@@ -2715,5 +2715,38 @@
   "status": "ok",
   "n_jobs": 6,
   "n_israel": 5
+ },
+ {
+  "name": "Qodo",
+  "domain": "qodo.ai",
+  "careers_url": "",
+  "ats": "comeet",
+  "slug": "qodo/B8.00B",
+  "source": "override",
+  "status": "ok",
+  "n_jobs": 7,
+  "n_israel": 3
+ },
+ {
+  "name": "Trigo",
+  "domain": "trigoretail.com",
+  "careers_url": "",
+  "ats": "comeet",
+  "slug": "trigo/A6.005",
+  "source": "override",
+  "status": "ok",
+  "n_jobs": 3,
+  "n_israel": 2
+ },
+ {
+  "name": "Cyolo",
+  "domain": "cyolo.io",
+  "careers_url": "",
+  "ats": "comeet",
+  "slug": "cyolo/F5.005",
+  "source": "override",
+  "status": "ok",
+  "n_jobs": 5,
+  "n_israel": 2
  }
 ]
