@@ -12,9 +12,9 @@
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f5f0e6">
 <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#121116">
-<link rel="stylesheet" href="dashboard.css" integrity="sha384-wq33zafIMNZR1KAZETkRVoWpze6Xj4ebj5Jtx6YyD+pMS4mpGpjax2eLZEM3Zm2x">
+<link rel="stylesheet" href="dashboard.css" integrity="sha384-F80F4SoUou+BT3/rrz/+SBuX4XySq6uhx0rgHkpxyW0fxRnvkxKGj+wtVdrLwsDo">
 <script src="theme.js" integrity="sha384-HYg7XFf1IJXOEgRXtXu8PaIF1+Z+LZWtoEMko63nPxbGA1OeTRN0ULcwPM+r2ONB"></script>
-<script type="module" src="dashboard.js" integrity="sha384-2wWV4U14Pt5+VaRD3fQd7PU5112lnNh8sbaCKsaSEDbZADP02AFeYfMw3dFGxv3Q"></script>
+<script type="module" src="dashboard.js" integrity="sha384-PdqZNhtnDYJdwT4lnOFdng57WwiMFoZ70nCkgsUePSNf9GDZI5ajJG2Yby0+aIcB"></script>
 <link rel="alternate" type="application/json" href="jobs.json" title="Open roles as JSON">
 <link rel="alternate" type="application/ld+json" href="jobs.jsonld" title="Open roles as schema.org JSON-LD">
 <script type="application/ld+json">{"@context":"https://schema.org","@type":"Dataset","name":"Misra: open entry-level, student and product roles in Israel","description":"Every open role, refreshed daily. Each role has a title, company, location and the date it was first seen.","isAccessibleForFree":true,"distribution":[{"@type":"DataDownload","encodingFormat":"application/json","contentUrl":"jobs.json"},{"@type":"DataDownload","encodingFormat":"application/ld+json","contentUrl":"jobs.jsonld"}]}</script>
@@ -45,7 +45,8 @@
     <div class="chip-group" role="group" aria-label="Role type">
       <button type="button" class="chip" data-cat="all" aria-pressed="true">Everything</button>
       <button type="button" class="chip" data-cat="pm" aria-pressed="false">Product</button>
-      <button type="button" class="chip" data-cat="junior" aria-pressed="false">Intern &amp; junior</button>
+      <button type="button" class="chip" data-cat="intern" aria-pressed="false">Intern</button>
+      <button type="button" class="chip" data-cat="junior" aria-pressed="false">Junior</button>
     </div>
     <button type="button" class="chip chip-new" id="onlyNew" aria-pressed="false">New only</button>
   </div>

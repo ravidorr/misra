@@ -1,10 +1,10 @@
 /* Dashboard script. Loaded as a deferred module by docs/index.html; the roles come from jobs.json. */
 const $ = (id) => document.getElementById(id);
 const LS_D = 'il-jobs-discarded-v1';
-const LS_F = 'il-jobs-filters-v1';
+const LS_F = 'il-jobs-filters-v2';
 const LS_T = 'misra-theme';
-const CATS = { pm: 'product', junior: 'junior', other: 'other' };
-const KIND = { pm: 'Product', junior: 'Intern / junior', other: 'Other' };
+const CATS = { pm: 'product', intern: 'intern', junior: 'junior', other: 'other' };
+const KIND = { pm: 'Product', intern: 'Intern', junior: 'Junior', other: 'Other' };
 const MODES = ['auto', 'light', 'dark'];
 const SIZES = [10, 25, 50, 100];
 const ANNOUNCE_DELAY_MS = 600;
@@ -427,22 +427,25 @@ $('file').addEventListener('change', (e) => {
   reader.readAsText(file);
 });
 
-const gaps = DATA.gaps ?? { blocked: [], untracked: [] };
-if (gaps.blocked.length > 0 || gaps.untracked.length > 0) {
+const gaps = DATA.gaps ?? { blocked: [], untracked: [], total: 0, groups: [] };
+if (gaps.total > 0) {
   const el = $('gaps');
-  $('gaps-title').textContent =
-    `Coverage gaps: ${gaps.blocked.length} failing in the latest run, ${gaps.untracked.length} not tracked yet`;
-  for (const x of gaps.blocked) {
+  $('gaps-title').textContent = `Coverage gaps: ${gaps.total} companies whose roles may be missing or old`;
+  el.append(
+    h('p', { class: 'gaps-intro' }, [
+      'Each group says why we do not fully crawl these companies; open one to see them.',
+    ]),
+  );
+  for (const group of gaps.groups) {
+    const list = h('ul', { class: 'gap-sites' });
+    for (const site of group.sites) {
+      list.append(h('li', {}, [h('b', { text: site.c }), site.why ? h('span', { class: 'gap-why', text: site.why }) : null]));
+    }
     el.append(
-      h('p', {}, [
-        h('b', { text: x.c }),
-        `: ${x.why}. Its roles are possibly old (last good crawl ${x.last}).`,
+      h('details', { class: 'gap-group', 'data-reason': group.reason, 'data-count': String(group.count) }, [
+        h('summary', {}, [h('span', { text: group.label }), h('span', { class: 'gap-count', text: String(group.count) })]),
+        list,
       ]),
-    );
-  }
-  if (gaps.untracked.length > 0) {
-    el.append(
-      h('p', {}, [h('b', { text: 'Not tracked (no usable job feed found):' }), ` ${gaps.untracked.join(', ')}`]),
     );
   }
   el.hidden = false;
@@ -496,7 +499,12 @@ const TOOLS = [
       type: 'object',
       properties: {
         query: { type: 'string', description: 'Words to match in title, company, team or location.' },
-        category: { type: 'string', enum: ['product', 'junior', 'other'] },
+        category: {
+          type: 'string',
+          enum: ['product', 'intern', 'junior', 'other'],
+          description:
+            'product: product titles. intern: intern, internship and student titles. junior: junior, jr, graduate, entry and trainee titles. Product wins over both, and intern over junior.',
+        },
         company: { type: 'string', description: 'Exact company name.' },
         newOnly: { type: 'boolean', description: 'Only roles first seen in the last 7 days.' },
         includeDiscarded: { type: 'boolean' },
@@ -551,7 +559,8 @@ const TOOLS = [
   },
   {
     name: 'list_coverage_gaps',
-    description: 'List companies that could not be crawled or are not tracked, so their roles may be missing or old.',
+    description:
+      'List the companies we do not fully crawl, grouped by reason (groups, each with a count and its companies), so their roles may be missing or old.',
     inputSchema: { type: 'object', properties: {} },
     annotations: { readOnlyHint: true },
     execute: () => Promise.resolve(reply(gaps)),
