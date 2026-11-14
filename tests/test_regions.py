@@ -1,5 +1,6 @@
 """Regions of Israel (FR-3), checked on location strings taken from the open jobs in data/jobs.db."""
 
+import re
 import sqlite3
 from pathlib import Path
 
@@ -7,6 +8,8 @@ import pytest
 
 import regions
 from regions import CENTER, CITY_NOT_GIVEN, JERUSALEM, NORTH, REMOTE, SHARON, SOUTH, TEL_AVIV
+
+MIN_SHARE_IN_REGION = 95.0
 
 # (location, regions): real strings from data/jobs.db, spellings as written.
 REAL_LOCATIONS: list[tuple[str, tuple[str, ...]]] = [
@@ -55,9 +58,20 @@ REAL_LOCATIONS: list[tuple[str, tuple[str, ...]]] = [
     ("Israel, Yokneam; Israel, Tel Aviv", (TEL_AVIV, NORTH)),
     ("Israel, Tel Aviv; Israel, Raanana; Israel, Beer Sheva; Israel, Yokneam", (TEL_AVIV, SHARON, NORTH, SOUTH)),
     ("Tel Aviv/ Netanya, Israel", (TEL_AVIV, SHARON)),
-    ("Israel, Tel Aviv, Herzliya", (TEL_AVIV, SHARON)),
+    ("Israel, Tel Aviv, Herzliya", (SHARON,)),  # country, district, city
+    ("Herzliya, Tel Aviv, Israel", (SHARON,)),
+    ("Israel, Tel Aviv, Tel Aviv", (TEL_AVIV,)),
+    ("Givatayim", (TEL_AVIV,)),
+    ("Tel Aviv; Ashdod", (TEL_AVIV, SOUTH)),
+    ("Israel; Ashkelon", (SOUTH,)),
+    ("Center, Israel", (CENTER,)),
+    ("\u05ea\u05dc \u05d0\u05d1\u05d9\u05d1, \u05d9\u05e9\u05e8\u05d0\u05dc", (TEL_AVIV,)),
+    ("Remote - Tel Aviv, Israel", (TEL_AVIV, REMOTE)),
+    ("Israel (Remote)", (REMOTE,)),
+    ("Hybrid - Haifa, Israel", (NORTH,)),
     ("Haifa, Haifa District, Israel; Hod Hasharon, Haifa District, Israel", (SHARON, NORTH)),
-    ("Israel, Multiple Locations, Multiple Locations; Israel, Tel Aviv, Herzliya", (TEL_AVIV, SHARON)),
+    ("Israel, Multiple Locations, Multiple Locations; Israel, Tel Aviv, Herzliya", (SHARON,)),
+    ("Israel, Tel Aviv, Herzliya; Israel, Tel Aviv, Tel Aviv", (TEL_AVIV, SHARON)),
     (
         "Israel, Multiple Locations, Multiple Locations; Israel, Central, Jerusalem; Israel, Southern, Beer-Sheva",
         (JERUSALEM, SOUTH),
@@ -134,14 +148,6 @@ def test_jobs_outside_israel_are_untouched(location: str | None) -> None:
     assert regions.place(location) == regions.Place(israel=False)
 
 
-def test_no_job_in_israel_is_dropped() -> None:
-    """Every Israeli location gets a region or a location of its own."""
-    for location, _ in REAL_LOCATIONS:
-        placed = regions.place(location)
-        if placed.israel:
-            assert placed.regions or placed.locations
-
-
 def test_a_new_place_is_one_table_entry(monkeypatch: pytest.MonkeyPatch) -> None:
     assert regions.place("Zikim, Israel").locations == ("Zikim, Israel",)
     monkeypatch.setitem(regions.PLACES, regions.SOUTH, (*regions.PLACES[regions.SOUTH], "zikim"))
@@ -175,12 +181,23 @@ def test_report_caps_the_unmapped_sample() -> None:
     assert f"Unmapped places (top {sample} of 5):" in text
 
 
-def test_real_data_puts_at_least_95_percent_of_israeli_jobs_in_a_region() -> None:
-    """FR-3 AC 11 on the open jobs of data/jobs.db (read-only)."""
+def _open_locations() -> list[str | None]:
     db = Path(__file__).resolve().parent.parent / "data" / "jobs.db"
     with sqlite3.connect(f"file:{db}?mode=ro", uri=True) as c:
-        locations = [row[0] for row in c.execute("SELECT location FROM jobs WHERE status='open'")]
-    placed = [p for p in (regions.place(location) for location in locations) if p.israel]
+        return [row[0] for row in c.execute("SELECT location FROM jobs WHERE status='open'")]
+
+
+def test_no_job_in_israel_is_dropped_on_real_data() -> None:
+    """FR-3 AC 7: every open Israeli location gets a region or a location of its own."""
+    placed = [p for p in (regions.place(location) for location in _open_locations()) if p.israel]
     assert placed
-    share = sum(1 for p in placed if p.regions) / len(placed)
-    assert share >= 0.95  # noqa: PLR2004
+    assert all(p.regions or p.locations for p in placed)
+
+
+def test_report_shows_at_least_95_percent_of_israeli_jobs_in_a_region() -> None:
+    """FR-3 AC 11 on the open jobs of data/jobs.db (read-only), read from the report itself."""
+    first_line = regions.report(_open_locations()).splitlines()[0]
+    match = re.match(r"Regions: ([\d.]+)% of (\d+) jobs in Israel", first_line)
+    assert match
+    assert float(match.group(1)) >= MIN_SHARE_IN_REGION
+    assert int(match.group(2)) > 0

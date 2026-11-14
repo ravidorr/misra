@@ -53,10 +53,10 @@ PLACES: dict[str, tuple[str, ...]] = {
 
 # A district alone ("Tel Aviv District, Israel") places a job only when no city is named.
 DISTRICTS: dict[str, str] = {
-    r"tel aviv district|gush dan": TEL_AVIV,
+    r"tel aviv district": TEL_AVIV,
     r"haifa district|northern": NORTH,
     r"jerusalem district": JERUSALEM,
-    r"center district|central": CENTER,
+    r"center district|\bcenter\b|central": CENTER,
     r"southern|south district": SOUTH,
 }
 
@@ -75,7 +75,9 @@ _CITIES = compile_places(PLACES)
 _DISTRICTS = {re.compile(pattern): region for pattern, region in DISTRICTS.items()}
 _DISTRICT_WORDS = re.compile(r"(?:tel aviv|haifa|jerusalem|center|central|south|southern|north|northern) district")
 _REMOTE = re.compile(r"remote|עבודה מרחוק")
-# "TLV" is the airport code of Tel Aviv: Israeli, though `common.ISRAEL` needs a place name or a country to say so.
+THREE_FIELDS = 3
+# "TLV" is the airport code of Tel Aviv: Israeli, though `common.ISRAEL` does not know it. A city of the table below
+# also makes a string Israeli, since `common.ISRAEL` knows only a few places (not Ashdod or Givatayim).
 _TLV = re.compile(r"\bTLV\b", re.I)
 
 
@@ -91,7 +93,7 @@ class Place:
 
 
 def _in_israel(text: str) -> bool:
-    return bool(ISRAEL.search(text) or _TLV.search(text))
+    return bool(ISRAEL.search(text) or _TLV.search(text) or _city_regions(_normalise(text)))
 
 
 def _normalise(text: str) -> str:
@@ -99,10 +101,22 @@ def _normalise(text: str) -> str:
     return re.sub(r"\s+", " ", re.sub(r"[-_]", " ", text))
 
 
+def _city_regions(text: str) -> set[str]:
+    return {region for region, pattern in _CITIES.items() if pattern.search(text)}
+
+
 def _cities_in(text: str) -> set[str]:
-    """Regions of the cities named in normalised text, ignoring district names such as "Haifa District"."""
-    cleaned = _DISTRICT_WORDS.sub(" ", text)
-    return {region for region, pattern in _CITIES.items() if pattern.search(cleaned)}
+    """Regions of the cities named in normalised text. District names do not count: "Haifa District", and the middle
+    field of "Israel, Tel Aviv, Herzliya" (country, district, city), which some sources write."""
+    fields = [f.strip() for f in _DISTRICT_WORDS.sub(" ", text).split(",")]
+    # "Israel, X, Y" or "Y, X, Israel": X is a district when exactly one end is a city
+    if (
+        len(fields) == THREE_FIELDS
+        and _city_regions(fields[1])
+        and bool(_city_regions(fields[0])) != bool(_city_regions(fields[2]))
+    ):
+        del fields[1]
+    return _city_regions(", ".join(fields))
 
 
 def _regions_in(segment: str) -> set[str]:
@@ -116,8 +130,8 @@ def _regions_in(segment: str) -> set[str]:
 
 
 def place(location: str | None) -> Place:
-    """Place a location string. A remote role is Remote only when the string also names Israel; "Remote, US" or a bare
-    "Remote" is outside Israel (or unknown) and is left alone."""
+    """Place a location string. A remote role is Remote only when the same part of the string (parts are split on ";")
+    also names Israel; "Remote, US" or a bare "Remote" is left alone, as an unknown or foreign place."""
     text = (location or "").strip()
     if not _in_israel(text):
         return Place(israel=False)
