@@ -785,5 +785,17 @@
  "Qedma": {
   "ats": "comeet",
   "slug": "qedma/7A.006"
+ },
+ "Qodo": {
+  "ats": "comeet",
+  "slug": "qodo/B8.00B"
+ },
+ "Trigo": {
+  "ats": "comeet",
+  "slug": "trigo/A6.005"
+ },
+ "Cyolo": {
+  "ats": "comeet",
+  "slug": "cyolo/F5.005"
  }
 }
