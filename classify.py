@@ -3,7 +3,7 @@
 The two are separate. `level()` gives Intern, Junior or Not specified. `role_types()` gives every type the title fits,
 or Other when none. Both are driven by data (the patterns below), so a new role type is one entry in `ROLE_TYPES` and a
 new keyword is one more string in a type's tuple. `INTERN`, `JUNIOR` and `PM_CORE` are the patterns the digest and the
-dashboard have always used; they live here now and keep their exact behaviour.
+dashboard used before this module existed; they live here now, unchanged.
 """
 
 import re
@@ -23,36 +23,40 @@ LEVELS = (INTERN_LEVEL, JUNIOR_LEVEL, NOT_SPECIFIED)
 OTHER = "Other"
 
 # Role types in display order. A job belongs to every type whose patterns match its title, and to Other when none does.
-# R&D covers software, hardware, QA, DevOps and algorithms.
-# Short all-caps acronyms use (?-i:...) so they only match as written ("IT", not the word "it").
+# R&D covers, for example, software, hardware, QA, DevOps and algorithms.
+# Acronyms that are also common words (IT, AI, ML, BI, UI, BD) use (?-i:...) so they only match as written; the other
+# acronyms match in any case.
 ROLE_TYPES: dict[str, tuple[str, ...]] = {
-    "Product": (PM_CORE.pattern,),
+    # PM_CORE without its loose "product" substring, which also catches "Production" and "Productivity".
+    "Product": (r"\bproduct(?!ion|ivity)|\bPM\b|\bAPM\b|מוצר",),
     "R&D": (
         r"\bR&D\b",
         r"software",
         r"hardware",
         r"developer|\bdev\b|devops|\bsre\b|site reliability",
-        r"(?<!sales )(?<!solution )(?<!solutions )(?<!support )(?<!success )\bengineer|engineering",
+        r"(?<!sales )(?<!solution )(?<!solutions )(?<!support )(?<!success )\bengineer(?:ing)?",
         r"\bQA\b|\bSDET\b|quality assurance|test automation|verification|validation",
         r"algorithm|firmware|embedded|\bFPGA\b|\bASIC\b|\bRTL\b|\bDFT\b|silicon|chip\b|\bVLSI\b",
         r"full[ -]?stack|back[ -]?end|front[ -]?end|\bmobile\b|\bios\b|android",
-        r"tech(nical)? lead|cyber|security (researcher|analyst)|researcher|research scientist|מפתח|הנדסה|מהנדס",
+        r"tech(nical)? lead|cyber|security (researcher|analyst)|(?<!market )researcher|research scientist",
+        r"מפתח|הנדסה|מהנדס",
     ),
     "Data & AI": (
-        r"\bdata\b",
+        r"\bdata\b(?! cent)",
         r"machine learning|deep learning|(?-i:\bML\b)|(?-i:\bAI\b)|\bNLP\b|\bLLM\b|computer vision|\bmlops\b",
         r"analytics|(?-i:\bBI\b)|business intelligence|data scien",
     ),
     "Design": (
-        r"designer|\bUX\b|(?-i:\bUI\b)|graphic|illustrat|\bart director|creative director|motion|animat",
+        r"designer|\bUX\b|(?-i:\bUI\b)|\bgraphic|illustrat|\bart director|creative director",
+        r"\bmotion (design|graphic)|animat",
         r"design lead|head of design|product design|עיצוב|מעצב",
     ),
     "IT": (
         r"(?-i:\bIT\b)|sys ?admin|system administrator|help ?desk|network (admin|engineer)|it support",
-        r"desktop support|infrastructure|\bit (manager|specialist|technician)|מערכות מידע|תמיכה טכנית",
+        r"desktop support|\bIT infrastructure|\bit (manager|specialist|technician)|מערכות מידע|תמיכה טכנית",
     ),
     "Finance": (
-        r"financ|account(ant|ing)\b|bookkeep|controller|\bFP&A\b|payroll|treasury|\btax\b|audit",
+        r"financ|account(ant|ing)\b|bookkeep|(?<!motor )controller|\bFP&A\b|payroll|treasury|\btax\b|audit",
         r"accounts (payable|receivable)|procurement|billing|פיננס|חשבונאות|הנהלת חשבונות",
     ),
     "Sales & BD": (
@@ -67,7 +71,13 @@ ROLE_TYPES: dict[str, tuple[str, ...]] = {
 
 ROLE_TYPE_NAMES = (*ROLE_TYPES, OTHER)
 
-_COMPILED = {name: re.compile("|".join(parts), re.I) for name, parts in ROLE_TYPES.items()}
+
+def compile_role_types(table: dict[str, tuple[str, ...]]) -> dict[str, re.Pattern[str]]:
+    """One case-insensitive pattern per role type, from a table shaped like `ROLE_TYPES`."""
+    return {name: re.compile("|".join(parts), re.I) for name, parts in table.items()}
+
+
+_COMPILED = compile_role_types(ROLE_TYPES)
 
 
 def level(title: str) -> str:
@@ -87,7 +97,8 @@ def role_types(title: str) -> list[str]:
 
 def matches(title: str, levels: Iterable[str] = (), types: Iterable[str] = ()) -> bool:
     """True when the job fits both the levels and the role types chosen. An empty choice means every one: Product with
-    every level gives Product at any seniority, Product with Intern and Junior gives only the entry-level ones."""
+    no level chosen (or every level) gives Product at any seniority, Product with Intern and Junior gives only the
+    entry-level ones. A role type that does not exist matches nothing."""
     wanted_levels = set(levels)
     wanted_types = set(types)
     return (not wanted_levels or level(title) in wanted_levels) and (
@@ -103,18 +114,19 @@ def share_not_other(titles: Iterable[str]) -> float:
 
 
 def report(titles: Iterable[str], sample: int = 15) -> str:
-    """Role-type quality report for the daily log: the share not in Other, the count per type and a few Other titles."""
+    """Role-type quality report for the daily log: the share not in Other, the count per type (a job with several
+    types counts in each, so the counts can exceed the total) and the first distinct titles left in Other."""
     titles = list(titles)
     per_type: Counter[str] = Counter()
-    others: list[str] = []
+    others: dict[str, None] = {}
     for title in titles:
         types = role_types(title)
         per_type.update(types)
-        if types == [OTHER] and title not in others:
-            others.append(title)
+        if types == [OTHER]:
+            others[title] = None
     lines = [f"Role types: {share_not_other(titles):.1%} of {len(titles)} open jobs are not in {OTHER}"]
     lines.extend(f"  {name}: {per_type[name]}" for name in ROLE_TYPE_NAMES)
     if others:
         lines.append(f"  Unplaced titles (first {min(sample, len(others))}):")
-        lines.extend(f"    {title}" for title in others[:sample])
+        lines.extend(f"    {title}" for title in list(others)[:sample])
     return "\n".join(lines)

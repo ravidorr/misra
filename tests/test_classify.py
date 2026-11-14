@@ -1,13 +1,11 @@
 """Level and role type, checked on titles taken from the open jobs in data/jobs.db."""
 
-import re
-
 import pytest
 
 import classify
 from classify import NOT_SPECIFIED, OTHER
 
-# (title, level, role types): real titles of open jobs.
+# (title, level, role types): titles of open jobs in data/jobs.db, except the last three, which are synthetic.
 REAL_TITLES: list[tuple[str, str, list[str]]] = [
     ("Product Manager Intern", "Intern", ["Product"]),
     ("Senior Product Manager - Mobile App", NOT_SPECIFIED, ["Product", "R&D"]),
@@ -41,6 +39,10 @@ REAL_TITLES: list[tuple[str, str, list[str]]] = [
     ("Digital Marketing Intern", "Intern", [OTHER]),
     ("מהנדס/ת ייצור אלקטרוניקה", NOT_SPECIFIED, ["R&D"]),
     ("קניין רכש", NOT_SPECIFIED, [OTHER]),
+    ("Production Intern", "Intern", [OTHER]),
+    ("Sales Engineering Manager", NOT_SPECIFIED, ["Sales & BD"]),
+    ("Data Center Deployment Specialist", NOT_SPECIFIED, [OTHER]),
+    ("Ads & Promotion Specialist", NOT_SPECIFIED, [OTHER]),
     ("Junior Intern", "Intern", [OTHER]),
     ("International Accountant", NOT_SPECIFIED, ["Finance"]),
     ("Internal Tools Engineer", NOT_SPECIFIED, ["R&D"]),
@@ -87,8 +89,8 @@ def test_a_job_can_belong_to_several_role_types_and_other_only_alone() -> None:
 def test_a_new_role_type_is_one_table_entry(monkeypatch: pytest.MonkeyPatch) -> None:
     assert classify.role_types("Legal Counsel") == [OTHER]
     monkeypatch.setitem(classify.ROLE_TYPES, "Legal", (r"\blegal\b|counsel",))
-    compiled = {name: re.compile("|".join(parts), re.I) for name, parts in classify.ROLE_TYPES.items()}
-    monkeypatch.setattr(classify, "_COMPILED", compiled)
+    assert not classify.matches("Legal Counsel", [], ["Legal"])  # an unknown type matches nothing, without error
+    monkeypatch.setattr(classify, "_COMPILED", classify.compile_role_types(classify.ROLE_TYPES))
     assert classify.role_types("Legal Counsel") == ["Legal"]
     assert classify.role_types("Senior Product Counsel") == ["Product", "Legal"]
 
@@ -102,7 +104,7 @@ def test_existing_patterns_keep_their_behaviour() -> None:
 
 PRODUCT_INTERN = "Product Manager Intern"
 PRODUCT_JUNIOR = "Junior Product Manager"
-PRODUCT_SENIOR = "Senior Product Manager - Mobile App"
+PRODUCT_SENIOR = "Senior Product Manager"
 SOFTWARE_INTERN = "Software Engineer Intern - Two Dots"
 
 
@@ -122,12 +124,17 @@ def test_product_with_intern_and_junior_gives_only_entry_level_ones() -> None:
     assert not classify.matches(PRODUCT_SENIOR, entry, ["Product"])
     # the old digest bug: an entry-level job of another field is not Product
     assert not classify.matches(SOFTWARE_INTERN, entry, ["Product"])
+    assert classify.matches("Junior Intern Product Manager", entry, ["Product"])
+    assert not classify.matches(PRODUCT_JUNIOR, ["Intern"], ["Product"])
+    assert classify.matches(PRODUCT_SENIOR, [NOT_SPECIFIED], ["Product"])
+    assert not classify.matches(PRODUCT_INTERN, [NOT_SPECIFIED], ["Product"])
 
 
 def test_no_role_type_chosen_means_every_type_and_not_specified_is_a_level() -> None:
     assert classify.matches(SOFTWARE_INTERN, ["Intern"], [])
     assert classify.matches("Legal Counsel", [NOT_SPECIFIED], [])
     assert classify.matches("Legal Counsel", [], [OTHER])
+    assert classify.matches("Legal Counsel")  # no choice at all drops nothing
     assert not classify.matches("Legal Counsel", ["Intern"], [])
     assert classify.matches("Senior Product Designer", [], ["Design", "Finance"])
 
@@ -136,6 +143,8 @@ def test_share_not_other() -> None:
     half = 0.5
     assert classify.share_not_other(["Product Manager", "Legal Counsel", "Software Engineer", "Recruiter"]) == half
     assert classify.share_not_other([]) == 1.0
+    assert classify.share_not_other(["Legal Counsel"]) == 0.0
+    assert classify.share_not_other(["Product Manager"]) == 1.0
 
 
 def test_report_lists_share_counts_and_unplaced_titles() -> None:
