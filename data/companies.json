@@ -2429,5 +2429,65 @@
   "n_jobs": 3,
   "n_israel": 0,
   "israel_only": true
+ },
+ {
+  "name": "Salesforce",
+  "domain": "salesforce.com",
+  "careers_url": "",
+  "ats": "workday",
+  "slug": "salesforce/wd12/External_Career_Site",
+  "source": "override",
+  "status": "ok",
+  "n_jobs": 18,
+  "n_israel": 18,
+  "israel_only": true
+ },
+ {
+  "name": "Cadence",
+  "domain": "cadence.com",
+  "careers_url": "",
+  "ats": "workday",
+  "slug": "cadence/wd1/External_Careers",
+  "source": "override",
+  "status": "ok",
+  "n_jobs": 3,
+  "n_israel": 3,
+  "israel_only": true
+ },
+ {
+  "name": "Edwards Lifesciences",
+  "domain": "edwards.com",
+  "careers_url": "",
+  "ats": "workday",
+  "slug": "edwards/wd5/edwardscareers",
+  "source": "override",
+  "status": "ok",
+  "n_jobs": 7,
+  "n_israel": 7,
+  "israel_only": true
+ },
+ {
+  "name": "Adobe",
+  "domain": "adobe.com",
+  "careers_url": "",
+  "ats": "workday",
+  "slug": "adobe/wd5/external_experienced",
+  "source": "override",
+  "status": "ok",
+  "n_jobs": 0,
+  "n_israel": 0,
+  "israel_only": true
+ },
+ {
+  "name": "Zoom",
+  "domain": "zoom.us",
+  "careers_url": "",
+  "ats": "workday",
+  "slug": "zoom/wd5/Zoom",
+  "source": "override",
+  "status": "ok",
+  "n_jobs": 0,
+  "n_israel": 0,
+  "israel_only": true
  }
 ]

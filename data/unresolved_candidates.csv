@@ -86,7 +86,6 @@ Apple,apple.com,multinational
 Meta,meta.com,multinational
 Intel,intel.com,multinational
 Cisco,cisco.com,multinational
-Salesforce,salesforce.com,multinational
 Oracle,oracle.com,multinational
 SAP,sap.com,multinational
 IBM,ibm.com,multinational
@@ -103,12 +102,10 @@ Mastercard,mastercard.com,multinational
 American Express,americanexpress.com,multinational
 KLA,kla.com,multinational
 Synopsys,synopsys.com,multinational
-Cadence,cadence.com,multinational
 Siemens,siemens.com,multinational
 Medtronic,medtronic.com,multinational
 Intuit,intuit.com,multinational
 Autodesk,autodesk.com,multinational
-Adobe,adobe.com,multinational
 Akamai,akamai.com,multinational
 Walmart Global Tech,walmart.com,multinational
 Ford,ford.com,multinational
@@ -120,9 +117,7 @@ Cloudflare,cloudflare.com,multinational
 Rapid7,rapid7.com,multinational
 Booking.com,booking.com,multinational
 Uber,uber.com,multinational
-Edwards Lifesciences,edwards.com,multinational
 Align Technology,aligntech.com,multinational
 Keysight,keysight.com,multinational
 Kyndryl,kyndryl.com,multinational
 Workday,workday.com,multinational
-Zoom,zoom.us,multinational
