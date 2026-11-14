@@ -2,6 +2,12 @@
 
 All notable changes are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses [Semantic Versioning](https://semver.org/).
 
+## [0.6.0] - 2026-11-14
+
+### Added
+
+- A `bamboohr` adapter for boards on `<slug>.bamboohr.com`. It reads `/careers/list`, the public JSON the careers page is built from, and writes each location as city, state and country when the company filled them in. The answer must come from the board's own host, its `totalCount` must match the list and every entry must have an id and a title; otherwise (an unknown slug lands on a web page) it is a failed crawl, not an empty board. A job with no location at all cannot be recognised as an Israel job, so an `israel_only` board drops it. Its first board is Splitit (slug `splitit`, `israel_only`): on 2026-11-14 it listed 3 jobs, none in Israel, and two of them had no location at all.
+
 ## [0.5.0] - 2026-11-14
 
 ### Added

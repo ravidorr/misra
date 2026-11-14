@@ -32,7 +32,9 @@ def test_job_normalises() -> None:
     }
 
 
-@pytest.mark.parametrize("name", ["greenhouse", "lever", "ashby", "workable", "comeet", "greenhouse_url", "jazzhr"])
+@pytest.mark.parametrize(
+    "name", ["greenhouse", "lever", "ashby", "workable", "comeet", "greenhouse_url", "jazzhr", "bamboohr"]
+)
 @pytest.mark.parametrize("resp", [None, FakeHttpResponse(status_code=500)])
 def test_failure_returns_none(monkeypatch: pytest.MonkeyPatch, name: str, resp: FakeHttpResponse | None) -> None:
     fake_get(monkeypatch, resp)
@@ -508,3 +510,109 @@ def test_jazzhr_markup_inside_a_title_is_dropped_and_the_footer_is_not_read_as_a
 
 def test_jazzhr_is_registered() -> None:
     assert adapters.ADAPTERS["jazzhr"] is adapters.jazzhr
+
+
+BAMBOO_URL = "https://acme.bamboohr.com/careers/list"
+
+
+def bamboo_answer(result: Any, total: Any = None) -> FakeHttpResponse:
+    meta = {"totalCount": len(result) if total is None else total}
+    return FakeHttpResponse(data={"meta": meta, "result": result}, url=BAMBOO_URL)
+
+
+def test_bamboohr_reads_the_careers_list(monkeypatch: pytest.MonkeyPatch) -> None:
+    result = [
+        {
+            "id": "82",
+            "jobOpeningName": "New Business Sales Executive",
+            "departmentLabel": "Sales",
+            "location": {"city": None, "state": None},
+            "atsLocation": {"country": None, "state": None, "province": None, "city": None},
+        },
+        {
+            "id": "121",
+            "jobOpeningName": "Manager, Portfolio",
+            "departmentLabel": "Card Programs",
+            "location": {"city": "New York", "state": "New York"},
+            "atsLocation": {"country": None},
+        },
+        {
+            "id": "130",
+            "jobOpeningName": "Backend Engineer",
+            "departmentLabel": None,
+            "location": {"city": "Tel Aviv", "state": None},
+            "atsLocation": {"country": "Israel"},
+        },
+        {
+            "id": "131",
+            "jobOpeningName": "Data Engineer",
+            "location": {"city": None, "state": None},
+            "atsLocation": {"city": "Haifa", "state": "Haifa District", "province": "North", "country": "Israel"},
+        },
+        {"id": 132, "jobOpeningName": "Designer", "location": None, "atsLocation": None},
+    ]
+    urls = fake_get(monkeypatch, bamboo_answer(result))
+    jobs = adapters.bamboohr("acme")
+    assert urls == [BAMBOO_URL]
+    assert jobs is not None
+    assert [(j["job_id"], j["title"], j["location"], j["team"], j["url"]) for j in jobs] == [
+        ("82", "New Business Sales Executive", "", "Sales", "https://acme.bamboohr.com/careers/82"),
+        ("121", "Manager, Portfolio", "New York", "Card Programs", "https://acme.bamboohr.com/careers/121"),
+        ("130", "Backend Engineer", "Tel Aviv, Israel", "", "https://acme.bamboohr.com/careers/130"),
+        ("131", "Data Engineer", "Haifa, Haifa District, North, Israel", "", "https://acme.bamboohr.com/careers/131"),
+        ("132", "Designer", "", "", "https://acme.bamboohr.com/careers/132"),
+    ]
+    assert [bool(discover.ISRAEL.search(j["location"])) for j in jobs] == [False, False, True, True, False]
+
+
+def test_bamboohr_a_board_with_no_job_is_empty_not_a_failure(monkeypatch: pytest.MonkeyPatch) -> None:
+    fake_get(monkeypatch, bamboo_answer([]))
+    assert adapters.bamboohr("acme") == []
+
+
+def test_bamboohr_without_a_count_trusts_the_list(monkeypatch: pytest.MonkeyPatch) -> None:
+    fake_get(monkeypatch, FakeHttpResponse(data={"result": [{"id": "1", "jobOpeningName": "A"}]}, url=BAMBOO_URL))
+    jobs = adapters.bamboohr("acme")
+    assert jobs is not None
+    assert [j["title"] for j in jobs] == ["A"]
+
+
+@pytest.mark.parametrize("data", [{}, {"result": None}, {"result": {"a": 1}}, [], None, {"meta": 3, "result": []}])
+def test_bamboohr_an_answer_without_a_list_is_a_failure(monkeypatch: pytest.MonkeyPatch, data: Any) -> None:
+    fake_get(monkeypatch, FakeHttpResponse(data=data, url=BAMBOO_URL))
+    assert adapters.bamboohr("acme") is None
+
+
+def test_bamboohr_an_html_answer_is_a_failure(monkeypatch: pytest.MonkeyPatch) -> None:
+    fake_get(monkeypatch, FakeHttpResponse(text="<html>", json_error=True, url=BAMBOO_URL))
+    assert adapters.bamboohr("acme") is None
+
+
+@pytest.mark.parametrize("url", ["https://www.bamboohr.com", "https://other.bamboohr.com/careers/list"])
+def test_bamboohr_an_answer_from_another_host_is_a_failure(monkeypatch: pytest.MonkeyPatch, url: str) -> None:
+    fake_get(monkeypatch, FakeHttpResponse(data={"meta": {"totalCount": 0}, "result": []}, url=url))
+    assert adapters.bamboohr("acme") is None
+
+
+@pytest.mark.parametrize(
+    "result",
+    [
+        [{"id": "1", "jobOpeningName": "A"}, {"id": "2"}],  # a good entry, then one with no title
+        [{"id": "1", "jobOpeningName": "A"}, {"jobOpeningName": "B"}],  # no id
+        [{"id": "1", "jobOpeningName": "A"}, "oops"],  # not an object
+    ],
+)
+def test_bamboohr_one_unreadable_entry_fails_the_crawl_instead_of_closing_its_job(
+    monkeypatch: pytest.MonkeyPatch, result: list[Any]
+) -> None:
+    fake_get(monkeypatch, bamboo_answer(result))
+    assert adapters.bamboohr("acme") is None
+
+
+def test_bamboohr_a_count_that_does_not_match_the_list_is_a_failure(monkeypatch: pytest.MonkeyPatch) -> None:
+    fake_get(monkeypatch, bamboo_answer([{"id": "1", "jobOpeningName": "A"}], total=2))
+    assert adapters.bamboohr("acme") is None
+
+
+def test_bamboohr_is_registered() -> None:
+    assert adapters.ADAPTERS["bamboohr"] is adapters.bamboohr

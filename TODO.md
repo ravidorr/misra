@@ -1,7 +1,7 @@
 # TODO
 
 Open work, as of 2026-11-14. Each item says what triggers it, how to do it and when it is done. When one is finished,
-delete it and update the counts in the others: the 128 and the four segment counts in the research item (a pin removes
+delete it and update the counts in the others: the 127 and the four segment counts in the research item (a pin removes
 one row from one segment), its "(37)" if the company had no careers URL, and the "five" and "six" in the Workday
 item. Observations about live sites below come from checks made on 2026-11-14 and may have changed.
 
@@ -83,10 +83,10 @@ item. Observations about live sites below come from checks made on 2026-11-14 an
 
 ## Research the remaining unresolved companies
 
-- [ ] `data/unresolved_candidates.csv` lists 128 researched companies with no usable job feed (as of 2026-11-14: 46
-  multinational, 47 deeptech, 18 cyber_infra, 17 biz_software). It includes the five Workday companies above. Each needs
+- [ ] `data/unresolved_candidates.csv` lists 127 researched companies with no usable job feed (as of 2026-11-14: 46
+  multinational, 47 deeptech, 18 cyber_infra, 16 biz_software). It includes the five Workday companies above. Each needs
   its own research; there is no batch fix left. Every observation about a live site below is from the checks of
-  2026-11-14, a crawl of the 105 rows that had a careers URL that day (91 today) and a scan of their rendered pages. The
+  2026-11-14, a crawl of the 105 rows that had a careers URL that day (90 today) and a scan of their rendered pages. The
   remaining work falls into these groups:
   - **No careers URL (37).** Status `not_found` in `data/new/*_companies.json`: OX Security, Upsolver, Ceva, Speedata,
     Teramount, X-Globe, Q Factor, Gilat, Siklu, Silicom, Sight Diagnostics, Brainsway, EarlySign, Diagnostic Robotics,
@@ -94,13 +94,13 @@ item. Observations about live sites below come from checks made on 2026-11-14 an
     HP, Dell Technologies, Mastercard, Cadence, Autodesk, Adobe, Akamai, Ford, Ericsson, Uber, Keysight. Find the real
     careers page first, then continue with the groups below. The large multinationals will need a location-filtered
     address or their ATS (see the last group).
-  - **A job board was found but there is no adapter.** Splitit (BambooHR). Each adapter is its own PR: a function in
-    `adapters.py`, an entry in `ADAPTERS`, tests with the fakes in `tests/test_adapters.py`, a version bump and a
-    changelog entry. Playstudios is not a Jobvite case any more: on 2026-11-14 `jobs.jobvite.com/playstudios-inc` is an
-    invalid board and the careers page links to Dayforce (`jobs.dayforcehcm.com/en-US/playstudios/CANDIDATEPORTAL`, a
-    page that renders in a browser); it has a Tel Aviv office, so it needs a Dayforce adapter or a browser pin. Booking.com
-    (iCIMS) is skipped: its iCIMS board answered 403 to a plain request on 2026-11-14 (bot protection, not to be
-    bypassed) and `careers.booking.com` is a custom site with no job feed; revisit it with the large multinationals.
+  - **A job board was found but there is no adapter.** Playstudios and Booking.com. Playstudios was listed as a Jobvite
+    board, but on 2026-11-14 `jobs.jobvite.com/playstudios-inc` is an invalid board and the careers page links to
+    Dayforce (`jobs.dayforcehcm.com/en-US/playstudios/CANDIDATEPORTAL`, a page that renders in a browser); it has a Tel
+    Aviv office, so it needs a Dayforce adapter or a browser pin. Booking.com (iCIMS) is skipped: its iCIMS board answered
+    403 to a plain request on 2026-11-14 (bot protection, not to be bypassed) and `careers.booking.com` is a custom site
+    with no job feed; revisit it with the large multinationals. A new adapter is its own PR: a function in `adapters.py`,
+    an entry in `ADAPTERS`, tests with the fakes in `tests/test_adapters.py`, a version bump and a changelog entry.
     American Express showed an Eightfold
     signature, but `aexp.eightfold.ai/careers` is a 404: find the real host, and pin it as the Citi and PayPal entries are
     (the browser crawler reads Eightfold boards, with `?location=Israel` and `israel_only`).

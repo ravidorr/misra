@@ -200,6 +200,40 @@ def jazzhr(slug: str) -> list[Job] | None:
     return out
 
 
+def bamboohr(slug: str) -> list[Job] | None:
+    """slug is the `<slug>` of `<slug>.bamboohr.com`. The careers page is fed by `/careers/list`, a public JSON list
+    with a city and state per job and the country when the company filled it in. The list is trusted only when it is
+    the board's own JSON, its count matches and every entry reads: a partial or empty list would close stored jobs."""
+    r = get(f"https://{slug}.bamboohr.com/careers/list")
+    if r is None or r.status_code != HTTP_OK or urlparse(r.url).hostname != f"{slug}.bamboohr.com":
+        return None
+    try:
+        data = r.json()
+        postings = data["result"]
+        total = (data.get("meta") or {}).get("totalCount", len(postings))
+    except (ValueError, KeyError, TypeError, AttributeError):  # an unknown slug is redirected to an HTML page
+        return None
+    if not isinstance(postings, list) or total != len(postings):
+        return None
+    out: list[Job] = []
+    for j in postings:
+        if not isinstance(j, dict) or not j.get("id") or not j.get("jobOpeningName"):
+            return None
+        loc, ats = j.get("location") or {}, j.get("atsLocation") or {}
+        place = [loc.get("city"), loc.get("state"), ats.get("city"), ats.get("state"), ats.get("province")]
+        place.append(ats.get("country"))
+        out.append(
+            _job(
+                j["id"],
+                j["jobOpeningName"],
+                ", ".join(dict.fromkeys(x for x in place if x)),  # a place the two fields share is written once
+                f"https://{slug}.bamboohr.com/careers/{j['id']}",
+                team=j.get("departmentLabel"),
+            )
+        )
+    return out
+
+
 def greenhouse_url(url: str) -> list[Job] | None:
     """Company site proxies a Greenhouse board as JSON ({"jobs": [...]}, Greenhouse field names)."""
     r = get(url)
@@ -327,4 +361,5 @@ ADAPTERS: dict[str, Callable[[str], list[Job] | None]] = {
     "comeet": comeet,
     "workday": workday,
     "jazzhr": jazzhr,
+    "bamboohr": bamboohr,
 }
