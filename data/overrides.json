@@ -601,15 +601,5 @@
  "Xtend": {
   "ats": "browser",
   "slug": "https://xtend.me/careers/"
- },
- "Cloudflare": {
-  "ats": "greenhouse",
-  "slug": "cloudflare",
-  "israel_only": true
- },
- "Western Digital": {
-  "ats": "smartrecruiters",
-  "slug": "WesternDigital",
-  "israel_only": true
  }
 }
