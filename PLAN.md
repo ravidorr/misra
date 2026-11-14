@@ -47,9 +47,9 @@ Decisions made in planning (they change the PRD's wording, so update the PRD in 
 
 ## FR-5 first (quick win, no backend)
 
-- [ ] 1.1 Complete the coverage gap card. Generate the list from `data/unresolved_candidates.csv` plus the failing and
-  blocked crawls, with a reason per site; add a test that parses the counts in the `TODO.md` research item (the 94, the four segment counts and the "(30)") and fails when they disagree with the rows and segments of the CSV (`build_dashboard.py`, `templates/dashboard.js`, `templates/dashboard.css`, tests). Group counts by
-  reason, readable at phone width. Done when: FR-5 all three AC hold, the existing gaps tests still pass.
+- [x] ~~1.1 Complete the coverage gap card. Generate the list from `data/unresolved_candidates.csv` plus the failing and
+  blocked crawls, with a reason per site; add a test that parses the counts in the `TODO.md` research item (the 93, the four segment counts and the "(30)") and fails when they disagree with the rows and segments of the CSV (`build_dashboard.py`, `templates/dashboard.js`, `templates/dashboard.css`, tests). Group counts by
+  reason, readable at phone width. Done when: FR-5 all three AC hold, the existing gaps tests still pass.~~
 
 ## Jobs in Supabase
 

@@ -427,22 +427,25 @@ $('file').addEventListener('change', (e) => {
   reader.readAsText(file);
 });
 
-const gaps = DATA.gaps ?? { blocked: [], untracked: [] };
-if (gaps.blocked.length > 0 || gaps.untracked.length > 0) {
+const gaps = DATA.gaps ?? { blocked: [], untracked: [], total: 0, groups: [] };
+if (gaps.total > 0) {
   const el = $('gaps');
-  $('gaps-title').textContent =
-    `Coverage gaps: ${gaps.blocked.length} failing in the latest run, ${gaps.untracked.length} not tracked yet`;
-  for (const x of gaps.blocked) {
+  $('gaps-title').textContent = `Coverage gaps: ${gaps.total} companies whose roles may be missing or old`;
+  el.append(
+    h('p', { class: 'gaps-intro' }, [
+      'Each group says why we do not fully crawl these companies; open one to see them.',
+    ]),
+  );
+  for (const group of gaps.groups) {
+    const list = h('ul', { class: 'gap-sites' });
+    for (const site of group.sites) {
+      list.append(h('li', {}, [h('b', { text: site.c }), site.why ? h('span', { class: 'gap-why', text: site.why }) : null]));
+    }
     el.append(
-      h('p', {}, [
-        h('b', { text: x.c }),
-        `: ${x.why}. Its roles are possibly old (last good crawl ${x.last}).`,
+      h('details', { class: 'gap-group', 'data-reason': group.reason, 'data-count': String(group.count) }, [
+        h('summary', {}, [h('span', { text: group.label }), h('span', { class: 'gap-count', text: String(group.count) })]),
+        list,
       ]),
-    );
-  }
-  if (gaps.untracked.length > 0) {
-    el.append(
-      h('p', {}, [h('b', { text: 'Not tracked (no usable job feed found):' }), ` ${gaps.untracked.join(', ')}`]),
     );
   }
   el.hidden = false;
@@ -556,7 +559,8 @@ const TOOLS = [
   },
   {
     name: 'list_coverage_gaps',
-    description: 'List companies that could not be crawled or are not tracked, so their roles may be missing or old.',
+    description:
+      'List the companies we do not fully crawl, grouped by reason (groups, each with a count and its companies), so their roles may be missing or old.',
     inputSchema: { type: 'object', properties: {} },
     annotations: { readOnlyHint: true },
     execute: () => Promise.resolve(reply(gaps)),
