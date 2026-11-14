@@ -24,6 +24,9 @@ ORACLEHCM_MAX_PAGES = 100
 ORACLEHCM_SLUG_PARTS = 2
 AMAZON_PAGE = 100
 AMAZON_MAX_PAGES = 50
+PHENOM_PAGE = 50
+PHENOM_MAX_PAGES = 100
+PHENOM_SLUG_PARTS = 3
 
 
 def _job(  # noqa: PLR0913, PLR0917
@@ -469,6 +472,87 @@ def amazon(slug: str) -> list[Job] | None:
     return None  # more pages than the limit: the list is not complete
 
 
+def _phenom_page(host: str, country: str, lang: str, offset: int) -> tuple[int, list[Job]] | None:
+    """The reported total and one page of Israel jobs from a Phenom career site, or None when the answer is not the
+    JSON of a search, the total is not the Israel count of the site's own country facet (the filter matched nothing),
+    a job lacks an id, a title or a sequence number, or a job is not in Israel (the filter was ignored)."""
+    body = {
+        "lang": f"{lang}_{country}",
+        "deviceType": "desktop",
+        "country": country,
+        "pageName": "search-results",
+        "ddoKey": "refineSearch",
+        "sortBy": "Most recent",
+        "subsearch": "",
+        "from": offset,
+        "jobs": True,
+        "counts": True,
+        "all_fields": ["country"],
+        "size": PHENOM_PAGE,
+        "clearAll": False,
+        "jdsource": "facets",
+        "isSliderEnable": False,
+        "pageId": "page15",
+        "siteType": "external",
+        "keywords": "",
+        "global": True,
+        "selected_fields": {"country": ["Israel"]},
+        "locationData": {},
+    }
+    r = post(f"https://{host}/widgets", json=body)
+    if r is None or r.status_code != HTTP_OK:
+        return None
+    try:
+        search = r.json()["refineSearch"]
+        total, found = search["totalHits"], search["data"]["jobs"]
+        facet = next(a["value"] for a in search["data"]["aggregations"] if a.get("field") == "country")
+        israel = facet.get("Israel", 0)
+    except (ValueError, KeyError, TypeError, AttributeError, StopIteration):
+        return None
+    if not isinstance(found, list) or not isinstance(total, int) or israel != total:
+        return (
+            None  # the country facet counts the Israel jobs whatever the filter: a filter that matches nothing differs
+        )
+    out: list[Job] = []
+    for j in found:
+        if not (isinstance(j, dict) and j.get("jobId") and j.get("title") and j.get("jobSeqNo")):
+            return None
+        places = [str(x) for x in [j.get("location"), *(j.get("multi_location") or [])] if x]
+        place = next((x for x in places if "israel" in x.lower()), None)
+        if place is None:
+            return None
+        url = f"https://{host}/{country}/{lang}/job/{j['jobSeqNo']}"
+        out.append(_job(j["jobId"], j["title"], place, url, team=j.get("category"), posted=j.get("postedDate")))
+    return total, out
+
+
+def phenom(slug: str) -> list[Job] | None:
+    """slug is '<host>/<country>/<lang>' of a Phenom career site, for example 'careers.cisco.com/global/en' (the site
+    is `https://<host>/<country>/<lang>/search-results`). The site's own search widget is asked for the country Israel,
+    50 jobs a page. The list is trusted only when every page answers with that JSON, every job is located in Israel (a
+    site that ignores the filter gives the worldwide list), and the jobs add up to the reported total, which is the
+    same on every page, with no job twice: a partial list would close the jobs it lacks."""
+    parts = slug.split("/")
+    if len(parts) != PHENOM_SLUG_PARTS or "." not in parts[0] or not all(parts):
+        return None
+    host, country, lang = parts
+    out: list[Job] = []
+    first_total: int | None = None
+    for page in range(PHENOM_MAX_PAGES):
+        got = _phenom_page(host, country, lang, page * PHENOM_PAGE)
+        if got is None:
+            return None
+        total, jobs = got
+        if first_total is None:
+            first_total = total
+        if total != first_total:
+            return None
+        out.extend(jobs)
+        if len(out) >= total or not jobs:
+            return out if len(out) == total and len({j["job_id"] for j in out}) == total else None
+    return None  # more pages than the limit: the list is not complete
+
+
 ADAPTERS: dict[str, Callable[[str], list[Job] | None]] = {
     "greenhouse_url": greenhouse_url,
     "greenhouse": greenhouse,
@@ -482,4 +566,5 @@ ADAPTERS: dict[str, Callable[[str], list[Job] | None]] = {
     "bamboohr": bamboohr,
     "oraclehcm": oraclehcm,
     "amazon": amazon,
+    "phenom": phenom,
 }

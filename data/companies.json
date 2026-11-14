@@ -2621,5 +2621,41 @@
   "n_jobs": 5,
   "n_israel": 5,
   "israel_only": true
+ },
+ {
+  "name": "Cisco",
+  "domain": "cisco.com",
+  "careers_url": "",
+  "ats": "phenom",
+  "slug": "careers.cisco.com/global/en",
+  "source": "override",
+  "status": "ok",
+  "n_jobs": 48,
+  "n_israel": 48,
+  "israel_only": true
+ },
+ {
+  "name": "Mastercard",
+  "domain": "mastercard.com",
+  "careers_url": "",
+  "ats": "phenom",
+  "slug": "careers.mastercard.com/us/en",
+  "source": "override",
+  "status": "ok",
+  "n_jobs": 3,
+  "n_israel": 3,
+  "israel_only": true
+ },
+ {
+  "name": "GE HealthCare",
+  "domain": "gehealthcare.com",
+  "careers_url": "",
+  "ats": "phenom",
+  "slug": "careers.gehealthcare.com/global/en",
+  "source": "override",
+  "status": "ok",
+  "n_jobs": 34,
+  "n_israel": 34,
+  "israel_only": true
  }
 ]

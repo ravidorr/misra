@@ -903,3 +903,205 @@ def test_amazon_a_failure_after_the_first_page_is_a_failure(monkeypatch: pytest.
 
 def test_amazon_is_registered() -> None:
     assert adapters.ADAPTERS["amazon"] is adapters.amazon
+
+
+PHENOM_SLUG = "careers.acme.com/global/en"
+PHENOM_PAGE_SIZE = 50
+
+
+def ph_job(
+    job_id: Any, title: Any = "Engineer", seq: Any = "SEQ", place: Any = "Haifa, Israel", **extra: Any
+) -> dict[str, Any]:
+    return {
+        "jobId": job_id,
+        "title": title,
+        "jobSeqNo": seq,
+        "location": place,
+        "multi_location": [place] if place else [],
+        "category": "Engineering",
+        "postedDate": "2026-10-06T00:00:00.000+0000",
+        **extra,
+    }
+
+
+def ph_answer(jobs: Any, total: Any = None, israel: Any = None) -> FakeHttpResponse:
+    count = len(jobs) if total is None and isinstance(jobs, list) else total
+    facet = {"United States of America": 99, "Israel": count if israel is None else israel}
+    data = {"jobs": jobs, "aggregations": [{"field": "city", "value": {}}, {"field": "country", "value": facet}]}
+    return FakeHttpResponse(data={"refineSearch": {"totalHits": count, "data": data}})
+
+
+def fake_ph(monkeypatch: pytest.MonkeyPatch, *responses: FakeHttpResponse | None) -> list[dict[str, Any]]:
+    calls: list[dict[str, Any]] = []
+    queue = list(responses)
+
+    def _post(url: str, **kw: Any) -> FakeHttpResponse | None:
+        calls.append({"url": url, **kw})
+        return queue.pop(0) if len(queue) > 1 else queue[0]
+
+    monkeypatch.setattr(adapters, "post", _post)
+    return calls
+
+
+def test_phenom_reads_the_israel_jobs(monkeypatch: pytest.MonkeyPatch) -> None:
+    jobs_in = [
+        ph_job("1", "A", "S1", "Tel Aviv-Yafo, Israel"),
+        ph_job("2", "B", "S2", "Austin, United States", multi_location=["Austin, United States", "Haifa, Israel"]),
+    ]
+    calls = fake_ph(monkeypatch, ph_answer(jobs_in))
+    jobs = adapters.phenom(PHENOM_SLUG)
+    assert len(calls) == 1
+    assert calls[0]["url"] == "https://careers.acme.com/widgets"
+    body = calls[0]["json"]
+    assert (body["lang"], body["country"], body["from"], body["size"]) == ("en_global", "global", 0, PHENOM_PAGE_SIZE)
+    assert body["selected_fields"] == {"country": ["Israel"]}
+    assert jobs is not None
+    assert [(j["job_id"], j["title"], j["location"], j["team"], j["url"]) for j in jobs] == [
+        ("1", "A", "Tel Aviv-Yafo, Israel", "Engineering", "https://careers.acme.com/global/en/job/S1"),
+        ("2", "B", "Haifa, Israel", "Engineering", "https://careers.acme.com/global/en/job/S2"),
+    ]
+    assert jobs[0]["posted"] == "2026-10-06T00:00:00.000+0000"
+    assert all(discover.ISRAEL.search(j["location"]) for j in jobs)
+
+
+def test_phenom_reads_every_page(monkeypatch: pytest.MonkeyPatch) -> None:
+    first = ph_answer([ph_job(str(i), seq=f"S{i}") for i in range(PHENOM_PAGE_SIZE)], total=PHENOM_PAGE_SIZE + 1)
+    second = ph_answer([ph_job("last", seq="SL")], total=PHENOM_PAGE_SIZE + 1)
+    calls = fake_ph(monkeypatch, first, second)
+    jobs = adapters.phenom(PHENOM_SLUG)
+    assert jobs is not None
+    assert [j["job_id"] for j in jobs][-2:] == ["49", "last"]
+    assert [c["json"]["from"] for c in calls] == [0, PHENOM_PAGE_SIZE]
+
+
+def test_phenom_no_job_is_an_empty_board(monkeypatch: pytest.MonkeyPatch) -> None:
+    fake_ph(monkeypatch, ph_answer([]))
+    assert adapters.phenom(PHENOM_SLUG) == []
+
+
+def test_phenom_no_israel_entry_in_the_country_facet_means_none_to_find(monkeypatch: pytest.MonkeyPatch) -> None:
+    data = {"jobs": [], "aggregations": [{"field": "country", "value": {"France": 4}}]}
+    fake_ph(monkeypatch, FakeHttpResponse(data={"refineSearch": {"totalHits": 0, "data": data}}))
+    assert adapters.phenom(PHENOM_SLUG) == []
+
+
+def test_phenom_a_filter_that_matches_nothing_while_the_facet_counts_jobs_is_a_failure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    fake_ph(monkeypatch, ph_answer([], total=0, israel=48))  # what a renamed facet value or a typo answers
+    assert adapters.phenom(PHENOM_SLUG) is None
+
+
+def test_phenom_a_total_the_facet_does_not_confirm_is_a_failure(monkeypatch: pytest.MonkeyPatch) -> None:
+    fake_ph(monkeypatch, ph_answer([ph_job("1")], total=1, israel=2))
+    assert adapters.phenom(PHENOM_SLUG) is None
+
+
+def test_phenom_a_job_outside_israel_means_the_filter_was_ignored(monkeypatch: pytest.MonkeyPatch) -> None:
+    fake_ph(monkeypatch, ph_answer([ph_job("1", place="Haifa, Israel"), ph_job("2", place="London, UK")]))
+    assert adapters.phenom(PHENOM_SLUG) is None
+
+
+def test_phenom_a_job_with_no_place_is_a_failure(monkeypatch: pytest.MonkeyPatch) -> None:
+    fake_ph(monkeypatch, ph_answer([ph_job("1", place=None, multi_location=None)]))
+    assert adapters.phenom(PHENOM_SLUG) is None
+
+
+def test_phenom_fewer_jobs_than_the_total_is_a_failure(monkeypatch: pytest.MonkeyPatch) -> None:
+    fake_ph(monkeypatch, ph_answer([ph_job("1")], total=3), ph_answer([], total=3))
+    assert adapters.phenom(PHENOM_SLUG) is None
+
+
+def test_phenom_a_total_that_moves_between_pages_is_a_failure(monkeypatch: pytest.MonkeyPatch) -> None:
+    first = ph_answer([ph_job(str(i), seq=f"S{i}") for i in range(PHENOM_PAGE_SIZE)], total=PHENOM_PAGE_SIZE + 1)
+    second = ph_answer([ph_job("last", seq="SL")], total=PHENOM_PAGE_SIZE)
+    fake_ph(monkeypatch, first, second)
+    assert adapters.phenom(PHENOM_SLUG) is None
+
+
+def test_phenom_a_job_listed_twice_is_a_failure(monkeypatch: pytest.MonkeyPatch) -> None:
+    first = ph_answer([ph_job(str(i), seq=f"S{i}") for i in range(PHENOM_PAGE_SIZE)], total=PHENOM_PAGE_SIZE + 1)
+    fake_ph(monkeypatch, first, ph_answer([ph_job("0", seq="S0")], total=PHENOM_PAGE_SIZE + 1))
+    assert adapters.phenom(PHENOM_SLUG) is None
+
+
+def test_phenom_more_pages_than_the_limit_is_a_failure(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(adapters, "PHENOM_MAX_PAGES", 2)
+    full = ph_answer([ph_job(str(i), seq=f"S{i}") for i in range(PHENOM_PAGE_SIZE)], total=10_000)
+    fake_ph(monkeypatch, full)
+    assert adapters.phenom(PHENOM_SLUG) is None
+
+
+@pytest.mark.parametrize(
+    "slug",
+    [
+        "acme",
+        "careers.acme.com",
+        "careers.acme.com/global",
+        "a.com/b/c/d",
+        "nodot/global/en",
+        "a.com//en",
+        "a.com/global/",
+    ],
+)
+def test_phenom_a_bad_slug_is_a_failure(monkeypatch: pytest.MonkeyPatch, slug: str) -> None:
+    calls = fake_ph(monkeypatch, ph_answer([]))
+    assert adapters.phenom(slug) is None
+    assert calls == []
+
+
+@pytest.mark.parametrize(
+    "resp", [None, FakeHttpResponse(status_code=503), FakeHttpResponse(text="<html>", json_error=True)]
+)
+def test_phenom_a_failed_request_or_html_answer_is_a_failure(
+    monkeypatch: pytest.MonkeyPatch, resp: FakeHttpResponse | None
+) -> None:
+    fake_ph(monkeypatch, resp)
+    assert adapters.phenom(PHENOM_SLUG) is None
+
+
+@pytest.mark.parametrize(
+    "answer",
+    [
+        FakeHttpResponse(data={}),
+        FakeHttpResponse(data=None),
+        FakeHttpResponse(data={"refineSearch": {"totalHits": 1}}),
+        FakeHttpResponse(data={"refineSearch": {"totalHits": 1, "data": {"jobs": []}}}),  # no country facet
+        FakeHttpResponse(data={"refineSearch": {"totalHits": 1, "data": {"jobs": [], "aggregations": []}}}),
+        FakeHttpResponse(data={"refineSearch": {"totalHits": 1, "data": {"jobs": [], "aggregations": None}}}),
+        FakeHttpResponse(
+            data={"refineSearch": {"totalHits": 1, "data": {"jobs": [], "aggregations": [{"field": "country"}]}}}
+        ),
+        FakeHttpResponse(
+            data={
+                "refineSearch": {
+                    "totalHits": 1,
+                    "data": {"jobs": [], "aggregations": [{"field": "country", "value": 5}]},
+                }
+            }
+        ),
+        FakeHttpResponse(data={"refineSearch": {"totalHits": "1", "data": {"jobs": []}}}),
+        FakeHttpResponse(data={"refineSearch": {"totalHits": 1, "data": {"jobs": {"a": 1}}}}),
+        ph_answer({"a": 1}, total=1),
+        ph_answer([], total="1"),
+        ph_answer(["junk"], total=1),
+        ph_answer([ph_job("")], total=1),  # no id
+        ph_answer([ph_job("1", title="")], total=1),
+        ph_answer([ph_job("1", seq=None)], total=1),
+    ],
+)
+def test_phenom_an_answer_that_is_not_a_clean_search_is_a_failure(
+    monkeypatch: pytest.MonkeyPatch, answer: FakeHttpResponse
+) -> None:
+    fake_ph(monkeypatch, answer)
+    assert adapters.phenom(PHENOM_SLUG) is None
+
+
+def test_phenom_a_failure_after_the_first_page_is_a_failure(monkeypatch: pytest.MonkeyPatch) -> None:
+    first = ph_answer([ph_job(str(i), seq=f"S{i}") for i in range(PHENOM_PAGE_SIZE)], total=100)
+    fake_ph(monkeypatch, first, FakeHttpResponse(status_code=500))
+    assert adapters.phenom(PHENOM_SLUG) is None
+
+
+def test_phenom_is_registered() -> None:
+    assert adapters.ADAPTERS["phenom"] is adapters.phenom

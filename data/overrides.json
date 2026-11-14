@@ -747,5 +747,20 @@
   "ats": "workday",
   "slug": "workday/wd5/Workday",
   "israel_only": true
+ },
+ "Cisco": {
+  "ats": "phenom",
+  "slug": "careers.cisco.com/global/en",
+  "israel_only": true
+ },
+ "Mastercard": {
+  "ats": "phenom",
+  "slug": "careers.mastercard.com/us/en",
+  "israel_only": true
+ },
+ "GE HealthCare": {
+  "ats": "phenom",
+  "slug": "careers.gehealthcare.com/global/en",
+  "israel_only": true
  }
 }
