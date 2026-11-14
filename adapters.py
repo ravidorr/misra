@@ -23,10 +23,10 @@ ORACLEHCM_PAGE = 50
 ORACLEHCM_MAX_PAGES = 100
 ORACLEHCM_SLUG_PARTS = 2
 AMAZON_PAGE = 100
+AMAZON_MAX_PAGES = 50
 PHENOM_PAGE = 50
 PHENOM_MAX_PAGES = 100
 PHENOM_SLUG_PARTS = 3
-AMAZON_MAX_PAGES = 50
 
 
 def _job(  # noqa: PLR0913, PLR0917
@@ -474,8 +474,8 @@ def amazon(slug: str) -> list[Job] | None:
 
 def _phenom_page(host: str, country: str, lang: str, offset: int) -> tuple[int, list[Job]] | None:
     """The reported total and one page of Israel jobs from a Phenom career site, or None when the answer is not the
-    JSON of a search, a job lacks an id, a title or a sequence number, or a job is not in Israel (the country filter
-    was ignored, so the page is a worldwide one)."""
+    JSON of a search, the total is not the Israel count of the site's own country facet (the filter matched nothing),
+    a job lacks an id, a title or a sequence number, or a job is not in Israel (the filter was ignored)."""
     body = {
         "lang": f"{lang}_{country}",
         "deviceType": "desktop",
@@ -505,10 +505,14 @@ def _phenom_page(host: str, country: str, lang: str, offset: int) -> tuple[int, 
     try:
         search = r.json()["refineSearch"]
         total, found = search["totalHits"], search["data"]["jobs"]
-    except (ValueError, KeyError, TypeError):
+        facet = next(a["value"] for a in search["data"]["aggregations"] if a.get("field") == "country")
+        israel = facet.get("Israel", 0)
+    except (ValueError, KeyError, TypeError, AttributeError, StopIteration):
         return None
-    if not isinstance(found, list) or not isinstance(total, int):
-        return None
+    if not isinstance(found, list) or not isinstance(total, int) or israel != total:
+        return (
+            None  # the country facet counts the Israel jobs whatever the filter: a filter that matches nothing differs
+        )
     out: list[Job] = []
     for j in found:
         if not (isinstance(j, dict) and j.get("jobId") and j.get("title") and j.get("jobSeqNo")):

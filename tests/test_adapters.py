@@ -924,9 +924,11 @@ def ph_job(
     }
 
 
-def ph_answer(jobs: Any, total: Any = None) -> FakeHttpResponse:
+def ph_answer(jobs: Any, total: Any = None, israel: Any = None) -> FakeHttpResponse:
     count = len(jobs) if total is None and isinstance(jobs, list) else total
-    return FakeHttpResponse(data={"refineSearch": {"totalHits": count, "data": {"jobs": jobs}}})
+    facet = {"United States of America": 99, "Israel": count if israel is None else israel}
+    data = {"jobs": jobs, "aggregations": [{"field": "city", "value": {}}, {"field": "country", "value": facet}]}
+    return FakeHttpResponse(data={"refineSearch": {"totalHits": count, "data": data}})
 
 
 def fake_ph(monkeypatch: pytest.MonkeyPatch, *responses: FakeHttpResponse | None) -> list[dict[str, Any]]:
@@ -975,6 +977,24 @@ def test_phenom_reads_every_page(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_phenom_no_job_is_an_empty_board(monkeypatch: pytest.MonkeyPatch) -> None:
     fake_ph(monkeypatch, ph_answer([]))
     assert adapters.phenom(PHENOM_SLUG) == []
+
+
+def test_phenom_no_israel_entry_in_the_country_facet_means_none_to_find(monkeypatch: pytest.MonkeyPatch) -> None:
+    data = {"jobs": [], "aggregations": [{"field": "country", "value": {"France": 4}}]}
+    fake_ph(monkeypatch, FakeHttpResponse(data={"refineSearch": {"totalHits": 0, "data": data}}))
+    assert adapters.phenom(PHENOM_SLUG) == []
+
+
+def test_phenom_a_filter_that_matches_nothing_while_the_facet_counts_jobs_is_a_failure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    fake_ph(monkeypatch, ph_answer([], total=0, israel=48))  # what a renamed facet value or a typo answers
+    assert adapters.phenom(PHENOM_SLUG) is None
+
+
+def test_phenom_a_total_the_facet_does_not_confirm_is_a_failure(monkeypatch: pytest.MonkeyPatch) -> None:
+    fake_ph(monkeypatch, ph_answer([ph_job("1")], total=1, israel=2))
+    assert adapters.phenom(PHENOM_SLUG) is None
 
 
 def test_phenom_a_job_outside_israel_means_the_filter_was_ignored(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -1046,8 +1066,24 @@ def test_phenom_a_failed_request_or_html_answer_is_a_failure(
         FakeHttpResponse(data={}),
         FakeHttpResponse(data=None),
         FakeHttpResponse(data={"refineSearch": {"totalHits": 1}}),
+        FakeHttpResponse(data={"refineSearch": {"totalHits": 1, "data": {"jobs": []}}}),  # no country facet
+        FakeHttpResponse(data={"refineSearch": {"totalHits": 1, "data": {"jobs": [], "aggregations": []}}}),
+        FakeHttpResponse(data={"refineSearch": {"totalHits": 1, "data": {"jobs": [], "aggregations": None}}}),
+        FakeHttpResponse(
+            data={"refineSearch": {"totalHits": 1, "data": {"jobs": [], "aggregations": [{"field": "country"}]}}}
+        ),
+        FakeHttpResponse(
+            data={
+                "refineSearch": {
+                    "totalHits": 1,
+                    "data": {"jobs": [], "aggregations": [{"field": "country", "value": 5}]},
+                }
+            }
+        ),
         FakeHttpResponse(data={"refineSearch": {"totalHits": "1", "data": {"jobs": []}}}),
         FakeHttpResponse(data={"refineSearch": {"totalHits": 1, "data": {"jobs": {"a": 1}}}}),
+        ph_answer({"a": 1}, total=1),
+        ph_answer([], total="1"),
         ph_answer(["junk"], total=1),
         ph_answer([ph_job("")], total=1),  # no id
         ph_answer([ph_job("1", title="")], total=1),
