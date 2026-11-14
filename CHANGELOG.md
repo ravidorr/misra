@@ -2,6 +2,16 @@
 
 All notable changes are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses [Semantic Versioning](https://semver.org/).
 
+## [0.10.1] - 2026-11-14
+
+### Fixed
+
+- `discover.ATS_LINK` no longer reads the `j` of `apply.workable.com/j/<shortcode>` (a job link) as a Workable account, which is how D-ID and Autofleet got bad slugs. A page that links a job and a board still finds the board.
+
+### Added
+
+- `ATS_LINK` recognises JazzHR (`<slug>.applytojob.com`) and BambooHR (`<slug>.bamboohr.com`) boards, so a rediscovery finds the companies pinned on those adapters. The `www`, `api`, `app` and `help` hosts of either site are not boards, and the slug is lowercased (the adapters compare it with the host the response gives back).
+
 ## [0.10.0] - 2026-11-14
 
 ### Changed

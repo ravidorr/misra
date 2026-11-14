@@ -116,8 +116,8 @@ Observations about live sites below come from checks made on 2026-11-14 and may 
     1. Find the real careers page, then look for the job board it uses: an embedded or linked Greenhouse, Lever, Ashby,
        Workable, SmartRecruiters, Comeet or Workday board (`discover.ATS_LINK` has the patterns, and the page's HTML,
        links and iframes all need a look, since scripts hide them) or a JSON feed in its network requests.
-       A Workable job link is `apply.workable.com/j/<shortcode>` on a page: `ATS_LINK` read its `j` as the account, so
-       open the link, which redirects to `apply.workable.com/<account>/j/<shortcode>`, and take the account from there.
+       A Workable job link on a page is `apply.workable.com/j/<shortcode>`: it names no account (open it: it redirects
+       to `apply.workable.com/<account>/j/<shortcode>`). `ATS_LINK` skips these links since 0.10.1.
     2. With an existing adapter, probe it from a shell (`adapters.ADAPTERS["greenhouse"]("slug")` and so on). Without
        one, the browser crawler is the fallback: `browser_crawl.crawl_many([url])` (set `PW_CHROMIUM` to a Chromium
        build, or run `playwright install chromium`) shows what it reads.
