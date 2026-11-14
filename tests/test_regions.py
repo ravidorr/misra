@@ -169,6 +169,12 @@ def test_report_lists_share_counts_and_unmapped_places() -> None:
     assert "    2 Foo Town, IL" in lines
 
 
+def test_report_counts_unmapped_places_next_to_mapped_ones() -> None:
+    text = regions.report(["Israel, Tel Aviv; Israel, Zikim", "Israel, Zikim"])
+    assert "    2 Israel, Zikim" in text.splitlines()
+    assert text.splitlines()[0] == "Regions: 50.0% of 2 jobs in Israel are in a region"
+
+
 def test_report_without_unmapped_places_or_israeli_jobs() -> None:
     assert "Unmapped" not in regions.report(["Tel Aviv, IL"])
     empty = regions.report(["London, UK"])

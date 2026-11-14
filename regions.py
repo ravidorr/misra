@@ -156,8 +156,7 @@ def report(locations: Iterable[str | None], sample: int = 20) -> str:
     in_region = sum(1 for p in placed if p.regions)
     unmapped: Counter[str] = Counter()
     for p in placed:
-        if not p.regions:
-            unmapped.update(p.locations)
+        unmapped.update(p.locations)
     share = in_region / len(placed) if placed else 1.0
     lines = [f"Regions: {share:.1%} of {len(placed)} jobs in Israel are in a region"]
     lines.extend(f"  {name}: {sum(1 for p in placed if name in p.regions)}" for name in REGION_NAMES)
