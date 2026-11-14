@@ -1,9 +1,8 @@
 # TODO
 
 Open work, as of 2026-11-14. Each item says what triggers it, how to do it and when it is done. When one is finished,
-delete it and update the counts in the others: the 116 and the four segment counts in the research item (a pin removes
-one row from one segment), its "(34)" if the company had no careers URL, and the "five" and "six" in the Workday
-item. Observations about live sites below come from checks made on 2026-11-14 and may have changed.
+delete it and update the counts in the others: the 111 and the four segment counts in the research item (a pin removes
+one row from one segment), its "(34)" if the company had no careers URL. Observations about live sites below come from checks made on 2026-11-14 and may have changed.
 
 ## Review the Node and Python pins
 
@@ -35,58 +34,12 @@ item. Observations about live sites below come from checks made on 2026-11-14 an
        green.
   - Done when: the pins name the new versions and that manual run passed. Put the next review date here.
 
-## Workday companies waiting for Workday
-
-- [ ] Five companies (six sites: Kyndryl has two) run their careers on Workday, and the `workday` adapter is merged, but
-  their hosts still cannot be checked. Seven others were pinned on 2026-11-14 (DoubleVerify, Visa, Motorola Solutions,
-  Palo Alto Networks, CrowdStrike, Proofpoint, Integral Ad Science) once their hosts answered again. On 2026-11-14 at
-  15:17 UTC the job search of these five still answered with a 303 redirect that ends at
-  `community.workday.com/maintenance-page` (Workday's "service interruption" notice), while other tenants on the same
-  data centres (wd5: Visa, CrowdStrike; wd1: Integral Ad Science; wd3: Samsung, Criteo) answered normally, so the
-  outage is per tenant, not per data centre. It is not a wrong address: an unknown tenant answers 422 and an unknown
-  site 404, never this redirect. Nothing is pinned for them, on purpose: a down host would show as a "not crawled" gap
-  on the first day.
-  - The addresses came from the companies' own careers pages:
-
-    | Company | Slug |
-    | --- | --- |
-    | Marvell | `marvell/wd1/MarvellCareers` |
-    | Broadcom | `broadcom/wd1/External_Career` |
-    | Medtronic | `medtronic/wd1/MedtronicCareers` |
-    | Kyndryl | `kyndryl/wd5/KyndrylProfessionalCareers` and `kyndryl/wd5/KyndrylEarlyCareers` |
-    | Workday | `workday/wd5/Workday` |
-
-  - Steps:
-    1. Probe a slug from the repository root (it needs the `.venv`, see the README): `.venv/bin/python -c "import adapters;
-       print(adapters.workday('visa/wd5/Visa'))"`. `None` means the host did not answer with a job search (an outage, a
-       wrong tenant or site, an error); `[]` means it answered and has no job in Israel; a list is the Israel jobs, each a
-       dict with `job_id`, `title`, `location` and `url`.
-    2. If it is `None`, retry on another day and at another time. If it stays `None` for several days, open the careers
-       page in a browser: the tenant, data centre or site name may have changed.
-    3. For each slug that answers, check the result by hand once: open two of the `url`s in a browser (they should be real
-       postings in Israel) and, for an empty list, look at the company's own careers page, since several of these
-       companies have Israeli offices. Then pin it with four edits. Edit the files by hand and append at the end: do not
-       rerun `discover.py`, which re-probes every company and rewrites `data/companies.json`.
-       - `data/overrides.json`: `"Visa": {"ats": "workday", "slug": "visa/wd5/Visa", "israel_only": true}`
-       - `data/companies.json`: `{"name", "domain", "careers_url": "", "ats": "workday", "slug", "source": "override",
-         "status": "ok", "n_jobs", "n_israel", "israel_only": true}`, with `n_jobs` and `n_israel` from the probe (the
-         adapter returns Israel jobs only, so they are equal: Samsung is 3 and 3, Criteo 0 and 0; the domain is in
-         `data/unresolved_candidates.csv`)
-       - `data/seed_companies.csv`: one `Name,domain` row
-       - remove the row from `data/unresolved_candidates.csv`
-       - both CSV files use CRLF line endings: keep them, and update the counts named at the top
-    4. A board with no Israel job today is fine to pin: the `israel_only` rule reports the first Israel job it ever lists.
-    5. Kyndryl is one company, so one entry (overrides are keyed by name): probe both sites and pin the one that lists
-       Israel jobs, the larger one if both do, and either (say which) if neither does.
-    6. This is a data-only PR: no version bump. Run the gates and the review loop as for any PR.
-  - Done when: each of the five is pinned or has a recorded reason it cannot be (move it to the research item).
-
 ## Research the remaining unresolved companies
 
-- [ ] `data/unresolved_candidates.csv` lists 116 researched companies with no usable job feed (as of 2026-11-14: 35
-  multinational, 47 deeptech, 18 cyber_infra, 16 biz_software). It includes the five Workday companies above. Each needs
+- [ ] `data/unresolved_candidates.csv` lists 111 researched companies with no usable job feed (as of 2026-11-14: 30
+  multinational, 47 deeptech, 18 cyber_infra, 16 biz_software). Each needs
   its own research; there is no batch fix left. Every observation about a live site below is from the checks of
-  2026-11-14, a crawl of the 105 rows that had a careers URL that day (82 today) and a scan of their rendered pages. The
+  2026-11-14, a crawl of the 105 rows that had a careers URL that day (77 today) and a scan of their rendered pages. The
   remaining work falls into these groups:
   - **No careers URL (34).** Status `not_found` in `data/new/*_companies.json`: OX Security, Upsolver, Ceva, Speedata,
     Teramount, X-Globe, Q Factor, Gilat, Siklu, Silicom, Sight Diagnostics, Brainsway, EarlySign, Diagnostic Robotics,
@@ -135,9 +88,22 @@ item. Observations about live sites below come from checks made on 2026-11-14 an
     3. Read the result before pinning. It needs real titles, distinct links and a location per job that the Israel matcher
        (`discover.ISRAEL`) can recognise, for the jobs that will appear and not only the ones there today. A list of
        navigation links, a worldwide first page or a partial list is not a feed.
-    4. Pin with the four edits described under the Workday item (an `israel_only` company if it is a large multinational),
-       one company or one source per PR so a bad pin is easy to drop. Code changes (an adapter, a parser fix) need a
-       version bump and a changelog entry; data-only PRs do not.
+    4. Pin with four edits (`israel_only` for a large multinational), one company or one source per PR so a bad pin is
+       easy to drop. Edit the files by hand and append at the end: do not rerun `discover.py`, which re-probes every
+       company and rewrites `data/companies.json`.
+       - `data/overrides.json`: `"Visa": {"ats": "workday", "slug": "visa/wd5/Visa", "israel_only": true}`
+       - `data/companies.json`: `{"name", "domain", "careers_url": "", "ats": "workday", "slug", "source": "override",
+         "status": "ok", "n_jobs", "n_israel", "israel_only": true}`, with `n_jobs` and `n_israel` from the probe (an
+         `israel_only` adapter returns Israel jobs only, so they are equal; the domain is in
+         `data/unresolved_candidates.csv`)
+       - `data/seed_companies.csv`: one `Name,domain` row
+       - remove the row from `data/unresolved_candidates.csv`
+       - both CSV files use CRLF line endings: keep them, and update the counts named at the top.
+       A board with no Israel job today is fine to pin: the `israel_only` rule reports the first Israel job it ever
+       lists. Code changes (an adapter, a parser fix) need a version bump and a changelog entry; data-only PRs do not.
+       Probe a Workday slug with `.venv/bin/python -c "import adapters; print(adapters.workday('visa/wd5/Visa'))"`:
+       `None` is a host that did not answer with a job search (Workday tenants go to a maintenance page for hours at a
+       time, and answer again later: probe on more than one day before giving up), `[]` is a board with no Israel job.
     5. If a company cannot be done, say why. Adding a `reason` column to `data/unresolved_candidates.csv` is safe (no
        code reads that file) and keeps the next person from repeating the work.
   - Tools: `browser_crawl.crawl_many` over every row with a careers URL, and a scan of the rendered pages for ATS links,

@@ -722,5 +722,30 @@
   "ats": "amazon",
   "slug": "ISR",
   "israel_only": true
+ },
+ "Marvell": {
+  "ats": "workday",
+  "slug": "marvell/wd1/MarvellCareers",
+  "israel_only": true
+ },
+ "Medtronic": {
+  "ats": "workday",
+  "slug": "medtronic/wd1/MedtronicCareers",
+  "israel_only": true
+ },
+ "KLA": {
+  "ats": "workday",
+  "slug": "kla/wd1/Search",
+  "israel_only": true
+ },
+ "Kyndryl": {
+  "ats": "workday",
+  "slug": "kyndryl/wd5/KyndrylProfessionalCareers",
+  "israel_only": true
+ },
+ "Workday": {
+  "ats": "workday",
+  "slug": "workday/wd5/Workday",
+  "israel_only": true
  }
 }
