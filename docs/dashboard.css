@@ -1,0 +1,704 @@
+/*
+ * Misra design tokens. The only file allowed to contain raw colors.
+ * Light is the default; dark follows the system setting and can be forced
+ * with <html data-theme="dark"> or <html data-theme="light">.
+ */
+:root {
+  --font-sans: system-ui, -apple-system, "Segoe UI", roboto, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", menlo, consolas, monospace;
+  --text-xs: 0.75rem;
+  --text-sm: 0.875rem;
+  --text-md: 1rem;
+  --text-lg: 1.125rem;
+  --text-xl: 1.5rem;
+  --text-hero: clamp(2.75rem, 11vw, 4rem);
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.5rem;
+  --space-6: 2rem;
+  --space-7: 3rem;
+  --radius-control: 14px;
+  --radius-card: 20px;
+  --radius-pill: 999px;
+  --border-width: 2px;
+  --shadow-sm: 3px 3px 0 var(--shadow);
+  --shadow-md: 5px 5px 0 var(--shadow);
+  --tap: 44px;
+
+  color-scheme: light;
+
+  --bg: #f5f0e6;
+  --panel: #fff;
+  --ink: #111;
+  --line: #111;
+  --shadow: #111;
+  --muted: #55525c;
+  --accent: #6c47ff;
+  --solid: #6c47ff;
+  --on-solid: #fff;
+  --accent-bg: #e6deff;
+  --lime: #d4ff4f;
+  --on-lime: #111;
+  --warn-bg: #ffe3b3;
+
+  /* The logo keeps its colors in both themes. */
+  --mark-disc: #6c47ff;
+  --mark-ink: #111;
+  --mark-spark: #d4ff4f;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+
+    --bg: #121116;
+    --panel: #1d1b24;
+    --ink: #f5f0e6;
+    --line: #5a5570;
+    --shadow: #6c47ff;
+    --muted: #b4b0be;
+    --accent: #a58fff;
+    --accent-bg: #2b2447;
+    --warn-bg: #4a3512;
+  }
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+
+  --bg: #121116;
+  --panel: #1d1b24;
+  --ink: #f5f0e6;
+  --line: #5a5570;
+  --shadow: #6c47ff;
+  --muted: #b4b0be;
+  --accent: #a58fff;
+  --accent-bg: #2b2447;
+  --warn-bg: #4a3512;
+}
+/*
+ * Button. Use <a> for navigation (Apply) and <button type="button"> for actions.
+ *   <a class="btn btn-primary" href="...">Apply ↗</a>
+ *   <button type="button" class="btn">Show more</button>
+ *   <button type="button" class="btn btn-link">Not for me</button>
+ */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: var(--tap);
+  padding: var(--space-2) var(--space-5);
+  border: var(--border-width) solid var(--line);
+  border-radius: var(--radius-control);
+  background: var(--panel);
+  color: var(--ink);
+  font: inherit;
+  font-weight: 800;
+  text-decoration: none;
+  box-shadow: var(--shadow-sm);
+  cursor: pointer;
+}
+
+.btn-primary {
+  background: var(--solid);
+  color: var(--on-solid);
+}
+
+.btn-link {
+  padding-inline: var(--space-2);
+  border-color: transparent;
+  background: none;
+  color: var(--muted);
+  font-weight: 600;
+  text-decoration: underline;
+  box-shadow: none;
+}
+
+.btn-pill {
+  border-radius: var(--radius-pill);
+}
+
+.btn:focus-visible,
+.chip:focus-visible,
+.story:focus-visible,
+.field:focus-visible,
+.card a:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .btn {
+    transition: transform 100ms ease-out, box-shadow 100ms ease-out;
+  }
+}
+
+@media (hover: hover) {
+  .btn:not(.btn-link):hover {
+    transform: translate(-1px, -1px);
+    box-shadow: 4px 4px 0 var(--shadow);
+  }
+}
+
+.btn:not(.btn-link):active {
+  transform: translate(2px, 2px);
+  box-shadow: 1px 1px 0 var(--shadow);
+}
+
+/* Icon-only theme switch: one icon per mode, picked by the theme on <html> so it never flashes. */
+.btn-icon {
+  width: var(--tap);
+  padding: 0;
+}
+
+.theme-icon {
+  display: none;
+}
+
+:root:not([data-theme]) .theme-icon[data-mode="auto"],
+:root[data-theme="light"] .theme-icon[data-mode="light"],
+:root[data-theme="dark"] .theme-icon[data-mode="dark"] {
+  display: inline-flex;
+}
+/*
+ * Card: one role. Machine-readable by design, so keep the data-* attributes.
+ *   <article class="card" data-job-id="..." data-company="..." data-new="true">
+ *     <span class="sticker card-flag">NEW</span>
+ *     <p class="card-company">Acme</p>
+ *     <h3 class="card-title"><a href="...">Role</a></h3>
+ *     <p class="card-tags"><span class="pill">Tel Aviv</span></p>
+ *     <p class="card-actions"><a class="btn btn-primary" href="...">Apply ↗</a></p>
+ *   </article>
+ */
+.card {
+  position: relative;
+  padding: var(--space-4) var(--space-4) var(--space-3);
+  border: var(--border-width) solid var(--line);
+  border-radius: var(--radius-card);
+  background: var(--panel);
+  box-shadow: var(--shadow-md);
+}
+
+.card[data-discarded="true"] {
+  opacity: 0.5;
+}
+
+.card-flag {
+  position: absolute;
+  top: -12px;
+  right: var(--space-4);
+}
+
+.card-company {
+  margin: 0;
+  color: var(--accent);
+  font-size: var(--text-sm);
+  font-weight: 700;
+}
+
+.card-title {
+  margin: var(--space-1) 0 var(--space-3);
+  font-size: var(--text-xl);
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  line-height: 1.15;
+}
+
+.card-title a {
+  color: inherit;
+  text-decoration: none;
+}
+
+@media (hover: hover) {
+  .card-title a:hover {
+    color: var(--accent);
+  }
+}
+
+.card-tags {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0 0 var(--space-4);
+}
+
+.card-seen {
+  color: var(--muted);
+  font-size: 0.8125rem;
+}
+
+.card-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin: 0;
+}
+/*
+ * Chip: a toggle filter. State lives in aria-pressed, never in color alone.
+ *   <button type="button" class="chip" aria-pressed="false">Product</button>
+ *   <button type="button" class="chip chip-new" aria-pressed="true">New only</button>
+ */
+.chip {
+  min-height: var(--tap);
+  padding: var(--space-2) var(--space-4);
+  border: var(--border-width) solid var(--line);
+  border-radius: var(--radius-pill);
+  background: var(--panel);
+  color: var(--ink);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.chip[aria-pressed="true"] {
+  background: var(--ink);
+  color: var(--bg);
+}
+
+.chip-new[aria-pressed="true"] {
+  background: var(--lime);
+  color: var(--on-lime);
+}
+/*
+ * Field (input / select) and notice. Always pair a field with a <label>.
+ *   <label class="sr-only" for="q">Search</label>
+ *   <input class="field" id="q" type="search" placeholder="Search">
+ *   <div class="notice" role="note">Heads up: ...</div>
+ */
+.field {
+  min-height: var(--tap);
+  padding: var(--space-2) var(--space-4);
+  border: var(--border-width) solid var(--line);
+  border-radius: var(--radius-pill);
+  background: var(--panel);
+  color: var(--ink);
+  font: inherit;
+}
+
+/* Custom caret so it sits inside the pill instead of hugging the right edge. */
+select.field {
+  padding-right: calc(var(--space-4) + 20px);
+  appearance: none;
+  background-image:
+    linear-gradient(45deg, transparent 50%, var(--ink) 50%),
+    linear-gradient(135deg, var(--ink) 50%, transparent 50%);
+  background-position:
+    calc(100% - var(--space-4) - 5px) 50%,
+    calc(100% - var(--space-4)) 50%;
+  background-size: 5px 5px;
+  background-repeat: no-repeat;
+}
+
+.field::placeholder {
+  color: var(--muted);
+}
+
+.notice {
+  padding: var(--space-3) var(--space-4);
+  border: var(--border-width) solid var(--line);
+  border-radius: 16px;
+  background: var(--warn-bg);
+  color: var(--ink);
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.highlight {
+  padding: 0 var(--space-2);
+  margin-inline-start: calc(-1 * var(--space-2));
+  background: var(--lime);
+  color: var(--on-lime);
+  box-decoration-break: clone;
+}
+/*
+ * Sticker (status) and pill (tag). Lime is reserved for "new".
+ *   <span class="sticker">NEW</span>
+ *   <span class="sticker sticker-warn">OLD?</span>
+ *   <span class="pill">Tel Aviv</span>
+ *   <span class="pill pill-soft">Intern</span>
+ */
+.sticker {
+  display: inline-block;
+  padding: 2px var(--space-3);
+  border: var(--border-width) solid var(--line);
+  border-radius: var(--radius-pill);
+  background: var(--lime);
+  color: var(--on-lime);
+  font-size: var(--text-xs);
+  font-weight: 800;
+  transform: rotate(3deg);
+}
+
+.sticker-warn {
+  background: var(--warn-bg);
+  color: var(--ink);
+}
+
+.pill {
+  display: inline-block;
+  padding: 2px var(--space-3);
+  border: var(--border-width) solid var(--line);
+  border-radius: var(--radius-pill);
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+
+.pill-soft {
+  border-color: var(--accent-bg);
+  background: var(--accent-bg);
+  color: var(--ink);
+}
+/*
+ * Story: a company with new roles. Tap to filter the feed to it.
+ *   <button type="button" class="story story-new" aria-pressed="false">
+ *     <span class="story-badge" aria-hidden="true">A</span><span class="story-name">Acme</span>
+ *     <span class="sr-only">, 2 new roles</span>
+ *   </button>
+ * Do not use aria-label here: the visible text (badge letter and name) must be part of the accessible name.
+ */
+.story {
+  flex: 0 0 auto;
+  width: 72px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  text-align: center;
+  cursor: pointer;
+}
+
+.story-badge {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 64px;
+  height: 64px;
+  margin: 0 auto var(--space-2);
+  border: 3px solid var(--line);
+  border-radius: 50%;
+  background: var(--panel);
+  box-shadow: var(--shadow-sm);
+  font-size: var(--text-xl);
+  font-weight: 800;
+}
+
+.story-new .story-badge {
+  background: var(--lime);
+  color: var(--on-lime);
+}
+
+.story[aria-pressed="true"] .story-badge {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.story-name {
+  display: block;
+  overflow: hidden;
+  font-size: var(--text-xs);
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* Dashboard layout. Tokens and components come from design-system/ and are bundled into docs/dashboard.css by build_dashboard.py. */
+* {
+  box-sizing: border-box;
+}
+
+html {
+  text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font: var(--text-md) / 1.4 var(--font-sans);
+}
+
+a,
+button,
+summary {
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+a {
+  color: inherit;
+}
+
+.skip {
+  position: absolute;
+  top: -100px;
+  left: var(--space-4);
+  padding: var(--space-2) var(--space-4);
+  background: var(--ink);
+  color: var(--bg);
+}
+
+.skip:focus {
+  top: var(--space-2);
+}
+
+/* Safe-area insets keep content clear of notches and the home indicator on phones. */
+.page {
+  max-width: 760px;
+  margin: 0 auto;
+  padding:
+    max(var(--space-4), env(safe-area-inset-top))
+    max(var(--space-4), env(safe-area-inset-right))
+    max(var(--space-7), env(safe-area-inset-bottom))
+    max(var(--space-4), env(safe-area-inset-left));
+}
+
+.top {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-bottom: var(--space-6);
+}
+
+.top-mark {
+  width: 40px;
+  height: 40px;
+}
+
+.mark-disc {
+  fill: var(--mark-disc);
+  stroke: var(--mark-ink);
+}
+
+.mark-pulse {
+  fill: none;
+  stroke: var(--mark-ink);
+}
+
+.mark-spark {
+  fill: var(--mark-spark);
+  stroke: var(--mark-ink);
+}
+
+.wordmark {
+  display: inline-block;
+  padding: 0 var(--space-2);
+  background: var(--lime);
+  color: var(--on-lime);
+  transform: rotate(-2deg);
+}
+
+.top-name {
+  margin: 0;
+  font-size: var(--text-xl);
+  font-weight: 800;
+  letter-spacing: -0.04em;
+}
+
+.theme-toggle {
+  margin-inline-start: auto;
+}
+
+.hero {
+  margin: 0;
+  font-size: var(--text-hero);
+  font-weight: 800;
+  letter-spacing: -0.05em;
+  line-height: 0.98;
+}
+
+.hero span {
+  display: block;
+  width: fit-content;
+}
+
+.sub {
+  margin: var(--space-4) 0 var(--space-5);
+  color: var(--muted);
+  font-size: var(--text-lg);
+}
+
+.label {
+  margin: 0 0 var(--space-3);
+  font-size: 0.8125rem;
+  font-weight: 700;
+}
+
+.stories {
+  display: flex;
+  list-style: none;
+  gap: var(--space-4);
+  margin: 0 calc(-1 * var(--space-1)) var(--space-4);
+  padding: var(--space-1) var(--space-1) var(--space-4);
+  overflow-x: auto;
+}
+
+.chip-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+
+.controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+}
+
+.search {
+  margin-bottom: var(--space-5);
+}
+
+.search .field {
+  width: 100%;
+}
+
+.more-body input:disabled + span {
+  opacity: 0.5;
+}
+
+.more {
+  margin-bottom: var(--space-5);
+  border: var(--border-width) solid var(--line);
+  border-radius: var(--radius-card);
+  background: var(--warn-bg);
+  box-shadow: var(--shadow-md);
+}
+
+.more > summary {
+  min-height: var(--tap);
+  padding: var(--space-3) var(--space-4);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.more-body {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3) var(--space-4);
+  padding: 0 var(--space-4) var(--space-4);
+}
+
+.more-body label {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--muted);
+  font-size: var(--text-sm);
+}
+
+.gaps {
+  margin-top: var(--space-5);
+  margin-bottom: var(--space-5);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-md);
+}
+
+.gaps > summary {
+  cursor: pointer;
+}
+
+.gaps p {
+  margin: var(--space-2) 0 0;
+  font-weight: 400;
+}
+
+.feed {
+  display: grid;
+  margin-top: var(--space-5);
+  gap: var(--space-5);
+  margin-bottom: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.empty {
+  padding: var(--space-6) 0;
+  color: var(--muted);
+  text-align: center;
+}
+
+.pager {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-3);
+  margin: var(--space-6) 0 var(--space-5);
+}
+
+.pager-info,
+.pager-size {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--muted);
+  font-size: var(--text-sm);
+}
+
+.foot {
+  margin: var(--space-6) 0 0;
+  color: var(--muted);
+  font-size: 0.8125rem;
+  text-align: center;
+}
+
+@media (width <= 560px) {
+  .card-actions .btn-primary {
+    flex: 1;
+  }
+}
+
+.pager[hidden] {
+  display: none;
+}
+
+.pager .btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* Wide screens: compact header so filters and the first cards fit in one screen. */
+@media (width >= 561px) {
+  .page {
+    padding-top: var(--space-3);
+  }
+
+  .top {
+    margin-bottom: var(--space-3);
+  }
+
+  .hero {
+    font-size: 2.5rem;
+    line-height: 1.1;
+  }
+
+  .hero span {
+    display: inline;
+  }
+
+  .sub {
+    margin: var(--space-2) 0 var(--space-3);
+    font-size: var(--text-md);
+  }
+
+  .controls,
+  .more,
+  .search {
+    margin-bottom: var(--space-3);
+  }
+}
