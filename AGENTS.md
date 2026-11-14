@@ -30,7 +30,7 @@ Daily batch pipeline that crawls career pages, keeps history in SQLite, and emai
 
 ## Layout
 
-- Python modules at the root (`run.py`, `adapters.py`, `browser_crawl.py`, `digest.py`, `send_email.py`, `build_dashboard.py`, `discover.py`, `common.py`, dev tools `survey*.py`), `tests/` for pytest
+- Python modules at the root (`run.py`, `adapters.py`, `browser_crawl.py`, `digest.py`, `classify.py`, `send_email.py`, `build_dashboard.py`, `discover.py`, `common.py`, dev tools `survey*.py`), `tests/` for pytest
 - `data/` - seed lists and the SQLite history; `templates/` - dashboard page, script and styles; `docs/` - generated dashboard (GitHub Pages)
 - `design-system/` - tokens, components, showcase page (`index.html`), logo brief; `templates/dashboard.css` - dashboard layout
 - `.husky/` - git hooks (pre-commit fast, pre-push broad)

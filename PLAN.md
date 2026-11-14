@@ -70,10 +70,10 @@ Decisions made in planning (they change the PRD's wording, so update the PRD in 
 
 ## FR-9 and FR-3 (data classification)
 
-- [ ] 3.1 `classify.py`: `level(title)` giving Intern, Junior or Not specified, and `role_types(title)` giving a list
+- [x] ~~3.1 `classify.py`: `level(title)` giving Intern, Junior or Not specified, and `role_types(title)` giving a list
   from the nine types above (more than one allowed, Other when none), as data tables so a new type is one entry.
   Tests on a fixture of real titles, including "Product with every level" and "Product with Intern and Junior".
-  Done when: FR-9 AC 3, 4, 5, 6 and 10 hold in tests, and a report prints the share not in Other.
+  Done when: FR-9 AC 3, 4, 5, 6 and 10 hold in tests, and a report prints the share not in Other.~~
 - [ ] 3.2 `regions.py`: normalise Israeli location strings to the seven regions, handle several cities per job, hybrid
   as office region, "Israel" alone as "Israel, city not given", remote only when open to Israel (otherwise unknown,
   not Remote); unmatched Israeli places keep their own location string; non-Israel jobs untouched. Tests from the real
