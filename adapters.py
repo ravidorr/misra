@@ -22,6 +22,8 @@ ORACLEHCM_ISRAEL = "IL"
 ORACLEHCM_PAGE = 50
 ORACLEHCM_MAX_PAGES = 100
 ORACLEHCM_SLUG_PARTS = 2
+AMAZON_PAGE = 100
+AMAZON_MAX_PAGES = 50
 
 
 def _job(  # noqa: PLR0913, PLR0917
@@ -416,6 +418,51 @@ def oraclehcm(slug: str) -> list[Job] | None:
     return None  # more pages than the limit: the list is not complete
 
 
+def _amazon_page(slug: str, offset: int) -> tuple[int, list[Job]] | None:
+    """The reported total and one page of jobs, or None when the answer is not the JSON of a search or a job lacks an
+    id, a title or a path, or is not in the asked country."""
+    r = get(
+        "https://www.amazon.jobs/en/search.json",
+        params={"country": slug, "result_limit": AMAZON_PAGE, "offset": offset, "sort": "recent"},
+    )
+    if r is None or r.status_code != HTTP_OK:
+        return None
+    try:
+        data = r.json()
+        hits, found = data["hits"], data["jobs"]
+    except (ValueError, KeyError, TypeError):
+        return None
+    if not isinstance(found, list) or not isinstance(hits, int):
+        return None
+    out: list[Job] = []
+    for j in found:
+        if not (isinstance(j, dict) and j.get("id_icims") and j.get("title") and j.get("job_path")):
+            return None
+        if j.get("country_code") != slug:
+            return None
+        where = j.get("normalized_location") or j.get("location")
+        url = f"https://www.amazon.jobs{j['job_path']}"
+        out.append(_job(j["id_icims"], j["title"], where, url, team=j.get("job_category")))
+    return hits, out
+
+
+def amazon(slug: str) -> list[Job] | None:
+    """slug is the country code of amazon.jobs ('ISR'). The site's own search JSON, filtered by `country`, lists every
+    job there (the job page is `https://www.amazon.jobs<job_path>`). The list is trusted only when every page answers
+    with that JSON, every job is in the asked country and has an id, a title and a path, and the pages add up to the
+    reported `hits`: a partial list would close the jobs it lacks."""
+    out: list[Job] = []
+    for page in range(AMAZON_MAX_PAGES):
+        got = _amazon_page(slug, page * AMAZON_PAGE)
+        if got is None:
+            return None
+        hits, jobs = got
+        out.extend(jobs)
+        if len(out) >= hits or not jobs:
+            return out if len(out) == hits else None
+    return None  # more pages than the limit: the list is not complete
+
+
 ADAPTERS: dict[str, Callable[[str], list[Job] | None]] = {
     "greenhouse_url": greenhouse_url,
     "greenhouse": greenhouse,
@@ -428,4 +475,5 @@ ADAPTERS: dict[str, Callable[[str], list[Job] | None]] = {
     "jazzhr": jazzhr,
     "bamboohr": bamboohr,
     "oraclehcm": oraclehcm,
+    "amazon": amazon,
 }
