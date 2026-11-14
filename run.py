@@ -116,7 +116,14 @@ def main() -> None:  # noqa: PLR0912
         if held:
             failed.append(name)  # a crawl that probably lost most of the list: record what it saw, close nothing
         seen: set[str] = set()
-        known = c.execute("SELECT COUNT(*) FROM jobs WHERE company=?", (name,)).fetchone()[0]
+        # a company is new until a crawl has worked once: counting stored jobs alone would baseline silently the first
+        # Israel job of an israel_only company that had none, which is never stored before it appears
+        known = (
+            c.execute("SELECT COUNT(*) FROM jobs WHERE company=?", (name,)).fetchone()[0]
+            or c.execute("SELECT COUNT(*) FROM crawl_log WHERE company=? AND ok=1 AND ts < ?", (name, now)).fetchone()[
+                0
+            ]
+        )
         for j in jobs:
             seen.add(j["job_id"])
             cur = c.execute("SELECT 1 FROM jobs WHERE company=? AND job_id=?", (name, j["job_id"])).fetchone()

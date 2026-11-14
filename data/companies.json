@@ -2265,5 +2265,29 @@
   "status": "ok",
   "n_jobs": null,
   "n_israel": null
+ },
+ {
+  "name": "Samsung",
+  "domain": "samsung.com",
+  "careers_url": "",
+  "ats": "workday",
+  "slug": "sec/wd3/Samsung_Careers",
+  "source": "override",
+  "status": "ok",
+  "n_jobs": 3,
+  "n_israel": 3,
+  "israel_only": true
+ },
+ {
+  "name": "Criteo",
+  "domain": "criteo.com",
+  "careers_url": "",
+  "ats": "workday",
+  "slug": "criteo/wd3/Criteo_Career_Site",
+  "source": "override",
+  "status": "ok",
+  "n_jobs": 0,
+  "n_israel": 0,
+  "israel_only": true
  }
 ]

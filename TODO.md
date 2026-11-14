@@ -1,5 +1,6 @@
 # TODO
 
 - [ ] Review the pins when Node 27 becomes LTS (scheduled 2027-10-20; `engines` in `package.json` caps Node below 27) or before Python 3.12 reaches end of life in October 2028. Node 26 has been LTS since 2026-10-28, and Python 3.12 is the declared floor (`requires-python`) and the version CI and the daily job run.
-- [ ] `data/unresolved_candidates.csv` lists 141 researched companies with no usable job feed yet; revisit as adapters are added
+- [ ] `data/unresolved_candidates.csv` lists 139 researched companies with no usable job feed yet; revisit as adapters are added
 - [ ] The Israel location matcher misses SmartRecruiters' lowercase country code ("Migdal HaEmek, il", "Caesarea, il") for towns that are not in its place list, and does not know Migdal; Western Digital's board is the example
+- [ ] Twelve more Workday boards are known but could not be checked (Workday was in maintenance on 2026-11-14): pin each with `{"ats": "workday", "slug": ..., "israel_only": true}` once `adapters.workday(slug)` answers: doubleverify/wd5/DV_Careers, integralads/wd1/IAScareers, marvell/wd1/MarvellCareers, broadcom/wd1/External_Career, visa/wd5/Visa, medtronic/wd1/MedtronicCareers, motorolasolutions/wd5/Careers, paloaltonetworks/wd5/panwexternalcareers, crowdstrike/wd5/crowdstrikecareers, proofpoint/wd5/proofpointcareers, kyndryl/wd5/KyndrylProfessionalCareers (and KyndrylEarlyCareers), workday/wd5/Workday

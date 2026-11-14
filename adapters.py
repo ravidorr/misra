@@ -6,10 +6,16 @@ import re
 from collections.abc import Callable
 from typing import Any
 
-from common import get
+from common import get, post
 
 HTTP_OK = 200
 Job = dict[str, Any]
+WORKDAY_ISRAEL = (
+    "084562884af243748dad7c84c304d89a"  # Workday's id for Israel in a country facet, the same on every tenant
+)
+WORKDAY_PAGE = 20  # the most jobs Workday returns in one request
+WORKDAY_MAX_PAGES = 100
+WORKDAY_SLUG_PARTS = 3
 
 
 def _job(  # noqa: PLR0913, PLR0917
@@ -171,6 +177,76 @@ def greenhouse_url(url: str) -> list[Job] | None:
     ]
 
 
+def _workday_page(base: str, applied: dict[str, list[str]], text: str, offset: int) -> dict[str, Any] | None:
+    """One page of a Workday job search, or None when the answer is not the JSON of a search (a maintenance
+    redirect, an error page, a tenant or site that does not exist)."""
+    body = {"appliedFacets": applied, "limit": WORKDAY_PAGE, "offset": offset, "searchText": text}
+    r = post(base, json=body, headers={"Accept": "application/json"})
+    if r is None or r.status_code != HTTP_OK:
+        return None
+    try:
+        d = r.json()
+    except ValueError:
+        return None
+    return d if isinstance(d, dict) and isinstance(d.get("jobPostings"), list) else None
+
+
+def _workday_filter(first: dict[str, Any]) -> tuple[dict[str, list[str]], str] | None:
+    """(facets, search text) that select the jobs in Israel, from the facets of an unfiltered search; None when the
+    tenant lists its countries and Israel is not one of them."""
+    facets = [f for f in first.get("facets") or [] if isinstance(f, dict)]
+    for f in facets:
+        if any(v.get("id") == WORKDAY_ISRAEL for v in f.get("values") or [] if isinstance(v, dict)):
+            return {f["facetParameter"]: [WORKDAY_ISRAEL]}, ""
+    if any("country" in str(f.get("facetParameter", "")).lower() for f in facets):
+        return None
+    return {}, "Israel"  # no country facet: search for the word instead
+
+
+def _workday_job(host: str, site: str, posting: dict[str, Any], tag_israel: bool) -> Job | None:
+    path = posting.get("externalPath")
+    if not path:
+        return None
+    loc = " ".join((posting.get("locationsText") or "").split())
+    if tag_israel and "israel" not in loc.lower():
+        loc = f"{loc}, Israel" if loc else "Israel"
+    return _job(path, posting.get("title"), loc, f"{host}/en-US/{site}{path}")
+
+
+def workday(slug: str) -> list[Job] | None:
+    """slug is '<tenant>/<wdN>/<site>', from <tenant>.<wdN>.myworkdayjobs.com/<site>. Only jobs in Israel are read.
+
+    Workday lists a country facet whose name differs per tenant, so it is found in the first answer (see
+    _workday_filter). A posting in several places says only "2 Locations", so a posting found through the Israel
+    facet is tagged Israel when its text does not already say so."""
+    parts = slug.split("/")
+    if len(parts) != WORKDAY_SLUG_PARTS:
+        return None
+    tenant, dc, site = parts
+    host = f"https://{tenant}.{dc}.myworkdayjobs.com"
+    base = f"{host}/wday/cxs/{tenant}/{site}/jobs"
+    first = _workday_page(base, {}, "", 0)
+    if first is None:
+        return None
+    selected = _workday_filter(first)
+    if selected is None:
+        return []
+    applied, text = selected
+    out: list[Job] = []
+    total = 0
+    for page in range(WORKDAY_MAX_PAGES):
+        d = _workday_page(base, applied, text, page * WORKDAY_PAGE)
+        if d is None:
+            return None if page == 0 else out
+        if page == 0:
+            total = d.get("total") or 0  # only the first page carries the total
+        jobs = (_workday_job(host, site, p, bool(applied)) for p in d["jobPostings"])
+        out.extend(j for j in jobs if j)
+        if (page + 1) * WORKDAY_PAGE >= total or not d["jobPostings"]:
+            break
+    return out
+
+
 ADAPTERS: dict[str, Callable[[str], list[Job] | None]] = {
     "greenhouse_url": greenhouse_url,
     "greenhouse": greenhouse,
@@ -179,4 +255,5 @@ ADAPTERS: dict[str, Callable[[str], list[Job] | None]] = {
     "workable": workable,
     "smartrecruiters": smartrecruiters,
     "comeet": comeet,
+    "workday": workday,
 }

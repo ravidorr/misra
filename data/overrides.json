@@ -601,5 +601,15 @@
  "Xtend": {
   "ats": "browser",
   "slug": "https://xtend.me/careers/"
+ },
+ "Samsung": {
+  "ats": "workday",
+  "slug": "sec/wd3/Samsung_Careers",
+  "israel_only": true
+ },
+ "Criteo": {
+  "ats": "workday",
+  "slug": "criteo/wd3/Criteo_Career_Site",
+  "israel_only": true
  }
 }

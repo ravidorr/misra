@@ -2,6 +2,16 @@
 
 All notable changes are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses [Semantic Versioning](https://semver.org/).
 
+## [0.3.1] - 2026-11-14
+
+### Added
+
+- Workday career sites: the `workday` adapter (slug `<tenant>/<wdN>/<site>`, from `<tenant>.<wdN>.myworkdayjobs.com/<site>`) asks Workday's public job search for the jobs in Israel only, through the country facet its first answer lists (its name differs per tenant) or, for a tenant without one, a search for the word Israel. A posting in several places is tagged Israel. Maintenance pages and other non-JSON answers count as a failed crawl, so nothing is closed. Pinned, with `israel_only`, for Samsung (3 Israel jobs) and Criteo (none today).
+
+### Fixed
+
+- A company counts as new until a crawl has worked once, not only until a job is stored. Before, the first Israel job of an `israel_only` company that had none stored (a board with no Israel job when it was pinned) was baselined silently and never reached the digest.
+
 ## [0.3.0] - 2026-11-14
 
 ### Changed

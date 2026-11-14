@@ -9,7 +9,7 @@ import pytest
 
 import browser_crawl
 import run
-from tests.conftest import add_job, write_json
+from tests.conftest import add_crawls, add_job, write_json
 
 
 def job(job_id: str, title: str = "T") -> dict[str, str]:
@@ -477,6 +477,44 @@ def test_a_drop_in_an_api_company_is_still_believed(workdir: Path, adapter: dict
     adapter["api"] = [[job("j0"), job("j1")]]
     run.main()
     assert open_jobs("Api") == API_KEPT  # API feeds are complete lists: only browser crawls are held back
+
+
+def reported_of(name: str, job_id: str) -> int:
+    check = sqlite3.connect(run.DB)
+    value: int = check.execute("SELECT reported FROM jobs WHERE company=? AND job_id=?", (name, job_id)).fetchone()[0]
+    check.close()
+    return value
+
+
+@pytest.mark.parametrize(
+    ("earlier", "reported"),
+    [
+        ([], 1),  # a company seen for the first time is baselined silently
+        ([(0, "HTTP 403")], 1),  # a crawl that failed saw nothing: still new
+        ([(0, "HTTP 403"), (1, "")], 0),  # it has worked once, with no job stored (israel_only found none)
+        ([(1, "")], 0),
+    ],
+)
+def test_a_company_is_new_until_a_crawl_has_worked(
+    workdir: Path, adapter: dict[str, Any], earlier: list[tuple[int, str | None]], reported: int
+) -> None:
+    conn = run.init()
+    add_crawls(conn, "Acme", earlier, ats="fake")
+    conn.close()
+    write_json(workdir / "data" / "companies.json", [co("Acme")])
+    adapter["acme"] = [[job("first")]]
+    run.main()
+    assert reported_of("Acme", "first") == reported
+
+
+def test_stored_jobs_also_make_a_company_known(workdir: Path, adapter: dict[str, Any]) -> None:
+    conn = run.init()
+    add_job(conn, "Acme", "old", "Old job")  # no crawl log at all: a database from before it existed
+    conn.close()
+    write_json(workdir / "data" / "companies.json", [co("Acme")])
+    adapter["acme"] = [[job("old"), job("fresh")]]
+    run.main()
+    assert reported_of("Acme", "fresh") == 0
 
 
 def test_main_without_companies_as_script(workdir: Path, capsys: pytest.CaptureFixture[str]) -> None:
