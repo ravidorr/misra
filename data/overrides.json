@@ -777,5 +777,13 @@
   "ats": "workday",
   "slug": "philips/wd3/jobs-and-careers",
   "israel_only": true
+ },
+ "Retym": {
+  "ats": "comeet",
+  "slug": "retym/C6.003"
+ },
+ "Qedma": {
+  "ats": "comeet",
+  "slug": "qedma/7A.006"
  }
 }
