@@ -2748,5 +2748,52 @@
   "status": "ok",
   "n_jobs": 5,
   "n_israel": 2
+ },
+ {
+  "name": "Allot",
+  "domain": "allot.com",
+  "careers_url": "",
+  "ats": "comeet",
+  "slug": "allot/C4.009",
+  "source": "override",
+  "status": "ok",
+  "n_jobs": 24,
+  "n_israel": 1
+ },
+ {
+  "name": "Foretellix",
+  "domain": "foretellix.com",
+  "careers_url": "",
+  "ats": "comeet",
+  "slug": "Foretellix/84.007",
+  "source": "override",
+  "status": "ok",
+  "n_jobs": 0,
+  "n_israel": 0,
+  "israel_only": true
+ },
+ {
+  "name": "XM Cyber",
+  "domain": "xmcyber.com",
+  "careers_url": "",
+  "ats": "comeet",
+  "slug": "xmcyber/15.005",
+  "source": "override",
+  "status": "ok",
+  "n_jobs": 0,
+  "n_israel": 0,
+  "israel_only": true
+ },
+ {
+  "name": "Dataloop",
+  "domain": "dataloop.ai",
+  "careers_url": "",
+  "ats": "comeet",
+  "slug": "dataloop/B5.00A",
+  "source": "override",
+  "status": "ok",
+  "n_jobs": 0,
+  "n_israel": 0,
+  "israel_only": true
  }
 ]

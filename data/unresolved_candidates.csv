@@ -1,5 +1,4 @@
 name,domain,segment
-XM Cyber,xmcyber.com,cyber_infra
 OX Security,ox.security,cyber_infra
 Radware,radware.com,cyber_infra
 Deep Instinct,deepinstinct.com,cyber_infra
@@ -12,7 +11,6 @@ Firefly,firefly.ai,cyber_infra
 Swimm,swimm.io,cyber_infra
 Applitools,applitools.com,cyber_infra
 lakeFS,lakefs.io,cyber_infra
-Dataloop,dataloop.ai,cyber_infra
 SQream,sqream.com,cyber_infra
 Upsolver,upsolver.com,cyber_infra
 Sunbit,sunbit.com,biz_software
@@ -37,11 +35,9 @@ NeuReality,neureality.ai,deeptech
 Teramount,teramount.com,deeptech
 X-Globe,x-globe.com,deeptech
 Q Factor,qfactor.ai,deeptech
-Foretellix,foretellix.com,deeptech
 Cognata,cognata.com,deeptech
 REE Automotive,ree.auto,deeptech
 Gilat,gilat.com,deeptech
-Allot,allot.com,deeptech
 Siklu,siklu.com,deeptech
 Satixfy,satixfy.com,deeptech
 Silicom,silicom.co.il,deeptech
