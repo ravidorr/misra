@@ -2254,5 +2254,40 @@
   "status": "ok",
   "n_jobs": null,
   "n_israel": null
+ },
+ {
+  "name": "Xtend",
+  "domain": "xtend.me",
+  "careers_url": "https://xtend.me/careers/",
+  "ats": "browser",
+  "slug": "https://xtend.me/careers/",
+  "source": "override",
+  "status": "ok",
+  "n_jobs": null,
+  "n_israel": null
+ },
+ {
+  "name": "Cloudflare",
+  "domain": "cloudflare.com",
+  "careers_url": "",
+  "ats": "greenhouse",
+  "slug": "cloudflare",
+  "source": "override",
+  "status": "ok",
+  "n_jobs": 479,
+  "n_israel": 0,
+  "israel_only": true
+ },
+ {
+  "name": "Western Digital",
+  "domain": "westerndigital.com",
+  "careers_url": "",
+  "ats": "smartrecruiters",
+  "slug": "WesternDigital",
+  "source": "override",
+  "status": "ok",
+  "n_jobs": 325,
+  "n_israel": 0,
+  "israel_only": true
  }
 ]
