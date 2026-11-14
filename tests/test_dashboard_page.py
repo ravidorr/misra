@@ -22,6 +22,15 @@ ORIGIN = "https://misra.test"
 ISRAEL_JOBS = 12
 PAGE_SIZE = 10
 DEBOUNCE_MS = 600
+LONG_NOTE = "A very long note without a break " + "x" * 120
+PHONE = {"width": 375, "height": 800}
+TAP = 44
+GAP_GROUPS = [
+    ("Blocks automated access", 1),
+    ("Site down, parked or unreachable", 1),
+    ("Roles are listed, but we cannot read them yet", 1),
+    ("No job feed found yet", 1),
+]
 
 
 @pytest.fixture
@@ -29,7 +38,16 @@ def site(db: sqlite3.Connection, workdir: Path) -> Path:
     """The real templates and design system built over a small database; returns docs/."""
     shutil.copytree(REPO / "templates", workdir / "templates", dirs_exist_ok=True)
     shutil.copytree(REPO / "design-system", workdir / "design-system")
-    write_json(workdir / "data" / "companies.json", [{"name": "Acme", "status": "ok"}])
+    write_json(
+        workdir / "data" / "companies.json", [{"name": "Acme", "status": "ok"}, {"name": "Nowhere", "status": "x"}]
+    )
+    (workdir / "data" / "unresolved_candidates.csv").write_text(
+        "name,domain,segment,reason,note\r\n"
+        "Parked,parked.test,deeptech,site_unusable,Domain parked at GoDaddy\r\n"
+        f'LongName,long.test,deeptech,needs_reader,"{LONG_NOTE}"\r\n'
+        "Walled,walled.test,multinational,bot_protection,\r\n",
+        encoding="utf-8",
+    )
     old = (datetime.now(UTC) - timedelta(days=30)).strftime("%Y-%m-%dT00:00:00")
     today = datetime.now(UTC).strftime("%Y-%m-%dT00:00:00")
     add_job(db, "Acme", "0", "Accountant", first_seen=old)
@@ -80,6 +98,7 @@ async def test_loads_its_files_under_the_csp_and_lists_roles(page: Page, site: P
 async def test_has_no_axe_violations(page: Page, site: Path, scheme: str) -> None:
     await page.emulate_media(color_scheme=scheme)  # type: ignore[arg-type]
     await serve(page, site)
+    await open_gaps(page)  # the card, every group open, is part of the page
     await page.evaluate(AXE.read_text(encoding="utf-8"))
     violations = await page.evaluate(
         "axe.run().then(r => r.violations.map(v => v.id + ': ' + v.nodes.map(n => n.html).join(' | ')))"
@@ -136,3 +155,31 @@ async def test_a_failed_data_load_says_so(page: Page, site: Path) -> None:
     problems = await serve(page, site, wait=False)
     await expect(page.locator("#summary")).to_contain_text("Could not load")
     assert any("jobs.json" in p for p in problems)
+
+
+async def open_gaps(page: Page) -> None:
+    await page.evaluate("document.querySelectorAll('#gaps, #gaps details').forEach(d => { d.open = true; })")
+
+
+async def test_the_coverage_gap_card_counts_the_sites_by_reason(page: Page, site: Path) -> None:
+    await serve(page, site)
+    assert await page.locator("#gaps-title").inner_text() == "Coverage gaps: 4 companies we do not fully crawl"
+    groups = page.locator("#gaps details.gap-group")
+    shown = [
+        (await g.locator("summary span").first.text_content(), int(await g.get_attribute("data-count") or 0))
+        for g in await groups.all()
+    ]
+    assert shown == [(label, count) for label, count in GAP_GROUPS if count]
+    assert await page.locator("[data-reason=site_unusable] li").text_content() == "ParkedDomain parked at GoDaddy"
+    assert await page.locator("[data-reason=bot_protection] li").text_content() == "Walled"
+
+
+async def test_the_coverage_gap_card_reads_well_on_a_phone(page: Page, site: Path) -> None:
+    await page.set_viewport_size(PHONE)
+    await serve(page, site)
+    await open_gaps(page)
+    assert await page.evaluate("document.documentElement.scrollWidth <= document.documentElement.clientWidth")
+    for summary in await page.locator("#gaps summary").all():
+        box = await summary.bounding_box()
+        assert box is not None
+        assert box["height"] >= TAP

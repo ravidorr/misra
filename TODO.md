@@ -40,7 +40,7 @@ Observations about live sites below come from checks made on 2026-11-14 and may 
 - [ ] `data/unresolved_candidates.csv` lists 93 researched companies with no usable job feed (as of 2026-11-14: 24
   multinational, 42 deeptech, 13 cyber_infra, 14 biz_software). Each needs
   its own research; there is no batch fix left. Every observation about a live site below is from the checks of
-  2026-11-14, a crawl of the 105 rows that had a careers URL that day (64 today) and a scan of their rendered pages. The
+  2026-11-14, a crawl of the 105 rows that had a careers URL that day (63 today) and a scan of their rendered pages. The
   remaining work falls into these groups:
   - **No careers URL (30).** Status `not_found` in `data/new/*_companies.json`: OX Security, Upsolver, Ceva, Speedata,
     Teramount, X-Globe, Q Factor, Gilat, Siklu, Silicom, Sight Diagnostics, Brainsway, EarlySign, Diagnostic Robotics,
@@ -170,10 +170,11 @@ Observations about live sites below come from checks made on 2026-11-14 and may 
        Probe a Workday slug with `.venv/bin/python -c "import adapters; print(adapters.workday('visa/wd5/Visa'))"`:
        `None` is a host that did not answer with a job search (Workday tenants go to a maintenance page for hours at a
        time, and answer again later: probe on more than one day before giving up), `[]` is a board with no Israel job.
-    5. If a company cannot be done, say why. Adding a `reason` column to `data/unresolved_candidates.csv` is safe (no
-       code reads that file) and keeps the next person from repeating the work.
+    5. If a company cannot be done, say why. Set the `reason` (one of the keys of `build_dashboard.REASONS`) and a short `note` of
+       the row in `data/unresolved_candidates.csv`: the coverage gap card reads them, and `tests/test_todo_counts.py` fails
+       when the counts quoted here and the rows disagree.
   - Tools: `browser_crawl.crawl_many` over every row with a careers URL, and a scan of the rendered pages for ATS links,
     were the two passes behind this list; both were throwaway scripts and are not in the repo. Adding them as a dev tool
     next to `survey.py` and `survey2.py` would make a re-run easy (a new module must be registered as `AGENTS.md`
     describes).
-  - Done when: `data/unresolved_candidates.csv` is empty, or every remaining row has a `reason`.
+  - Done when: `data/unresolved_candidates.csv` is empty, or every remaining row has a `reason` that says why it cannot be done.

@@ -41,8 +41,15 @@ def write_css(workdir: Path) -> None:
     (workdir / "templates" / "dashboard.css").write_text("body{}\n", encoding="utf-8")
 
 
+def write_unresolved(workdir: Path, *rows: tuple[str, str, str]) -> None:
+    """data/unresolved_candidates.csv with the given (name, reason, note) rows."""
+    lines = ["name,domain,segment,reason,note"] + [f'{n},{n.lower()}.test,deeptech,{r},"{note}"' for n, r, note in rows]
+    (workdir / "data" / "unresolved_candidates.csv").write_text("\r\n".join(lines) + "\r\n", encoding="utf-8")
+
+
 def prepare(workdir: Path) -> None:
     write_json(workdir / "data" / "companies.json", [{"name": "Zed", "status": "ok"}, {"name": "Alpha", "status": "x"}])
+    write_unresolved(workdir, ("Beta", "no_openings", "No open roles"))
     write_static(workdir)
 
 
@@ -83,6 +90,13 @@ def test_main_builds_dashboard(db: sqlite3.Connection, workdir: Path, capsys: py
     assert gaps["blocked"][0]["last"] == "2024-01-01"
     assert gaps["blocked"][0]["why"].startswith("the last crawl failed")
     assert gaps["blocked"][1]["last"] == "never"
+    # Down (a failing crawl), Never (the same), Alpha (no feed found) and Beta (from the CSV), grouped by reason
+    assert gaps["total"] == len(["Down", "Never", "Alpha", "Beta"])
+    assert [(g["reason"], g["count"]) for g in gaps["groups"]] == [
+        ("crawl_failing", 2),
+        ("no_openings", 1),
+        ("no_feed_found", 1),
+    ]
     jobs = {j["i"]: j for j in payload["jobs"]}
     assert sorted(jobs) == ["1", "2", "3", "4", "6", "7", "8", "9"]
     assert jobs["1"]["k"] == "pm"
@@ -147,6 +161,7 @@ def test_site_files_are_written_next_to_the_page(db: sqlite3.Connection, workdir
     write_css(workdir)
     write_static(workdir)
     write_json(workdir / "data" / "companies.json", [])
+    write_unresolved(workdir)
     add_job(db, "Acme", "1", "Product Manager </script> é")
     add_job(db, "Acme", "2", "Accountant", location="London")
     db.close()
@@ -174,6 +189,7 @@ def test_page_gets_integrity_hashes_of_its_files(db: sqlite3.Connection, workdir
     write_css(workdir)
     write_static(workdir)
     write_json(workdir / "data" / "companies.json", [])
+    write_unresolved(workdir)
     (workdir / "templates" / "dashboard.html").write_text(
         '<link integrity="__SRI_DASHBOARD_CSS__"><script integrity="__SRI_THEME_JS__"></script>'
         '<script integrity="__SRI_DASHBOARD_JS__"></script>',
@@ -192,3 +208,65 @@ def test_page_gets_integrity_hashes_of_its_files(db: sqlite3.Connection, workdir
         f'<script integrity="{expected("dashboard.js")}"></script>'
     )
     assert "__SRI" not in html
+
+
+COMPANIES = [
+    {"name": "Page", "status": "careers_page_only"},
+    {"name": "Nowhere", "status": "not_found"},
+    {"name": "Odd", "status": "something_new"},
+]
+
+
+def test_gap_groups_follow_the_reasons_in_order_and_count_each_site_once() -> None:
+    blocked = [
+        {"c": "Walled", "why": build_dashboard.BLOCKED_WHY, "last": "2026-01-02"},
+        {"c": "Down", "why": "the last crawl failed", "last": "never"},
+        {"c": "Page", "why": "HTTP 500", "last": "never"},  # also untracked: counted as failing only
+    ]
+    unresolved = [
+        {"name": "Zeta", "reason": "needs_reader", "note": "Avature board"},
+        {"name": "Alef", "reason": "needs_reader", "note": ""},
+        {"name": "Nowhere", "reason": "bot_protection", "note": "ignored: already a site"},
+    ]
+    groups = build_dashboard.gap_groups(blocked, COMPANIES, unresolved)
+    assert [(g["reason"], g["count"]) for g in groups] == [
+        ("crawl_failing", 2),
+        ("bot_protection", 1),
+        ("no_careers_url", 1),
+        ("needs_reader", 2),
+        ("no_feed_found", 1),
+    ]
+    assert all(g["label"] == build_dashboard.REASONS[g["reason"]] for g in groups)
+    by_reason = {g["reason"]: g["sites"] for g in groups}
+    assert [s["c"] for s in by_reason["crawl_failing"]] == ["Down", "Page"]  # sorted by name
+    assert by_reason["crawl_failing"][0]["why"] == "The last crawl failed; its roles may be old (last good crawl never)"
+    assert by_reason["needs_reader"] == [{"c": "Alef", "why": ""}, {"c": "Zeta", "why": "Avature board"}]
+    assert by_reason["no_feed_found"] == [{"c": "Odd", "why": ""}]
+
+
+def test_gap_groups_leave_out_a_reason_with_no_site() -> None:
+    assert build_dashboard.gap_groups([], [], []) == []
+
+
+def test_read_unresolved_returns_the_rows(workdir: Path) -> None:
+    write_unresolved(workdir, ("Beta", "no_openings", "No open roles, none at all"))
+    assert build_dashboard.read_unresolved() == [
+        {
+            "name": "Beta",
+            "domain": "beta.test",
+            "segment": "deeptech",
+            "reason": "no_openings",
+            "note": "No open roles, none at all",
+        }
+    ]
+
+
+def test_read_unresolved_rejects_a_reason_that_is_not_known(workdir: Path) -> None:
+    write_unresolved(workdir, ("Beta", "because", ""))
+    with pytest.raises(ValueError, match="Beta has the unknown reason 'because'"):
+        build_dashboard.read_unresolved()
+
+
+def test_the_real_unresolved_csv_has_only_known_reasons(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.chdir(Path(__file__).resolve().parents[1])
+    assert build_dashboard.read_unresolved()

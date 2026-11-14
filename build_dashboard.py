@@ -1,6 +1,7 @@
 """Build the dashboard in docs/: a static page plus cacheable stylesheet, scripts and job data files."""
 
 import base64
+import csv
 import hashlib
 import json
 import re
@@ -21,11 +22,61 @@ OUTPUT_NAMES = {"templates/dashboard.html": "index.html"}
 INTEGRITY = re.compile(r"__SRI_([A-Z]+)_([A-Z]+)__")
 
 
+# The researched companies with no usable job feed; each row says why in `reason` (a key of REASONS) and `note`.
+UNRESOLVED = "data/unresolved_candidates.csv"
+BLOCKED_WHY = "its site blocks automated access from GitHub's servers"
+# Why a site is on the coverage gap card, in the order the card lists them. The keys are the only values the `reason`
+# column of the CSV may hold; the labels are what the visitor reads.
+REASONS = {
+    "crawl_failing": "Failing in the latest crawl",
+    "bot_protection": "Blocks automated access",
+    "no_careers_url": "No careers page found",
+    "site_unusable": "Site down, parked or unreachable",
+    "no_openings": "No open roles in Israel, or the board is closed",
+    "needs_reader": "Roles are listed, but we cannot read them yet",
+    "no_feed_found": "No job feed found yet",
+}
+
+
 def reason(note: str | None) -> str:
     n = note or ""
     if re.search(r"HTTP 40[13]|blocked page|Access Denied|Just a moment", n, re.I):
-        return "its site blocks automated access from GitHub's servers"
+        return BLOCKED_WHY
     return n[:120] or "the last crawl failed"
+
+
+def read_unresolved() -> list[dict[str, str]]:
+    """The rows of the unresolved-candidates CSV; a reason that is not in REASONS stops the build."""
+    with open(UNRESOLVED, newline="", encoding="utf-8") as fh:
+        rows = list(csv.DictReader(fh))
+    for row in rows:
+        if row["reason"] not in REASONS:
+            raise ValueError(f"{UNRESOLVED}: {row['name']} has the unknown reason {row['reason']!r}")
+    return rows
+
+
+def gap_groups(
+    blocked: list[dict[str, str]], untracked: list[dict[str, str]], unresolved: list[dict[str, str]]
+) -> list[dict[str, Any]]:
+    """Every site that is not crawled, grouped by why, in REASONS order. A site named twice is counted once."""
+    sites: dict[str, tuple[str, str]] = {}
+    for gap in blocked:
+        code = "bot_protection" if gap["why"] == BLOCKED_WHY else "crawl_failing"
+        sites.setdefault(
+            gap["c"],
+            (code, f"{gap['why'][:1].upper()}{gap['why'][1:]}; its roles may be old (last good crawl {gap['last']})"),
+        )
+    for company in untracked:
+        code = "no_careers_url" if company["status"] == "not_found" else "no_feed_found"
+        sites.setdefault(company["name"], (code, ""))
+    for row in unresolved:
+        sites.setdefault(row["name"], (row["reason"], row["note"]))
+    groups = []
+    for code, label in REASONS.items():
+        members = [{"c": name, "why": why} for name, (c, why) in sorted(sites.items()) if c == code]
+        if members:
+            groups.append({"reason": code, "label": label, "count": len(members), "sites": members})
+    return groups
 
 
 def read_css() -> str:
@@ -75,12 +126,15 @@ def main() -> None:
     failing = {co: v for co, v in latest.items() if not any(recent[co][-2:])}
     with open("data/companies.json") as fh:
         companies = json.load(fh)
-    untracked = sorted(x["name"] for x in companies if x["status"] != "ok")
+    unfed = [x for x in companies if x["status"] != "ok"]
+    untracked = sorted(x["name"] for x in unfed)
+    blocked = [{"c": co, "why": reason(v[2]), "last": last_good.get(co, "never")} for co, v in sorted(failing.items())]
+    groups = gap_groups(blocked, unfed, read_unresolved())
     gaps = {
-        "blocked": [
-            {"c": co, "why": reason(v[2]), "last": last_good.get(co, "never")} for co, v in sorted(failing.items())
-        ],
+        "blocked": blocked,
         "untracked": untracked,
+        "total": sum(g["count"] for g in groups),
+        "groups": groups,
     }
     first = dict(c.execute("SELECT company, MIN(substr(first_seen,1,10)) FROM jobs GROUP BY company"))
     jobs: list[dict[str, Any]] = []
@@ -133,7 +187,7 @@ def main() -> None:
         INTEGRITY.sub(lambda m: integrity(out / f"{m[1]}.{m[2]}".lower()), page.read_text(encoding="utf-8")),
         encoding="utf-8",
     )
-    print(f"gaps: {[g['c'] for g in gaps['blocked']]} failing, {len(untracked)} untracked")
+    print(f"gaps: {[g['c'] for g in gaps['blocked']]} failing, {len(untracked)} untracked, {gaps['total']} in all")
     print(
         f"dashboard: {len(jobs)} open jobs, {sum(j['il'] for j in jobs)} in Israel, jobs.json {len(payload) // 1024} KB"
     )

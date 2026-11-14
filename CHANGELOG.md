@@ -2,6 +2,17 @@
 
 All notable changes are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses [Semantic Versioning](https://semver.org/).
 
+## [0.11.0] - 2026-11-14
+
+### Changed
+
+- The coverage gap card on the dashboard lists every site that is not crawled, with a reason for each, and shows the count of each reason: sites failing in the latest crawl, the companies with no feed in `data/companies.json` and the 93 researched companies of `data/unresolved_candidates.csv`. The card is a list of groups (a count, then the companies of that reason with a note), narrow enough for a phone. `gaps` in `jobs.json` (and the `list_coverage_gaps` tool) keeps `blocked` and `untracked` and gains `total` and `groups`.
+- `data/unresolved_candidates.csv` has a `reason` (one of `build_dashboard.REASONS`) and a `note` for every row. `build_dashboard.py` stops on a reason it does not know.
+
+### Added
+
+- `tests/test_todo_counts.py` fails when the counts quoted in the `TODO.md` research item (the total, the four segments, the companies without a careers URL and the ones with) disagree with the CSV, so the card and `TODO.md` cannot drift apart.
+
 ## [0.10.1] - 2026-11-14
 
 ### Fixed
