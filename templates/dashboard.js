@@ -57,11 +57,12 @@ $('theme').addEventListener('click', () => {
    build_dashboard.py injects both values, the same ones it puts in the page's connect-src. */
 const SUPABASE_URL = '__SUPABASE_URL__';
 const SUPABASE_ANON_KEY = '__SUPABASE_ANON_KEY__';
+const FETCH_TIMEOUT_MS = 20000;
 const REST_PAGE = 1000; /* PostgREST answers at most 1,000 rows at a time */
 const JOB_COLUMNS = 'company,job_id,title,team,location,url,first_seen,level,role_types,regions,locations';
 
 async function fetchJson(url, headers = {}) {
-  const response = await fetch(url, { headers });
+  const response = await fetch(url, { headers, signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) });
   if (!response.ok) throw new Error(`${new URL(url, location.href).pathname}: HTTP ${response.status}`);
   return { body: await response.json(), range: response.headers.get('Content-Range') };
 }
@@ -75,6 +76,7 @@ async function fetchJobs() {
   const first = await fetchJson(url(0), { ...headers, Prefer: 'count=exact' });
   const total = Number(first.range?.split('/')[1]);
   if (!Number.isInteger(total)) throw new Error('jobs: no total in Content-Range');
+  if (total === 0) throw new Error('jobs: the backend returned no open roles'); /* a policy or sync fault, not an empty market */
   const offsets = Array.from({ length: Math.ceil(total / REST_PAGE) - 1 }, (_, n) => (n + 1) * REST_PAGE);
   const rest = await Promise.all(offsets.map((offset) => fetchJson(url(offset), headers)));
   const rows = [first, ...rest].flatMap((answer) => answer.body);
@@ -94,19 +96,20 @@ function toJob(row, failing, firstDay) {
   return {
     c: row.company,
     i: row.job_id,
-    t: row.title.trim(),
+    t: (row.title ?? '').trim(),
     m: (row.team ?? '').trim(),
     l: (row.location ?? '').trim().slice(0, 80),
     u: row.url,
     f,
     k,
     il: (row.regions ?? []).length + (row.locations ?? []).length > 0,
-    n: f !== '' && f > firstDay[row.company],
+    n: f !== '' && f > (firstDay[row.company] ?? f),
     s: failing.has(row.company),
   };
 }
 
 function showLoadError(error) {
+  console.error(error);
   $('summary').textContent = 'Could not load the roles.';
   const retry = h('button', { type: 'button', class: 'btn btn-pill', id: 'retry', text: 'Try again' });
   retry.addEventListener('click', () => location.reload());
@@ -114,12 +117,11 @@ function showLoadError(error) {
     h('section', { class: 'notice load-error', id: 'load-error', role: 'alert' }, [
       h('h2', { text: 'The roles could not be loaded' }),
       h('p', {
-        text: 'The job list is kept on a server that did not answer, so there is nothing to show yet. Check your connection and try again.',
+        text: 'The job list is kept on a server that did not give a usable answer, so there is nothing to show yet. Check your connection and try again; if it keeps failing, the service may be down.',
       }),
       retry,
     ]),
   );
-  console.error(error);
 }
 
 async function loadData() {
@@ -127,13 +129,8 @@ async function loadData() {
     const meta = JSON.parse($('page-data').textContent);
     const rows = await fetchJobs();
     const failing = new Set(meta.gaps.blocked.map((gap) => gap.c));
-    const firstDay = {};
-    for (const row of rows) {
-      const f = (row.first_seen ?? '').slice(0, 10);
-      if (f && (firstDay[row.company] === undefined || f < firstDay[row.company])) firstDay[row.company] = f;
-    }
     return {
-      jobs: rows.map((row) => toJob(row, failing, firstDay)),
+      jobs: rows.map((row) => toJob(row, failing, meta.firstDay)),
       gaps: meta.gaps,
       generated: meta.generated,
     };

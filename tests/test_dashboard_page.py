@@ -112,9 +112,13 @@ class Backend:
         page = self.rows[offset : offset + limit]
         total = len(self.rows) - (1 if self.mode == "short" else 0)
         headers = {**CORS, "content-range": f"{offset}-{offset + len(page) - 1}/{total}"}
+        key = build_dashboard.SUPABASE_ANON_KEY
+        authorised = request.headers.get("apikey") == key and request.headers.get("authorization") == f"Bearer {key}"
         if self.mode == "down":
             await route.abort()
-        elif self.mode == "error":
+        elif not authorised:
+            await route.fulfill(status=401, headers=CORS, body="no key")
+        elif self.mode == "error" or (self.mode == "later_page" and offset > 0):
             await route.fulfill(status=503, headers=CORS, body="unavailable")
         else:
             if self.mode == "no_range":
@@ -251,10 +255,11 @@ async def test_filters_work_on_the_loaded_jobs(page: Page, site: Path) -> None:
     assert await page.locator("#list > li").count() == 1
 
 
-@pytest.mark.parametrize("mode", ["down", "error", "no_range", "short"])
+@pytest.mark.parametrize("mode", ["down", "error", "no_range", "short", "later_page"])
 async def test_an_unreachable_or_incomplete_backend_shows_an_error_card(page: Page, site: Path, mode: str) -> None:
     rows = json.loads((site.parent / "rows.json").read_text(encoding="utf-8"))
-    await serve(page, site, wait=False, backend=Backend(rows, mode))
+    extra = table_rows(REST_PAGE) if mode == "later_page" else []  # more than one page, so a later one can fail
+    await serve(page, site, wait=False, backend=Backend(rows + extra, mode))
     card = page.locator("#load-error")
     await expect(card).to_be_visible()
     assert await card.get_attribute("role") == "alert"
@@ -264,6 +269,64 @@ async def test_an_unreachable_or_incomplete_backend_shows_an_error_card(page: Pa
     box = await card.locator("#retry").bounding_box()
     assert box is not None
     assert box["height"] >= TAP
+
+
+async def test_an_empty_table_is_an_error_not_an_empty_dashboard(page: Page, site: Path) -> None:
+    await serve(page, site, wait=False, backend=Backend([]))
+    await expect(page.locator("#load-error")).to_be_visible()
+
+
+async def test_every_request_asks_for_open_jobs_in_a_stable_order_page_by_page(page: Page, site: Path) -> None:
+    backend = Backend(table_rows(2 * REST_PAGE + 1))
+    await serve(page, site, backend=backend)
+    queries = [parse_qs(urlparse(r.url).query) for r in backend.requests]
+    assert sorted(int(q["offset"][0]) for q in queries) == [0, REST_PAGE, 2 * REST_PAGE]
+    for query in queries:
+        assert query["order"] == ["company,job_id"]
+        assert query["status"] == ["eq.open"]
+        assert query["limit"] == [str(REST_PAGE)]
+        columns = set(query["select"][0].split(","))
+        assert {"level", "role_types", "regions", "locations", "first_seen"} <= columns
+        assert "description" not in columns
+
+
+def row(company: str, job_id: str, title: str | None, first_seen: str, **kw: Any) -> dict[str, Any]:
+    return {**table_rows(1)[0], "company": company, "job_id": job_id, "title": title, "first_seen": first_seen, **kw}
+
+
+async def test_cards_take_kind_and_place_from_the_table_columns(page: Page, site: Path) -> None:
+    today = datetime.now(UTC).strftime("%Y-%m-%dT00:00:00")
+    rows = [
+        row("Acme", "1", "Product Intern", today, level="Intern", role_types=["Product"]),
+        row("Acme", "2", "Student", today, level="Intern"),
+        row("Acme", "3", "Junior Dev", today, level="Junior"),
+        row("Acme", "4", "Engineer", today),
+        row("Nowhere", "5", None, today, regions=[], locations=["Somewhere, Israel"]),
+        row("Abroad", "6", "Engineer", today, regions=[], locations=[]),
+    ]
+    await serve(page, site, backend=Backend(rows))
+    assert await page.locator("#summary").inner_text() == "Showing 5 of 5 open roles in Israel. 0 discarded."
+    for category in ("product", "intern", "junior"):  # Product wins over a level; one of each kind
+        assert await page.locator(f"article[data-category={category}]").count() == 1
+    assert await page.locator("article[data-category=other]").count() == len(["Engineer", "untitled"])
+
+
+async def test_a_company_whose_first_jobs_have_closed_still_shows_its_new_roles(page: Page, site: Path) -> None:
+    today = datetime.now(UTC).strftime("%Y-%m-%dT00:00:00")
+    # the build knows Acme's first day (30 days ago, a job that is no longer open); Acme's only open role is from today
+    await serve(page, site, backend=Backend([row("Acme", "9", "Engineer", today)]))
+    assert await page.locator("article[data-company=Acme]").get_attribute("data-new") == "true"
+
+
+async def test_a_company_in_the_failing_list_is_marked_possibly_old(page: Page, site: Path) -> None:
+    html = (site / "index.html").read_text(encoding="utf-8")
+    assert '"blocked":[]' in html
+    (site / "index.html").write_text(
+        html.replace('"blocked":[]', '"blocked":[{"c":"Acme","why":"x","last":"never"}]'), encoding="utf-8"
+    )
+    await serve(page, site)
+    assert await page.locator("article[data-company=Acme]").first.get_attribute("data-stale") == "true"
+    assert await page.locator("article[data-company=Globex]").count() == 0  # not in Israel
 
 
 async def test_the_error_card_retries_by_reloading(page: Page, site: Path) -> None:
@@ -294,6 +357,12 @@ async def test_the_page_csp_allows_only_itself_and_the_project_host(site: Path) 
     html = (site / "index.html").read_text(encoding="utf-8")
     assert f"connect-src 'self' {build_dashboard.SUPABASE_URL};" in html
     assert "__SUPABASE" not in html
+    assert "__PAGE_DATA__" not in html
+    assert build_dashboard.SUPABASE_ANON_KEY.startswith("sb_publishable_")  # never a secret or service-role key
+    for built in site.iterdir():
+        text = built.read_text(encoding="utf-8") if built.suffix in {".html", ".js", ".css", ".json"} else ""
+        assert "sb_secret_" not in text
+        assert "service_role" not in text
     assert "__SUPABASE" not in (site / "dashboard.js").read_text(encoding="utf-8")
     assert "unsafe-inline" not in html
 

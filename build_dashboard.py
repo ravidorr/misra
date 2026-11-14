@@ -196,10 +196,11 @@ def main() -> None:
     (out / "jobs.json").write_text(payload, encoding="utf-8")
     (out / "jobs.jsonld").write_text(dump_json(listing), encoding="utf-8")
     (out / "dashboard.css").write_text(read_css(), encoding="utf-8")
-    # What the page needs besides the jobs it reads from Supabase: the coverage gaps and the build time. It sits in a
+    # What the page needs besides the jobs it reads from Supabase: the coverage gaps, the build time and each company's
+    # first day of listings (the closed jobs that fix it are not readable with the anon key). It sits in a
     # JSON data block of index.html (not executed, so the page stays free of inline script); `<` is escaped so the
     # data can never close the block.
-    page_data = dump_json({"gaps": gaps, "generated": generated}).replace("<", "\\u003c")
+    page_data = dump_json({"gaps": gaps, "generated": generated, "firstDay": first}).replace("<", "\\u003c")
     for source in STATIC_FILES:
         text = Path(source).read_text(encoding="utf-8")
         text = text.replace("__SUPABASE_URL__", SUPABASE_URL).replace("__SUPABASE_ANON_KEY__", SUPABASE_ANON_KEY)
