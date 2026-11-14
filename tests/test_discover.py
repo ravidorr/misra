@@ -44,6 +44,10 @@ def test_scan_page(monkeypatch: pytest.MonkeyPatch) -> None:
         ("https://www.applytojob.com/about", (None, "https://final.test/c")),
         ("https://acme-labs.bamboohr.com/careers", ("bamboohr", "acme-labs")),
         ("https://www.bamboohr.com/hr-software/", (None, "https://final.test/c")),
+        ("https://Acme.BambooHR.com/careers", ("bamboohr", "acme")),
+        ("https://API.BambooHR.com/x https://help.applytojob.com/y", (None, "https://final.test/c")),
+        ("https%3A%2F%2Facme.applytojob.com", (None, "https://final.test/c")),
+        ("https://sub.acme.bamboohr.com/careers", (None, "https://final.test/c")),
         ("https://jobs.lever.co/first and https://acme.bamboohr.com/careers", ("lever", "first")),
     ],
 )

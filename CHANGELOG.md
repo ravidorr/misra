@@ -10,7 +10,7 @@ All notable changes are documented here. Format follows [Keep a Changelog](https
 
 ### Added
 
-- `ATS_LINK` recognises JazzHR (`<slug>.applytojob.com`) and BambooHR (`<slug>.bamboohr.com`) boards, so a rediscovery finds the companies pinned on those adapters. The `www` host of either site is not a board.
+- `ATS_LINK` recognises JazzHR (`<slug>.applytojob.com`) and BambooHR (`<slug>.bamboohr.com`) boards, so a rediscovery finds the companies pinned on those adapters. The `www`, `api`, `app` and `help` hosts of either site are not boards, and the slug is lowercased (the adapters compare it with the host the response gives back).
 
 ## [0.10.0] - 2026-11-14
 
