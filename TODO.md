@@ -1,8 +1,8 @@
 # TODO
 
 Open work, as of 2026-11-14. Each item says what triggers it, how to do it and when it is done. When one is finished,
-delete it and update the counts in the others: the 127 and the four segment counts in the research item (a pin removes
-one row from one segment), its "(37)" if the company had no careers URL, and the "five" and "six" in the Workday
+delete it and update the counts in the others: the 122 and the four segment counts in the research item (a pin removes
+one row from one segment), its "(35)" if the company had no careers URL, and the "five" and "six" in the Workday
 item. Observations about live sites below come from checks made on 2026-11-14 and may have changed.
 
 ## Review the Node and Python pins
@@ -83,15 +83,15 @@ item. Observations about live sites below come from checks made on 2026-11-14 an
 
 ## Research the remaining unresolved companies
 
-- [ ] `data/unresolved_candidates.csv` lists 127 researched companies with no usable job feed (as of 2026-11-14: 46
+- [ ] `data/unresolved_candidates.csv` lists 122 researched companies with no usable job feed (as of 2026-11-14: 41
   multinational, 47 deeptech, 18 cyber_infra, 16 biz_software). It includes the five Workday companies above. Each needs
   its own research; there is no batch fix left. Every observation about a live site below is from the checks of
-  2026-11-14, a crawl of the 105 rows that had a careers URL that day (90 today) and a scan of their rendered pages. The
+  2026-11-14, a crawl of the 105 rows that had a careers URL that day (87 today) and a scan of their rendered pages. The
   remaining work falls into these groups:
-  - **No careers URL (37).** Status `not_found` in `data/new/*_companies.json`: OX Security, Upsolver, Ceva, Speedata,
+  - **No careers URL (35).** Status `not_found` in `data/new/*_companies.json`: OX Security, Upsolver, Ceva, Speedata,
     Teramount, X-Globe, Q Factor, Gilat, Siklu, Silicom, Sight Diagnostics, Brainsway, EarlySign, Diagnostic Robotics,
     Tevel Aerobotics, CytoReason, Converge Bio, SolarEdge, Watergen, Stratasys, AIR, Intel, Cisco, SAP, eBay, GE HealthCare,
-    HP, Dell Technologies, Mastercard, Cadence, Autodesk, Adobe, Akamai, Ford, Ericsson, Uber, Keysight. Find the real
+    HP, Dell Technologies, Mastercard, Autodesk, Akamai, Ford, Ericsson, Uber, Keysight. Find the real
     careers page first, then continue with the groups below. The large multinationals will need a location-filtered
     address or their ATS (see the last group).
   - **A job board was found but there is no adapter.** Playstudios and Booking.com. Playstudios was listed as a Jobvite

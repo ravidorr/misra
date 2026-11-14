@@ -667,5 +667,30 @@
   "ats": "bamboohr",
   "slug": "splitit",
   "israel_only": true
+ },
+ "Salesforce": {
+  "ats": "workday",
+  "slug": "salesforce/wd12/External_Career_Site",
+  "israel_only": true
+ },
+ "Cadence": {
+  "ats": "workday",
+  "slug": "cadence/wd1/External_Careers",
+  "israel_only": true
+ },
+ "Edwards Lifesciences": {
+  "ats": "workday",
+  "slug": "edwards/wd5/edwardscareers",
+  "israel_only": true
+ },
+ "Adobe": {
+  "ats": "workday",
+  "slug": "adobe/wd5/external_experienced",
+  "israel_only": true
+ },
+ "Zoom": {
+  "ats": "workday",
+  "slug": "zoom/wd5/Zoom",
+  "israel_only": true
  }
 }
