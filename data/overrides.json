@@ -825,5 +825,9 @@
   "ats": "comeet",
   "slug": "firefly/39.000",
   "israel_only": true
+ },
+ "DarioHealth": {
+  "ats": "comeet",
+  "slug": "Dario.Health/34.006"
  }
 }
