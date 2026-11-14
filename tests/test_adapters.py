@@ -760,3 +760,146 @@ def test_oraclehcm_a_failure_after_the_first_page_is_a_failure(monkeypatch: pyte
 
 def test_oraclehcm_is_registered() -> None:
     assert adapters.ADAPTERS["oraclehcm"] is adapters.oraclehcm
+
+
+AMAZON_PAGE_SIZE = 100
+
+
+def amz_job(job_id: Any, title: Any = "Engineer", path: Any = "/en/jobs/1/x", country: str = "ISR") -> dict[str, Any]:
+    return {
+        "id_icims": job_id,
+        "title": title,
+        "job_path": path,
+        "country_code": country,
+        "normalized_location": "Tel Aviv-Yafo, Tel Aviv, ISR",
+        "location": "IL, Tel Aviv",
+        "job_category": "Software Development",
+    }
+
+
+def amz_answer(jobs: Any, hits: Any = None) -> FakeHttpResponse:
+    return FakeHttpResponse(data={"hits": len(jobs) if hits is None else hits, "jobs": jobs})
+
+
+def fake_amz(monkeypatch: pytest.MonkeyPatch, *responses: FakeHttpResponse | None) -> list[dict[str, Any]]:
+    calls: list[dict[str, Any]] = []
+    queue = list(responses)
+
+    def _get(url: str, **kw: Any) -> FakeHttpResponse | None:
+        calls.append({"url": url, **kw})
+        return queue.pop(0) if len(queue) > 1 else queue[0]
+
+    monkeypatch.setattr(adapters, "get", _get)
+    return calls
+
+
+def test_amazon_reads_the_jobs_of_a_country(monkeypatch: pytest.MonkeyPatch) -> None:
+    jobs_in = [amz_job("10", "A", "/en/jobs/10/a"), amz_job("11", "B", "/en/jobs/11/b")]
+    jobs_in[0]["posted_date"] = "November 12, 2026"
+    jobs_in[1]["normalized_location"] = None  # falls back to the plain location
+    calls = fake_amz(monkeypatch, amz_answer(jobs_in))
+    jobs = adapters.amazon("ISR")
+    assert len(calls) == 1
+    assert calls[0]["url"] == "https://www.amazon.jobs/en/search.json"
+    assert calls[0]["params"] == {"country": "ISR", "result_limit": 100, "offset": 0, "sort": "recent"}
+    assert jobs is not None
+    assert [(j["job_id"], j["title"], j["location"], j["team"], j["url"]) for j in jobs] == [
+        ("10", "A", "Tel Aviv-Yafo, Tel Aviv, ISR", "Software Development", "https://www.amazon.jobs/en/jobs/10/a"),
+        ("11", "B", "IL, Tel Aviv", "Software Development", "https://www.amazon.jobs/en/jobs/11/b"),
+    ]
+    assert [j["posted"] for j in jobs] == ["November 12, 2026", ""]
+    assert all(discover.ISRAEL.search(j["location"]) for j in jobs)
+
+
+def test_amazon_reads_every_page(monkeypatch: pytest.MonkeyPatch) -> None:
+    first = amz_answer([amz_job(str(i)) for i in range(AMAZON_PAGE_SIZE)], hits=AMAZON_PAGE_SIZE + 1)
+    second = amz_answer([amz_job("last")], hits=AMAZON_PAGE_SIZE + 1)
+    calls = fake_amz(monkeypatch, first, second)
+    jobs = adapters.amazon("ISR")
+    assert jobs is not None
+    assert [j["job_id"] for j in jobs][-2:] == ["99", "last"]
+    assert [c["params"]["offset"] for c in calls] == [0, AMAZON_PAGE_SIZE]
+
+
+def test_amazon_no_job_at_all_is_a_failure_not_an_empty_board(monkeypatch: pytest.MonkeyPatch) -> None:
+    fake_amz(monkeypatch, amz_answer([]))  # what a wrong country code answers
+    assert adapters.amazon("XXX") is None
+
+
+def test_amazon_a_total_that_moves_between_pages_is_a_failure(monkeypatch: pytest.MonkeyPatch) -> None:
+    first = amz_answer([amz_job(str(i)) for i in range(AMAZON_PAGE_SIZE)], hits=AMAZON_PAGE_SIZE + 1)
+    second = amz_answer([amz_job("last")], hits=AMAZON_PAGE_SIZE)  # a job closed between the two requests
+    fake_amz(monkeypatch, first, second)
+    assert adapters.amazon("ISR") is None
+
+
+def test_amazon_a_job_listed_twice_is_a_failure(monkeypatch: pytest.MonkeyPatch) -> None:
+    first = amz_answer([amz_job(str(i)) for i in range(AMAZON_PAGE_SIZE)], hits=AMAZON_PAGE_SIZE + 1)
+    second = amz_answer([amz_job("0")], hits=AMAZON_PAGE_SIZE + 1)  # a job added in between shifted page one's last
+    fake_amz(monkeypatch, first, second)
+    assert adapters.amazon("ISR") is None
+
+
+def test_amazon_fewer_jobs_than_the_hits_is_a_failure(monkeypatch: pytest.MonkeyPatch) -> None:
+    fake_amz(monkeypatch, amz_answer([amz_job("1")], hits=3), amz_answer([], hits=3))
+    assert adapters.amazon("ISR") is None
+
+
+def test_amazon_more_jobs_than_the_hits_is_a_failure(monkeypatch: pytest.MonkeyPatch) -> None:
+    fake_amz(monkeypatch, amz_answer([amz_job("1"), amz_job("2")], hits=1))
+    assert adapters.amazon("ISR") is None
+
+
+def test_amazon_an_empty_page_the_hits_contradict_is_a_failure(monkeypatch: pytest.MonkeyPatch) -> None:
+    first = amz_answer([amz_job(str(i)) for i in range(AMAZON_PAGE_SIZE)], hits=250)
+    fake_amz(monkeypatch, first, amz_answer([], hits=250))
+    assert adapters.amazon("ISR") is None
+
+
+def test_amazon_more_pages_than_the_limit_is_a_failure(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(adapters, "AMAZON_MAX_PAGES", 2)
+    full = amz_answer([amz_job(str(i)) for i in range(AMAZON_PAGE_SIZE)], hits=10_000)
+    fake_amz(monkeypatch, full)
+    assert adapters.amazon("ISR") is None
+
+
+@pytest.mark.parametrize(
+    "resp", [None, FakeHttpResponse(status_code=503), FakeHttpResponse(text="<html>", json_error=True)]
+)
+def test_amazon_a_failed_request_or_html_answer_is_a_failure(
+    monkeypatch: pytest.MonkeyPatch, resp: FakeHttpResponse | None
+) -> None:
+    fake_amz(monkeypatch, resp)
+    assert adapters.amazon("ISR") is None
+
+
+@pytest.mark.parametrize(
+    "answer",
+    [
+        FakeHttpResponse(data={}),
+        FakeHttpResponse(data=None),
+        FakeHttpResponse(data={"hits": 1}),
+        FakeHttpResponse(data={"hits": "1", "jobs": []}),
+        FakeHttpResponse(data={"hits": 1, "jobs": {"a": 1}}),
+        amz_answer(["junk"], hits=1),
+        amz_answer([amz_job("")], hits=1),  # no id
+        amz_answer([amz_job("1", title="")], hits=1),
+        amz_answer([amz_job("1", path=None)], hits=1),
+        amz_answer([amz_job("1", country="USA")], hits=1),  # not the asked country
+    ],
+)
+def test_amazon_an_answer_that_is_not_a_clean_search_is_a_failure(
+    monkeypatch: pytest.MonkeyPatch, answer: FakeHttpResponse
+) -> None:
+    fake_amz(monkeypatch, answer)
+    assert adapters.amazon("ISR") is None
+
+
+def test_amazon_a_failure_after_the_first_page_is_a_failure(monkeypatch: pytest.MonkeyPatch) -> None:
+    first = amz_answer([amz_job(str(i)) for i in range(AMAZON_PAGE_SIZE)], hits=250)
+    fake_amz(monkeypatch, first, FakeHttpResponse(status_code=500))
+    assert adapters.amazon("ISR") is None
+
+
+def test_amazon_is_registered() -> None:
+    assert adapters.ADAPTERS["amazon"] is adapters.amazon

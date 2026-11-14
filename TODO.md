@@ -1,7 +1,7 @@
 # TODO
 
 Open work, as of 2026-11-14. Each item says what triggers it, how to do it and when it is done. When one is finished,
-delete it and update the counts in the others: the 117 and the four segment counts in the research item (a pin removes
+delete it and update the counts in the others: the 116 and the four segment counts in the research item (a pin removes
 one row from one segment), its "(34)" if the company had no careers URL, and the "five" and "six" in the Workday
 item. Observations about live sites below come from checks made on 2026-11-14 and may have changed.
 
@@ -83,10 +83,10 @@ item. Observations about live sites below come from checks made on 2026-11-14 an
 
 ## Research the remaining unresolved companies
 
-- [ ] `data/unresolved_candidates.csv` lists 117 researched companies with no usable job feed (as of 2026-11-14: 36
+- [ ] `data/unresolved_candidates.csv` lists 116 researched companies with no usable job feed (as of 2026-11-14: 35
   multinational, 47 deeptech, 18 cyber_infra, 16 biz_software). It includes the five Workday companies above. Each needs
   its own research; there is no batch fix left. Every observation about a live site below is from the checks of
-  2026-11-14, a crawl of the 105 rows that had a careers URL that day (83 today) and a scan of their rendered pages. The
+  2026-11-14, a crawl of the 105 rows that had a careers URL that day (82 today) and a scan of their rendered pages. The
   remaining work falls into these groups:
   - **No careers URL (34).** Status `not_found` in `data/new/*_companies.json`: OX Security, Upsolver, Ceva, Speedata,
     Teramount, X-Globe, Q Factor, Gilat, Siklu, Silicom, Sight Diagnostics, Brainsway, EarlySign, Diagnostic Robotics,

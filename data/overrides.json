@@ -717,5 +717,10 @@
   "ats": "oraclehcm",
   "slug": "fa-evmr-saasfaprod1.fa.ocs.oraclecloud.com/CX_1",
   "israel_only": true
+ },
+ "Amazon": {
+  "ats": "amazon",
+  "slug": "ISR",
+  "israel_only": true
  }
 }
