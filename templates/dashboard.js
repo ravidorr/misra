@@ -430,10 +430,10 @@ $('file').addEventListener('change', (e) => {
 const gaps = DATA.gaps ?? { blocked: [], untracked: [], total: 0, groups: [] };
 if (gaps.total > 0) {
   const el = $('gaps');
-  $('gaps-title').textContent = `Coverage gaps: ${gaps.total} companies we do not fully crawl`;
+  $('gaps-title').textContent = `Coverage gaps: ${gaps.total} companies whose roles may be missing or old`;
   el.append(
     h('p', { class: 'gaps-intro' }, [
-      'Roles at these companies may be missing or old. Each group says why; open one to see its companies.',
+      'Each group says why we do not fully crawl these companies; open one to see them.',
     ]),
   );
   for (const group of gaps.groups) {

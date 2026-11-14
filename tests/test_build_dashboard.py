@@ -225,14 +225,14 @@ def test_gap_groups_follow_the_reasons_in_order_and_count_each_site_once() -> No
     ]
     unresolved = [
         {"name": "Zeta", "reason": "needs_reader", "note": "Avature board"},
-        {"name": "Alef", "reason": "needs_reader", "note": ""},
-        {"name": "Nowhere", "reason": "bot_protection", "note": "ignored: already a site"},
+        {"name": "alef", "reason": "needs_reader", "note": ""},
+        {"name": "Nowhere", "reason": "bot_protection", "note": "researched: wins over the bare status"},
+        {"name": "Walled", "reason": "no_openings", "note": "ignored: the crawl is failing"},
     ]
     groups = build_dashboard.gap_groups(blocked, COMPANIES, unresolved)
     assert [(g["reason"], g["count"]) for g in groups] == [
         ("crawl_failing", 2),
-        ("bot_protection", 1),
-        ("no_careers_url", 1),
+        ("bot_protection", 2),
         ("needs_reader", 2),
         ("no_feed_found", 1),
     ]
@@ -240,7 +240,14 @@ def test_gap_groups_follow_the_reasons_in_order_and_count_each_site_once() -> No
     by_reason = {g["reason"]: g["sites"] for g in groups}
     assert [s["c"] for s in by_reason["crawl_failing"]] == ["Down", "Page"]  # sorted by name
     assert by_reason["crawl_failing"][0]["why"] == "The last crawl failed; its roles may be old (last good crawl never)"
-    assert by_reason["needs_reader"] == [{"c": "Alef", "why": ""}, {"c": "Zeta", "why": "Avature board"}]
+    assert by_reason["bot_protection"] == [
+        {"c": "Nowhere", "why": "researched: wins over the bare status"},
+        {
+            "c": "Walled",
+            "why": f"Its {build_dashboard.BLOCKED_WHY[4:]}; its roles may be old (last good crawl 2026-01-02)",
+        },
+    ]
+    assert by_reason["needs_reader"] == [{"c": "alef", "why": ""}, {"c": "Zeta", "why": "Avature board"}]  # any case
     assert by_reason["no_feed_found"] == [{"c": "Odd", "why": ""}]
 
 
@@ -265,6 +272,21 @@ def test_read_unresolved_rejects_a_reason_that_is_not_known(workdir: Path) -> No
     write_unresolved(workdir, ("Beta", "because", ""))
     with pytest.raises(ValueError, match="Beta has the unknown reason 'because'"):
         build_dashboard.read_unresolved()
+
+
+def test_read_unresolved_needs_the_reason_and_note_columns(workdir: Path) -> None:
+    (workdir / "data" / "unresolved_candidates.csv").write_text(
+        "name,domain,segment\r\nBeta,b.test,x\r\n", encoding="utf-8"
+    )
+    with pytest.raises(ValueError, match="no note, reason column"):
+        build_dashboard.read_unresolved()
+
+
+def test_read_unresolved_reads_a_short_row_as_an_empty_note(workdir: Path) -> None:
+    (workdir / "data" / "unresolved_candidates.csv").write_text(
+        "name,domain,segment,reason,note\r\nBeta,b.test,x,no_openings\r\n", encoding="utf-8"
+    )
+    assert [r["note"] for r in build_dashboard.read_unresolved()] == [""]
 
 
 def test_the_real_unresolved_csv_has_only_known_reasons(monkeypatch: pytest.MonkeyPatch) -> None:

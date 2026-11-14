@@ -48,8 +48,13 @@ def reason(note: str | None) -> str:
 def read_unresolved() -> list[dict[str, str]]:
     """The rows of the unresolved-candidates CSV; a reason that is not in REASONS stops the build."""
     with open(UNRESOLVED, newline="", encoding="utf-8") as fh:
-        rows = list(csv.DictReader(fh))
+        reader = csv.DictReader(fh)
+        missing = {"name", "reason", "note"} - set(reader.fieldnames or ())
+        if missing:
+            raise ValueError(f"{UNRESOLVED}: no {', '.join(sorted(missing))} column")
+        rows = list(reader)
     for row in rows:
+        row["note"] = row["note"] or ""
         if row["reason"] not in REASONS:
             raise ValueError(f"{UNRESOLVED}: {row['name']} has the unknown reason {row['reason']!r}")
     return rows
@@ -66,14 +71,18 @@ def gap_groups(
             gap["c"],
             (code, f"{gap['why'][:1].upper()}{gap['why'][1:]}; its roles may be old (last good crawl {gap['last']})"),
         )
+    for row in unresolved:  # the researched reason and note win over the bare status of companies.json
+        sites.setdefault(row["name"], (row["reason"], row["note"]))
     for company in untracked:
         code = "no_careers_url" if company["status"] == "not_found" else "no_feed_found"
         sites.setdefault(company["name"], (code, ""))
-    for row in unresolved:
-        sites.setdefault(row["name"], (row["reason"], row["note"]))
     groups = []
     for code, label in REASONS.items():
-        members = [{"c": name, "why": why} for name, (c, why) in sorted(sites.items()) if c == code]
+        members = [
+            {"c": name, "why": why}
+            for name, (c, why) in sorted(sites.items(), key=lambda site: site[0].lower())
+            if c == code
+        ]
         if members:
             groups.append({"reason": code, "label": label, "count": len(members), "sites": members})
     return groups

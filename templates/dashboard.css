@@ -196,8 +196,8 @@ a {
 .gaps summary {
   display: flex;
   min-height: var(--tap);
+  list-style: none;
   align-items: center;
-  justify-content: space-between;
   gap: var(--space-3);
   cursor: pointer;
 }
@@ -205,6 +205,20 @@ a {
 .gaps p {
   margin: var(--space-2) 0 0;
   font-weight: 400;
+}
+
+.gaps summary::before {
+  content: '\25B8';
+  flex: none;
+}
+
+.gaps[open] > summary::before,
+.gaps details[open] > summary::before {
+  content: '\25BE';
+}
+
+.gaps summary > :first-child {
+  flex: 1;
 }
 
 .gap-group {

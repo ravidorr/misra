@@ -163,15 +163,32 @@ async def open_gaps(page: Page) -> None:
 
 async def test_the_coverage_gap_card_counts_the_sites_by_reason(page: Page, site: Path) -> None:
     await serve(page, site)
-    assert await page.locator("#gaps-title").inner_text() == "Coverage gaps: 4 companies we do not fully crawl"
-    groups = page.locator("#gaps details.gap-group")
-    shown = [
-        (await g.locator("summary span").first.text_content(), int(await g.get_attribute("data-count") or 0))
-        for g in await groups.all()
-    ]
-    assert shown == [(label, count) for label, count in GAP_GROUPS if count]
-    assert await page.locator("[data-reason=site_unusable] li").text_content() == "ParkedDomain parked at GoDaddy"
+    assert (
+        await page.locator("#gaps-title").inner_text() == "Coverage gaps: 4 companies whose roles may be missing or old"
+    )
+    shown = []
+    for group in await page.locator("#gaps details.gap-group").all():
+        label = await group.locator("summary span").first.text_content()
+        visible = await group.locator("summary .gap-count").text_content()
+        listed = await group.locator("li").count()
+        assert (visible, str(listed)) == (await group.get_attribute("data-count"), visible)
+        shown.append((label, int(visible)))
+    assert shown == GAP_GROUPS
+    assert await page.locator("[data-reason=site_unusable] li b").text_content() == "Parked"
+    assert await page.locator("[data-reason=site_unusable] li .gap-why").text_content() == "Domain parked at GoDaddy"
     assert await page.locator("[data-reason=bot_protection] li").text_content() == "Walled"
+
+
+async def test_the_coverage_gap_card_opens_and_closes_and_says_so(page: Page, site: Path) -> None:
+    await serve(page, site)
+    await page.locator("#gaps-title").click()
+    group = page.locator("[data-reason=site_unusable]")
+    assert await group.evaluate("d => d.open") is False
+    marker = "d => getComputedStyle(d.querySelector('summary'), '::before').content"
+    assert await group.evaluate(marker) == '"\u25b8"'
+    await group.locator("summary").click()
+    assert await group.evaluate("d => d.open") is True
+    assert await group.evaluate(marker) == '"\u25be"'
 
 
 async def test_the_coverage_gap_card_reads_well_on_a_phone(page: Page, site: Path) -> None:
@@ -179,7 +196,12 @@ async def test_the_coverage_gap_card_reads_well_on_a_phone(page: Page, site: Pat
     await serve(page, site)
     await open_gaps(page)
     assert await page.evaluate("document.documentElement.scrollWidth <= document.documentElement.clientWidth")
-    for summary in await page.locator("#gaps summary").all():
+    summaries = await page.locator("#gaps summary").all()
+    assert len(summaries) == 1 + len(GAP_GROUPS)
+    for summary in summaries:
         box = await summary.bounding_box()
         assert box is not None
         assert box["height"] >= TAP
+    note = await page.locator("[data-reason=needs_reader] .gap-why").bounding_box()
+    assert note is not None
+    assert note["x"] + note["width"] <= PHONE["width"]
