@@ -74,11 +74,11 @@ Decisions made in planning (they change the PRD's wording, so update the PRD in 
   from the nine types above (more than one allowed, Other when none), as data tables so a new type is one entry.
   Tests on a fixture of real titles, including "Product with every level" and "Product with Intern and Junior".
   Done when: FR-9 AC 3, 4, 5, 6 and 10 hold in tests, and a report prints the share not in Other.~~
-- [ ] 3.2 `regions.py`: normalise Israeli location strings to the seven regions, handle several cities per job, hybrid
+- [x] ~~3.2 `regions.py`: normalise Israeli location strings to the seven regions, handle several cities per job, hybrid
   as office region, "Israel" alone as "Israel, city not given", remote only when open to Israel (otherwise unknown,
   not Remote); unmatched Israeli places keep their own location string; non-Israel jobs untouched. Tests from the real
   distinct-location list in `jobs.db`. Add an unmapped-locations and coverage report to the sync log.
-  Done when: FR-3 AC 1 to 7 and 11 hold in tests and the report shows at least 95% of Israeli jobs in a region.
+  Done when: FR-3 AC 1 to 7 and 11 hold in tests and the report shows at least 95% of Israeli jobs in a region.~~
 - [ ] 3.3 Sync writes `level`, `role_types`, `regions`, `locations`; migration adds an index for filtering; the
   quality shares (FR-3 95%, FR-9 non-Other) are printed in the daily log. Done when: the columns are populated for all
   open Israeli jobs after a run.
