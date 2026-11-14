@@ -2669,5 +2669,29 @@
   "n_jobs": null,
   "n_israel": null,
   "israel_only": true
+ },
+ {
+  "name": "Broadcom",
+  "domain": "broadcom.com",
+  "careers_url": "",
+  "ats": "workday",
+  "slug": "broadcom/wd1/External_Career",
+  "source": "override",
+  "status": "ok",
+  "n_jobs": 1,
+  "n_israel": 1,
+  "israel_only": true
+ },
+ {
+  "name": "Philips",
+  "domain": "philips.com",
+  "careers_url": "",
+  "ats": "workday",
+  "slug": "philips/wd3/jobs-and-careers",
+  "source": "override",
+  "status": "ok",
+  "n_jobs": 10,
+  "n_israel": 10,
+  "israel_only": true
  }
 ]

@@ -10,7 +10,7 @@ from typing import Any, cast
 
 from playwright.async_api import async_playwright
 
-from discover import ISRAEL
+from common import ISRAEL
 
 JOBLINK = re.compile(
     r"/(jobs?|positions?|careers?|openings?|vacanc\w+|job-?post\w*)/[^/?#]{4,}|[?&]job_id=[^&#]+", re.I

@@ -8,8 +8,7 @@ import sys
 import time
 from typing import Any
 
-from common import DROP_BELIEVED, DROP_NOTE
-from discover import ISRAEL
+from common import DROP_BELIEVED, DROP_NOTE, ISRAEL
 
 DB = "data/jobs.db"
 PM_CORE = re.compile(r"product|\bPM\b|\bAPM\b|מוצר", re.I)

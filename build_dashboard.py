@@ -9,8 +9,8 @@ import time
 from pathlib import Path
 from typing import Any
 
+from common import ISRAEL
 from digest import DB, INTERN, JUNIOR, PM_CORE
-from discover import ISRAEL
 
 # Stylesheets bundled into docs/dashboard.css, in order. Raw colors live only in tokens.css.
 CSS_SOURCES = ("design-system/tokens.css", "design-system/components/*.css", "templates/dashboard.css")

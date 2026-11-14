@@ -47,3 +47,37 @@ def slug_candidates(name: str, domain: str) -> list[str]:
         if s and s not in out:
             out.append(s)
     return out
+
+
+_PLACES = re.compile(
+    r"israel|tel[ -]?aviv|jerusalem|haifa|herzliya|ra'?anana|petah|petach|\bramat|netanya|rehovot|yokneam|kfar"
+    r"|beer[ -]?sheva|holon|rishon|hod hasharon|airport city|migdal|\bISR\b",
+    re.I,
+)
+_US_WORDS = re.compile(
+    r"united states|\busa\b|illinois|chicago|naperville|schaumburg|springfield|oak brook|rosemont", re.I
+)
+_US_CODES = re.compile(
+    r"\bUS\b|,\s*(?:AL|AK|AZ|AR|CA|CO|CT|DC|DE|FL|GA|HI|IA|ID|IN|KS|KY|LA|MA|MD|ME|MI|MN|MO|MS|MT|NC|ND|NE|NH|NJ|NM|NV"
+    r"|NY|OH|OK|OR|PA|RI|SC|SD|TN|TX|UT|VA|VT|WA|WI|WV|WY)\b"
+)
+_BARE_IL = re.compile(r"\bIL\b")
+
+
+class _IsraelMatcher:
+    """True for locations in Israel. A place name decides. The bare country code `IL` also counts ("Caesarea, IL",
+    "IL: Tel Aviv") unless the location points to the US, where `IL` is Illinois ("Chicago, IL", "US-IL-Remote")."""
+
+    def names_a_place(self, text: str) -> bool:
+        """True when text names an Israeli place or the country itself, never on the bare code `IL` alone."""
+        return bool(_PLACES.search(text))
+
+    def search(self, text: str) -> bool:
+        if _PLACES.search(text):
+            return True
+        if not _BARE_IL.search(text):
+            return False
+        return not (_US_WORDS.search(text) or _US_CODES.search(text))
+
+
+ISRAEL = _IsraelMatcher()
