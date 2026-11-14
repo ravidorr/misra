@@ -200,6 +200,34 @@ def jazzhr(slug: str) -> list[Job] | None:
     return out
 
 
+def bamboohr(slug: str) -> list[Job] | None:
+    """slug is the `<slug>` of `<slug>.bamboohr.com`. The careers page is fed by `/careers/list`, a public JSON list
+    with a city and state per job and the country when the company filled it in."""
+    r = get(f"https://{slug}.bamboohr.com/careers/list")
+    if r is None or r.status_code != HTTP_OK:
+        return None
+    try:
+        postings = r.json()["result"]
+    except (ValueError, KeyError, TypeError):  # an unknown slug is redirected to an HTML page
+        return None
+    if not isinstance(postings, list):
+        return None
+    out: list[Job] = []
+    for j in postings:
+        place = [(j.get("location") or {}).get("city"), (j.get("location") or {}).get("state")]
+        place.append((j.get("atsLocation") or {}).get("country"))
+        out.append(
+            _job(
+                j["id"],
+                j["jobOpeningName"],
+                ", ".join(x for x in place if x),
+                f"https://{slug}.bamboohr.com/careers/{j['id']}",
+                team=j.get("departmentLabel"),
+            )
+        )
+    return out
+
+
 def greenhouse_url(url: str) -> list[Job] | None:
     """Company site proxies a Greenhouse board as JSON ({"jobs": [...]}, Greenhouse field names)."""
     r = get(url)
@@ -327,4 +355,5 @@ ADAPTERS: dict[str, Callable[[str], list[Job] | None]] = {
     "comeet": comeet,
     "workday": workday,
     "jazzhr": jazzhr,
+    "bamboohr": bamboohr,
 }

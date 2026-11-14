@@ -32,7 +32,9 @@ def test_job_normalises() -> None:
     }
 
 
-@pytest.mark.parametrize("name", ["greenhouse", "lever", "ashby", "workable", "comeet", "greenhouse_url", "jazzhr"])
+@pytest.mark.parametrize(
+    "name", ["greenhouse", "lever", "ashby", "workable", "comeet", "greenhouse_url", "jazzhr", "bamboohr"]
+)
 @pytest.mark.parametrize("resp", [None, FakeHttpResponse(status_code=500)])
 def test_failure_returns_none(monkeypatch: pytest.MonkeyPatch, name: str, resp: FakeHttpResponse | None) -> None:
     fake_get(monkeypatch, resp)
@@ -508,3 +510,64 @@ def test_jazzhr_markup_inside_a_title_is_dropped_and_the_footer_is_not_read_as_a
 
 def test_jazzhr_is_registered() -> None:
     assert adapters.ADAPTERS["jazzhr"] is adapters.jazzhr
+
+
+def test_bamboohr_reads_the_careers_list(monkeypatch: pytest.MonkeyPatch) -> None:
+    data = {
+        "meta": {"totalCount": 3},
+        "result": [
+            {
+                "id": "82",
+                "jobOpeningName": "New Business Sales Executive",
+                "departmentLabel": "Sales",
+                "location": {"city": None, "state": None},
+                "atsLocation": {"country": None, "state": None, "province": None, "city": None},
+            },
+            {
+                "id": "121",
+                "jobOpeningName": "Manager, Portfolio",
+                "departmentLabel": "Card Programs",
+                "location": {"city": "New York", "state": "New York"},
+                "atsLocation": {"country": None},
+            },
+            {
+                "id": "130",
+                "jobOpeningName": "Backend Engineer",
+                "departmentLabel": None,
+                "location": {"city": "Tel Aviv", "state": None},
+                "atsLocation": {"country": "Israel"},
+            },
+            {"id": 131, "jobOpeningName": "Designer", "location": None, "atsLocation": None},
+        ],
+    }
+    urls = fake_get(monkeypatch, FakeHttpResponse(data=data))
+    jobs = adapters.bamboohr("acme")
+    assert urls == ["https://acme.bamboohr.com/careers/list"]
+    assert jobs is not None
+    assert [(j["job_id"], j["title"], j["location"], j["team"], j["url"]) for j in jobs] == [
+        ("82", "New Business Sales Executive", "", "Sales", "https://acme.bamboohr.com/careers/82"),
+        ("121", "Manager, Portfolio", "New York, New York", "Card Programs", "https://acme.bamboohr.com/careers/121"),
+        ("130", "Backend Engineer", "Tel Aviv, Israel", "", "https://acme.bamboohr.com/careers/130"),
+        ("131", "Designer", "", "", "https://acme.bamboohr.com/careers/131"),
+    ]
+    assert [bool(discover.ISRAEL.search(j["location"])) for j in jobs] == [False, False, True, False]
+
+
+def test_bamboohr_a_board_with_no_job_is_empty_not_a_failure(monkeypatch: pytest.MonkeyPatch) -> None:
+    fake_get(monkeypatch, FakeHttpResponse(data={"meta": {"totalCount": 0}, "result": []}))
+    assert adapters.bamboohr("acme") == []
+
+
+@pytest.mark.parametrize("data", [{}, {"result": None}, {"result": {"a": 1}}, [], None])
+def test_bamboohr_an_answer_without_a_list_is_a_failure(monkeypatch: pytest.MonkeyPatch, data: Any) -> None:
+    fake_get(monkeypatch, FakeHttpResponse(data=data))
+    assert adapters.bamboohr("acme") is None
+
+
+def test_bamboohr_an_html_answer_is_a_failure(monkeypatch: pytest.MonkeyPatch) -> None:
+    fake_get(monkeypatch, FakeHttpResponse(text="<html>", json_error=True))  # an unknown slug lands on a web page
+    assert adapters.bamboohr("acme") is None
+
+
+def test_bamboohr_is_registered() -> None:
+    assert adapters.ADAPTERS["bamboohr"] is adapters.bamboohr

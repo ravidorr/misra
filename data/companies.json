@@ -2417,5 +2417,17 @@
   "status": "ok",
   "n_jobs": 1,
   "n_israel": 1
+ },
+ {
+  "name": "Splitit",
+  "domain": "splitit.com",
+  "careers_url": "",
+  "ats": "bamboohr",
+  "slug": "splitit",
+  "source": "override",
+  "status": "ok",
+  "n_jobs": 3,
+  "n_israel": 0,
+  "israel_only": true
  }
 ]

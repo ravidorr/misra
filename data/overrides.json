@@ -662,5 +662,10 @@
  "LinearB": {
   "ats": "jazzhr",
   "slug": "linearb"
+ },
+ "Splitit": {
+  "ats": "bamboohr",
+  "slug": "splitit",
+  "israel_only": true
  }
 }
