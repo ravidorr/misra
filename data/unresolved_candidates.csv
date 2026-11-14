@@ -86,7 +86,6 @@ Apple,apple.com,multinational
 Meta,meta.com,multinational
 Intel,intel.com,multinational
 Cisco,cisco.com,multinational
-Oracle,oracle.com,multinational
 SAP,sap.com,multinational
 IBM,ibm.com,multinational
 eBay,ebay.com,multinational
@@ -96,10 +95,7 @@ Broadcom,broadcom.com,multinational
 Philips,philips.com,multinational
 GE HealthCare,gehealthcare.com,multinational
 HP,hp.com,multinational
-Dell Technologies,dell.com,multinational
-JPMorgan Chase,jpmorganchase.com,multinational
 Mastercard,mastercard.com,multinational
-American Express,americanexpress.com,multinational
 KLA,kla.com,multinational
 Synopsys,synopsys.com,multinational
 Siemens,siemens.com,multinational
@@ -111,7 +107,6 @@ Walmart Global Tech,walmart.com,multinational
 Ford,ford.com,multinational
 General Motors,gm.com,multinational
 Western Digital,westerndigital.com,multinational
-Nokia,nokia.com,multinational
 Ericsson,ericsson.com,multinational
 Cloudflare,cloudflare.com,multinational
 Rapid7,rapid7.com,multinational
