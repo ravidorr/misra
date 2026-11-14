@@ -2,6 +2,16 @@
 
 All notable changes are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses [Semantic Versioning](https://semver.org/).
 
+## [0.12.0] - 2026-11-14
+
+### Added
+
+- `classify.py` classifies a job by its title: `level(title)` gives Intern, Junior or Not specified, and `role_types(title)` gives every role type the title fits (Product, R&D, Data & AI, Design, IT, Finance, Sales & BD, Customer success & support) or Other when none. The types are a table (`ROLE_TYPES`), so a new type is one entry. `matches(title, levels, types)` applies the FR-9 rule (an empty choice means all), and `report(titles)` prints the share of open jobs not in Other, for the daily log later. On the 6,026 open jobs of `data/jobs.db` 75.5% are placed in a role type other than Other.
+
+### Changed
+
+- `INTERN`, `JUNIOR` and `PM_CORE` moved from `digest.py` to `classify.py` with the same patterns. The digest and the dashboard behave as before.
+
 ## [0.11.0] - 2026-11-14
 
 ### Changed

@@ -8,13 +8,11 @@ import sys
 import time
 from typing import Any
 
+from classify import INTERN, JUNIOR, PM_CORE
 from common import DROP_BELIEVED, DROP_NOTE, ISRAEL
 
 DB = "data/jobs.db"
-PM_CORE = re.compile(r"product|\bPM\b|\bAPM\b|מוצר", re.I)
-# Buckets for titles that are not product: Intern wins over Junior. Used by build_dashboard.py and render().
-INTERN = re.compile(r"intern\b|internship|student|סטודנט", re.I)
-JUNIOR = re.compile(r"junior|\bjr\b|graduate|entry|trainee", re.I)
+# PM_CORE, INTERN and JUNIOR live in classify.py. Intern wins over Junior in render().
 # a title must match a product, intern or junior pattern (derived, so a new keyword is picked up here too)
 ROLE = re.compile("|".join(p.pattern for p in (PM_CORE, INTERN, JUNIOR)), re.I)
 # drop clearly irrelevant senior or non-product matches
