@@ -56,6 +56,15 @@ jobs:
           GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
           DIGEST_TO: ${{ secrets.DIGEST_TO }}
         run: python send_email.py
+      - name: Sync jobs to Supabase
+        id: sync
+        if: ${{ always() && steps.crawl.outcome == 'success' }}
+        timeout-minutes: 10
+        env:
+          # Exposed to this step only, after the crawl. Unset secrets arrive empty and the script skips with exit 0.
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: python sync_supabase.py
       - name: Build dashboard
         if: ${{ always() && steps.checkout.outcome == 'success' }}
         run: python build_dashboard.py
@@ -106,5 +115,5 @@ jobs:
           GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
           DIGEST_TO: ${{ secrets.DIGEST_TO }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-          STEPS: verify=${{ steps.verify.outcome }} crawl=${{ steps.crawl.outcome }} digest=${{ steps.digest.outcome }} commit=${{ steps.commit.outcome }}
+          STEPS: verify=${{ steps.verify.outcome }} crawl=${{ steps.crawl.outcome }} digest=${{ steps.digest.outcome }} sync=${{ steps.sync.outcome }} commit=${{ steps.commit.outcome }}
         run: python3 send_alert.py "$RUN_URL"

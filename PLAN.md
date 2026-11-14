@@ -58,10 +58,11 @@ Decisions made in planning (they change the PRD's wording, so update the PRD in 
   `level`, `role_types text[]`, `regions text[]`, `locations text[]`), `crawl_log`, and RLS: public read of open jobs,
   no public write. Done when: migrations apply to a fresh project and a read with the anon key works.~~
   Remaining check, live only: apply the migrations to the Supabase project (`supabase/README.md`) and read with the anon key.
-- [ ] 2.2 `sync_supabase.py`: after each daily run upsert every open job (all 6,026 today, as in `docs/jobs.json`, not only Israeli ones, so the signed-out dashboard stays whole) and mark missing ones closed, using the
+- [x] ~~2.2 `sync_supabase.py`: after each daily run upsert every open job (all 6,026 today, as in `docs/jobs.json`, not only Israeli ones, so the signed-out dashboard stays whole) and mark missing ones closed, using the
   service-role key; new module (release lists), tests with a fake client. Add a daily-workflow step after the crawl and
   before the deploy push, with the secret exposed only to that step, and the maintainer failure alert covering it.
-  Done when: a manual daily run fills the table and a second run changes nothing.
+  Done when: a manual daily run fills the table and a second run changes nothing.~~
+  Remaining check, live only: save `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` as Actions secrets, run the daily workflow by hand, see the table filled and a second run change nothing (also confirms the key format works as both `apikey` and bearer).
 - [ ] 2.3 Dashboard reads jobs from Supabase (PostgREST with the anon key) instead of `docs/jobs.json`; clear error card
   when the backend is unreachable, no offline copy; CSP `connect-src` gains the project host only. Keep `jobs.jsonld`
   and the WebMCP tools working from the loaded data. Decide in this PR whether `jobs.json` is still published (the
@@ -80,9 +81,10 @@ Decisions made in planning (they change the PRD's wording, so update the PRD in 
   not Remote); unmatched Israeli places keep their own location string; non-Israel jobs untouched. Tests from the real
   distinct-location list in `jobs.db`. Add an unmapped-locations and coverage report to the sync log.
   Done when: FR-3 AC 1 to 7 and 11 hold in tests and the report shows at least 95% of Israeli jobs in a region.~~
-- [ ] 3.3 Sync writes `level`, `role_types`, `regions`, `locations`; migration adds an index for filtering; the
+- [x] ~~3.3 Sync writes `level`, `role_types`, `regions`, `locations`; migration adds an index for filtering; the
   quality shares (FR-3 95%, FR-9 non-Other) are printed in the daily log. Done when: the columns are populated for all
-  open Israeli jobs after a run.
+  open Israeli jobs after a run.~~
+  Remaining check, live only: after that manual run, the columns are populated for all open Israeli jobs and the log shows the shares.
 - [ ] 3.4 Dashboard: level and role-type become separate filters (replacing the blended KIND filter; `build_dashboard.py` moves its `INTERN`, `JUNIOR` and `PM_CORE` imports from `digest.py` to `classify.py`), region and
   location filter with the full list of distinct Israeli locations, "include remote roles that do not say" option,
   region, level and role type shown on the card and in `data-*` hooks and JSON-LD; existing Israel / all locations

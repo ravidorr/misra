@@ -2,6 +2,13 @@
 
 All notable changes are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses [Semantic Versioning](https://semver.org/).
 
+## [0.14.0] - 2026-11-14
+
+### Added
+
+- `sync_supabase.py` copies every open job of `data/jobs.db` into the Supabase `jobs` table through the PostgREST API (`requests`, the service-role key from `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY`), in batches of 500, jobs in Israel or not. Each row carries `level` and `role_types` (`classify.py`) and `regions` and `locations` (`regions.py`); `description` and `details` are never sent, so later steps can fill them. Jobs that are no longer open locally are set to closed (the open keys are read back in pages of 1,000, because Supabase caps a response). The upsert merges on (company, job_id), so a repeat run with an unchanged database writes the same values. It refuses to run against a database with no open jobs, so an empty file cannot close every job. It prints the role-type and region quality shares of `classify.report` and `regions.report` for the daily log. With either variable empty it prints a message and exits 0; any other failure exits non-zero and never prints the key.
+- The daily workflow has a "Sync jobs to Supabase" step after the digest and before the dashboard build and the deploy push, with the two secrets exposed to that step only. It runs after a successful crawl even if the digest failed. A failed sync does not stop the push, and it is named (`sync=`) in the failure alert.
+
 ## [0.13.0] - 2026-11-14
 
 ### Added
