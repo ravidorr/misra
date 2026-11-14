@@ -616,3 +616,138 @@ def test_bamboohr_a_count_that_does_not_match_the_list_is_a_failure(monkeypatch:
 
 def test_bamboohr_is_registered() -> None:
     assert adapters.ADAPTERS["bamboohr"] is adapters.bamboohr
+
+
+HCM_SLUG = "acme.fa.oraclecloud.com/CX_1"
+HCM_API = "https://acme.fa.oraclecloud.com/hcmRestApi/resources/latest/recruitingCEJobRequisitions"
+
+
+def hcm_req(job_id: Any, title: Any, country: str, place: str, secondary: Any = None) -> dict[str, Any]:
+    return {
+        "Id": job_id,
+        "Title": title,
+        "PrimaryLocationCountry": country,
+        "PrimaryLocation": place,
+        "PostedDate": "2026-11-01",
+        "secondaryLocations": secondary or [],
+    }
+
+
+def hcm_answer(reqs: Any, total: Any = None) -> FakeHttpResponse:
+    count = len(reqs) if total is None and isinstance(reqs, list) else total
+    return FakeHttpResponse(data={"items": [{"TotalJobsCount": count, "requisitionList": reqs}]})
+
+
+def fake_hcm(monkeypatch: pytest.MonkeyPatch, *responses: FakeHttpResponse | None) -> list[dict[str, Any]]:
+    calls: list[dict[str, Any]] = []
+    queue = list(responses)
+
+    def _get(url: str, **kw: Any) -> FakeHttpResponse | None:
+        calls.append({"url": url, **kw})
+        return queue.pop(0) if len(queue) > 1 else queue[0]
+
+    monkeypatch.setattr(adapters, "get", _get)
+    return calls
+
+
+def test_oraclehcm_keeps_the_requisitions_located_in_israel(monkeypatch: pytest.MonkeyPatch) -> None:
+    reqs = [
+        hcm_req("1", "Backend Engineer", "IL", "Herzliya, Tel Aviv, Israel"),
+        hcm_req("2", "Mentions Israel in its text", "GB", "READING, United Kingdom"),
+        hcm_req(
+            "3", "Field Engineer", "US", "New York, United States", [{"Name": "Haifa, Israel", "CountryCode": "IL"}]
+        ),
+        hcm_req("4", "Analyst", "IL", ""),
+        hcm_req("5", "Manager", "US", "Austin", [{"Name": "", "CountryCode": "IL"}, "junk", {"CountryCode": "GB"}]),
+        hcm_req("6", "Other", "US", "Austin", ["junk", {"Name": "Paris", "CountryCode": "FR"}]),
+    ]
+    calls = fake_hcm(monkeypatch, hcm_answer(reqs))
+    jobs = adapters.oraclehcm(HCM_SLUG)
+    assert len(calls) == 1
+    assert calls[0]["url"] == HCM_API
+    assert calls[0]["params"]["finder"] == "findReqs;siteNumber=CX_1,limit=50,offset=0,keyword=Israel"
+    assert jobs is not None
+    assert [(j["job_id"], j["title"], j["location"], j["posted"]) for j in jobs] == [
+        ("1", "Backend Engineer", "Herzliya, Tel Aviv, Israel", "2026-11-01"),
+        ("3", "Field Engineer", "Haifa, Israel", "2026-11-01"),
+        ("4", "Analyst", "Israel", "2026-11-01"),
+        ("5", "Manager", "Israel", "2026-11-01"),
+    ]
+    assert jobs[0]["url"] == "https://acme.fa.oraclecloud.com/hcmUI/CandidateExperience/en/sites/CX_1/job/1"
+    assert all(discover.ISRAEL.search(j["location"]) for j in jobs)
+
+
+def test_oraclehcm_reads_every_page(monkeypatch: pytest.MonkeyPatch) -> None:
+    first = hcm_answer([hcm_req(str(i), "T", "IL", "Haifa, Israel") for i in range(50)], total=51)
+    second = hcm_answer([hcm_req("50", "T", "IL", "Haifa, Israel")], total=51)
+    calls = fake_hcm(monkeypatch, first, second)
+    jobs = adapters.oraclehcm(HCM_SLUG)
+    assert jobs is not None
+    assert [j["job_id"] for j in jobs] == [str(i) for i in range(51)]
+    assert [c["params"]["finder"].split(",")[2] for c in calls] == ["offset=0", "offset=50"]
+
+
+def test_oraclehcm_no_match_is_an_empty_board(monkeypatch: pytest.MonkeyPatch) -> None:
+    fake_hcm(monkeypatch, hcm_answer([]))
+    assert adapters.oraclehcm(HCM_SLUG) == []
+
+
+def test_oraclehcm_stops_on_an_empty_page_even_if_the_total_says_more(monkeypatch: pytest.MonkeyPatch) -> None:
+    fake_hcm(monkeypatch, hcm_answer([], total=500))
+    assert adapters.oraclehcm(HCM_SLUG) == []
+
+
+def test_oraclehcm_more_pages_than_the_limit_is_a_failure(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(adapters, "ORACLEHCM_MAX_PAGES", 2)
+    full = hcm_answer([hcm_req(str(i), "T", "IL", "Haifa, Israel") for i in range(50)], total=500)
+    fake_hcm(monkeypatch, full)
+    assert adapters.oraclehcm(HCM_SLUG) is None
+
+
+@pytest.mark.parametrize(
+    "slug", ["acme", "acme.fa.oraclecloud.com", "a.com/b/c", "nodot/CX_1", "acme.fa.oraclecloud.com/"]
+)
+def test_oraclehcm_a_bad_slug_is_a_failure(monkeypatch: pytest.MonkeyPatch, slug: str) -> None:
+    calls = fake_hcm(monkeypatch, hcm_answer([]))
+    assert adapters.oraclehcm(slug) is None
+    assert calls == []
+
+
+@pytest.mark.parametrize(
+    "resp", [None, FakeHttpResponse(status_code=503), FakeHttpResponse(text="<html>", json_error=True)]
+)
+def test_oraclehcm_a_failed_request_or_html_answer_is_a_failure(
+    monkeypatch: pytest.MonkeyPatch, resp: FakeHttpResponse | None
+) -> None:
+    fake_hcm(monkeypatch, resp)
+    assert adapters.oraclehcm(HCM_SLUG) is None
+
+
+@pytest.mark.parametrize(
+    "answer",
+    [
+        FakeHttpResponse(data={}),
+        FakeHttpResponse(data={"items": []}),
+        FakeHttpResponse(data={"items": [{"TotalJobsCount": 1}]}),
+        hcm_answer({"a": 1}, total=1),
+        hcm_answer([], total="1"),
+        hcm_answer([{"Id": "1"}], total=1),  # no title
+        hcm_answer([{"Title": "T"}], total=1),  # no id
+        hcm_answer(["junk"], total=1),
+    ],
+)
+def test_oraclehcm_an_answer_that_is_not_a_search_is_a_failure(
+    monkeypatch: pytest.MonkeyPatch, answer: FakeHttpResponse
+) -> None:
+    fake_hcm(monkeypatch, answer)
+    assert adapters.oraclehcm(HCM_SLUG) is None
+
+
+def test_oraclehcm_a_failure_after_the_first_page_is_a_failure(monkeypatch: pytest.MonkeyPatch) -> None:
+    first = hcm_answer([hcm_req(str(i), "T", "IL", "Haifa, Israel") for i in range(50)], total=100)
+    fake_hcm(monkeypatch, first, FakeHttpResponse(status_code=500))
+    assert adapters.oraclehcm(HCM_SLUG) is None
+
+
+def test_oraclehcm_is_registered() -> None:
+    assert adapters.ADAPTERS["oraclehcm"] is adapters.oraclehcm

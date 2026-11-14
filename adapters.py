@@ -18,6 +18,10 @@ WORKDAY_ISRAEL = (
 WORKDAY_PAGE = 20  # the most jobs Workday returns in one request
 WORKDAY_MAX_PAGES = 100
 WORKDAY_SLUG_PARTS = 3
+ORACLEHCM_ISRAEL = "IL"
+ORACLEHCM_PAGE = 50
+ORACLEHCM_MAX_PAGES = 100
+ORACLEHCM_SLUG_PARTS = 2
 
 
 def _job(  # noqa: PLR0913, PLR0917
@@ -351,6 +355,65 @@ def workday(slug: str) -> list[Job] | None:
     return None  # more pages than the limit: the list is not complete
 
 
+def _oraclehcm_place(req: dict[str, Any]) -> str | None:
+    """Where a requisition is in Israel (its primary place, else the first secondary place there), or None."""
+    if req.get("PrimaryLocationCountry") == ORACLEHCM_ISRAEL:
+        return str(req.get("PrimaryLocation") or "Israel")
+    for place in req.get("secondaryLocations") or []:
+        if isinstance(place, dict) and place.get("CountryCode") == ORACLEHCM_ISRAEL:
+            return str(place.get("Name") or "Israel")
+    return None
+
+
+def _oraclehcm_page(host: str, site: str, offset: int) -> tuple[int, list[dict[str, Any]]] | None:
+    """The total and one page of requisitions for the word Israel, or None when the answer is not the JSON of a
+    search (a failed request, a wrong site, which answers 200 with something else) or a requisition lacks an id or
+    a title."""
+    finder = f"findReqs;siteNumber={site},limit={ORACLEHCM_PAGE},offset={offset},keyword=Israel"
+    r = get(
+        f"https://{host}/hcmRestApi/resources/latest/recruitingCEJobRequisitions",
+        params={"onlyData": "true", "expand": "requisitionList.secondaryLocations", "finder": finder},
+    )
+    if r is None or r.status_code != HTTP_OK:
+        return None
+    try:
+        search = r.json()["items"][0]
+        total, reqs = search["TotalJobsCount"], search["requisitionList"]
+    except (ValueError, KeyError, IndexError, TypeError):
+        return None
+    if not isinstance(reqs, list) or not isinstance(total, int):
+        return None
+    if not all(isinstance(q, dict) and q.get("Id") and q.get("Title") for q in reqs):
+        return None
+    return total, reqs
+
+
+def oraclehcm(slug: str) -> list[Job] | None:
+    """slug is '<host>/<site>' of an Oracle Fusion HCM career site, for example 'jpmc.fa.oraclecloud.com/CX_1001' (the
+    page is `https://<host>/hcmUI/CandidateExperience/en/sites/<site>`). Only jobs in Israel are read: the public
+    requisition search is asked for the word Israel, which matches the places and the descriptions, and a requisition
+    is kept when its primary or one of its secondary places is in Israel (country code IL). Any failure, including one
+    after the first page, is None: a partial list would close the jobs it lacks."""
+    parts = slug.split("/")
+    if len(parts) != ORACLEHCM_SLUG_PARTS or "." not in parts[0] or not parts[1]:
+        return None
+    host, site = parts
+    out: list[Job] = []
+    for page in range(ORACLEHCM_MAX_PAGES):
+        found = _oraclehcm_page(host, site, page * ORACLEHCM_PAGE)
+        if found is None:
+            return None
+        total, reqs = found
+        for req in reqs:
+            place = _oraclehcm_place(req)
+            if place:
+                url = f"https://{host}/hcmUI/CandidateExperience/en/sites/{site}/job/{req['Id']}"
+                out.append(_job(req["Id"], req["Title"], place, url, posted=req.get("PostedDate")))
+        if (page + 1) * ORACLEHCM_PAGE >= total or not reqs:
+            return out
+    return None  # more pages than the limit: the list is not complete
+
+
 ADAPTERS: dict[str, Callable[[str], list[Job] | None]] = {
     "greenhouse_url": greenhouse_url,
     "greenhouse": greenhouse,
@@ -362,4 +425,5 @@ ADAPTERS: dict[str, Callable[[str], list[Job] | None]] = {
     "workday": workday,
     "jazzhr": jazzhr,
     "bamboohr": bamboohr,
+    "oraclehcm": oraclehcm,
 }

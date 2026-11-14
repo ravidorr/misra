@@ -692,5 +692,30 @@
   "ats": "workday",
   "slug": "zoom/wd5/Zoom",
   "israel_only": true
+ },
+ "Oracle": {
+  "ats": "oraclehcm",
+  "slug": "eeho.fa.us2.oraclecloud.com/jobsearch",
+  "israel_only": true
+ },
+ "JPMorgan Chase": {
+  "ats": "oraclehcm",
+  "slug": "jpmc.fa.oraclecloud.com/CX_1001",
+  "israel_only": true
+ },
+ "Dell Technologies": {
+  "ats": "oraclehcm",
+  "slug": "enterpriseplatform.dell.com/careers",
+  "israel_only": true
+ },
+ "American Express": {
+  "ats": "oraclehcm",
+  "slug": "egug.fa.us2.oraclecloud.com/CX_1",
+  "israel_only": true
+ },
+ "Nokia": {
+  "ats": "oraclehcm",
+  "slug": "fa-evmr-saasfaprod1.fa.ocs.oraclecloud.com/CX_1",
+  "israel_only": true
  }
 }
