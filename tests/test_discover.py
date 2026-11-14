@@ -60,6 +60,11 @@ def test_israel_count() -> None:
         ("US-IL-Chicago-MSO", False),
         ("Austin, TX; Chicago, IL", False),
         ("Boston, MA; Rehovot, IL", True),
+        ("Migdal HaEmek", True),
+        ("Omer, IL", True),  # SmartRecruiters' country code, written in capitals by its adapter
+        ("Chicago, US", False),
+        ("Haifa, IL", True),
+        ("Toronto, CA", False),
         ("New York", False),
         ("il", False),
         ("", False),

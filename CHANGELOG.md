@@ -2,6 +2,12 @@
 
 All notable changes are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses [Semantic Versioning](https://semver.org/).
 
+## [0.3.2] - 2026-11-14
+
+### Fixed
+
+- The Israel location matcher now recognises SmartRecruiters jobs in Israeli towns it does not list by name ("Omer, il", "Migdal HaEmek, il"): the SmartRecruiters adapter writes the country code in capitals ("IL"), which the matcher tells apart from Illinois, and Migdal is a known place. On 2026-11-14 the ServiceNow and Western Digital boards held no such job (25 and 0 Israel jobs before and after), so no stored job changes; this closes the gap before one appears.
+
 ## [0.3.1] - 2026-11-14
 
 ### Added

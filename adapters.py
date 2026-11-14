@@ -117,7 +117,7 @@ def smartrecruiters(slug: str) -> list[Job] | None:
                 _job(
                     j["id"],
                     j["name"],
-                    ", ".join(x for x in (loc.get("city"), loc.get("country")) if x),
+                    ", ".join(x for x in (loc.get("city"), (loc.get("country") or "").upper()) if x),  # "il" -> "IL"
                     f"https://jobs.smartrecruiters.com/{slug}/{j['id']}",
                     team=(j.get("department") or {}).get("label"),
                     posted=j.get("releasedDate", ""),
