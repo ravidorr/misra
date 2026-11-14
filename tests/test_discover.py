@@ -63,6 +63,8 @@ def test_israel_count() -> None:
         ("Migdal HaEmek", True),
         ("Omer, IL", True),  # SmartRecruiters' country code, written in capitals by its adapter
         ("Chicago, US", False),
+        ("Haifa, IL", True),
+        ("Toronto, CA", False),
         ("New York", False),
         ("il", False),
         ("", False),

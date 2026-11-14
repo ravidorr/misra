@@ -123,11 +123,14 @@ def test_smartrecruiters_writes_the_country_code_in_capitals(monkeypatch: pytest
     israel = {**posting("1"), "location": {"city": "Omer", "country": "il"}}
     usa = {**posting("2"), "location": {"city": "Chicago", "country": "us"}}
     nowhere = {**posting("3"), "location": {"city": "Remote", "country": None}}
-    fake_get(monkeypatch, FakeHttpResponse(data={"content": [israel, usa, nowhere], "totalFound": 3}))
+    mixed = {**posting("4"), "location": {"city": "Haifa", "country": "Il"}}
+    canada = {**posting("5"), "location": {"city": "Toronto", "country": "ca"}}  # CA is also California
+    postings = [israel, usa, nowhere, mixed, canada]
+    fake_get(monkeypatch, FakeHttpResponse(data={"content": postings, "totalFound": len(postings)}))
     jobs = adapters.smartrecruiters("acme")
     assert jobs is not None
-    assert [j["location"] for j in jobs] == ["Omer, IL", "Chicago, US", "Remote"]
-    assert [discover.ISRAEL.search(j["location"]) for j in jobs] == [True, False, False]
+    assert [j["location"] for j in jobs] == ["Omer, IL", "Chicago, US", "Remote", "Haifa, IL", "Toronto, CA"]
+    assert [discover.ISRAEL.search(j["location"]) for j in jobs] == [True, False, False, True, False]
 
 
 def test_smartrecruiters_failures(monkeypatch: pytest.MonkeyPatch) -> None:
