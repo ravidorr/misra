@@ -9,7 +9,7 @@ import pytest
 
 import browser_crawl
 import run
-from tests.conftest import add_job, write_json
+from tests.conftest import add_crawls, add_job, write_json
 
 
 def job(job_id: str, title: str = "T") -> dict[str, str]:
@@ -477,6 +477,83 @@ def test_a_drop_in_an_api_company_is_still_believed(workdir: Path, adapter: dict
     adapter["api"] = [[job("j0"), job("j1")]]
     run.main()
     assert open_jobs("Api") == API_KEPT  # API feeds are complete lists: only browser crawls are held back
+
+
+def reported_of(name: str, job_id: str) -> int:
+    check = sqlite3.connect(run.DB)
+    value: int = check.execute("SELECT reported FROM jobs WHERE company=? AND job_id=?", (name, job_id)).fetchone()[0]
+    check.close()
+    return value
+
+
+@pytest.mark.parametrize(
+    ("case", "reported"),
+    [
+        ((True, [], "fake"), 1),  # a company seen for the first time is baselined silently
+        ((True, [(0, "HTTP 403")], "fake"), 1),  # a crawl that failed saw nothing: still new
+        (
+            (True, [(0, "HTTP 403"), (1, "")], "fake"),
+            0,
+        ),  # it has worked once and stored nothing: its first Israel job counts
+        ((True, [(1, "")], "fake"), 0),
+        ((True, [(1, "")], "greenhouse"), 1),  # worked, but through another source: a new baseline
+        ((False, [(1, "")], "fake"), 1),  # not israel_only: it stores every job, so none stored means none seen
+    ],
+)
+def test_a_company_is_new_until_a_crawl_has_worked(
+    workdir: Path, adapter: dict[str, Any], case: tuple[bool, list[tuple[int, str | None]], str], reported: int
+) -> None:
+    israel_only, earlier, earlier_ats = case
+    conn = run.init()
+    add_crawls(conn, "Acme", earlier, ats=earlier_ats)
+    conn.close()
+    write_json(workdir / "data" / "companies.json", [{**co("Acme"), "israel_only": israel_only}])
+    adapter["acme"] = [[{**job("first"), "location": "Haifa, Israel"}]]
+    run.main()
+    assert reported_of("Acme", "first") == reported
+
+
+def test_another_companys_history_does_not_make_a_company_known(workdir: Path, adapter: dict[str, Any]) -> None:
+    conn = run.init()
+    add_crawls(conn, "Other", [(1, "")], ats="fake")
+    add_job(conn, "Other", "o1", "Other job")
+    conn.close()
+    write_json(workdir / "data" / "companies.json", [{**co("Acme"), "israel_only": True}])
+    adapter["acme"] = [[{**job("first"), "location": "Haifa, Israel"}]]
+    run.main()
+    assert reported_of("Acme", "first") == 1
+
+
+def test_an_adapter_that_raises_fails_its_own_company_and_not_the_run(
+    workdir: Path, adapter: dict[str, Any], monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    def boom(_slug: str) -> Any:
+        raise ValueError("unexpected shape")
+
+    monkeypatch.setitem(run.ADAPTERS, "boom", boom)
+    conn = run.init()
+    add_job(conn, "Bad", "keep", "Kept job")
+    conn.close()
+    write_json(workdir / "data" / "companies.json", [co("Good"), co("Bad", ats="boom")])
+    adapter["good"] = [[job("g1")]]
+    run.main()
+    assert "failed 1 ['Bad']" in capsys.readouterr().out
+    assert reported_of("Good", "g1") == 1
+    check = sqlite3.connect(run.DB)
+    assert check.execute("SELECT status FROM jobs WHERE company='Bad'").fetchone() == ("open",)  # nothing closed
+    note = check.execute("SELECT note FROM crawl_log WHERE company='Bad'").fetchone()[0]
+    check.close()
+    assert note == "adapter error: ValueError: unexpected shape"
+
+
+def test_stored_jobs_also_make_a_company_known(workdir: Path, adapter: dict[str, Any]) -> None:
+    conn = run.init()
+    add_job(conn, "Acme", "old", "Old job")  # no crawl log at all: a database from before it existed
+    conn.close()
+    write_json(workdir / "data" / "companies.json", [co("Acme")])
+    adapter["acme"] = [[job("old"), job("fresh")]]
+    run.main()
+    assert reported_of("Acme", "fresh") == 0
 
 
 def test_main_without_companies_as_script(workdir: Path, capsys: pytest.CaptureFixture[str]) -> None:

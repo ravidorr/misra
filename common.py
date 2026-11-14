@@ -1,7 +1,7 @@
 import re
 import threading
 import time
-from typing import Any
+from typing import Any, cast
 
 import requests
 
@@ -16,7 +16,7 @@ DROP_NOTE = "sharp drop"  # crawl log note prefix of a held crawl
 DROP_BELIEVED = f"drop believed after {DROP_HOLD_DAYS} held days"  # note prefix of the crawl that believed one
 
 
-def get(url: str, **kw: Any) -> requests.Response | None:
+def _request(method: str, url: str, **kw: Any) -> requests.Response | None:
     host = re.sub(r"^https?://([^/]+).*", r"\1", url)
     with _lock:
         wait = _last.get(host, 0) + DELAY - time.time()
@@ -25,9 +25,17 @@ def get(url: str, **kw: Any) -> requests.Response | None:
         time.sleep(wait)
     kw.setdefault("timeout", 20)
     try:
-        return _s.get(url, **kw)
+        return cast("requests.Response", getattr(_s, method)(url, **kw))
     except requests.RequestException:
         return None
+
+
+def get(url: str, **kw: Any) -> requests.Response | None:
+    return _request("get", url, **kw)
+
+
+def post(url: str, **kw: Any) -> requests.Response | None:
+    return _request("post", url, **kw)
 
 
 def slug_candidates(name: str, domain: str) -> list[str]:

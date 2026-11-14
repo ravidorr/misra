@@ -1,0 +1,138 @@
+{
+ "total": 74,
+ "jobPostings": [
+  {
+   "title": "Sales Manager Beauty, Luxury & FTO Retail Media UK",
+   "externalPath": "/job/London/Senior-Sales-Manager--Beauty---Luxury--12-months-FTC-_r20990",
+   "locationsText": "London",
+   "bulletFields": [
+    "United Kingdom"
+   ]
+  },
+  {
+   "title": "Agency Partner, Performance Marketing UK",
+   "externalPath": "/job/London/Agency-Partner--Performance-Marketing-UK_r21240",
+   "locationsText": "London",
+   "bulletFields": [
+    "United Kingdom"
+   ]
+  }
+ ],
+ "facets": [
+  {
+   "facetParameter": "Country",
+   "descriptor": "Country",
+   "values": [
+    {
+     "descriptor": "Spain",
+     "id": "bd34c524a6a04ae6915f5d96fa086199",
+     "count": 22
+    },
+    {
+     "descriptor": "France",
+     "id": "54c5b6971ffb4bf0b116fe7651ec789a",
+     "count": 16
+    },
+    {
+     "descriptor": "United States of America",
+     "id": "bc33aa3152ec42d4995f4791a106ed09",
+     "count": 11
+    },
+    {
+     "descriptor": "India",
+     "id": "c4f78be1a8f14da0ab49ce1162348a5e",
+     "count": 8
+    }
+   ]
+  },
+  {
+   "facetParameter": "City",
+   "descriptor": "City",
+   "values": [
+    {
+     "descriptor": "Barcelona",
+     "id": "6e21c564851f10eeb9cce432fa41633d",
+     "count": 22
+    },
+    {
+     "descriptor": "Paris",
+     "id": "6e21c564851f10eeb9cceb4c542a6347",
+     "count": 16
+    },
+    {
+     "descriptor": "New York",
+     "id": "6e21c564851f10eeb9cd0d9c51fb6374",
+     "count": 11
+    },
+    {
+     "descriptor": "Gurgaon",
+     "id": "6e21c564851f10eeb9cccdabc219632e",
+     "count": 8
+    }
+   ]
+  },
+  {
+   "facetParameter": "Job_Category",
+   "descriptor": "Job Category",
+   "values": [
+    {
+     "descriptor": "Commercial",
+     "id": "a166d7b6a44d017de7783f232c50e187",
+     "count": 30
+    },
+    {
+     "descriptor": "Analytics",
+     "id": "a166d7b6a44d011b9c09f8222c50c787",
+     "count": 12
+    },
+    {
+     "descriptor": "R&D",
+     "id": "a166d7b6a44d0158dd9a34232c50dd87",
+     "count": 9
+    },
+    {
+     "descriptor": "Revenue Operations & Enablement",
+     "id": "a166d7b6a44d0171dfa13a232c50df87",
+     "count": 6
+    }
+   ]
+  },
+  {
+   "facetParameter": "Hiring_Type",
+   "descriptor": "Hiring Type",
+   "values": [
+    {
+     "descriptor": "Regular",
+     "id": "6e21c564851f10ed8128131cd9bb3e1f",
+     "count": 50
+    },
+    {
+     "descriptor": "Intern (Fixed Term) (Trainee)",
+     "id": "6e21c564851f10ed81281732e8ff3e21",
+     "count": 21
+    },
+    {
+     "descriptor": "FTC (Fixed Term)",
+     "id": "6e21c564851f10ed8128152551d63e20",
+     "count": 3
+    }
+   ]
+  },
+  {
+   "facetParameter": "Working_Style",
+   "descriptor": "Working Style",
+   "values": [
+    {
+     "descriptor": "Hybrid",
+     "id": "da762f4e254d1000baab7abf18050000",
+     "count": 59
+    },
+    {
+     "descriptor": "On Site",
+     "id": "da762f4e254d1000baab7abf18050001",
+     "count": 15
+    }
+   ]
+  }
+ ]
+}
