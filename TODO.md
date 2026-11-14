@@ -87,10 +87,10 @@ item. Observations about live sites below come from checks made on 2026-11-14 an
 
 ## Research the remaining unresolved companies
 
-- [ ] `data/unresolved_candidates.csv` lists 137 researched companies with no usable job feed (as of 2026-11-14: 51
-  multinational, 48 deeptech, 19 cyber_infra, 19 biz_software). It includes the twelve Workday companies above. Each needs
+- [ ] `data/unresolved_candidates.csv` lists 136 researched companies with no usable job feed (as of 2026-11-14: 51
+  multinational, 47 deeptech, 19 cyber_infra, 19 biz_software). It includes the twelve Workday companies above. Each needs
   its own research; there is no batch fix left. Every observation about a live site below is from the checks of
-  2026-11-14, a crawl of the 105 rows that had a careers URL that day (100 today) and a scan of their rendered pages. The
+  2026-11-14, a crawl of the 105 rows that had a careers URL that day (99 today) and a scan of their rendered pages. The
   remaining work falls into these groups:
   - **No careers URL (37).** Status `not_found` in `data/new/*_companies.json`: OX Security, Upsolver, Ceva, Speedata,
     Teramount, X-Globe, Q Factor, Gilat, Siklu, Silicom, Sight Diagnostics, Brainsway, EarlySign, Diagnostic Robotics,
@@ -117,9 +117,6 @@ item. Observations about live sites below come from checks made on 2026-11-14 an
   - **The page returned links, not jobs.** Ex Libris, Optibus, REE Automotive, Ormat and similar pages gave navigation
     links such as "View openings". Follow the link to the real list one level down; it may embed a board.
   - **The crawl parsed, but badly or partly.**
-    - Valens Semiconductor: 3 jobs, but the title and team are swapped ("Engineer" with team "Senior Backend", for the
-      page's "Senior Backend Engineer"). Fix `_parse_card` for a title split over two lines, then pin
-      `https://www.valens.com/positions/`.
     - Palo Alto Networks: a partial list (4 Israel jobs) that would churn day to day. Use its Workday board.
   - **Large multinational boards that show a worldwide first page.** Google, Oracle, Intuit, Apple, IBM, JPMorgan Chase
     and others returned jobs, but almost none in Israel (Apple's page had one), because the page is a worldwide search.

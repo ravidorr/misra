@@ -586,6 +586,21 @@ async def test_eightfold_ignores_responses_that_are_not_a_search_result() -> Non
         (["Software Engineer, QA", "Haifa"], ("Software Engineer, QA", "Haifa", "")),
         (["CISO"], ("CISO", "", "")),
         (["Customer Success"], ("Customer Success", "", "")),
+        # a title wrapped over two lines, with the team above it or below it (Valens)
+        (
+            ["Senior Backend", "Engineer", "Valens HQ, Hod Hasharon, Israel", "R&D", "Full Time"],
+            ("Senior Backend Engineer", "Valens HQ, Hod Hasharon, Israel", "R&D"),
+        ),
+        (
+            ["RT Embedded", "SW Engineer", "Valens HQ, Hod Hasharon, Israel", "R&D", "Full Time"],
+            ("SW Engineer", "Valens HQ, Hod Hasharon, Israel", "RT Embedded"),
+        ),
+        (
+            ["PMO Manager", "Valens HQ, Hod Hasharon, Israel", "Product, Application & Customer Success (PACS)"],
+            ("PMO Manager", "Valens HQ, Hod Hasharon, Israel", "Product, Application & Customer Success (PACS)"),
+        ),
+        # an acronym under a team name is the title, not the end of the team's name
+        (["Security", "CISO", "Haifa"], ("CISO", "Haifa", "Security")),
         # nothing but boilerplate and places
         (["Apply now", "Full-time"], None),
         (["Tel Aviv", "Remote"], None),
