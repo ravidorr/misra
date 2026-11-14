@@ -71,6 +71,30 @@ Observations about live sites below come from checks made on 2026-11-14 and may 
     and others returned jobs, but almost none in Israel (Apple's page had one), because the page is a worldwide search.
     They need a career address filtered to Israel (as `citi.eightfold.ai/careers?location=Israel` is) with `israel_only`,
     or their ATS. Check that the filter works before pinning.
+    Findings on the 26 multinationals left after the pins of 2026-11-14 (so the next person does not repeat them):
+    - Workday boards the adapter cannot read yet: Broadcom (`broadcom/wd1/External_Career`, 401 jobs) writes its Israel
+      place as `ISR-Tel Aviv University`, and Philips (`philips/wd3/jobs-and-careers`) has a country facet whose
+      "Israel" value has a tenant-specific id (10 jobs, Haifa), so the word-search route and the id route both miss
+      them. A fix in `adapters.workday` is needed: match a facet value by its name "Israel" as well as by Workday's id,
+      and accept a place that `discover.ISRAEL` recognises on the word-search route. Intel (`intel/wd1/External`) and
+      the Workday sites of Autodesk, Akamai and others gave no answer: the tenant, data centre or site name is
+      unknown.
+    - Bot protection (403 to a plain request, 2026-11-14; not to be bypassed): Intel (`jobs.intel.com`), Autodesk,
+      Akamai, General Motors (`search-careers.gm.com`), Ford, SAP, Uber, Booking.com.
+    - Other platforms with no adapter yet: AMD and Keysight (iCIMS: `careers-amd.icims.com`,
+      `careers-keysight.icims.com`), Synopsys (Avature: `synopsys.avature.net`), Intuit (Radancy: the search takes a
+      location only with coordinates and shows "Multiple Locations" for many jobs), Google (the results page embeds
+      its data; the crawler read only navigation links on `?location=Israel`), Apple (`jobs.apple.com/en-il/search`
+      is a script app; `/api/role/search` answers a redirect), IBM and Meta (no feed found).
+    - Ericsson: `jobs.ericsson.com/careers?location=Israel` is an Eightfold board that shows "0 jobs" in Israel today,
+      and the crawler reads its "Join Talent Network" link as a job, so it is not pinned; pin it once it lists one.
+    - eBay (`careers.ebayinc.com`), Walmart Global Tech (`careers.walmart.com`, a timeout), Siemens
+      (`jobs.siemens.com`, no DNS answer), Align Technology (`jobs.aligntech.com`) and Rapid7
+      (`careers.rapid7.com/jobs/search`): no feed found in the page HTML; not investigated further.
+    - Done on 2026-11-14: new adapters `oraclehcm` (Oracle, JPMorgan Chase, Dell, American Express, Nokia), `amazon`
+      and `phenom` (Cisco, GE HealthCare, Mastercard); Workday pins (Salesforce, Cadence, Edwards, Adobe, Zoom,
+      Marvell, Medtronic, KLA, Kyndryl, Workday); HP on Eightfold. American Express and Nokia list no job in Israel
+      today, and Adobe and Zoom none either.
   - **Pages that loaded and showed no job links.** 72 of the 105 pages crawled on 2026-11-14 returned no job, five of
     them with an empty title: the list is probably drawn by JavaScript from a JSON feed. Open the page, watch its network
     requests for the feed, then decide between an adapter and a browser pin.
