@@ -816,5 +816,14 @@
   "ats": "comeet",
   "slug": "dataloop/B5.00A",
   "israel_only": true
+ },
+ "Sunbit": {
+  "ats": "comeet",
+  "slug": "sunbit/37.001"
+ },
+ "Firefly": {
+  "ats": "comeet",
+  "slug": "firefly/39.000",
+  "israel_only": true
  }
 }
