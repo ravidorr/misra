@@ -1,6 +1,6 @@
 [project]
 name = "misra"
-version = "0.12.0"
+version = "0.13.0"
 description = "Daily batch pipeline: crawls career pages, keeps history in SQLite, and emails a digest."
 readme = "README.md"
 license = "MIT"
@@ -29,6 +29,7 @@ py-modules = [
   "common",
   "digest",
   "discover",
+  "regions",
   "run",
   "send_alert",
   "send_email",
@@ -61,4 +62,4 @@ show_missing = true
 [tool.mypy]
 python_version = "3.12"
 strict = true
-files = ["adapters.py", "browser_crawl.py", "build_dashboard.py", "classify.py", "common.py", "digest.py", "discover.py", "run.py", "send_alert.py", "send_email.py", "survey.py", "survey2.py"]
+files = ["adapters.py", "browser_crawl.py", "build_dashboard.py", "classify.py", "common.py", "digest.py", "discover.py", "regions.py", "run.py", "send_alert.py", "send_email.py", "survey.py", "survey2.py"]
