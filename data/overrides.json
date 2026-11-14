@@ -597,5 +597,9 @@
  "Weebit Nano": {
   "ats": "browser",
   "slug": "https://www.weebit-nano.com/company/careers/"
+ },
+ "Xtend": {
+  "ats": "browser",
+  "slug": "https://xtend.me/careers/"
  }
 }

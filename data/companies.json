@@ -2254,5 +2254,16 @@
   "status": "ok",
   "n_jobs": null,
   "n_israel": null
+ },
+ {
+  "name": "Xtend",
+  "domain": "xtend.me",
+  "careers_url": "https://xtend.me/careers/",
+  "ats": "browser",
+  "slug": "https://xtend.me/careers/",
+  "source": "override",
+  "status": "ok",
+  "n_jobs": null,
+  "n_israel": null
  }
 ]
