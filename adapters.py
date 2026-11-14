@@ -1,6 +1,7 @@
 """One adapter per ATS. fetch(slug) -> list of job dicts, or None on failure
 (None means 'could not crawl'; [] means 'crawled, no jobs')."""
 
+import html
 import json
 import re
 from collections.abc import Callable, Iterator
@@ -156,6 +157,40 @@ def comeet(slug: str) -> list[Job] | None:
     return out
 
 
+_JAZZHR_ITEM = '<li class="list-group-item">'
+_JAZZHR_LINK = re.compile(r'<a href="(https://[^"]+/apply/([A-Za-z0-9]+)/[^"]*)">(.*?)</a>', re.S)
+_JAZZHR_FACT = re.compile(r"<li><i class='fa fa-(map-marker|sitemap)'></i>(.*?)</li>", re.S)
+
+
+def _jazzhr_text(raw: str) -> str:
+    return html.unescape(re.sub(r"\s+", " ", raw)).strip()
+
+
+def jazzhr(slug: str) -> list[Job] | None:
+    """slug is the `<slug>` of `<slug>.applytojob.com`. JazzHR has no public feed: the board page lists the jobs as HTML
+    (a title link, then a map-marker location and a sitemap department)."""
+    r = get(f"https://{slug}.applytojob.com/apply")
+    # an unknown slug redirects to jazzhr.com, and a changed page layout loses the job list: neither is "no jobs"
+    if r is None or r.status_code != HTTP_OK or ".applytojob.com/" not in r.url or "jobs-list" not in r.text:
+        return None
+    out: list[Job] = []
+    for item in r.text.split(_JAZZHR_ITEM)[1:]:
+        link = _JAZZHR_LINK.search(item)
+        if not link:
+            return None  # an entry we cannot read: a partial list would close the jobs we missed
+        facts = {kind: _jazzhr_text(value) for kind, value in _JAZZHR_FACT.findall(item)}
+        out.append(
+            _job(
+                link.group(2),
+                _jazzhr_text(link.group(3)),
+                facts.get("map-marker"),
+                html.unescape(link.group(1)),
+                team=facts.get("sitemap"),
+            )
+        )
+    return out
+
+
 def greenhouse_url(url: str) -> list[Job] | None:
     """Company site proxies a Greenhouse board as JSON ({"jobs": [...]}, Greenhouse field names)."""
     r = get(url)
@@ -282,4 +317,5 @@ ADAPTERS: dict[str, Callable[[str], list[Job] | None]] = {
     "smartrecruiters": smartrecruiters,
     "comeet": comeet,
     "workday": workday,
+    "jazzhr": jazzhr,
 }

@@ -12,7 +12,7 @@ python3 digest.py --commit # only after sending manually; send_email.py does thi
 python3 send_email.py      # send the digest (add --dry-run to preview)
 ```
 
-Adapters: Greenhouse, Lever, Ashby, Workable, SmartRecruiters, Comeet (public hosted pages), Workday (the public job search, Israel only; slug `tenant/wdN/site`), and a generic
+Adapters: Greenhouse, Lever, Ashby, Workable, SmartRecruiters, Comeet (public hosted pages), Workday (the public job search, Israel only; slug `tenant/wdN/site`), JazzHR (the board page of `<slug>.applytojob.com`), and a generic
 Playwright crawler (`browser_crawl.py`, JSON-LD or job-looking links) for custom career pages. It also reads HiBob boards and
 Eightfold career sites (the page's own search results, paged with "Next jobs"); pin an Eightfold site with its
 `...careers?location=Israel` URL.

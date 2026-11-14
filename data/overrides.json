@@ -658,5 +658,9 @@
   "ats": "workday",
   "slug": "integralads/wd1/IAScareers",
   "israel_only": true
+ },
+ "LinearB": {
+  "ats": "jazzhr",
+  "slug": "linearb"
  }
 }

@@ -32,7 +32,7 @@ def test_job_normalises() -> None:
     }
 
 
-@pytest.mark.parametrize("name", ["greenhouse", "lever", "ashby", "workable", "comeet", "greenhouse_url"])
+@pytest.mark.parametrize("name", ["greenhouse", "lever", "ashby", "workable", "comeet", "greenhouse_url", "jazzhr"])
 @pytest.mark.parametrize("resp", [None, FakeHttpResponse(status_code=500)])
 def test_failure_returns_none(monkeypatch: pytest.MonkeyPatch, name: str, resp: FakeHttpResponse | None) -> None:
     fake_get(monkeypatch, resp)
@@ -402,3 +402,88 @@ def test_workday_more_pages_than_the_limit_is_a_failure_not_a_partial_list(monke
 
 def test_workday_is_registered() -> None:
     assert adapters.ADAPTERS["workday"] is adapters.workday
+
+
+JAZZHR_URL = "https://acme.applytojob.com/apply"
+
+
+def jazzhr_page(*items: str) -> str:
+    """The shape of a JazzHR board page, as recorded from linearb.applytojob.com on 2026-11-14."""
+    return (
+        "<main><div class='col col-xs-7 jobs-list'><h2 class='page-title'>Current Openings</h2>"
+        "<ul class='list-group'>" + "".join(items) + "</ul></div></main><footer><ul><li>About</li></ul></footer>"
+    )
+
+
+def jazzhr_item(job_id: str, title: str, *facts: tuple[str, str]) -> str:
+    return (
+        "<li class=\"list-group-item\">\n<h3 class='list-group-item-heading'>\n"
+        f'<a href="https://acme.applytojob.com/apply/{job_id}/Some-Title">\n  {title}   \n</a></h3>'
+        "<ul class='list-inline list-group-item-text'>"
+        + "".join(f"<li><i class='fa fa-{icon}'></i>{text}</li>" for icon, text in facts)
+        + "</ul></li>\n"
+    )
+
+
+def test_jazzhr_reads_the_board_page(monkeypatch: pytest.MonkeyPatch) -> None:
+    page = jazzhr_page(
+        jazzhr_item(
+            "HSVVa69rsU", "Senior Software Developer", ("map-marker", "Tel Aviv, Israel"), ("sitemap", "R&amp;D")
+        ),
+        jazzhr_item("b2", "Sales &amp; Support", ("map-marker", "Remote")),
+        jazzhr_item("c3", "Designer"),
+    )
+    urls = fake_get(monkeypatch, FakeHttpResponse(text=page, url=JAZZHR_URL))
+    jobs = adapters.jazzhr("acme")
+    assert urls == [JAZZHR_URL]
+    assert jobs == [
+        {
+            "job_id": "HSVVa69rsU",
+            "title": "Senior Software Developer",
+            "location": "Tel Aviv, Israel",
+            "url": "https://acme.applytojob.com/apply/HSVVa69rsU/Some-Title",
+            "team": "R&D",
+            "posted": "",
+        },
+        {
+            "job_id": "b2",
+            "title": "Sales & Support",
+            "location": "Remote",
+            "url": "https://acme.applytojob.com/apply/b2/Some-Title",
+            "team": "",
+            "posted": "",
+        },
+        {
+            "job_id": "c3",
+            "title": "Designer",
+            "location": "",
+            "url": "https://acme.applytojob.com/apply/c3/Some-Title",
+            "team": "",
+            "posted": "",
+        },
+    ]
+    assert all(discover.ISRAEL.search(j["location"]) for j in jobs[:1])
+
+
+def test_jazzhr_a_board_with_no_job_is_empty_not_a_failure(monkeypatch: pytest.MonkeyPatch) -> None:
+    fake_get(monkeypatch, FakeHttpResponse(text=jazzhr_page(), url=JAZZHR_URL))
+    assert adapters.jazzhr("acme") == []
+
+
+@pytest.mark.parametrize(
+    ("text", "url"),
+    [
+        (jazzhr_page(jazzhr_item("a", "A")), "https://www.jazzhr.com/job-seekers"),  # unknown slug: redirected away
+        ("<html>a layout without the job list</html>", JAZZHR_URL),
+        (jazzhr_page('<li class="list-group-item">no link in this entry</li>'), JAZZHR_URL),
+    ],
+)
+def test_jazzhr_a_page_it_cannot_read_is_a_failure_not_an_empty_board(
+    monkeypatch: pytest.MonkeyPatch, text: str, url: str
+) -> None:
+    fake_get(monkeypatch, FakeHttpResponse(text=text, url=url))
+    assert adapters.jazzhr("acme") is None
+
+
+def test_jazzhr_is_registered() -> None:
+    assert adapters.ADAPTERS["jazzhr"] is adapters.jazzhr
