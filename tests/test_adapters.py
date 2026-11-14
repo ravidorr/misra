@@ -291,11 +291,11 @@ def test_workday_on_a_recorded_philips_answer_uses_the_israel_value_with_its_own
 def test_workday_on_a_recorded_broadcom_answer_uses_the_israeli_places_of_its_location_facet(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    page = wd_page([wd_posting(1, "ISR-Tel Aviv University"), wd_posting(2, "USA-IL-Remote")], total=1)
+    page = wd_page([wd_posting(1, "ISR-Tel Aviv University"), wd_posting(2, "2 Locations")], total=1)
     bodies = fake_post(monkeypatch, recorded("broadcom"), page)
     jobs = adapters.workday("broadcom/wd1/External_Career")
     assert jobs is not None
-    assert [j["location"] for j in jobs] == ["ISR-Tel Aviv University"]  # located in Israel by its own text, not tagged
+    assert [j["location"] for j in jobs] == ["ISR-Tel Aviv University, Israel", "2 Locations, Israel"]
     ids = bodies[1]["appliedFacets"]["locations"]
     assert len(ids) == 1  # the one ISR value; the Australian, Singapore and Illinois values are not Israel
     assert bodies[1]["searchText"] == ""
@@ -326,7 +326,7 @@ def test_workday_a_country_named_israel_is_found_by_its_name_in_any_case(monkeyp
     assert bodies[1]["appliedFacets"] == {"Country": ["zz"]}
 
 
-def test_workday_place_facet_applies_every_israeli_place_and_keeps_only_postings_located_in_israel(
+def test_workday_place_facet_applies_every_israeli_place_and_tags_what_the_filter_returned(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     facet = places_facet(("Office - Israel - Tel Aviv", 2), ("Spain-Madrid", 5), ("Haifa", 1), ("Madrid", None))
@@ -334,7 +334,7 @@ def test_workday_place_facet_applies_every_israeli_place_and_keeps_only_postings
     bodies = fake_post(monkeypatch, wd_page([], facets=[facet]), page)
     jobs = adapters.workday(SLUG)
     assert jobs is not None
-    assert [j["title"] for j in jobs] == ["Job 1", "Job 3"]
+    assert [j["location"] for j in jobs] == ["Tel Aviv, Israel", "2 Locations, Israel", "Haifa, Israel"]
     assert bodies[1]["appliedFacets"] == {"locations": ["id0", "id2"]}
 
 
@@ -394,6 +394,8 @@ def test_workday_search_route_keeps_only_postings_located_in_israel(monkeypatch:
         wd_posting(6, "Ra'anana"),  # a place the matcher knows, without the country
         wd_posting(7, "Milano"),
         wd_posting(8, "Chicago, IL"),  # Illinois
+        wd_posting(9, "Peoria, IL"),  # Illinois, in no list of US cities
+        wd_posting(10, "Remote, IL"),
     ]
     fake_post(
         monkeypatch, wd_page([], facets=[{"facetParameter": "jobFamily", "values": [{"id": "bb"}]}]), wd_page(postings)

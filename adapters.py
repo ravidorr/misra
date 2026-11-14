@@ -302,9 +302,8 @@ def _workday_is_israel_country(value: dict[str, Any]) -> bool:
     return value["id"] == WORKDAY_ISRAEL or str(value.get("descriptor") or "").strip().casefold() == "israel"
 
 
-def _workday_israel_filter(first: dict[str, Any]) -> tuple[str, list[dict[str, Any]], bool] | None:
-    """The facet that lists Israel in the facets of an unfiltered search: its name, its Israeli values and whether they
-    are the country itself (True) or places in it (False). Else None.
+def _workday_israel_filter(first: dict[str, Any]) -> tuple[str, list[dict[str, Any]]] | None:
+    """The facet that lists Israel in the facets of an unfiltered search: its name and its Israeli values, else None.
 
     The country comes first, whichever facet holds it. Failing that, the values of a location facet whose name is an
     Israeli place (Broadcom writes "ISR-Tel Aviv University"); the bare code `IL` is not enough, it is also Illinois."""
@@ -316,25 +315,26 @@ def _workday_israel_filter(first: dict[str, Any]) -> tuple[str, list[dict[str, A
     for param, values in facets:
         country = [v for v in values if _workday_is_israel_country(v)]
         if country:
-            return param, country, True
+            return param, country
     for param, values in facets:
         places = [v for v in values if ISRAEL.names_a_place(str(v.get("descriptor") or ""))]
         if places and "location" in param.lower():
-            return param, places, False
+            return param, places
     return None
 
 
-def _workday_job(host: str, site: str, posting: dict[str, Any], is_country: bool) -> Job | None:
-    """A job from a posting, or None when it has no link or is not located in Israel. A posting found through the
-    country facet is Israel whatever its text says: a posting in several places says only "2 Locations"."""
+def _workday_job(host: str, site: str, posting: dict[str, Any], via_facet: bool) -> Job | None:
+    """A job from a posting, or None when it has no link or, on the word-search route, is not located in Israel (a
+    place the matcher knows: the bare code IL is Illinois on Workday). A posting found through the Israel facet is
+    Israel whatever its text says: a posting in several places says only "2 Locations"."""
     path = posting.get("externalPath")
     if not path:
         return None
     loc = " ".join((posting.get("locationsText") or "").split())
-    if is_country:
+    if via_facet:
         if "israel" not in loc.lower():
             loc = f"{loc}, Israel" if loc else "Israel"
-    elif not ISRAEL.search(loc):
+    elif not ISRAEL.names_a_place(loc):
         return None
     return _job(path, posting.get("title"), loc, f"{host}/en-US/{site}{path}")
 
@@ -367,9 +367,10 @@ def workday(slug: str) -> list[Job] | None:
 
     The facets of an unfiltered first search are searched, nested groups included, for one that lists Israel (its name
     and the id of the country differ per tenant): the country by Workday's id or by the name "Israel", else the places
-    of a location facet. A search filtered by it gives the jobs in Israel. Through the country a posting in several
-    places, which says only "2 Locations", is tagged Israel; through places only postings located in Israel are kept.
-    Without any such facet the search is for the word Israel and only postings located in Israel are kept, so a tenant
+    of a location facet. A search filtered by it gives the jobs in Israel, and a posting in several
+    places, which says only "2 Locations", is tagged Israel. The places route is complete only if the matcher knows
+    every Israeli place the facet lists. Without any such facet the search is for the word Israel and only postings
+    located in a place the matcher knows are kept, so a tenant
     whose facets Workday reshaped still gives its Israel jobs, minus the multi-location ones. Any failure, including
     one after the first page and a filtered total larger than the facet says, is None: a partial list would close the
     jobs it lacks."""
@@ -383,7 +384,7 @@ def workday(slug: str) -> list[Job] | None:
     if first is None:
         return None
     found = _workday_israel_filter(first)
-    param, values, is_country = found if found else ("", [], False)
+    param, values = found if found else ("", [])
     applied = {param: [v["id"] for v in values]} if found else {}
     text = "" if found else "Israel"
     out: list[Job] = []
@@ -396,7 +397,7 @@ def workday(slug: str) -> list[Job] | None:
             if found and _workday_contradicts(d, values):
                 return None
             total = d.get("total")  # only the first page carries it
-        jobs = (_workday_job(host, site, p, is_country) for p in d["jobPostings"])
+        jobs = (_workday_job(host, site, p, bool(found)) for p in d["jobPostings"])
         out.extend(j for j in jobs if j)
         if not _workday_has_more(d, page, total):
             return out
