@@ -161,6 +161,7 @@ _REMOTE = re.compile(r"\b(remote|hybrid|on-?site|worldwide|anywhere)\b", re.I)
 _COUNTRY_ONLY = re.compile(rf"(?:{_COUNTRIES})", re.I)
 MAX_LOCATION_LEN = 60
 MAX_TEAM_WORDS = 2
+MAX_ACRONYM_LEN = 4
 MAX_REMOTE_WORDS = 4
 
 
@@ -199,7 +200,7 @@ def _parse_card(lines: list[str]) -> tuple[str, str, str] | None:
         and len(title.split()) <= MAX_TEAM_WORDS
         and not ROLE_WORD.search(title)
         and ROLE_WORD.fullmatch(others[0])
-        and not others[0].isupper()
+        and not (others[0].isupper() and len(others[0]) <= MAX_ACRONYM_LEN)
     ):
         title, others = f"{title} {others[0]}", others[1:]
     # a short leading line with no role word is a team name when the next line has one ("Analytics" / "... Engineer")

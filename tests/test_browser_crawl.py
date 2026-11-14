@@ -599,6 +599,11 @@ async def test_eightfold_ignores_responses_that_are_not_a_search_result() -> Non
             ["PMO Manager", "Valens HQ, Hod Hasharon, Israel", "Product, Application & Customer Success (PACS)"],
             ("PMO Manager", "Valens HQ, Hod Hasharon, Israel", "Product, Application & Customer Success (PACS)"),
         ),
+        # the same on a site that prints in capitals
+        (
+            ["SENIOR BACKEND", "ENGINEER", "TEL AVIV, ISRAEL"],
+            ("SENIOR BACKEND ENGINEER", "TEL AVIV, ISRAEL", ""),
+        ),
         # an acronym under a team name is the title, not the end of the team's name
         (["Security", "CISO", "Haifa"], ("CISO", "Haifa", "Security")),
         # nothing but boilerplate and places
