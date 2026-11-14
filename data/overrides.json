@@ -797,5 +797,24 @@
  "Cyolo": {
   "ats": "comeet",
   "slug": "cyolo/F5.005"
+ },
+ "Allot": {
+  "ats": "comeet",
+  "slug": "allot/C4.009"
+ },
+ "Foretellix": {
+  "ats": "comeet",
+  "slug": "Foretellix/84.007",
+  "israel_only": true
+ },
+ "XM Cyber": {
+  "ats": "comeet",
+  "slug": "xmcyber/15.005",
+  "israel_only": true
+ },
+ "Dataloop": {
+  "ats": "comeet",
+  "slug": "dataloop/B5.00A",
+  "israel_only": true
  }
 }
