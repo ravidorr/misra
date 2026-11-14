@@ -1,8 +1,8 @@
 # TODO
 
 Open work, as of 2026-11-14. Each item says what triggers it, how to do it and when it is done. When one is finished,
-delete it and update the counts in the others: the 139 and the four segment counts in the research item (a pin removes
-one row from one segment), its "(37)" if the company had no careers URL, and the "twelve" and "thirteen" in the Workday
+delete it and update the counts in the others: the 129 and the four segment counts in the research item (a pin removes
+one row from one segment), its "(37)" if the company had no careers URL, and the "five" and "six" in the Workday
 item. Observations about live sites below come from checks made on 2026-11-14 and may have changed.
 
 ## Review the Node and Python pins
@@ -37,26 +37,22 @@ item. Observations about live sites below come from checks made on 2026-11-14 an
 
 ## Workday companies waiting for Workday
 
-- [ ] Twelve companies (thirteen sites: Kyndryl has two) run their careers on Workday, and the `workday` adapter is
-  merged, but their hosts could not be checked: on 2026-11-14 every wd1 and wd5 host answered the job search with a 303
-  redirect that ends at `static.community.workday.com/maintenance-page.html` ("Workday is currently unavailable. We are
-  experiencing a service interruption", so an outage notice, with no planned window given), while the wd3 hosts (Samsung,
-  Criteo, both already pinned) answered normally. Retries from 13:18 to 14:04 UTC changed nothing. Nothing is pinned for
-  them, on purpose: a wrong address or a down host would show as a "not crawled" gap on the first day.
+- [ ] Five companies (six sites: Kyndryl has two) run their careers on Workday, and the `workday` adapter is merged, but
+  their hosts still cannot be checked. Seven others were pinned on 2026-11-14 (DoubleVerify, Visa, Motorola Solutions,
+  Palo Alto Networks, CrowdStrike, Proofpoint, Integral Ad Science) once their hosts answered again. On 2026-11-14 at
+  15:17 UTC the job search of these five still answered with a 303 redirect that ends at
+  `community.workday.com/maintenance-page` (Workday's "service interruption" notice), while other tenants on the same
+  data centres (wd5: Visa, CrowdStrike; wd1: Integral Ad Science; wd3: Samsung, Criteo) answered normally, so the
+  outage is per tenant, not per data centre. It is not a wrong address: an unknown tenant answers 422 and an unknown
+  site 404, never this redirect. Nothing is pinned for them, on purpose: a down host would show as a "not crawled" gap
+  on the first day.
   - The addresses came from the companies' own careers pages:
 
     | Company | Slug |
     | --- | --- |
-    | DoubleVerify | `doubleverify/wd5/DV_Careers` |
-    | Integral Ad Science | `integralads/wd1/IAScareers` |
     | Marvell | `marvell/wd1/MarvellCareers` |
     | Broadcom | `broadcom/wd1/External_Career` |
-    | Visa | `visa/wd5/Visa` |
     | Medtronic | `medtronic/wd1/MedtronicCareers` |
-    | Motorola Solutions | `motorolasolutions/wd5/Careers` |
-    | Palo Alto Networks | `paloaltonetworks/wd5/panwexternalcareers` |
-    | CrowdStrike | `crowdstrike/wd5/crowdstrikecareers` |
-    | Proofpoint | `proofpoint/wd5/proofpointcareers` |
     | Kyndryl | `kyndryl/wd5/KyndrylProfessionalCareers` and `kyndryl/wd5/KyndrylEarlyCareers` |
     | Workday | `workday/wd5/Workday` |
 
@@ -83,14 +79,14 @@ item. Observations about live sites below come from checks made on 2026-11-14 an
     5. Kyndryl is one company, so one entry (overrides are keyed by name): probe both sites and pin the one that lists
        Israel jobs, the larger one if both do, and either (say which) if neither does.
     6. This is a data-only PR: no version bump. Run the gates and the review loop as for any PR.
-  - Done when: each of the twelve is pinned or has a recorded reason it cannot be (move it to the research item).
+  - Done when: each of the five is pinned or has a recorded reason it cannot be (move it to the research item).
 
 ## Research the remaining unresolved companies
 
-- [ ] `data/unresolved_candidates.csv` lists 136 researched companies with no usable job feed (as of 2026-11-14: 51
-  multinational, 47 deeptech, 19 cyber_infra, 19 biz_software). It includes the twelve Workday companies above. Each needs
+- [ ] `data/unresolved_candidates.csv` lists 129 researched companies with no usable job feed (as of 2026-11-14: 46
+  multinational, 47 deeptech, 19 cyber_infra, 17 biz_software). It includes the five Workday companies above. Each needs
   its own research; there is no batch fix left. Every observation about a live site below is from the checks of
-  2026-11-14, a crawl of the 105 rows that had a careers URL that day (99 today) and a scan of their rendered pages. The
+  2026-11-14, a crawl of the 105 rows that had a careers URL that day (92 today) and a scan of their rendered pages. The
   remaining work falls into these groups:
   - **No careers URL (37).** Status `not_found` in `data/new/*_companies.json`: OX Security, Upsolver, Ceva, Speedata,
     Teramount, X-Globe, Q Factor, Gilat, Siklu, Silicom, Sight Diagnostics, Brainsway, EarlySign, Diagnostic Robotics,
@@ -102,8 +98,7 @@ item. Observations about live sites below come from checks made on 2026-11-14 an
     Booking.com (iCIMS). Each adapter is its own PR: a function in `adapters.py`, an entry in `ADAPTERS`, tests with the
     fakes in `tests/test_adapters.py`, a version bump and a changelog entry. American Express showed an Eightfold
     signature, but `aexp.eightfold.ai/careers` is a 404: find the real host, and pin it as the Citi and PayPal entries are
-    (the browser crawler reads Eightfold boards, with `?location=Israel` and `israel_only`). Palo Alto Networks is in the
-    Workday item: pinning it there also closes its entry under the partial lists below.
+    (the browser crawler reads Eightfold boards, with `?location=Israel` and `israel_only`).
   - **A board was found but its address is wrong or dead.**
     - Pliops: on 2026-11-14 the Comeet page for `pliops/05.004` said "This Spark Hire Recruit account has been
       deactivated", and it still does, but `pliops.com/careers` still links to that page, so the company has published no
@@ -116,8 +111,6 @@ item. Observations about live sites below come from checks made on 2026-11-14 an
       not be recognised. The adapter would need to read the offices (`?content=true`) first.
   - **The page returned links, not jobs.** Ex Libris, Optibus, REE Automotive, Ormat and similar pages gave navigation
     links such as "View openings". Follow the link to the real list one level down; it may embed a board.
-  - **The crawl parsed, but badly or partly.**
-    - Palo Alto Networks: a partial list (4 Israel jobs) that would churn day to day. Use its Workday board.
   - **Large multinational boards that show a worldwide first page.** Google, Oracle, Intuit, Apple, IBM, JPMorgan Chase
     and others returned jobs, but almost none in Israel (Apple's page had one), because the page is a worldwide search.
     They need a career address filtered to Israel (as `citi.eightfold.ai/careers?location=Israel` is) with `israel_only`,

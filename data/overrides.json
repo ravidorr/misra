@@ -623,5 +623,40 @@
  "Valens Semiconductor": {
   "ats": "browser",
   "slug": "https://www.valens.com/positions/"
+ },
+ "DoubleVerify": {
+  "ats": "workday",
+  "slug": "doubleverify/wd5/DV_Careers",
+  "israel_only": true
+ },
+ "Visa": {
+  "ats": "workday",
+  "slug": "visa/wd5/Visa",
+  "israel_only": true
+ },
+ "Motorola Solutions": {
+  "ats": "workday",
+  "slug": "motorolasolutions/wd5/Careers",
+  "israel_only": true
+ },
+ "Palo Alto Networks": {
+  "ats": "workday",
+  "slug": "paloaltonetworks/wd5/panwexternalcareers",
+  "israel_only": true
+ },
+ "CrowdStrike": {
+  "ats": "workday",
+  "slug": "crowdstrike/wd5/crowdstrikecareers",
+  "israel_only": true
+ },
+ "Proofpoint": {
+  "ats": "workday",
+  "slug": "proofpoint/wd5/proofpointcareers",
+  "israel_only": true
+ },
+ "Integral Ad Science": {
+  "ats": "workday",
+  "slug": "integralads/wd1/IAScareers",
+  "israel_only": true
  }
 }
