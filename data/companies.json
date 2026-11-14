@@ -2311,5 +2311,16 @@
   "status": "ok",
   "n_jobs": 5,
   "n_israel": 4
+ },
+ {
+  "name": "Valens Semiconductor",
+  "domain": "valens.com",
+  "careers_url": "https://www.valens.com/positions/",
+  "ats": "browser",
+  "slug": "https://www.valens.com/positions/",
+  "source": "override",
+  "status": "ok",
+  "n_jobs": null,
+  "n_israel": null
  }
 ]

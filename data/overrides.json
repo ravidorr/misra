@@ -619,5 +619,9 @@
  "Autofleet": {
   "ats": "workable",
   "slug": "autofleet"
+ },
+ "Valens Semiconductor": {
+  "ats": "browser",
+  "slug": "https://www.valens.com/positions/"
  }
 }
