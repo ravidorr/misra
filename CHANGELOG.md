@@ -2,6 +2,57 @@
 
 All notable changes are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses [Semantic Versioning](https://semver.org/).
 
+## [0.10.0] - 2026-11-14
+
+### Changed
+
+- The `workday` adapter recognises Israel on tenants the old routes missed. The facet filter now takes a country value named "Israel" with the tenant's own id (Philips) as well as Workday's id, and applies the value's id. When no such country exists it takes the values of a location facet whose name is an Israeli place (Broadcom's `ISR-Tel Aviv University`) and tags every posting it returns Israel like the country route. The bare code `IL` never selects a facet value and never makes a posting Israeli on Workday (it is Illinois as often as Israel). The word-search route now keeps a posting whose location names an Israeli place the matcher knows, not only one that says "Israel". A filtered first page whose total is above the counts of the values asked for (a filter Workday ignored would return every job) is a failed crawl. The 19 Workday boards already pinned return the same jobs, except Palo Alto Networks, which gains one multi-location posting in Israel.
+- The Israel matcher moved from `discover.py` to `common.py` so the adapters can use it (`discover` imports `adapters`); `run`, `digest`, `build_dashboard` and `browser_crawl` import it from there. `ramat` now matches only at the start of a word, so "Parramatta" is no longer an Israeli place.
+
+### Added
+
+- Pinned with `israel_only` on Workday: Broadcom (`broadcom/wd1/External_Career`, 1 job on 2026-11-14) and Philips (`philips/wd3/jobs-and-careers`, 10 jobs in Haifa and Ra'anana).
+
+## [0.9.0] - 2026-11-14
+
+### Added
+
+- A `phenom` adapter for career sites built on Phenom People (slug `<host>/<country>/<lang>`, for example `careers.cisco.com/global/en`). It asks the site's own search widget (`POST /widgets`) for the country Israel, 50 jobs a page, and links each job to `/<country>/<lang>/job/<jobSeqNo>`. The list is trusted only when every page is the search JSON, every job is located in Israel (a site that ignores the filter would answer with the worldwide list), and the reported total equals the Israel count of the site's own country facet (a filter that matches nothing, for example after a renamed value, is not an empty board) and the jobs add up to it, the same on every page, with no job twice; otherwise (including more than 100 pages) it is a failed crawl. Pinned with `israel_only`: Cisco (48 jobs on 2026-11-14), GE HealthCare (34) and Mastercard (3).
+
+## [0.8.0] - 2026-11-14
+
+### Added
+
+- An `amazon` adapter that reads the search JSON of `amazon.jobs` for one country (slug: the country code, `ISR`), 100 jobs a page. The list is trusted only when every page answers with that JSON, every job is in the asked country and has an id, a title and a path, and the pages add up to the reported `hits`, which must be above zero (a wrong country code answers with no job) and the same on every page, with no job twice; otherwise (including more than 50 pages) it is a failed crawl. Amazon is pinned with `israel_only` on slug `ISR`: 171 jobs in Tel Aviv, Haifa and other Israeli sites on 2026-11-14, each recognised as Israel by `discover.ISRAEL`.
+
+## [0.7.0] - 2026-11-14
+
+### Added
+
+- An `oraclehcm` adapter for career sites on Oracle Fusion HCM (slug `<host>/<site>`, from `https://<host>/hcmUI/CandidateExperience/en/sites/<site>`). It asks the public requisition search for the word Israel and keeps a requisition whose primary or one of whose secondary places has country code IL, so the descriptions that merely mention Israel are dropped. A bad slug, a failed request, an answer that is not a search, a requisition with no id or title, a page shorter than the reported total promises, and a list longer than 100 pages are failed crawls, not empty boards. Pinned with `israel_only`: Oracle (2 jobs on 2026-11-14), JPMorgan Chase (1), Dell Technologies (6), American Express (0) and Nokia (0).
+
+## [0.6.0] - 2026-11-14
+
+### Added
+
+- A `bamboohr` adapter for boards on `<slug>.bamboohr.com`. It reads `/careers/list`, the public JSON the careers page is built from, and writes each location as city, state and country when the company filled them in. The answer must come from the board's own host, its `totalCount` must match the list and every entry must have an id and a title; otherwise (an unknown slug lands on a web page) it is a failed crawl, not an empty board. A job with no location at all cannot be recognised as an Israel job, so an `israel_only` board drops it. Its first board is Splitit (slug `splitit`, `israel_only`): on 2026-11-14 it listed 3 jobs, none in Israel, and two of them had no location at all.
+
+## [0.5.0] - 2026-11-14
+
+### Added
+
+- A `jazzhr` adapter for boards on `<slug>.applytojob.com`. JazzHR has no public feed, so it reads the board page, where each job is a title link with a location and a department; a page it cannot read (an unknown slug, which redirects to jazzhr.com, or a changed layout) is a failed crawl, not an empty board. Its first board is LinearB (slug `linearb`, 1 job on 2026-11-14, in Tel Aviv).
+
+## [0.4.1] - 2026-11-14
+
+### Fixed
+
+- The browser crawler no longer swaps the title and the team of a job card whose title is wrapped over two lines ("Senior Backend" above "Engineer"): a lone role word after a short line with no role word of its own now finishes that line, so the card reads "Senior Backend Engineer" instead of "Engineer" with the team "Senior Backend". An acronym such as "CISO" under a team name is still a title. Re-crawling 14 pinned browser pages before and after the change gave the same jobs for all of them; the one difference (Priority Software, 9 and 22 jobs) also showed with the old code, so it is the page, not the parser.
+
+### Added
+
+- Valens Semiconductor is pinned on `https://www.valens.com/positions/` (3 jobs on 2026-11-14, all at its Hod Hasharon office).
+
 ## [0.4.0] - 2026-11-14
 
 ### Changed

@@ -1,0 +1,83 @@
+{
+ "total": 776,
+ "jobPostings": [
+  {
+   "title": "North America Payroll Manager (Nashville, TN)",
+   "externalPath": "/job/Nashville-Tennessee-United-States/North-America-Payroll-Manager--Nashville--TN-_593509",
+   "locationsText": "Nashville, Tennessee, United States",
+   "postedOn": "Posted Today",
+   "bulletFields": [
+    "593509"
+   ]
+  },
+  {
+   "title": "Director, Insurance Risk Management (Cambridge, MA)",
+   "externalPath": "/job/Cambridge-US-Massachusetts-United-States/Director--Risk-Management--Cambridge--MA-_594702",
+   "locationsText": "Cambridge (US), Massachusetts, United States",
+   "postedOn": "Posted Today",
+   "bulletFields": [
+    "594702"
+   ]
+  }
+ ],
+ "facets": [
+  {
+   "facetParameter": "locationMainGroup",
+   "values": [
+    {
+     "facetParameter": "locationHierarchy1",
+     "descriptor": "Country/Region",
+     "values": [
+      {
+       "descriptor": "Finland",
+       "id": "6e1b2a934716103c2ade3245ee870118",
+       "count": 1
+      },
+      {
+       "descriptor": "Israel",
+       "id": "6e1b2a934716103c2adde8e0944f00ee",
+       "count": 10
+      },
+      {
+       "descriptor": "Italy",
+       "id": "6e1b2a934716103c2addec4ab1bf00f0",
+       "count": 3
+      },
+      {
+       "descriptor": "United States",
+       "id": "6e1b2a934716103c2add443cd4170090",
+       "count": 247
+      }
+     ]
+    },
+    {
+     "facetParameter": "locationHierarchy2",
+     "descriptor": "State/Province",
+     "values": [
+      {
+       "descriptor": "Haifa",
+       "id": "6e1b2a934716103c2ae2263d60b70286",
+       "count": 9
+      },
+      {
+       "descriptor": "Milano",
+       "id": "6e1b2a934716103c2ae23d6d3ebf0294",
+       "count": 3
+      }
+     ]
+    },
+    {
+     "facetParameter": "locations",
+     "descriptor": "City",
+     "values": [
+      {
+       "descriptor": "Haifa",
+       "id": "477471c84a9210a115773e51114810c4",
+       "count": 9
+      }
+     ]
+    }
+   ]
+  }
+ ]
+}

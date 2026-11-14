@@ -1,12 +1,14 @@
 """One adapter per ATS. fetch(slug) -> list of job dicts, or None on failure
 (None means 'could not crawl'; [] means 'crawled, no jobs')."""
 
+import html
 import json
 import re
 from collections.abc import Callable, Iterator
 from typing import Any
+from urllib.parse import urlparse
 
-from common import get, post
+from common import ISRAEL, get, post
 
 HTTP_OK = 200
 Job = dict[str, Any]
@@ -16,6 +18,15 @@ WORKDAY_ISRAEL = (
 WORKDAY_PAGE = 20  # the most jobs Workday returns in one request
 WORKDAY_MAX_PAGES = 100
 WORKDAY_SLUG_PARTS = 3
+ORACLEHCM_ISRAEL = "IL"
+ORACLEHCM_PAGE = 50
+ORACLEHCM_MAX_PAGES = 100
+ORACLEHCM_SLUG_PARTS = 2
+AMAZON_PAGE = 100
+AMAZON_MAX_PAGES = 50
+PHENOM_PAGE = 50
+PHENOM_MAX_PAGES = 100
+PHENOM_SLUG_PARTS = 3
 
 
 def _job(  # noqa: PLR0913, PLR0917
@@ -156,6 +167,82 @@ def comeet(slug: str) -> list[Job] | None:
     return out
 
 
+_JAZZHR_ITEM = '<li class="list-group-item">'
+_JAZZHR_ITEM_END = re.compile(r"</ul>\s*</li>")
+_JAZZHR_LINK = re.compile(r'<a href="(https://[^"]+/apply/([A-Za-z0-9]+)/[^"]*)">(.*?)</a>', re.S)
+_JAZZHR_ANY_JOB_LINK = re.compile(r'href="https://[^"]+/apply/([A-Za-z0-9]+)/')
+_JAZZHR_FACT = re.compile(r"<li><i class='fa fa-(map-marker|sitemap)'></i>(.*?)</li>", re.S)
+_JAZZHR_TAG = re.compile(r"<[^>]+>")
+
+
+def _jazzhr_text(raw: str) -> str:
+    return html.unescape(re.sub(r"\s+", " ", _JAZZHR_TAG.sub(" ", raw))).strip()
+
+
+def jazzhr(slug: str) -> list[Job] | None:
+    """slug is the `<slug>` of `<slug>.applytojob.com`. JazzHR has no public feed: the board page lists the jobs as HTML
+    (a title link, then a map-marker location and a sitemap department). Only a page that reads cleanly gives a list:
+    anything else is None, because an empty list would close every stored job."""
+    r = get(f"https://{slug}.applytojob.com/apply")
+    # an unknown slug redirects to jazzhr.com, and a changed page layout loses the job list: neither is "no jobs"
+    if r is None or r.status_code != HTTP_OK or urlparse(r.url).hostname != f"{slug}.applytojob.com":
+        return None
+    _, marker, board = r.text.partition("jobs-list")
+    if not marker:
+        return None
+    out: list[Job] = []
+    for chunk in board.split(_JAZZHR_ITEM)[1:]:
+        item = _JAZZHR_ITEM_END.split(chunk)[0]  # the footer and anything after the list is not part of the last job
+        link = _JAZZHR_LINK.search(item)
+        title = _jazzhr_text(link.group(3)) if link else ""
+        if not link or not title:
+            return None  # an entry we cannot read: a partial list would close the jobs we missed
+        facts: dict[str, str] = {}
+        for kind, value in _JAZZHR_FACT.findall(item):
+            facts.setdefault(kind, _jazzhr_text(value))
+        out.append(
+            _job(link.group(2), title, facts.get("map-marker"), html.unescape(link.group(1)), team=facts.get("sitemap"))
+        )
+    # job links the item markup did not yield (a changed layout) mean the list is not complete
+    if len(set(_JAZZHR_ANY_JOB_LINK.findall(board))) != len({j["job_id"] for j in out}):
+        return None
+    return out
+
+
+def bamboohr(slug: str) -> list[Job] | None:
+    """slug is the `<slug>` of `<slug>.bamboohr.com`. The careers page is fed by `/careers/list`, a public JSON list
+    with a city and state per job and the country when the company filled it in. The list is trusted only when it is
+    the board's own JSON, its count matches and every entry reads: a partial or empty list would close stored jobs."""
+    r = get(f"https://{slug}.bamboohr.com/careers/list")
+    if r is None or r.status_code != HTTP_OK or urlparse(r.url).hostname != f"{slug}.bamboohr.com":
+        return None
+    try:
+        data = r.json()
+        postings = data["result"]
+        total = (data.get("meta") or {}).get("totalCount", len(postings))
+    except (ValueError, KeyError, TypeError, AttributeError):  # an unknown slug is redirected to an HTML page
+        return None
+    if not isinstance(postings, list) or total != len(postings):
+        return None
+    out: list[Job] = []
+    for j in postings:
+        if not isinstance(j, dict) or not j.get("id") or not j.get("jobOpeningName"):
+            return None
+        loc, ats = j.get("location") or {}, j.get("atsLocation") or {}
+        place = [loc.get("city"), loc.get("state"), ats.get("city"), ats.get("state"), ats.get("province")]
+        place.append(ats.get("country"))
+        out.append(
+            _job(
+                j["id"],
+                j["jobOpeningName"],
+                ", ".join(dict.fromkeys(x for x in place if x)),  # a place the two fields share is written once
+                f"https://{slug}.bamboohr.com/careers/{j['id']}",
+                team=j.get("departmentLabel"),
+            )
+        )
+    return out
+
+
 def greenhouse_url(url: str) -> list[Job] | None:
     """Company site proxies a Greenhouse board as JSON ({"jobs": [...]}, Greenhouse field names)."""
     r = get(url)
@@ -202,29 +289,53 @@ def _workday_facets(facets: Any) -> Iterator[dict[str, Any]]:
             )
 
 
-def _is_israel(value: Any) -> bool:
-    return isinstance(value, dict) and value.get("id") == WORKDAY_ISRAEL
+def _workday_values(facet: dict[str, Any]) -> list[dict[str, Any]]:
+    """The selectable values of a facet (those with an id), not the facet groups nested in it."""
+    values = facet.get("values")
+    if not isinstance(values, list):
+        return []
+    return [v for v in values if isinstance(v, dict) and isinstance(v.get("id"), str) and "facetParameter" not in v]
 
 
-def _workday_israel_facet(first: dict[str, Any]) -> str | None:
-    """Name of the facet that lists Israel (by Workday's id) in the facets of an unfiltered search, else None."""
-    for f in _workday_facets(first.get("facets")):
-        param, values = f.get("facetParameter"), f.get("values")
-        if isinstance(param, str) and isinstance(values, list) and any(_is_israel(v) for v in values):
-            return param
+def _workday_is_israel_country(value: dict[str, Any]) -> bool:
+    """Workday's own id for Israel, or a value named "Israel" (a tenant may give the country an id of its own)."""
+    return value["id"] == WORKDAY_ISRAEL or str(value.get("descriptor") or "").strip().casefold() == "israel"
+
+
+def _workday_israel_filter(first: dict[str, Any]) -> tuple[str, list[dict[str, Any]]] | None:
+    """The facet that lists Israel in the facets of an unfiltered search: its name and its Israeli values, else None.
+
+    The country comes first, whichever facet holds it. Failing that, the values of a location facet whose name is an
+    Israeli place (Broadcom writes "ISR-Tel Aviv University"); the bare code `IL` is not enough, it is also Illinois."""
+    facets = [
+        (f["facetParameter"], _workday_values(f))
+        for f in _workday_facets(first.get("facets"))
+        if isinstance(f.get("facetParameter"), str)
+    ]
+    for param, values in facets:
+        country = [v for v in values if _workday_is_israel_country(v)]
+        if country:
+            return param, country
+    for param, values in facets:
+        places = [v for v in values if ISRAEL.names_a_place(str(v.get("descriptor") or ""))]
+        if places and "location" in param.lower():
+            return param, places
     return None
 
 
 def _workday_job(host: str, site: str, posting: dict[str, Any], via_facet: bool) -> Job | None:
-    """A job from a posting, or None when it has no link or, on the word-search route, is not located in Israel."""
+    """A job from a posting, or None when it has no link or, on the word-search route, is not located in Israel (a
+    place the matcher knows: the bare code IL is Illinois on Workday). A posting found through the Israel facet is
+    Israel whatever its text says: a posting in several places says only "2 Locations"."""
     path = posting.get("externalPath")
     if not path:
         return None
     loc = " ".join((posting.get("locationsText") or "").split())
-    if "israel" not in loc.lower():
-        if not via_facet:
-            return None
-        loc = f"{loc}, Israel" if loc else "Israel"  # "2 Locations" under the Israel facet: one of them is in Israel
+    if via_facet:
+        if "israel" not in loc.lower():
+            loc = f"{loc}, Israel" if loc else "Israel"
+    elif not ISRAEL.names_a_place(loc):
+        return None
     return _job(path, posting.get("title"), loc, f"{host}/en-US/{site}{path}")
 
 
@@ -232,19 +343,36 @@ def _workday_has_more(d: dict[str, Any], page: int, total: Any) -> bool:
     """Is there a page after this one? The total is trusted only when it is a positive number; otherwise a full page
     means there may be more."""
     postings = d["jobPostings"]
-    if isinstance(total, int) and not isinstance(total, bool) and total > 0:
+    if _is_number(total) and total > 0:
         return bool(postings) and (page + 1) * WORKDAY_PAGE < total
     return len(postings) == WORKDAY_PAGE
+
+
+def _workday_contradicts(d: dict[str, Any], values: list[dict[str, Any]]) -> bool:
+    """Does the first filtered page say more jobs than the filter's values hold? Then Workday ignored the filter (a
+    wrong parameter shape returns every job), and tagging them Israel would store a worldwide list."""
+    total: Any = d.get("total")
+    counts: list[Any] = [v.get("count") for v in values]
+    if not _is_number(total) or not all(_is_number(c) for c in counts):
+        return False
+    return bool(total > sum(counts))
+
+
+def _is_number(value: Any) -> bool:
+    return isinstance(value, int) and not isinstance(value, bool)
 
 
 def workday(slug: str) -> list[Job] | None:
     """slug is '<tenant>/<wdN>/<site>', from <tenant>.<wdN>.myworkdayjobs.com/<site>. Only jobs in Israel are read.
 
-    The facets of an unfiltered first search are searched, nested groups included, for the one that lists Israel (its
-    name differs per tenant): a search filtered by it gives the jobs in Israel, and a posting in several places,
-    which says only "2 Locations", is tagged Israel. Without it the search is for the word Israel and only postings
-    located in Israel are kept, so a tenant whose facets Workday reshaped still gives its Israel jobs, minus the
-    multi-location ones. Any failure, including one after the first page, is None: a partial list would close the
+    The facets of an unfiltered first search are searched, nested groups included, for one that lists Israel (its name
+    and the id of the country differ per tenant): the country by Workday's id or by the name "Israel", else the places
+    of a location facet. A search filtered by it gives the jobs in Israel, and a posting in several
+    places, which says only "2 Locations", is tagged Israel. The places route is complete only if the matcher knows
+    every Israeli place the facet lists. Without any such facet the search is for the word Israel and only postings
+    located in a place the matcher knows are kept, so a tenant
+    whose facets Workday reshaped still gives its Israel jobs, minus the multi-location ones. Any failure, including
+    one after the first page and a filtered total larger than the facet says, is None: a partial list would close the
     jobs it lacks."""
     parts = slug.split("/")
     if len(parts) != WORKDAY_SLUG_PARTS:
@@ -255,9 +383,10 @@ def workday(slug: str) -> list[Job] | None:
     first = _workday_page(base, {}, "", 0)
     if first is None:
         return None
-    param = _workday_israel_facet(first)
-    applied = {param: [WORKDAY_ISRAEL]} if param else {}
-    text = "" if param else "Israel"
+    found = _workday_israel_filter(first)
+    param, values = found if found else ("", [])
+    applied = {param: [v["id"] for v in values]} if found else {}
+    text = "" if found else "Israel"
     out: list[Job] = []
     total: Any = None
     for page in range(WORKDAY_MAX_PAGES):
@@ -265,11 +394,206 @@ def workday(slug: str) -> list[Job] | None:
         if d is None:
             return None
         if page == 0:
+            if found and _workday_contradicts(d, values):
+                return None
             total = d.get("total")  # only the first page carries it
-        jobs = (_workday_job(host, site, p, bool(param)) for p in d["jobPostings"])
+        jobs = (_workday_job(host, site, p, bool(found)) for p in d["jobPostings"])
         out.extend(j for j in jobs if j)
         if not _workday_has_more(d, page, total):
             return out
+    return None  # more pages than the limit: the list is not complete
+
+
+def _oraclehcm_place(req: dict[str, Any]) -> str | None:
+    """Where a requisition is in Israel (its primary place, else the first secondary place there), or None."""
+    if req.get("PrimaryLocationCountry") == ORACLEHCM_ISRAEL:
+        return str(req.get("PrimaryLocation") or "Israel")
+    for place in req.get("secondaryLocations") or []:
+        if isinstance(place, dict) and place.get("CountryCode") == ORACLEHCM_ISRAEL:
+            return str(place.get("Name") or "Israel")
+    return None
+
+
+def _oraclehcm_page(host: str, site: str, offset: int) -> tuple[int, list[dict[str, Any]]] | None:
+    """The total and one page of requisitions for the word Israel, or None when the answer is not the JSON of a
+    search (a failed request, a wrong site, which answers 200 with something else) or a requisition lacks an id or
+    a title."""
+    finder = f"findReqs;siteNumber={site},limit={ORACLEHCM_PAGE},offset={offset},keyword=Israel"
+    r = get(
+        f"https://{host}/hcmRestApi/resources/latest/recruitingCEJobRequisitions",
+        params={"onlyData": "true", "expand": "requisitionList.secondaryLocations", "finder": finder},
+    )
+    if r is None or r.status_code != HTTP_OK:
+        return None
+    try:
+        search = r.json()["items"][0]
+        total, reqs = search["TotalJobsCount"], search["requisitionList"]
+    except (ValueError, KeyError, IndexError, TypeError):
+        return None
+    if not isinstance(reqs, list) or not isinstance(total, int):
+        return None
+    if not all(isinstance(q, dict) and q.get("Id") and q.get("Title") for q in reqs):
+        return None
+    return total, reqs
+
+
+def oraclehcm(slug: str) -> list[Job] | None:
+    """slug is '<host>/<site>' of an Oracle Fusion HCM career site, for example 'jpmc.fa.oraclecloud.com/CX_1001' (the
+    page is `https://<host>/hcmUI/CandidateExperience/en/sites/<site>`). Only jobs in Israel are read: the public
+    requisition search is asked for the word Israel, which matches the places and the descriptions, and a requisition
+    is kept when its primary or one of its secondary places is in Israel (country code IL). Any failure, including one
+    after the first page, is None: a partial list would close the jobs it lacks."""
+    parts = slug.split("/")
+    if len(parts) != ORACLEHCM_SLUG_PARTS or "." not in parts[0] or not parts[1]:
+        return None
+    host, site = parts
+    out: list[Job] = []
+    for page in range(ORACLEHCM_MAX_PAGES):
+        found = _oraclehcm_page(host, site, page * ORACLEHCM_PAGE)
+        if found is None:
+            return None
+        total, reqs = found
+        if len(reqs) < min(ORACLEHCM_PAGE, total - page * ORACLEHCM_PAGE):  # fewer than the total promises
+            return None
+        for req in reqs:
+            place = _oraclehcm_place(req)
+            if place:
+                url = f"https://{host}/hcmUI/CandidateExperience/en/sites/{site}/job/{req['Id']}"
+                out.append(_job(req["Id"], req["Title"], place, url, posted=req.get("PostedDate")))
+        if (page + 1) * ORACLEHCM_PAGE >= total:
+            return out
+    return None  # more pages than the limit: the list is not complete
+
+
+def _amazon_page(slug: str, offset: int) -> tuple[int, list[Job]] | None:
+    """The reported total and one page of jobs, or None when the answer is not the JSON of a search or a job lacks an
+    id, a title or a path, or is not in the asked country."""
+    r = get(
+        "https://www.amazon.jobs/en/search.json",
+        params={"country": slug, "result_limit": AMAZON_PAGE, "offset": offset, "sort": "recent"},
+    )
+    if r is None or r.status_code != HTTP_OK:
+        return None
+    try:
+        data = r.json()
+        hits, found = data["hits"], data["jobs"]
+    except (ValueError, KeyError, TypeError):
+        return None
+    if not isinstance(found, list) or not isinstance(hits, int):
+        return None
+    out: list[Job] = []
+    for j in found:
+        if not (isinstance(j, dict) and j.get("id_icims") and j.get("title") and j.get("job_path")):
+            return None
+        if j.get("country_code") != slug:
+            return None
+        where = j.get("normalized_location") or j.get("location")
+        url = f"https://www.amazon.jobs{j['job_path']}"
+        out.append(_job(j["id_icims"], j["title"], where, url, team=j.get("job_category"), posted=j.get("posted_date")))
+    return hits, out
+
+
+def amazon(slug: str) -> list[Job] | None:
+    """slug is the country code of amazon.jobs ('ISR'). The site's own search JSON, filtered by `country`, lists every
+    job there (the job page is `https://www.amazon.jobs<job_path>`). The list is trusted only when every page answers
+    with that JSON, every job is in the asked country and has an id, a title and a path, and the pages add up to the
+    reported `hits`, which must be the same on every page and above zero (a wrong country code answers 200 with no
+    job), with no job twice: a partial list would close the jobs it lacks."""
+    out: list[Job] = []
+    first_hits: int | None = None
+    for page in range(AMAZON_MAX_PAGES):
+        got = _amazon_page(slug, page * AMAZON_PAGE)
+        if got is None:
+            return None
+        hits, jobs = got
+        if first_hits is None:
+            first_hits = hits
+        if hits == 0 or hits != first_hits:  # no job at all is a wrong code, not a board; a moving total is a torn list
+            return None
+        out.extend(jobs)
+        if len(out) >= hits or not jobs:
+            return out if len(out) == hits and len({j["job_id"] for j in out}) == hits else None
+    return None  # more pages than the limit: the list is not complete
+
+
+def _phenom_page(host: str, country: str, lang: str, offset: int) -> tuple[int, list[Job]] | None:
+    """The reported total and one page of Israel jobs from a Phenom career site, or None when the answer is not the
+    JSON of a search, the total is not the Israel count of the site's own country facet (the filter matched nothing),
+    a job lacks an id, a title or a sequence number, or a job is not in Israel (the filter was ignored)."""
+    body = {
+        "lang": f"{lang}_{country}",
+        "deviceType": "desktop",
+        "country": country,
+        "pageName": "search-results",
+        "ddoKey": "refineSearch",
+        "sortBy": "Most recent",
+        "subsearch": "",
+        "from": offset,
+        "jobs": True,
+        "counts": True,
+        "all_fields": ["country"],
+        "size": PHENOM_PAGE,
+        "clearAll": False,
+        "jdsource": "facets",
+        "isSliderEnable": False,
+        "pageId": "page15",
+        "siteType": "external",
+        "keywords": "",
+        "global": True,
+        "selected_fields": {"country": ["Israel"]},
+        "locationData": {},
+    }
+    r = post(f"https://{host}/widgets", json=body)
+    if r is None or r.status_code != HTTP_OK:
+        return None
+    try:
+        search = r.json()["refineSearch"]
+        total, found = search["totalHits"], search["data"]["jobs"]
+        facet = next(a["value"] for a in search["data"]["aggregations"] if a.get("field") == "country")
+        israel = facet.get("Israel", 0)
+    except (ValueError, KeyError, TypeError, AttributeError, StopIteration):
+        return None
+    if not isinstance(found, list) or not isinstance(total, int) or israel != total:
+        return (
+            None  # the country facet counts the Israel jobs whatever the filter: a filter that matches nothing differs
+        )
+    out: list[Job] = []
+    for j in found:
+        if not (isinstance(j, dict) and j.get("jobId") and j.get("title") and j.get("jobSeqNo")):
+            return None
+        places = [str(x) for x in [j.get("location"), *(j.get("multi_location") or [])] if x]
+        place = next((x for x in places if "israel" in x.lower()), None)
+        if place is None:
+            return None
+        url = f"https://{host}/{country}/{lang}/job/{j['jobSeqNo']}"
+        out.append(_job(j["jobId"], j["title"], place, url, team=j.get("category"), posted=j.get("postedDate")))
+    return total, out
+
+
+def phenom(slug: str) -> list[Job] | None:
+    """slug is '<host>/<country>/<lang>' of a Phenom career site, for example 'careers.cisco.com/global/en' (the site
+    is `https://<host>/<country>/<lang>/search-results`). The site's own search widget is asked for the country Israel,
+    50 jobs a page. The list is trusted only when every page answers with that JSON, every job is located in Israel (a
+    site that ignores the filter gives the worldwide list), and the jobs add up to the reported total, which is the
+    same on every page, with no job twice: a partial list would close the jobs it lacks."""
+    parts = slug.split("/")
+    if len(parts) != PHENOM_SLUG_PARTS or "." not in parts[0] or not all(parts):
+        return None
+    host, country, lang = parts
+    out: list[Job] = []
+    first_total: int | None = None
+    for page in range(PHENOM_MAX_PAGES):
+        got = _phenom_page(host, country, lang, page * PHENOM_PAGE)
+        if got is None:
+            return None
+        total, jobs = got
+        if first_total is None:
+            first_total = total
+        if total != first_total:
+            return None
+        out.extend(jobs)
+        if len(out) >= total or not jobs:
+            return out if len(out) == total and len({j["job_id"] for j in out}) == total else None
     return None  # more pages than the limit: the list is not complete
 
 
@@ -282,4 +606,9 @@ ADAPTERS: dict[str, Callable[[str], list[Job] | None]] = {
     "smartrecruiters": smartrecruiters,
     "comeet": comeet,
     "workday": workday,
+    "jazzhr": jazzhr,
+    "bamboohr": bamboohr,
+    "oraclehcm": oraclehcm,
+    "amazon": amazon,
+    "phenom": phenom,
 }

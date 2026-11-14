@@ -1,0 +1,63 @@
+{
+ "total": 400,
+ "jobPostings": [
+  {
+   "title": "Memory Validation Lab Manager",
+   "externalPath": "/job/USA-Mendota-Heights-Northland/Memory-Validation-Lab-Manager_R027771",
+   "timeType": "Full time",
+   "locationsText": "USA-Mendota Heights-Northland",
+   "postedOn": "Posted Yesterday",
+   "bulletFields": [
+    "R027771"
+   ]
+  },
+  {
+   "title": "IC Design Engineer",
+   "externalPath": "/job/USA-CA-Irvine-Alton-Parkway-Bldg-1/IC-Design-Engineer_R027814",
+   "timeType": "Full time",
+   "locationsText": "2 Locations",
+   "postedOn": "Posted Yesterday",
+   "bulletFields": [
+    "R027814"
+   ]
+  }
+ ],
+ "facets": [
+  {
+   "facetParameter": "locationMainGroup",
+   "values": [
+    {
+     "facetParameter": "locations",
+     "descriptor": "Locations",
+     "values": [
+      {
+       "descriptor": "AUS-New South Wales Remote Location",
+       "id": "ddccc22ea927013a2f5881f5190edfd2",
+       "count": 1
+      },
+      {
+       "descriptor": "AUS-Sydney- Pitt St.",
+       "id": "877d747df71910021362181853fa0000",
+       "count": 2
+      },
+      {
+       "descriptor": "ISR-Tel Aviv University",
+       "id": "2314daa817fc016cb4c254532e010de8",
+       "count": 1
+      },
+      {
+       "descriptor": "Singapore-Yishun",
+       "id": "72269b4403834df189040e857e3bac87",
+       "count": 28
+      },
+      {
+       "descriptor": "USA-IL-Remote Location",
+       "id": "036f545a07811067fb9e5a23b23bba74",
+       "count": 4
+      }
+     ]
+    }
+   ]
+  }
+ ]
+}

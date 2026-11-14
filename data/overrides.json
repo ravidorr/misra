@@ -611,5 +611,219 @@
   "ats": "workday",
   "slug": "criteo/wd3/Criteo_Career_Site",
   "israel_only": true
+ },
+ "D-ID": {
+  "ats": "workable",
+  "slug": "d-id"
+ },
+ "Autofleet": {
+  "ats": "workable",
+  "slug": "autofleet"
+ },
+ "Valens Semiconductor": {
+  "ats": "browser",
+  "slug": "https://www.valens.com/positions/"
+ },
+ "DoubleVerify": {
+  "ats": "workday",
+  "slug": "doubleverify/wd5/DV_Careers",
+  "israel_only": true
+ },
+ "Visa": {
+  "ats": "workday",
+  "slug": "visa/wd5/Visa",
+  "israel_only": true
+ },
+ "Motorola Solutions": {
+  "ats": "workday",
+  "slug": "motorolasolutions/wd5/Careers",
+  "israel_only": true
+ },
+ "Palo Alto Networks": {
+  "ats": "workday",
+  "slug": "paloaltonetworks/wd5/panwexternalcareers",
+  "israel_only": true
+ },
+ "CrowdStrike": {
+  "ats": "workday",
+  "slug": "crowdstrike/wd5/crowdstrikecareers",
+  "israel_only": true
+ },
+ "Proofpoint": {
+  "ats": "workday",
+  "slug": "proofpoint/wd5/proofpointcareers",
+  "israel_only": true
+ },
+ "Integral Ad Science": {
+  "ats": "workday",
+  "slug": "integralads/wd1/IAScareers",
+  "israel_only": true
+ },
+ "LinearB": {
+  "ats": "jazzhr",
+  "slug": "linearb"
+ },
+ "Splitit": {
+  "ats": "bamboohr",
+  "slug": "splitit",
+  "israel_only": true
+ },
+ "Salesforce": {
+  "ats": "workday",
+  "slug": "salesforce/wd12/External_Career_Site",
+  "israel_only": true
+ },
+ "Cadence": {
+  "ats": "workday",
+  "slug": "cadence/wd1/External_Careers",
+  "israel_only": true
+ },
+ "Edwards Lifesciences": {
+  "ats": "workday",
+  "slug": "edwards/wd5/edwardscareers",
+  "israel_only": true
+ },
+ "Adobe": {
+  "ats": "workday",
+  "slug": "adobe/wd5/external_experienced",
+  "israel_only": true
+ },
+ "Zoom": {
+  "ats": "workday",
+  "slug": "zoom/wd5/Zoom",
+  "israel_only": true
+ },
+ "Oracle": {
+  "ats": "oraclehcm",
+  "slug": "eeho.fa.us2.oraclecloud.com/jobsearch",
+  "israel_only": true
+ },
+ "JPMorgan Chase": {
+  "ats": "oraclehcm",
+  "slug": "jpmc.fa.oraclecloud.com/CX_1001",
+  "israel_only": true
+ },
+ "Dell Technologies": {
+  "ats": "oraclehcm",
+  "slug": "enterpriseplatform.dell.com/careers",
+  "israel_only": true
+ },
+ "American Express": {
+  "ats": "oraclehcm",
+  "slug": "egug.fa.us2.oraclecloud.com/CX_1",
+  "israel_only": true
+ },
+ "Nokia": {
+  "ats": "oraclehcm",
+  "slug": "fa-evmr-saasfaprod1.fa.ocs.oraclecloud.com/CX_1",
+  "israel_only": true
+ },
+ "Amazon": {
+  "ats": "amazon",
+  "slug": "ISR",
+  "israel_only": true
+ },
+ "Marvell": {
+  "ats": "workday",
+  "slug": "marvell/wd1/MarvellCareers",
+  "israel_only": true
+ },
+ "Medtronic": {
+  "ats": "workday",
+  "slug": "medtronic/wd1/MedtronicCareers",
+  "israel_only": true
+ },
+ "KLA": {
+  "ats": "workday",
+  "slug": "kla/wd1/Search",
+  "israel_only": true
+ },
+ "Kyndryl": {
+  "ats": "workday",
+  "slug": "kyndryl/wd5/KyndrylProfessionalCareers",
+  "israel_only": true
+ },
+ "Workday": {
+  "ats": "workday",
+  "slug": "workday/wd5/Workday",
+  "israel_only": true
+ },
+ "Cisco": {
+  "ats": "phenom",
+  "slug": "careers.cisco.com/global/en",
+  "israel_only": true
+ },
+ "Mastercard": {
+  "ats": "phenom",
+  "slug": "careers.mastercard.com/us/en",
+  "israel_only": true
+ },
+ "GE HealthCare": {
+  "ats": "phenom",
+  "slug": "careers.gehealthcare.com/global/en",
+  "israel_only": true
+ },
+ "HP": {
+  "ats": "browser",
+  "slug": "https://apply.hp.com/careers?location=Israel",
+  "israel_only": true
+ },
+ "Broadcom": {
+  "ats": "workday",
+  "slug": "broadcom/wd1/External_Career",
+  "israel_only": true
+ },
+ "Philips": {
+  "ats": "workday",
+  "slug": "philips/wd3/jobs-and-careers",
+  "israel_only": true
+ },
+ "Retym": {
+  "ats": "comeet",
+  "slug": "retym/C6.003"
+ },
+ "Qedma": {
+  "ats": "comeet",
+  "slug": "qedma/7A.006"
+ },
+ "Qodo": {
+  "ats": "comeet",
+  "slug": "qodo/B8.00B"
+ },
+ "Trigo": {
+  "ats": "comeet",
+  "slug": "trigo/A6.005"
+ },
+ "Cyolo": {
+  "ats": "comeet",
+  "slug": "cyolo/F5.005"
+ },
+ "Allot": {
+  "ats": "comeet",
+  "slug": "allot/C4.009"
+ },
+ "Foretellix": {
+  "ats": "comeet",
+  "slug": "Foretellix/84.007",
+  "israel_only": true
+ },
+ "XM Cyber": {
+  "ats": "comeet",
+  "slug": "xmcyber/15.005",
+  "israel_only": true
+ },
+ "Dataloop": {
+  "ats": "comeet",
+  "slug": "dataloop/B5.00A",
+  "israel_only": true
+ },
+ "Sunbit": {
+  "ats": "comeet",
+  "slug": "sunbit/37.001"
+ },
+ "Firefly": {
+  "ats": "comeet",
+  "slug": "firefly/39.000",
+  "israel_only": true
  }
 }

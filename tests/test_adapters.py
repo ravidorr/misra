@@ -32,7 +32,9 @@ def test_job_normalises() -> None:
     }
 
 
-@pytest.mark.parametrize("name", ["greenhouse", "lever", "ashby", "workable", "comeet", "greenhouse_url"])
+@pytest.mark.parametrize(
+    "name", ["greenhouse", "lever", "ashby", "workable", "comeet", "greenhouse_url", "jazzhr", "bamboohr"]
+)
 @pytest.mark.parametrize("resp", [None, FakeHttpResponse(status_code=500)])
 def test_failure_returns_none(monkeypatch: pytest.MonkeyPatch, name: str, resp: FakeHttpResponse | None) -> None:
     fake_get(monkeypatch, resp)
@@ -274,6 +276,114 @@ def test_workday_on_a_recorded_criteo_answer_has_no_israel_facet_and_checks_by_s
     assert [(b["appliedFacets"], b["searchText"]) for b in bodies] == [({}, ""), ({}, "Israel")]  # not just assumed
 
 
+def test_workday_on_a_recorded_philips_answer_uses_the_israel_value_with_its_own_id(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    philips_israel = "6e1b2a934716103c2adde8e0944f00ee"  # not Workday's id: this tenant gave the country its own
+    page = wd_page([wd_posting(1, "Haifa"), wd_posting(2, "2 Locations")], total=10)
+    bodies = fake_post(monkeypatch, recorded("philips"), page)
+    jobs = adapters.workday("philips/wd3/jobs-and-careers")
+    assert jobs is not None
+    assert [j["location"] for j in jobs] == ["Haifa, Israel", "2 Locations, Israel"]
+    assert bodies[1]["appliedFacets"] == {"locationHierarchy1": [philips_israel]}  # not the State/Province "Haifa"
+
+
+def test_workday_on_a_recorded_broadcom_answer_uses_the_israeli_places_of_its_location_facet(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    page = wd_page([wd_posting(1, "ISR-Tel Aviv University"), wd_posting(2, "2 Locations")], total=1)
+    bodies = fake_post(monkeypatch, recorded("broadcom"), page)
+    jobs = adapters.workday("broadcom/wd1/External_Career")
+    assert jobs is not None
+    assert [j["location"] for j in jobs] == ["ISR-Tel Aviv University, Israel", "2 Locations, Israel"]
+    ids = bodies[1]["appliedFacets"]["locations"]
+    assert len(ids) == 1  # the one ISR value; the Australian, Singapore and Illinois values are not Israel
+    assert bodies[1]["searchText"] == ""
+
+
+def places_facet(*values: tuple[str, int | None], param: str = "locations") -> dict[str, Any]:
+    return {
+        "facetParameter": param,
+        "values": [
+            {"descriptor": d, "id": f"id{n}", **({} if c is None else {"count": c})} for n, (d, c) in enumerate(values)
+        ],
+    }
+
+
+def test_workday_a_country_value_wins_over_places_even_when_the_places_come_first(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    facets = [places_facet(("Israel - Tel Aviv", 2)), israel_facet("Country")]
+    bodies = fake_post(monkeypatch, wd_page([], facets=facets), wd_page([wd_posting(1)]))
+    assert adapters.workday(SLUG) is not None
+    assert bodies[1]["appliedFacets"] == {"Country": [ISRAEL_ID]}
+
+
+def test_workday_a_country_named_israel_is_found_by_its_name_in_any_case(monkeypatch: pytest.MonkeyPatch) -> None:
+    facets = [{"facetParameter": "Country", "values": [{"descriptor": " ISRAEL ", "id": "zz"}, {"id": "yy"}]}]
+    bodies = fake_post(monkeypatch, wd_page([], facets=facets), wd_page([wd_posting(1)]))
+    assert adapters.workday(SLUG) is not None
+    assert bodies[1]["appliedFacets"] == {"Country": ["zz"]}
+
+
+def test_workday_place_facet_applies_every_israeli_place_and_tags_what_the_filter_returned(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    facet = places_facet(("Office - Israel - Tel Aviv", 2), ("Spain-Madrid", 5), ("Haifa", 1), ("Madrid", None))
+    page = wd_page([wd_posting(1, "Tel Aviv, Israel"), wd_posting(2, "2 Locations"), wd_posting(3, "Haifa")], total=3)
+    bodies = fake_post(monkeypatch, wd_page([], facets=[facet]), page)
+    jobs = adapters.workday(SLUG)
+    assert jobs is not None
+    assert [j["location"] for j in jobs] == ["Tel Aviv, Israel", "2 Locations, Israel", "Haifa, Israel"]
+    assert bodies[1]["appliedFacets"] == {"locations": ["id0", "id2"]}
+
+
+@pytest.mark.parametrize(
+    "facet",
+    [
+        places_facet(("Remote (IL)", 3)),  # the bare code is Illinois as often as Israel
+        places_facet(("AUS-Parramatta", 4)),  # "ramat" inside another word
+        places_facet(("Israel - Tel Aviv", 2), param="jobFamily"),  # not a location facet
+    ],
+)
+def test_workday_place_facet_ignores_values_that_are_not_clearly_israeli(
+    monkeypatch: pytest.MonkeyPatch, facet: dict[str, Any]
+) -> None:
+    bodies = fake_post(monkeypatch, wd_page([], facets=[facet]), wd_page([wd_posting(1)]))
+    assert adapters.workday(SLUG) is not None
+    assert (bodies[1]["appliedFacets"], bodies[1]["searchText"]) == ({}, "Israel")
+
+
+def test_workday_a_filtered_total_above_what_the_facet_holds_is_none_not_a_worldwide_list(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    facet = places_facet(("Israel - Tel Aviv", 2), ("Israel - Haifa", 1))
+    fake_post(monkeypatch, wd_page([], facets=[facet]), wd_page([wd_posting(1)], total=776))  # the filter was ignored
+    assert adapters.workday(SLUG) is None
+    country = {"facetParameter": "Country", "values": [{"descriptor": "Israel", "id": "zz", "count": 4}]}
+    fake_post(monkeypatch, wd_page([], facets=[country]), wd_page([wd_posting(1)], total=776))
+    assert adapters.workday(SLUG) is None
+
+
+@pytest.mark.parametrize("count", [None, "3", True])
+def test_workday_without_a_usable_count_the_total_cannot_be_checked_and_is_trusted(
+    monkeypatch: pytest.MonkeyPatch, count: Any
+) -> None:
+    value = {"descriptor": "Israel", "id": "zz", **({} if count is None else {"count": count})}
+    fake_post(
+        monkeypatch,
+        wd_page([], facets=[{"facetParameter": "Country", "values": [value]}]),
+        wd_page([wd_posting(1)], total=776),
+    )
+    assert adapters.workday(SLUG) is not None
+
+
+def test_workday_a_filtered_total_that_matches_the_facet_is_fine(monkeypatch: pytest.MonkeyPatch) -> None:
+    facet = places_facet(("Israel - Tel Aviv", 2), ("Israel - Haifa", 1))
+    fake_post(monkeypatch, wd_page([], facets=[facet]), wd_page([wd_posting(1)], total=3))
+    assert adapters.workday(SLUG) is not None
+
+
 def test_workday_search_route_keeps_only_postings_located_in_israel(monkeypatch: pytest.MonkeyPatch) -> None:
     postings = [
         wd_posting(1, "Tel Aviv, Israel"),
@@ -281,13 +391,18 @@ def test_workday_search_route_keeps_only_postings_located_in_israel(monkeypatch:
         wd_posting(3, "2 Locations"),  # cannot be told: left out rather than guessed
         wd_posting(4, None),
         wd_posting(5, "HAIFA, ISRAEL"),
+        wd_posting(6, "Ra'anana"),  # a place the matcher knows, without the country
+        wd_posting(7, "Milano"),
+        wd_posting(8, "Chicago, IL"),  # Illinois
+        wd_posting(9, "Peoria, IL"),  # Illinois, in no list of US cities
+        wd_posting(10, "Remote, IL"),
     ]
     fake_post(
         monkeypatch, wd_page([], facets=[{"facetParameter": "jobFamily", "values": [{"id": "bb"}]}]), wd_page(postings)
     )
     jobs = adapters.workday(SLUG)
     assert jobs is not None
-    assert [j["title"] for j in jobs] == ["Job 1", "Job 5"]
+    assert [j["title"] for j in jobs] == ["Job 1", "Job 5", "Job 6"]
 
 
 def test_workday_tags_a_posting_found_through_the_israel_facet(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -402,3 +517,704 @@ def test_workday_more_pages_than_the_limit_is_a_failure_not_a_partial_list(monke
 
 def test_workday_is_registered() -> None:
     assert adapters.ADAPTERS["workday"] is adapters.workday
+
+
+JAZZHR_URL = "https://acme.applytojob.com/apply"
+
+
+def jazzhr_page(*items: str) -> str:
+    """A JazzHR board page, hand-built in the shape seen on linearb.applytojob.com on 2026-11-14. A board with no
+    job is assumed to keep the same list wrapper: no empty board could be checked live."""
+    return (
+        "<main><div class='col col-xs-7 jobs-list'><h2 class='page-title'>Current Openings</h2>"
+        "<ul class='list-group'>" + "".join(items) + "</ul></div></main><footer><ul><li>About</li></ul></footer>"
+    )
+
+
+def jazzhr_item(job_id: str, title: str, *facts: tuple[str, str]) -> str:
+    return (
+        "<li class=\"list-group-item\">\n<h3 class='list-group-item-heading'>\n"
+        f'<a href="https://acme.applytojob.com/apply/{job_id}/Some-Title">\n  {title}   \n</a></h3>'
+        "<ul class='list-inline list-group-item-text'>"
+        + "".join(f"<li><i class='fa fa-{icon}'></i>{text}</li>" for icon, text in facts)
+        + "</ul></li>\n"
+    )
+
+
+def test_jazzhr_reads_the_board_page(monkeypatch: pytest.MonkeyPatch) -> None:
+    page = jazzhr_page(
+        jazzhr_item(
+            "HSVVa69rsU", "Senior Software Developer", ("map-marker", "Tel Aviv, Israel"), ("sitemap", "R&amp;D")
+        ),
+        jazzhr_item("b2", "Sales &amp; Support", ("map-marker", "Haifa &amp; Remote"), ("map-marker", "Elsewhere")),
+        jazzhr_item("c3", "Designer"),
+    )
+    urls = fake_get(monkeypatch, FakeHttpResponse(text=page, url=JAZZHR_URL))
+    jobs = adapters.jazzhr("acme")
+    assert urls == [JAZZHR_URL]
+    assert jobs == [
+        {
+            "job_id": "HSVVa69rsU",
+            "title": "Senior Software Developer",
+            "location": "Tel Aviv, Israel",
+            "url": "https://acme.applytojob.com/apply/HSVVa69rsU/Some-Title",
+            "team": "R&D",
+            "posted": "",
+        },
+        {
+            "job_id": "b2",
+            "title": "Sales & Support",
+            "location": "Haifa & Remote",
+            "url": "https://acme.applytojob.com/apply/b2/Some-Title",
+            "team": "",
+            "posted": "",
+        },
+        {
+            "job_id": "c3",
+            "title": "Designer",
+            "location": "",
+            "url": "https://acme.applytojob.com/apply/c3/Some-Title",
+            "team": "",
+            "posted": "",
+        },
+    ]
+    assert [bool(discover.ISRAEL.search(j["location"])) for j in jobs] == [True, True, False]
+
+
+def test_jazzhr_a_board_with_no_job_is_empty_not_a_failure(monkeypatch: pytest.MonkeyPatch) -> None:
+    fake_get(monkeypatch, FakeHttpResponse(text=jazzhr_page(), url=JAZZHR_URL))
+    assert adapters.jazzhr("acme") == []
+
+
+@pytest.mark.parametrize(
+    ("text", "url"),
+    [
+        (jazzhr_page(jazzhr_item("a", "A")), "https://www.jazzhr.com/job-seekers"),  # unknown slug: redirected away
+        ("<html>a layout without the job list</html>", JAZZHR_URL),
+        (jazzhr_page('<li class="list-group-item">no link in this entry</li>'), JAZZHR_URL),
+        (
+            jazzhr_page(jazzhr_item("a", "A"), jazzhr_item("b", "  ")),
+            JAZZHR_URL,
+        ),  # a good entry, then an unreadable one
+        (jazzhr_page(jazzhr_item("a", "<b></b>")), JAZZHR_URL),  # no title once the tags are gone
+        (jazzhr_page(jazzhr_item("a", "A")), "https://other.applytojob.com/apply"),  # another tenant's host
+        (jazzhr_page(jazzhr_item("a", "A")), "https://www.jazzhr.com/?x=.applytojob.com/"),
+        # the container is there but the item markup changed: the job links are still on the page
+        (jazzhr_page(jazzhr_item("a", "A").replace("list-group-item", "list-group-item job")), JAZZHR_URL),
+    ],
+)
+def test_jazzhr_a_page_it_cannot_read_is_a_failure_not_an_empty_board(
+    monkeypatch: pytest.MonkeyPatch, text: str, url: str
+) -> None:
+    fake_get(monkeypatch, FakeHttpResponse(text=text, url=url))
+    assert adapters.jazzhr("acme") is None
+
+
+def test_jazzhr_markup_inside_a_title_is_dropped_and_the_footer_is_not_read_as_a_fact(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    page = jazzhr_page(jazzhr_item("a", "<span>Dev</span>   Lead", ("sitemap", "R&D")))
+    page += "<footer><ul><li><i class='fa fa-map-marker'></i>Head office, Ohio</li></ul></footer>"
+    fake_get(monkeypatch, FakeHttpResponse(text=page, url=JAZZHR_URL))
+    jobs = adapters.jazzhr("acme")
+    assert jobs is not None
+    assert [(j["title"], j["location"], j["team"]) for j in jobs] == [("Dev Lead", "", "R&D")]
+
+
+def test_jazzhr_is_registered() -> None:
+    assert adapters.ADAPTERS["jazzhr"] is adapters.jazzhr
+
+
+BAMBOO_URL = "https://acme.bamboohr.com/careers/list"
+
+
+def bamboo_answer(result: Any, total: Any = None) -> FakeHttpResponse:
+    meta = {"totalCount": len(result) if total is None else total}
+    return FakeHttpResponse(data={"meta": meta, "result": result}, url=BAMBOO_URL)
+
+
+def test_bamboohr_reads_the_careers_list(monkeypatch: pytest.MonkeyPatch) -> None:
+    result = [
+        {
+            "id": "82",
+            "jobOpeningName": "New Business Sales Executive",
+            "departmentLabel": "Sales",
+            "location": {"city": None, "state": None},
+            "atsLocation": {"country": None, "state": None, "province": None, "city": None},
+        },
+        {
+            "id": "121",
+            "jobOpeningName": "Manager, Portfolio",
+            "departmentLabel": "Card Programs",
+            "location": {"city": "New York", "state": "New York"},
+            "atsLocation": {"country": None},
+        },
+        {
+            "id": "130",
+            "jobOpeningName": "Backend Engineer",
+            "departmentLabel": None,
+            "location": {"city": "Tel Aviv", "state": None},
+            "atsLocation": {"country": "Israel"},
+        },
+        {
+            "id": "131",
+            "jobOpeningName": "Data Engineer",
+            "location": {"city": None, "state": None},
+            "atsLocation": {"city": "Haifa", "state": "Haifa District", "province": "North", "country": "Israel"},
+        },
+        {"id": 132, "jobOpeningName": "Designer", "location": None, "atsLocation": None},
+    ]
+    urls = fake_get(monkeypatch, bamboo_answer(result))
+    jobs = adapters.bamboohr("acme")
+    assert urls == [BAMBOO_URL]
+    assert jobs is not None
+    assert [(j["job_id"], j["title"], j["location"], j["team"], j["url"]) for j in jobs] == [
+        ("82", "New Business Sales Executive", "", "Sales", "https://acme.bamboohr.com/careers/82"),
+        ("121", "Manager, Portfolio", "New York", "Card Programs", "https://acme.bamboohr.com/careers/121"),
+        ("130", "Backend Engineer", "Tel Aviv, Israel", "", "https://acme.bamboohr.com/careers/130"),
+        ("131", "Data Engineer", "Haifa, Haifa District, North, Israel", "", "https://acme.bamboohr.com/careers/131"),
+        ("132", "Designer", "", "", "https://acme.bamboohr.com/careers/132"),
+    ]
+    assert [bool(discover.ISRAEL.search(j["location"])) for j in jobs] == [False, False, True, True, False]
+
+
+def test_bamboohr_a_board_with_no_job_is_empty_not_a_failure(monkeypatch: pytest.MonkeyPatch) -> None:
+    fake_get(monkeypatch, bamboo_answer([]))
+    assert adapters.bamboohr("acme") == []
+
+
+def test_bamboohr_without_a_count_trusts_the_list(monkeypatch: pytest.MonkeyPatch) -> None:
+    fake_get(monkeypatch, FakeHttpResponse(data={"result": [{"id": "1", "jobOpeningName": "A"}]}, url=BAMBOO_URL))
+    jobs = adapters.bamboohr("acme")
+    assert jobs is not None
+    assert [j["title"] for j in jobs] == ["A"]
+
+
+@pytest.mark.parametrize("data", [{}, {"result": None}, {"result": {"a": 1}}, [], None, {"meta": 3, "result": []}])
+def test_bamboohr_an_answer_without_a_list_is_a_failure(monkeypatch: pytest.MonkeyPatch, data: Any) -> None:
+    fake_get(monkeypatch, FakeHttpResponse(data=data, url=BAMBOO_URL))
+    assert adapters.bamboohr("acme") is None
+
+
+def test_bamboohr_an_html_answer_is_a_failure(monkeypatch: pytest.MonkeyPatch) -> None:
+    fake_get(monkeypatch, FakeHttpResponse(text="<html>", json_error=True, url=BAMBOO_URL))
+    assert adapters.bamboohr("acme") is None
+
+
+@pytest.mark.parametrize("url", ["https://www.bamboohr.com", "https://other.bamboohr.com/careers/list"])
+def test_bamboohr_an_answer_from_another_host_is_a_failure(monkeypatch: pytest.MonkeyPatch, url: str) -> None:
+    fake_get(monkeypatch, FakeHttpResponse(data={"meta": {"totalCount": 0}, "result": []}, url=url))
+    assert adapters.bamboohr("acme") is None
+
+
+@pytest.mark.parametrize(
+    "result",
+    [
+        [{"id": "1", "jobOpeningName": "A"}, {"id": "2"}],  # a good entry, then one with no title
+        [{"id": "1", "jobOpeningName": "A"}, {"jobOpeningName": "B"}],  # no id
+        [{"id": "1", "jobOpeningName": "A"}, "oops"],  # not an object
+    ],
+)
+def test_bamboohr_one_unreadable_entry_fails_the_crawl_instead_of_closing_its_job(
+    monkeypatch: pytest.MonkeyPatch, result: list[Any]
+) -> None:
+    fake_get(monkeypatch, bamboo_answer(result))
+    assert adapters.bamboohr("acme") is None
+
+
+def test_bamboohr_a_count_that_does_not_match_the_list_is_a_failure(monkeypatch: pytest.MonkeyPatch) -> None:
+    fake_get(monkeypatch, bamboo_answer([{"id": "1", "jobOpeningName": "A"}], total=2))
+    assert adapters.bamboohr("acme") is None
+
+
+def test_bamboohr_is_registered() -> None:
+    assert adapters.ADAPTERS["bamboohr"] is adapters.bamboohr
+
+
+HCM_SLUG = "acme.fa.oraclecloud.com/CX_1"
+HCM_API = "https://acme.fa.oraclecloud.com/hcmRestApi/resources/latest/recruitingCEJobRequisitions"
+
+
+def hcm_req(job_id: Any, title: Any, country: str, place: str, secondary: Any = None) -> dict[str, Any]:
+    return {
+        "Id": job_id,
+        "Title": title,
+        "PrimaryLocationCountry": country,
+        "PrimaryLocation": place,
+        "PostedDate": "2026-11-01",
+        "secondaryLocations": secondary or [],
+    }
+
+
+def hcm_answer(reqs: Any, total: Any = None) -> FakeHttpResponse:
+    count = len(reqs) if total is None and isinstance(reqs, list) else total
+    return FakeHttpResponse(data={"items": [{"TotalJobsCount": count, "requisitionList": reqs}]})
+
+
+def fake_hcm(monkeypatch: pytest.MonkeyPatch, *responses: FakeHttpResponse | None) -> list[dict[str, Any]]:
+    calls: list[dict[str, Any]] = []
+    queue = list(responses)
+
+    def _get(url: str, **kw: Any) -> FakeHttpResponse | None:
+        calls.append({"url": url, **kw})
+        return queue.pop(0) if len(queue) > 1 else queue[0]
+
+    monkeypatch.setattr(adapters, "get", _get)
+    return calls
+
+
+def test_oraclehcm_keeps_the_requisitions_located_in_israel(monkeypatch: pytest.MonkeyPatch) -> None:
+    reqs = [
+        hcm_req("1", "Backend Engineer", "IL", "Herzliya, Tel Aviv, Israel"),
+        hcm_req("2", "Mentions Israel in its text", "GB", "READING, United Kingdom"),
+        hcm_req(
+            "3", "Field Engineer", "US", "New York, United States", [{"Name": "Haifa, Israel", "CountryCode": "IL"}]
+        ),
+        hcm_req("4", "Analyst", "IL", ""),
+        hcm_req("5", "Manager", "US", "Austin", [{"Name": "", "CountryCode": "IL"}, "junk", {"CountryCode": "GB"}]),
+        hcm_req("6", "Other", "US", "Austin", ["junk", {"Name": "Paris", "CountryCode": "FR"}]),
+    ]
+    calls = fake_hcm(monkeypatch, hcm_answer(reqs))
+    jobs = adapters.oraclehcm(HCM_SLUG)
+    assert len(calls) == 1
+    assert calls[0]["url"] == HCM_API
+    assert calls[0]["params"]["finder"] == "findReqs;siteNumber=CX_1,limit=50,offset=0,keyword=Israel"
+    assert jobs is not None
+    assert [(j["job_id"], j["title"], j["location"], j["posted"]) for j in jobs] == [
+        ("1", "Backend Engineer", "Herzliya, Tel Aviv, Israel", "2026-11-01"),
+        ("3", "Field Engineer", "Haifa, Israel", "2026-11-01"),
+        ("4", "Analyst", "Israel", "2026-11-01"),
+        ("5", "Manager", "Israel", "2026-11-01"),
+    ]
+    assert jobs[0]["url"] == "https://acme.fa.oraclecloud.com/hcmUI/CandidateExperience/en/sites/CX_1/job/1"
+    assert all(discover.ISRAEL.search(j["location"]) for j in jobs)
+
+
+def test_oraclehcm_reads_every_page(monkeypatch: pytest.MonkeyPatch) -> None:
+    first = hcm_answer([hcm_req(str(i), "T", "IL", "Haifa, Israel") for i in range(50)], total=51)
+    second = hcm_answer([hcm_req("50", "T", "IL", "Haifa, Israel")], total=51)
+    calls = fake_hcm(monkeypatch, first, second)
+    jobs = adapters.oraclehcm(HCM_SLUG)
+    assert jobs is not None
+    assert [j["job_id"] for j in jobs] == [str(i) for i in range(51)]
+    assert [c["params"]["finder"].split(",")[2] for c in calls] == ["offset=0", "offset=50"]
+
+
+def test_oraclehcm_no_match_is_an_empty_board(monkeypatch: pytest.MonkeyPatch) -> None:
+    fake_hcm(monkeypatch, hcm_answer([]))
+    assert adapters.oraclehcm(HCM_SLUG) == []
+
+
+@pytest.mark.parametrize("total", [3, 51, 500])
+def test_oraclehcm_an_empty_page_the_total_contradicts_is_a_failure(
+    monkeypatch: pytest.MonkeyPatch, total: int
+) -> None:
+    fake_hcm(monkeypatch, hcm_answer([], total=total))
+    assert adapters.oraclehcm(HCM_SLUG) is None
+
+
+def test_oraclehcm_a_short_second_page_is_a_failure(monkeypatch: pytest.MonkeyPatch) -> None:
+    first = hcm_answer([hcm_req(str(i), "T", "IL", "Haifa, Israel") for i in range(50)], total=60)
+    fake_hcm(monkeypatch, first, hcm_answer([hcm_req("50", "T", "IL", "Haifa, Israel")], total=60))
+    assert adapters.oraclehcm(HCM_SLUG) is None
+
+
+def test_oraclehcm_more_pages_than_the_limit_is_a_failure(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(adapters, "ORACLEHCM_MAX_PAGES", 2)
+    full = hcm_answer([hcm_req(str(i), "T", "IL", "Haifa, Israel") for i in range(50)], total=500)
+    fake_hcm(monkeypatch, full)
+    assert adapters.oraclehcm(HCM_SLUG) is None
+
+
+@pytest.mark.parametrize(
+    "slug", ["acme", "acme.fa.oraclecloud.com", "a.com/b/c", "nodot/CX_1", "acme.fa.oraclecloud.com/"]
+)
+def test_oraclehcm_a_bad_slug_is_a_failure(monkeypatch: pytest.MonkeyPatch, slug: str) -> None:
+    calls = fake_hcm(monkeypatch, hcm_answer([]))
+    assert adapters.oraclehcm(slug) is None
+    assert calls == []
+
+
+@pytest.mark.parametrize(
+    "resp", [None, FakeHttpResponse(status_code=503), FakeHttpResponse(text="<html>", json_error=True)]
+)
+def test_oraclehcm_a_failed_request_or_html_answer_is_a_failure(
+    monkeypatch: pytest.MonkeyPatch, resp: FakeHttpResponse | None
+) -> None:
+    fake_hcm(monkeypatch, resp)
+    assert adapters.oraclehcm(HCM_SLUG) is None
+
+
+@pytest.mark.parametrize(
+    "answer",
+    [
+        FakeHttpResponse(data={}),
+        FakeHttpResponse(data={"items": []}),
+        FakeHttpResponse(data={"items": [{"TotalJobsCount": 1}]}),
+        hcm_answer({"a": 1}, total=1),
+        hcm_answer([], total="1"),
+        hcm_answer([{"Id": "1"}], total=1),  # no title
+        hcm_answer([{"Title": "T"}], total=1),  # no id
+        hcm_answer(["junk"], total=1),
+    ],
+)
+def test_oraclehcm_an_answer_that_is_not_a_search_is_a_failure(
+    monkeypatch: pytest.MonkeyPatch, answer: FakeHttpResponse
+) -> None:
+    fake_hcm(monkeypatch, answer)
+    assert adapters.oraclehcm(HCM_SLUG) is None
+
+
+def test_oraclehcm_a_failure_after_the_first_page_is_a_failure(monkeypatch: pytest.MonkeyPatch) -> None:
+    first = hcm_answer([hcm_req(str(i), "T", "IL", "Haifa, Israel") for i in range(50)], total=100)
+    fake_hcm(monkeypatch, first, FakeHttpResponse(status_code=500))
+    assert adapters.oraclehcm(HCM_SLUG) is None
+
+
+def test_oraclehcm_is_registered() -> None:
+    assert adapters.ADAPTERS["oraclehcm"] is adapters.oraclehcm
+
+
+AMAZON_PAGE_SIZE = 100
+
+
+def amz_job(job_id: Any, title: Any = "Engineer", path: Any = "/en/jobs/1/x", country: str = "ISR") -> dict[str, Any]:
+    return {
+        "id_icims": job_id,
+        "title": title,
+        "job_path": path,
+        "country_code": country,
+        "normalized_location": "Tel Aviv-Yafo, Tel Aviv, ISR",
+        "location": "IL, Tel Aviv",
+        "job_category": "Software Development",
+    }
+
+
+def amz_answer(jobs: Any, hits: Any = None) -> FakeHttpResponse:
+    return FakeHttpResponse(data={"hits": len(jobs) if hits is None else hits, "jobs": jobs})
+
+
+def fake_amz(monkeypatch: pytest.MonkeyPatch, *responses: FakeHttpResponse | None) -> list[dict[str, Any]]:
+    calls: list[dict[str, Any]] = []
+    queue = list(responses)
+
+    def _get(url: str, **kw: Any) -> FakeHttpResponse | None:
+        calls.append({"url": url, **kw})
+        return queue.pop(0) if len(queue) > 1 else queue[0]
+
+    monkeypatch.setattr(adapters, "get", _get)
+    return calls
+
+
+def test_amazon_reads_the_jobs_of_a_country(monkeypatch: pytest.MonkeyPatch) -> None:
+    jobs_in = [amz_job("10", "A", "/en/jobs/10/a"), amz_job("11", "B", "/en/jobs/11/b")]
+    jobs_in[0]["posted_date"] = "November 12, 2026"
+    jobs_in[1]["normalized_location"] = None  # falls back to the plain location
+    calls = fake_amz(monkeypatch, amz_answer(jobs_in))
+    jobs = adapters.amazon("ISR")
+    assert len(calls) == 1
+    assert calls[0]["url"] == "https://www.amazon.jobs/en/search.json"
+    assert calls[0]["params"] == {"country": "ISR", "result_limit": 100, "offset": 0, "sort": "recent"}
+    assert jobs is not None
+    assert [(j["job_id"], j["title"], j["location"], j["team"], j["url"]) for j in jobs] == [
+        ("10", "A", "Tel Aviv-Yafo, Tel Aviv, ISR", "Software Development", "https://www.amazon.jobs/en/jobs/10/a"),
+        ("11", "B", "IL, Tel Aviv", "Software Development", "https://www.amazon.jobs/en/jobs/11/b"),
+    ]
+    assert [j["posted"] for j in jobs] == ["November 12, 2026", ""]
+    assert all(discover.ISRAEL.search(j["location"]) for j in jobs)
+
+
+def test_amazon_reads_every_page(monkeypatch: pytest.MonkeyPatch) -> None:
+    first = amz_answer([amz_job(str(i)) for i in range(AMAZON_PAGE_SIZE)], hits=AMAZON_PAGE_SIZE + 1)
+    second = amz_answer([amz_job("last")], hits=AMAZON_PAGE_SIZE + 1)
+    calls = fake_amz(monkeypatch, first, second)
+    jobs = adapters.amazon("ISR")
+    assert jobs is not None
+    assert [j["job_id"] for j in jobs][-2:] == ["99", "last"]
+    assert [c["params"]["offset"] for c in calls] == [0, AMAZON_PAGE_SIZE]
+
+
+def test_amazon_no_job_at_all_is_a_failure_not_an_empty_board(monkeypatch: pytest.MonkeyPatch) -> None:
+    fake_amz(monkeypatch, amz_answer([]))  # what a wrong country code answers
+    assert adapters.amazon("XXX") is None
+
+
+def test_amazon_a_total_that_moves_between_pages_is_a_failure(monkeypatch: pytest.MonkeyPatch) -> None:
+    first = amz_answer([amz_job(str(i)) for i in range(AMAZON_PAGE_SIZE)], hits=AMAZON_PAGE_SIZE + 1)
+    second = amz_answer([amz_job("last")], hits=AMAZON_PAGE_SIZE)  # a job closed between the two requests
+    fake_amz(monkeypatch, first, second)
+    assert adapters.amazon("ISR") is None
+
+
+def test_amazon_a_job_listed_twice_is_a_failure(monkeypatch: pytest.MonkeyPatch) -> None:
+    first = amz_answer([amz_job(str(i)) for i in range(AMAZON_PAGE_SIZE)], hits=AMAZON_PAGE_SIZE + 1)
+    second = amz_answer([amz_job("0")], hits=AMAZON_PAGE_SIZE + 1)  # a job added in between shifted page one's last
+    fake_amz(monkeypatch, first, second)
+    assert adapters.amazon("ISR") is None
+
+
+def test_amazon_fewer_jobs_than_the_hits_is_a_failure(monkeypatch: pytest.MonkeyPatch) -> None:
+    fake_amz(monkeypatch, amz_answer([amz_job("1")], hits=3), amz_answer([], hits=3))
+    assert adapters.amazon("ISR") is None
+
+
+def test_amazon_more_jobs_than_the_hits_is_a_failure(monkeypatch: pytest.MonkeyPatch) -> None:
+    fake_amz(monkeypatch, amz_answer([amz_job("1"), amz_job("2")], hits=1))
+    assert adapters.amazon("ISR") is None
+
+
+def test_amazon_an_empty_page_the_hits_contradict_is_a_failure(monkeypatch: pytest.MonkeyPatch) -> None:
+    first = amz_answer([amz_job(str(i)) for i in range(AMAZON_PAGE_SIZE)], hits=250)
+    fake_amz(monkeypatch, first, amz_answer([], hits=250))
+    assert adapters.amazon("ISR") is None
+
+
+def test_amazon_more_pages_than_the_limit_is_a_failure(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(adapters, "AMAZON_MAX_PAGES", 2)
+    full = amz_answer([amz_job(str(i)) for i in range(AMAZON_PAGE_SIZE)], hits=10_000)
+    fake_amz(monkeypatch, full)
+    assert adapters.amazon("ISR") is None
+
+
+@pytest.mark.parametrize(
+    "resp", [None, FakeHttpResponse(status_code=503), FakeHttpResponse(text="<html>", json_error=True)]
+)
+def test_amazon_a_failed_request_or_html_answer_is_a_failure(
+    monkeypatch: pytest.MonkeyPatch, resp: FakeHttpResponse | None
+) -> None:
+    fake_amz(monkeypatch, resp)
+    assert adapters.amazon("ISR") is None
+
+
+@pytest.mark.parametrize(
+    "answer",
+    [
+        FakeHttpResponse(data={}),
+        FakeHttpResponse(data=None),
+        FakeHttpResponse(data={"hits": 1}),
+        FakeHttpResponse(data={"hits": "1", "jobs": []}),
+        FakeHttpResponse(data={"hits": 1, "jobs": {"a": 1}}),
+        amz_answer(["junk"], hits=1),
+        amz_answer([amz_job("")], hits=1),  # no id
+        amz_answer([amz_job("1", title="")], hits=1),
+        amz_answer([amz_job("1", path=None)], hits=1),
+        amz_answer([amz_job("1", country="USA")], hits=1),  # not the asked country
+    ],
+)
+def test_amazon_an_answer_that_is_not_a_clean_search_is_a_failure(
+    monkeypatch: pytest.MonkeyPatch, answer: FakeHttpResponse
+) -> None:
+    fake_amz(monkeypatch, answer)
+    assert adapters.amazon("ISR") is None
+
+
+def test_amazon_a_failure_after_the_first_page_is_a_failure(monkeypatch: pytest.MonkeyPatch) -> None:
+    first = amz_answer([amz_job(str(i)) for i in range(AMAZON_PAGE_SIZE)], hits=250)
+    fake_amz(monkeypatch, first, FakeHttpResponse(status_code=500))
+    assert adapters.amazon("ISR") is None
+
+
+def test_amazon_is_registered() -> None:
+    assert adapters.ADAPTERS["amazon"] is adapters.amazon
+
+
+PHENOM_SLUG = "careers.acme.com/global/en"
+PHENOM_PAGE_SIZE = 50
+
+
+def ph_job(
+    job_id: Any, title: Any = "Engineer", seq: Any = "SEQ", place: Any = "Haifa, Israel", **extra: Any
+) -> dict[str, Any]:
+    return {
+        "jobId": job_id,
+        "title": title,
+        "jobSeqNo": seq,
+        "location": place,
+        "multi_location": [place] if place else [],
+        "category": "Engineering",
+        "postedDate": "2026-10-06T00:00:00.000+0000",
+        **extra,
+    }
+
+
+def ph_answer(jobs: Any, total: Any = None, israel: Any = None) -> FakeHttpResponse:
+    count = len(jobs) if total is None and isinstance(jobs, list) else total
+    facet = {"United States of America": 99, "Israel": count if israel is None else israel}
+    data = {"jobs": jobs, "aggregations": [{"field": "city", "value": {}}, {"field": "country", "value": facet}]}
+    return FakeHttpResponse(data={"refineSearch": {"totalHits": count, "data": data}})
+
+
+def fake_ph(monkeypatch: pytest.MonkeyPatch, *responses: FakeHttpResponse | None) -> list[dict[str, Any]]:
+    calls: list[dict[str, Any]] = []
+    queue = list(responses)
+
+    def _post(url: str, **kw: Any) -> FakeHttpResponse | None:
+        calls.append({"url": url, **kw})
+        return queue.pop(0) if len(queue) > 1 else queue[0]
+
+    monkeypatch.setattr(adapters, "post", _post)
+    return calls
+
+
+def test_phenom_reads_the_israel_jobs(monkeypatch: pytest.MonkeyPatch) -> None:
+    jobs_in = [
+        ph_job("1", "A", "S1", "Tel Aviv-Yafo, Israel"),
+        ph_job("2", "B", "S2", "Austin, United States", multi_location=["Austin, United States", "Haifa, Israel"]),
+    ]
+    calls = fake_ph(monkeypatch, ph_answer(jobs_in))
+    jobs = adapters.phenom(PHENOM_SLUG)
+    assert len(calls) == 1
+    assert calls[0]["url"] == "https://careers.acme.com/widgets"
+    body = calls[0]["json"]
+    assert (body["lang"], body["country"], body["from"], body["size"]) == ("en_global", "global", 0, PHENOM_PAGE_SIZE)
+    assert body["selected_fields"] == {"country": ["Israel"]}
+    assert jobs is not None
+    assert [(j["job_id"], j["title"], j["location"], j["team"], j["url"]) for j in jobs] == [
+        ("1", "A", "Tel Aviv-Yafo, Israel", "Engineering", "https://careers.acme.com/global/en/job/S1"),
+        ("2", "B", "Haifa, Israel", "Engineering", "https://careers.acme.com/global/en/job/S2"),
+    ]
+    assert jobs[0]["posted"] == "2026-10-06T00:00:00.000+0000"
+    assert all(discover.ISRAEL.search(j["location"]) for j in jobs)
+
+
+def test_phenom_reads_every_page(monkeypatch: pytest.MonkeyPatch) -> None:
+    first = ph_answer([ph_job(str(i), seq=f"S{i}") for i in range(PHENOM_PAGE_SIZE)], total=PHENOM_PAGE_SIZE + 1)
+    second = ph_answer([ph_job("last", seq="SL")], total=PHENOM_PAGE_SIZE + 1)
+    calls = fake_ph(monkeypatch, first, second)
+    jobs = adapters.phenom(PHENOM_SLUG)
+    assert jobs is not None
+    assert [j["job_id"] for j in jobs][-2:] == ["49", "last"]
+    assert [c["json"]["from"] for c in calls] == [0, PHENOM_PAGE_SIZE]
+
+
+def test_phenom_no_job_is_an_empty_board(monkeypatch: pytest.MonkeyPatch) -> None:
+    fake_ph(monkeypatch, ph_answer([]))
+    assert adapters.phenom(PHENOM_SLUG) == []
+
+
+def test_phenom_no_israel_entry_in_the_country_facet_means_none_to_find(monkeypatch: pytest.MonkeyPatch) -> None:
+    data = {"jobs": [], "aggregations": [{"field": "country", "value": {"France": 4}}]}
+    fake_ph(monkeypatch, FakeHttpResponse(data={"refineSearch": {"totalHits": 0, "data": data}}))
+    assert adapters.phenom(PHENOM_SLUG) == []
+
+
+def test_phenom_a_filter_that_matches_nothing_while_the_facet_counts_jobs_is_a_failure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    fake_ph(monkeypatch, ph_answer([], total=0, israel=48))  # what a renamed facet value or a typo answers
+    assert adapters.phenom(PHENOM_SLUG) is None
+
+
+def test_phenom_a_total_the_facet_does_not_confirm_is_a_failure(monkeypatch: pytest.MonkeyPatch) -> None:
+    fake_ph(monkeypatch, ph_answer([ph_job("1")], total=1, israel=2))
+    assert adapters.phenom(PHENOM_SLUG) is None
+
+
+def test_phenom_a_job_outside_israel_means_the_filter_was_ignored(monkeypatch: pytest.MonkeyPatch) -> None:
+    fake_ph(monkeypatch, ph_answer([ph_job("1", place="Haifa, Israel"), ph_job("2", place="London, UK")]))
+    assert adapters.phenom(PHENOM_SLUG) is None
+
+
+def test_phenom_a_job_with_no_place_is_a_failure(monkeypatch: pytest.MonkeyPatch) -> None:
+    fake_ph(monkeypatch, ph_answer([ph_job("1", place=None, multi_location=None)]))
+    assert adapters.phenom(PHENOM_SLUG) is None
+
+
+def test_phenom_fewer_jobs_than_the_total_is_a_failure(monkeypatch: pytest.MonkeyPatch) -> None:
+    fake_ph(monkeypatch, ph_answer([ph_job("1")], total=3), ph_answer([], total=3))
+    assert adapters.phenom(PHENOM_SLUG) is None
+
+
+def test_phenom_a_total_that_moves_between_pages_is_a_failure(monkeypatch: pytest.MonkeyPatch) -> None:
+    first = ph_answer([ph_job(str(i), seq=f"S{i}") for i in range(PHENOM_PAGE_SIZE)], total=PHENOM_PAGE_SIZE + 1)
+    second = ph_answer([ph_job("last", seq="SL")], total=PHENOM_PAGE_SIZE)
+    fake_ph(monkeypatch, first, second)
+    assert adapters.phenom(PHENOM_SLUG) is None
+
+
+def test_phenom_a_job_listed_twice_is_a_failure(monkeypatch: pytest.MonkeyPatch) -> None:
+    first = ph_answer([ph_job(str(i), seq=f"S{i}") for i in range(PHENOM_PAGE_SIZE)], total=PHENOM_PAGE_SIZE + 1)
+    fake_ph(monkeypatch, first, ph_answer([ph_job("0", seq="S0")], total=PHENOM_PAGE_SIZE + 1))
+    assert adapters.phenom(PHENOM_SLUG) is None
+
+
+def test_phenom_more_pages_than_the_limit_is_a_failure(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(adapters, "PHENOM_MAX_PAGES", 2)
+    full = ph_answer([ph_job(str(i), seq=f"S{i}") for i in range(PHENOM_PAGE_SIZE)], total=10_000)
+    fake_ph(monkeypatch, full)
+    assert adapters.phenom(PHENOM_SLUG) is None
+
+
+@pytest.mark.parametrize(
+    "slug",
+    [
+        "acme",
+        "careers.acme.com",
+        "careers.acme.com/global",
+        "a.com/b/c/d",
+        "nodot/global/en",
+        "a.com//en",
+        "a.com/global/",
+    ],
+)
+def test_phenom_a_bad_slug_is_a_failure(monkeypatch: pytest.MonkeyPatch, slug: str) -> None:
+    calls = fake_ph(monkeypatch, ph_answer([]))
+    assert adapters.phenom(slug) is None
+    assert calls == []
+
+
+@pytest.mark.parametrize(
+    "resp", [None, FakeHttpResponse(status_code=503), FakeHttpResponse(text="<html>", json_error=True)]
+)
+def test_phenom_a_failed_request_or_html_answer_is_a_failure(
+    monkeypatch: pytest.MonkeyPatch, resp: FakeHttpResponse | None
+) -> None:
+    fake_ph(monkeypatch, resp)
+    assert adapters.phenom(PHENOM_SLUG) is None
+
+
+@pytest.mark.parametrize(
+    "answer",
+    [
+        FakeHttpResponse(data={}),
+        FakeHttpResponse(data=None),
+        FakeHttpResponse(data={"refineSearch": {"totalHits": 1}}),
+        FakeHttpResponse(data={"refineSearch": {"totalHits": 1, "data": {"jobs": []}}}),  # no country facet
+        FakeHttpResponse(data={"refineSearch": {"totalHits": 1, "data": {"jobs": [], "aggregations": []}}}),
+        FakeHttpResponse(data={"refineSearch": {"totalHits": 1, "data": {"jobs": [], "aggregations": None}}}),
+        FakeHttpResponse(
+            data={"refineSearch": {"totalHits": 1, "data": {"jobs": [], "aggregations": [{"field": "country"}]}}}
+        ),
+        FakeHttpResponse(
+            data={
+                "refineSearch": {
+                    "totalHits": 1,
+                    "data": {"jobs": [], "aggregations": [{"field": "country", "value": 5}]},
+                }
+            }
+        ),
+        FakeHttpResponse(data={"refineSearch": {"totalHits": "1", "data": {"jobs": []}}}),
+        FakeHttpResponse(data={"refineSearch": {"totalHits": 1, "data": {"jobs": {"a": 1}}}}),
+        ph_answer({"a": 1}, total=1),
+        ph_answer([], total="1"),
+        ph_answer(["junk"], total=1),
+        ph_answer([ph_job("")], total=1),  # no id
+        ph_answer([ph_job("1", title="")], total=1),
+        ph_answer([ph_job("1", seq=None)], total=1),
+    ],
+)
+def test_phenom_an_answer_that_is_not_a_clean_search_is_a_failure(
+    monkeypatch: pytest.MonkeyPatch, answer: FakeHttpResponse
+) -> None:
+    fake_ph(monkeypatch, answer)
+    assert adapters.phenom(PHENOM_SLUG) is None
+
+
+def test_phenom_a_failure_after_the_first_page_is_a_failure(monkeypatch: pytest.MonkeyPatch) -> None:
+    first = ph_answer([ph_job(str(i), seq=f"S{i}") for i in range(PHENOM_PAGE_SIZE)], total=100)
+    fake_ph(monkeypatch, first, FakeHttpResponse(status_code=500))
+    assert adapters.phenom(PHENOM_SLUG) is None
+
+
+def test_phenom_is_registered() -> None:
+    assert adapters.ADAPTERS["phenom"] is adapters.phenom
