@@ -611,5 +611,13 @@
   "ats": "workday",
   "slug": "criteo/wd3/Criteo_Career_Site",
   "israel_only": true
+ },
+ "D-ID": {
+  "ats": "workable",
+  "slug": "d-id"
+ },
+ "Autofleet": {
+  "ats": "workable",
+  "slug": "autofleet"
  }
 }
