@@ -2,7 +2,7 @@
 
 Open work, as of 2026-11-14. Each item says what triggers it, how to do it and when it is done. When one is finished,
 delete it and update the counts in the others: the 103 and the four segment counts in the research item (a pin removes
-one row from one segment), its "(30)" if the company had no careers URL.
+one row from one segment), its "(30)" if the company had no careers URL, else its "(73 today)".
 Observations about live sites below come from checks made on 2026-11-14 and may have changed.
 
 ## Review the Node and Python pins
@@ -40,7 +40,7 @@ Observations about live sites below come from checks made on 2026-11-14 and may 
 - [ ] `data/unresolved_candidates.csv` lists 103 researched companies with no usable job feed (as of 2026-11-14: 24
   multinational, 45 deeptech, 18 cyber_infra, 16 biz_software). Each needs
   its own research; there is no batch fix left. Every observation about a live site below is from the checks of
-  2026-11-14, a crawl of the 105 rows that had a careers URL that day (77 today) and a scan of their rendered pages. The
+  2026-11-14, a crawl of the 105 rows that had a careers URL that day (73 today) and a scan of their rendered pages. The
   remaining work falls into these groups:
   - **No careers URL (30).** Status `not_found` in `data/new/*_companies.json`: OX Security, Upsolver, Ceva, Speedata,
     Teramount, X-Globe, Q Factor, Gilat, Siklu, Silicom, Sight Diagnostics, Brainsway, EarlySign, Diagnostic Robotics,
