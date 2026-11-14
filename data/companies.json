@@ -2561,5 +2561,65 @@
   "n_jobs": 171,
   "n_israel": 171,
   "israel_only": true
+ },
+ {
+  "name": "Marvell",
+  "domain": "marvell.com",
+  "careers_url": "",
+  "ats": "workday",
+  "slug": "marvell/wd1/MarvellCareers",
+  "source": "override",
+  "status": "ok",
+  "n_jobs": 10,
+  "n_israel": 10,
+  "israel_only": true
+ },
+ {
+  "name": "Medtronic",
+  "domain": "medtronic.com",
+  "careers_url": "",
+  "ats": "workday",
+  "slug": "medtronic/wd1/MedtronicCareers",
+  "source": "override",
+  "status": "ok",
+  "n_jobs": 32,
+  "n_israel": 32,
+  "israel_only": true
+ },
+ {
+  "name": "KLA",
+  "domain": "kla.com",
+  "careers_url": "",
+  "ats": "workday",
+  "slug": "kla/wd1/Search",
+  "source": "override",
+  "status": "ok",
+  "n_jobs": 82,
+  "n_israel": 82,
+  "israel_only": true
+ },
+ {
+  "name": "Kyndryl",
+  "domain": "kyndryl.com",
+  "careers_url": "",
+  "ats": "workday",
+  "slug": "kyndryl/wd5/KyndrylProfessionalCareers",
+  "source": "override",
+  "status": "ok",
+  "n_jobs": 6,
+  "n_israel": 6,
+  "israel_only": true
+ },
+ {
+  "name": "Workday",
+  "domain": "workday.com",
+  "careers_url": "",
+  "ats": "workday",
+  "slug": "workday/wd5/Workday",
+  "source": "override",
+  "status": "ok",
+  "n_jobs": 5,
+  "n_israel": 5,
+  "israel_only": true
  }
 ]
