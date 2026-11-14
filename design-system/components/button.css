@@ -66,3 +66,19 @@
   transform: translate(2px, 2px);
   box-shadow: 1px 1px 0 var(--shadow);
 }
+
+/* Icon-only theme switch: one icon per mode, picked by the theme on <html> so it never flashes. */
+.btn-icon {
+  width: var(--tap);
+  padding: 0;
+}
+
+.theme-icon {
+  display: none;
+}
+
+:root:not([data-theme]) .theme-icon[data-mode="auto"],
+:root[data-theme="light"] .theme-icon[data-mode="light"],
+:root[data-theme="dark"] .theme-icon[data-mode="dark"] {
+  display: inline-flex;
+}

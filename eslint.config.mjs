@@ -3,7 +3,8 @@ import globals from 'globals';
 import tseslint from 'typescript-eslint';
 
 export default tseslint.config(
-  { ignores: ['.venv/**', 'dist/**', 'coverage/**', 'node_modules/**', '.lighthouseci/**'] },
+  // docs/ is generated from templates/ (linted there).
+  { ignores: ['.venv/**', 'dist/**', 'coverage/**', 'node_modules/**', '.lighthouseci/**', 'docs/**'] },
   js.configs.recommended,
   ...tseslint.configs.strictTypeChecked,
   ...tseslint.configs.stylisticTypeChecked,
@@ -29,6 +30,11 @@ export default tseslint.config(
     languageOptions: { globals: globals.node },
     // Plain JS/MJS tooling scripts have no type annotations; return types apply to TypeScript only.
     rules: { '@typescript-eslint/explicit-function-return-type': 'off' },
+  },
+  {
+    // The dashboard scripts run in the browser, not in Node.
+    files: ['templates/**/*.js'],
+    languageOptions: { globals: globals.browser },
   },
   {
     // CLI scripts print to stdout.

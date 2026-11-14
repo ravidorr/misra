@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; connect-src 'self'; base-uri 'none'; form-action 'none'">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="color-scheme" content="light dark">
 <meta name="robots" content="noindex, nofollow">
@@ -11,46 +12,41 @@
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f5f0e6">
 <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#121116">
-<script>
-/* Applies a theme before first paint and keeps the phone's browser bar in step with it. */
-function misraTheme(m){
-  var root=document.documentElement,metas=document.querySelectorAll('meta[name="theme-color"]'),colors={light:'#f5f0e6',dark:'#121116'};
-  if(m==='light'||m==='dark')root.setAttribute('data-theme',m);else root.removeAttribute('data-theme');
-  metas.forEach(function(el,i){
-    if(!el.dataset.auto)el.dataset.auto=el.content;
-    el.content=colors[m]||el.dataset.auto})}
-try{misraTheme(localStorage.getItem('misra-theme'))}catch(e){}
-</script>
-<style>
-__CSS__
-</style>
+<link rel="stylesheet" href="dashboard.css" integrity="__SRI_DASHBOARD_CSS__">
+<script src="theme.js" integrity="__SRI_THEME_JS__"></script>
+<script type="module" src="dashboard.js" integrity="__SRI_DASHBOARD_JS__"></script>
+<link rel="alternate" type="application/json" href="jobs.json" title="Open roles as JSON">
+<link rel="alternate" type="application/ld+json" href="jobs.jsonld" title="Open roles as schema.org JSON-LD">
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"Dataset","name":"Misra: open entry-level, student and product roles in Israel","description":"Every open role, refreshed daily. Each role has a title, company, location and the date it was first seen.","isAccessibleForFree":true,"distribution":[{"@type":"DataDownload","encodingFormat":"application/json","contentUrl":"jobs.json"},{"@type":"DataDownload","encodingFormat":"application/ld+json","contentUrl":"jobs.jsonld"}]}</script>
 </head>
 <body>
 <a class="skip" href="#list">Skip to roles</a>
 <div class="page">
 <header class="top">
-  <svg class="top-mark" aria-hidden="true" viewBox="0 0 64 64"><circle cx="32" cy="32" r="29.5" fill="#6c47ff" stroke="#111" stroke-width="5"/><path d="M9 35h12l5-15 8 28 6-19 3 6h12" fill="none" stroke="#111" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M47 6l2.4 6.6L56 15l-6.6 2.4L47 24l-2.4-6.6L38 15l6.6-2.4z" fill="#d4ff4f" stroke="#111" stroke-width="1.5" stroke-linejoin="round"/></svg>
-  <p class="top-name"><span class="wordmark">misra</span></p>
-  <span class="grow"></span>
-  <button type="button" class="btn btn-pill btn-icon" id="theme" aria-label="Theme: auto" title="Theme: auto">
+  <svg class="top-mark" aria-hidden="true" viewBox="0 0 64 64"><circle class="mark-disc" cx="32" cy="32" r="29.5" stroke-width="5"/><path class="mark-pulse" d="M9 35h12l5-15 8 28 6-19 3 6h12" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round"/><path class="mark-spark" d="M47 6l2.4 6.6L56 15l-6.6 2.4L47 24l-2.4-6.6L38 15l6.6-2.4z" stroke-width="1.5" stroke-linejoin="round"/></svg>
+  <span class="top-name"><span class="wordmark">misra</span></span>
+  <button type="button" class="btn btn-pill btn-icon theme-toggle" id="theme" aria-label="Theme: auto" title="Theme: auto">
     <span class="theme-icon" data-mode="auto"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg></span>
     <span class="theme-icon" data-mode="light"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg></span>
     <span class="theme-icon" data-mode="dark"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg></span>
   </button>
 </header>
 <main>
-  <h1 class="hero"><span class="highlight" id="heroTop">Open roles</span><br><span id="heroBottom">in Israel.</span></h1>
-  <p class="sub" id="summary" aria-live="polite"></p>
+  <h1 class="hero"><span class="highlight" id="heroTop">Open roles</span> <span id="heroBottom">in Israel.</span></h1>
+  <p class="sub" id="summary">Loading roles…</p>
+  <p class="sr-only" id="status" role="status"></p>
 
   <section id="hiring" aria-labelledby="hiring-h" hidden>
     <h2 class="label" id="hiring-h">Hiring now</h2>
-    <div class="stories" id="stories"></div>
+    <ul class="stories" id="stories"></ul>
   </section>
 
-  <div class="controls" role="group" aria-label="Filters">
-    <button type="button" class="chip" data-cat="all" aria-pressed="true">Everything</button>
-    <button type="button" class="chip" data-cat="pm" aria-pressed="false">Product</button>
-    <button type="button" class="chip" data-cat="junior" aria-pressed="false">Intern &amp; junior</button>
+  <div class="controls">
+    <div class="chip-group" role="group" aria-label="Role type">
+      <button type="button" class="chip" data-cat="all" aria-pressed="true">Everything</button>
+      <button type="button" class="chip" data-cat="pm" aria-pressed="false">Product</button>
+      <button type="button" class="chip" data-cat="junior" aria-pressed="false">Intern &amp; junior</button>
+    </div>
     <button type="button" class="chip chip-new" id="onlyNew" aria-pressed="false">New only</button>
   </div>
 
@@ -70,13 +66,14 @@ __CSS__
     </div>
   </details>
 
-  <div class="search">
+  <search class="search">
     <label class="sr-only" for="q">Search roles, companies and cities</label>
     <input class="field" type="search" id="q" placeholder="Search">
-  </div>
+  </search>
 
-  <noscript><p class="notice">The list needs JavaScript. Every open role is also in the JSON-LD block and the #data script of this page.</p></noscript>
-  <ul class="feed" id="list" aria-label="Open roles"></ul>
+  <noscript><p class="notice">The list needs JavaScript. Every open role is also in <a href="jobs.json">jobs.json</a> and <a href="jobs.jsonld">jobs.jsonld</a>.</p></noscript>
+  <h2 class="sr-only" id="list-h" tabindex="-1">All roles</h2>
+  <ul class="feed" id="list" aria-labelledby="list-h"></ul>
   <nav class="pager" id="pager" aria-label="Pagination" hidden>
     <button type="button" class="btn btn-pill" id="prev">Previous</button>
     <span class="pager-info" id="pageInfo" aria-live="polite"></span>
@@ -86,218 +83,7 @@ __CSS__
 
   <details class="gaps notice" id="gaps" hidden><summary id="gaps-title">Coverage gaps</summary></details>
 </main>
-<p class="foot">Discards are saved in this browser only. Data updated <span id="upd"></span>.</p>
+<footer class="foot">Discards are saved in this browser only. Data updated <time id="upd"></time>.</footer>
 </div>
-<script type="application/ld+json" id="jsonld">__JSONLD__</script>
-<script type="application/json" id="data">__DATA__</script>
-<script>
-(function(){
-var DATA=JSON.parse(document.getElementById('data').textContent);
-var JOBS=DATA.jobs,page=0;
-var $=function(id){return document.getElementById(id)};
-var LS_D='il-jobs-discarded-v1',LS_F='il-jobs-filters-v1',LS_T='misra-theme';
-var CATS={pm:'product',junior:'junior',other:'other'};
-var KIND={pm:'Product',junior:'Intern / junior',other:'Other'};
-function lsGet(k,d){try{var v=localStorage.getItem(k);return v?JSON.parse(v):d}catch(e){return d}}
-function lsSet(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}
-var gone=lsGet(LS_D,{});
-function defaults(){return {q:'',company:'',loc:'il',sort:'new',cats:[],onlyNew:false,showGone:false,hideStale:false,size:10}}
-var F=Object.assign(defaults(),lsGet(LS_F,{}));
-function key(j){return j.c+'|'+j.i}
-function h(tag,attrs,kids){
-  var e=document.createElement(tag);
-  Object.keys(attrs||{}).forEach(function(k){var v=attrs[k];if(v==null||v===false)return;if(k==='text')e.textContent=v;else e.setAttribute(k,v)});
-  (kids||[]).forEach(function(c){if(c)e.appendChild(typeof c==='string'?document.createTextNode(c):c)});
-  return e}
-function safeUrl(u){try{var x=new URL(u,location.href);return x.protocol==='https:'||x.protocol==='http:'?x.href:'#'}catch(e){return '#'}}
-var TODAY=DATA.generated.slice(0,10);
-function dayNum(d){return Math.floor(Date.parse(d+'T00:00:00Z')/86400000)}
-function age(f){return f?dayNum(TODAY)-dayNum(f):null}
-function fresh(j){var a=age(j.f);return !!j.n&&a!==null&&a<=7}
-function ago(f){var a=age(f);if(a===null)return '';if(a<=0)return 'today';if(a===1)return 'yesterday';return a+' days ago'}
-var companies=Array.from(new Set(JOBS.map(function(j){return j.c}))).sort(function(a,b){return a.localeCompare(b)});
-companies.forEach(function(c){var o=document.createElement('option');o.value=c;o.textContent=c;$('company').appendChild(o)});
-$('upd').textContent=DATA.generated;
-
-function select(f){
-  var terms=f.q.trim().toLowerCase().split(/\s+/).filter(Boolean);
-  var out=JOBS.filter(function(j){
-    if(gone[key(j)]&&!f.showGone)return false;
-    if(f.loc==='il'&&!j.il)return false;
-    if(f.company&&j.c!==f.company)return false;
-    if(f.cats.length&&f.cats.indexOf(j.k)<0)return false;
-    if(f.onlyNew&&!fresh(j))return false;
-    if(f.hideStale&&j.s)return false;
-    if(terms.length){var hay=(j.c+' '+j.t+' '+j.m+' '+j.l).toLowerCase();for(var x=0;x<terms.length;x++)if(hay.indexOf(terms[x])<0)return false}
-    return true});
-  out.sort(function(a,b){
-    if(f.sort==='co')return a.c.localeCompare(b.c)||a.t.localeCompare(b.t);
-    if(f.sort==='title')return a.t.localeCompare(b.t);
-    return (b.f>a.f?1:b.f<a.f?-1:0)||a.c.localeCompare(b.c)});
-  return out}
-
-function sync(){
-  $('q').value=F.q;$('company').value=F.company;$('loc').value=F.loc;$('sort').value=F.sort;
-  $('hideStale').checked=F.hideStale;$('showGone').checked=F.showGone;
-  $('other').checked=F.cats.length===1&&F.cats[0]==='other';
-  $('onlyNew').setAttribute('aria-pressed',F.onlyNew);
-  document.querySelectorAll('.chip[data-cat]').forEach(function(b){
-    var c=b.dataset.cat;
-    b.setAttribute('aria-pressed',c==='all'?F.cats.length===0:F.cats.indexOf(c)>=0)})}
-
-function renderStories(){
-  var counts={};
-  JOBS.forEach(function(j){if(j.il&&fresh(j)&&!gone[key(j)])counts[j.c]=(counts[j.c]||0)+1});
-  var names=Object.keys(counts).sort(function(a,b){return counts[b]-counts[a]||a.localeCompare(b)}).slice(0,15);
-  $('hiring').hidden=!names.length;
-  $('stories').replaceChildren.apply($('stories'),names.map(function(c){
-    var n=counts[c];
-    return h('button',{type:'button',class:'story story-new','data-company':c,'aria-pressed':String(F.company===c),'aria-label':c+', '+n+' new '+(n===1?'role':'roles')},[
-      h('span',{class:'story-badge','aria-hidden':'true',text:c.charAt(0).toUpperCase()}),
-      h('span',{class:'story-name',text:c})])}))}
-
-function cardEl(j){
-  var k=key(j),g=!!gone[k],isNew=fresh(j),what=j.t+' at '+j.c,url=safeUrl(j.u);
-  var art=h('article',{class:'card','data-job-id':k,'data-company':j.c,'data-category':CATS[j.k],'data-new':String(isNew),'data-stale':String(j.s),'data-discarded':String(g)});
-  if(j.s)art.appendChild(h('span',{class:'sticker sticker-warn card-flag',title:'This company could not be crawled in the latest run. The listing may be out of date.',text:'OLD?'}));
-  else if(isNew)art.appendChild(h('span',{class:'sticker card-flag',text:'NEW'}));
-  art.appendChild(h('p',{class:'card-company',text:j.c}));
-  art.appendChild(h('h3',{class:'card-title'},[h('a',{href:url,target:'_blank',rel:'noopener noreferrer',text:j.t})]));
-  art.appendChild(h('p',{class:'card-tags'},[
-    j.l&&h('span',{class:'pill',text:j.l}),
-    j.k!=='other'&&h('span',{class:'pill pill-soft',text:KIND[j.k]}),
-    j.m&&h('span',{class:'pill',text:j.m}),
-    j.f&&h('span',{class:'card-seen',text:ago(j.f)})]));
-  art.appendChild(h('p',{class:'card-actions'},[
-    h('a',{class:'btn btn-primary',href:url,target:'_blank',rel:'noopener noreferrer'},['Apply ↗',h('span',{class:'sr-only',text:' to '+what})]),
-    h('button',{type:'button',class:'btn btn-link','data-act':'toggle','data-k':k,'aria-label':(g?'Restore':'Not for me')+': '+what,text:g?'Restore':'Not for me'})]));
-  return h('li',{},[art])}
-
-function goneCount(){return Object.keys(gone).filter(function(k){return JOBS.some(function(j){return key(j)===k})}).length}
-
-function render(focusIdx){
-  var res=select(F),goneN=goneCount();
-  var israel=JOBS.filter(function(j){return j.il}).length;
-  var inScope=F.loc==='il'?israel:JOBS.length;
-  $('goneN').textContent=goneN;$('showGone').disabled=goneN===0;
-  var newN=JOBS.filter(function(j){return j.il&&fresh(j)&&!gone[key(j)]}).length;
-  $('heroTop').textContent=newN?newN+' new':israel+' open';
-  $('heroBottom').textContent=newN?'roles this week.':'roles in Israel.';
-  $('summary').textContent='Showing '+res.length+' of '+inScope+' open roles '+(F.loc==='il'?'in Israel':'in all locations')+'. '+goneN+' discarded.';
-  renderStories();
-  var ul=$('list');
-  if(!res.length){ul.replaceChildren(h('li',{class:'empty',text:'No roles match these filters.'}));$('pager').hidden=true;return}
-  var size=[10,25,50,100].indexOf(+F.size)>=0?+F.size:10,pages=Math.ceil(res.length/size);
-  page=Math.min(page,pages-1);
-  ul.replaceChildren.apply(ul,res.slice(page*size,(page+1)*size).map(cardEl));
-  $('pager').hidden=res.length<=10;
-  $('size').value=size;
-  $('prev').disabled=page===0;
-  $('next').disabled=page>=pages-1;
-  $('pageInfo').textContent='Page '+(page+1)+' of '+pages;
-  if(focusIdx!==undefined){var bs=ul.querySelectorAll('[data-act]');var b=bs[Math.min(focusIdx,bs.length-1)];if(b)b.focus()}}
-
-function save(){lsSet(LS_F,F)}
-function upd(){page=0;save();sync();render()}
-
-$('q').addEventListener('input',function(){F.q=this.value;upd()});
-$('company').addEventListener('change',function(){F.company=this.value;upd()});
-$('loc').addEventListener('change',function(){F.loc=this.value;upd()});
-$('sort').addEventListener('change',function(){F.sort=this.value;upd()});
-$('hideStale').addEventListener('change',function(){F.hideStale=this.checked;upd()});
-$('showGone').addEventListener('change',function(){F.showGone=this.checked;upd()});
-$('other').addEventListener('change',function(){F.cats=this.checked?['other']:[];upd()});
-$('onlyNew').addEventListener('click',function(){F.onlyNew=!F.onlyNew;upd()});
-document.querySelectorAll('.chip[data-cat]').forEach(function(b){b.addEventListener('click',function(){
-  var c=b.dataset.cat,i=F.cats.indexOf(c);
-  if(c==='all')F.cats=[];else if(i>=0)F.cats.splice(i,1);else{F.cats=F.cats.filter(function(x){return x!=='other'});F.cats.push(c)}
-  upd()})});
-$('stories').addEventListener('click',function(e){var b=e.target.closest('.story');if(!b)return;F.company=F.company===b.dataset.company?'':b.dataset.company;upd()});
-$('reset').addEventListener('click',function(){F=defaults();upd()});
-$('size').addEventListener('change',function(){F.size=+this.value;upd()});
-function go(d){page+=d;render();$('list').scrollIntoView()}
-$('prev').addEventListener('click',function(){go(-1)});
-$('next').addEventListener('click',function(){go(1)});
-function setGone(k,on){if(on)gone[k]=TODAY;else delete gone[k];lsSet(LS_D,gone)}
-$('list').addEventListener('click',function(e){
-  var b=e.target.closest('[data-act="toggle"]');if(!b)return;
-  var idx=Array.prototype.indexOf.call($('list').querySelectorAll('[data-act]'),b);
-  setGone(b.dataset.k,!gone[b.dataset.k]);render(idx)});
-$('exp').addEventListener('click',function(){var a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify(gone,null,1)],{type:'application/json'}));a.download='discarded-jobs.json';a.click()});
-$('imp').addEventListener('click',function(){$('file').click()});
-$('file').addEventListener('change',function(){var f=this.files[0];if(!f)return;var r=new FileReader();r.onload=function(){try{var d=JSON.parse(r.result);if(d&&typeof d==='object'){Object.assign(gone,d);lsSet(LS_D,gone);render()}}catch(e){alert('Not a valid discards file')}};r.readAsText(f)});
-
-(function(){
-  var G=DATA.gaps||{blocked:[],untracked:[]},el=$('gaps');
-  if(!G.blocked.length&&!G.untracked.length)return;
-  $('gaps-title').textContent='Coverage gaps: '+G.blocked.length+' failing in the latest run, '+G.untracked.length+' not tracked yet';
-  G.blocked.forEach(function(x){el.appendChild(h('p',{},[h('b',{text:x.c}),': '+x.why+'. Its roles are possibly old (last good crawl '+x.last+').']))});
-  if(G.untracked.length)el.appendChild(h('p',{},[h('b',{text:'Not tracked (no usable job feed found):'}),' '+G.untracked.join(', ')]));
-  el.hidden=false})();
-
-/* Theme: auto follows the system; light and dark are forced with data-theme. */
-var MODES=['auto','light','dark'];
-function themeLabel(m){var b=$('theme');b.dataset.mode=m;b.setAttribute('aria-label','Theme: '+m);b.title='Theme: '+m}
-function setTheme(m){
-  misraTheme(m);
-  try{if(m==='auto')localStorage.removeItem(LS_T);else localStorage.setItem(LS_T,m)}catch(e){}
-  themeLabel(m)}
-var cur=document.documentElement.getAttribute('data-theme')||'auto';
-themeLabel(cur);
-$('theme').addEventListener('click',function(){
-  var c=document.documentElement.getAttribute('data-theme')||'auto';
-  setTheme(MODES[(MODES.indexOf(c)+1)%MODES.length])});
-
-/* WebMCP: expose the same data and actions to browser agents (navigator.modelContext). */
-function describe(j){return {id:key(j),company:j.c,title:j.t,team:j.m,location:j.l,url:j.u,firstSeen:j.f,category:CATS[j.k],isNew:fresh(j),possiblyOld:j.s,discarded:!!gone[key(j)]}}
-function reply(obj,isError){return {content:[{type:'text',text:JSON.stringify(obj)}],isError:!!isError}}
-function find(id){return JOBS.filter(function(j){return key(j)===id})[0]}
-function search(a){
-  var f=defaults();
-  f.q=a.query||'';f.company=a.company||'';f.onlyNew=!!a.newOnly;f.showGone=!!a.includeDiscarded;
-  f.loc=a.allLocations?'all':'il';
-  f.sort={newest:'new',company:'co',title:'title'}[a.sort]||'new';
-  if(a.category){f.cats=Object.keys(CATS).filter(function(k){return CATS[k]===a.category})}
-  var res=select(f),n=Math.max(1,Math.min(100,Math.floor(a.limit||20)));
-  return {total:res.length,returned:Math.min(n,res.length),jobs:res.slice(0,n).map(describe)}}
-var idSchema={type:'object',properties:{id:{type:'string',description:'Job id as returned by search_jobs (company|jobId).'}},required:['id']};
-var TOOLS=[
- {name:'search_jobs',description:'Search open entry-level, student and product roles in Israel. All filters are optional.',
-  inputSchema:{type:'object',properties:{
-    query:{type:'string',description:'Words to match in title, company, team or location.'},
-    category:{type:'string',enum:['product','junior','other']},
-    company:{type:'string',description:'Exact company name.'},
-    newOnly:{type:'boolean',description:'Only roles first seen in the last 7 days.'},
-    includeDiscarded:{type:'boolean'},
-    allLocations:{type:'boolean',description:'Include roles outside Israel.'},
-    sort:{type:'string',enum:['newest','company','title']},
-    limit:{type:'integer',minimum:1,maximum:100,description:'Default 20.'}}},
-  annotations:{readOnlyHint:true},
-  execute:function(a){return Promise.resolve(reply(search(a||{})))}},
- {name:'list_new_jobs',description:'List roles first seen in the last 7 days, newest first.',
-  inputSchema:{type:'object',properties:{limit:{type:'integer',minimum:1,maximum:100}}},
-  annotations:{readOnlyHint:true},
-  execute:function(a){return Promise.resolve(reply(search({newOnly:true,limit:(a||{}).limit})))}},
- {name:'get_job',description:'Get one role by id.',inputSchema:idSchema,annotations:{readOnlyHint:true},
-  execute:function(a){var j=find((a||{}).id);return Promise.resolve(j?reply(describe(j)):reply({error:'Unknown job id'},true))}},
- {name:'discard_job',description:'Mark a role as not interesting. Saved in this browser and hidden from the feed.',inputSchema:idSchema,
-  execute:function(a){var j=find((a||{}).id);if(!j)return Promise.resolve(reply({error:'Unknown job id'},true));setGone(key(j),true);render();return Promise.resolve(reply(describe(j)))}},
- {name:'restore_job',description:'Bring a discarded role back into the feed.',inputSchema:idSchema,
-  execute:function(a){var j=find((a||{}).id);if(!j)return Promise.resolve(reply({error:'Unknown job id'},true));setGone(key(j),false);render();return Promise.resolve(reply(describe(j)))}},
- {name:'list_coverage_gaps',description:'List companies that could not be crawled or are not tracked, so their roles may be missing or old.',
-  inputSchema:{type:'object',properties:{}},annotations:{readOnlyHint:true},
-  execute:function(){return Promise.resolve(reply(DATA.gaps||{blocked:[],untracked:[]}))}}
-];
-(function(){
-  var mc=navigator.modelContext;
-  if(!mc)return;
-  try{
-    if(typeof mc.registerTool==='function')TOOLS.forEach(function(t){mc.registerTool(t)});
-    else if(typeof mc.provideContext==='function')mc.provideContext({tools:TOOLS})
-  }catch(e){console.warn('WebMCP registration failed',e)}})();
-
-sync();render();
-})();
-</script>
 </body>
 </html>

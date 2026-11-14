@@ -2,6 +2,23 @@
 
 All notable changes are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses [Semantic Versioning](https://semver.org/).
 
+## [0.3.0] - 2026-11-14
+
+### Changed
+
+- The dashboard is no longer one 2.3 MB file. `build_dashboard.py` now writes `docs/index.html` (7 KB) next to `dashboard.css`, `dashboard.js`, `theme.js`, `jobs.json` and `jobs.jsonld`. The browser caches the stylesheet and scripts, and the page fetches the roles from `jobs.json` (about 190 KB compressed). The schema.org job list moved from an inline JSON-LD block to `jobs.jsonld`; the page keeps a small inline `Dataset` block that points to both files. The daily workflow commits all of these files. The dashboard script is now modern, linted JavaScript in `templates/dashboard.js`.
+- The page has no inline script or style, so it ships a Content-Security-Policy (`default-src 'none'`, own-origin scripts, styles, images and fetches only) and Subresource Integrity hashes for its stylesheet and scripts.
+- The logo's colors are tokens (`--mark-*`) instead of hard-coded values, and the icon-only theme switch is a design-system component.
+
+### Fixed
+
+- Accessibility: the result count is announced once typing pauses instead of on every keystroke; paging moves focus to the list heading; links that open a new tab say so; a story button's accessible name now contains its visible text; the design-system showcase has a meta description, no line break inside its heading, and the same icon theme switch as the dashboard.
+- A failed `jobs.json` load shows "Could not load the roles" instead of an empty page.
+
+### Added
+
+- Browser tests run the built dashboard in Chromium: no console or CSP errors, no axe violations in light and dark (dashboard and showcase), focus after paging, delayed announcements, and the load-failure message. `axe-core` is a dev dependency.
+
 ## [0.2.10] - 2026-11-14
 
 ### Added

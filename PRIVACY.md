@@ -6,7 +6,7 @@ Last updated: 2026-11-14
 
 No personal data is collected. The pipeline reads publicly available job postings from company career pages and stores them in a SQLite database (`data/jobs.db`). The daily digest is emailed to `GMAIL_USER`, or to `DIGEST_TO` if that secret is set.
 
-The repository is public, so `data/jobs.db` and the generated dashboard (`docs/index.html`, published on GitHub Pages and marked `noindex`) are publicly readable. They contain only public job postings. The dashboard saves your Discard choices in your own browser (`localStorage`); nothing is sent anywhere.
+The repository is public, so `data/jobs.db` and the generated dashboard (the files in `docs/`, published on GitHub Pages and marked `noindex`) are publicly readable. They contain only public job postings. The dashboard saves your Discard choices in your own browser (`localStorage`); nothing is sent anywhere.
 
 ## How data is used
 

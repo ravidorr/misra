@@ -1,4 +1,4 @@
-/* Dashboard layout. Tokens and components come from design-system/ and are inlined by build_dashboard.py. */
+/* Dashboard layout. Tokens and components come from design-system/ and are bundled into docs/dashboard.css by build_dashboard.py. */
 * {
   box-sizing: border-box;
 }
@@ -61,6 +61,21 @@ a {
   height: 40px;
 }
 
+.mark-disc {
+  fill: var(--mark-disc);
+  stroke: var(--mark-ink);
+}
+
+.mark-pulse {
+  fill: none;
+  stroke: var(--mark-ink);
+}
+
+.mark-spark {
+  fill: var(--mark-spark);
+  stroke: var(--mark-ink);
+}
+
 .wordmark {
   display: inline-block;
   padding: 0 var(--space-2);
@@ -76,8 +91,8 @@ a {
   letter-spacing: -0.04em;
 }
 
-.grow {
-  flex-grow: 1;
+.theme-toggle {
+  margin-inline-start: auto;
 }
 
 .hero {
@@ -86,6 +101,11 @@ a {
   font-weight: 800;
   letter-spacing: -0.05em;
   line-height: 0.98;
+}
+
+.hero span {
+  display: block;
+  width: fit-content;
 }
 
 .sub {
@@ -102,10 +122,17 @@ a {
 
 .stories {
   display: flex;
+  list-style: none;
   gap: var(--space-4);
   margin: 0 calc(-1 * var(--space-1)) var(--space-4);
   padding: var(--space-1) var(--space-1) var(--space-4);
   overflow-x: auto;
+}
+
+.chip-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
 }
 
 .controls {
@@ -122,21 +149,6 @@ a {
 
 .search .field {
   width: 100%;
-}
-
-.btn-icon {
-  width: var(--tap);
-  padding: 0;
-}
-
-.theme-icon {
-  display: none;
-}
-
-.btn-icon[data-mode="auto"] .theme-icon[data-mode="auto"],
-.btn-icon[data-mode="light"] .theme-icon[data-mode="light"],
-.btn-icon[data-mode="dark"] .theme-icon[data-mode="dark"] {
-  display: inline-flex;
 }
 
 .more-body input:disabled + span {
@@ -260,8 +272,8 @@ a {
     line-height: 1.1;
   }
 
-  .hero br {
-    display: none;
+  .hero span {
+    display: inline;
   }
 
   .sub {

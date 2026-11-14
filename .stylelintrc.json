@@ -3,6 +3,7 @@
     "stylelint-config-standard"
   ],
   "ignoreFiles": [
+    "docs/**",
     ".venv/**",
     "coverage/**",
     "dist/**",

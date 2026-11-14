@@ -3,14 +3,11 @@
 The fakes in the other tests never run the script, so its climb (how far up from a title link a card reaches) is
 pinned here. Locally the tests skip when Chromium is missing; in CI (CI=true) a missing browser is a failure."""
 
-import os
-from collections.abc import AsyncIterator
 from typing import Any
 
 import pytest
-from playwright.async_api import Page, async_playwright
+from playwright.async_api import Page
 
-import browser_crawl
 from browser_crawl import CARD_ARGS, CARD_JS, CARD_MAX
 
 BASE = "https://x.test"
@@ -18,24 +15,6 @@ MAX_LEVELS = 4
 EXTRA_LEVELS = 2
 TEXT_WIDTH = 600
 OVERSIZE = 700
-
-
-@pytest.fixture
-async def page() -> AsyncIterator[Page]:
-    async with async_playwright() as p:
-        try:
-            launch_args = {"args": ["--no-sandbox"]}
-            if browser_crawl.EXE:
-                launch_args["executable_path"] = browser_crawl.EXE
-            browser = await p.chromium.launch(**launch_args)  # type: ignore[arg-type]
-        except Exception as exc:
-            if os.environ.get("CI"):
-                raise
-            pytest.skip(f"no Chromium to run the card script: {str(exc).splitlines()[0]}")
-        try:
-            yield await browser.new_page()
-        finally:
-            await browser.close()
 
 
 async def cards(page: Page, html: str) -> dict[str, str]:

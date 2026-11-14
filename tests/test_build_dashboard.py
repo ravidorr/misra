@@ -1,5 +1,6 @@
+import base64
+import hashlib
 import json
-import re
 import runpy
 import sqlite3
 from pathlib import Path
@@ -42,13 +43,17 @@ def write_css(workdir: Path) -> None:
 
 def prepare(workdir: Path) -> None:
     write_json(workdir / "data" / "companies.json", [{"name": "Zed", "status": "ok"}, {"name": "Alpha", "status": "x"}])
-    (workdir / "templates" / "dashboard.html").write_text("<script>var D=__DATA__;</script>", encoding="utf-8")
+    write_static(workdir)
+
+
+def write_static(workdir: Path) -> None:
+    (workdir / "templates" / "dashboard.html").write_text("<!doctype html><title>x</title>", encoding="utf-8")
+    (workdir / "templates" / "dashboard.js").write_text("const dashboard = 1;\n", encoding="utf-8")
+    (workdir / "templates" / "theme.js").write_text("const theme = 1;\n", encoding="utf-8")
 
 
 def read_payload(workdir: Path) -> Any:
-    html = (workdir / "docs" / "index.html").read_text(encoding="utf-8")
-    raw = html.removeprefix("<script>var D=").removesuffix(";</script>").replace("<\\/", "</")
-    return json.loads(raw)
+    return json.loads((workdir / "docs" / "jobs.json").read_text(encoding="utf-8"))
 
 
 def test_main_builds_dashboard(db: sqlite3.Connection, workdir: Path, capsys: pytest.CaptureFixture[str]) -> None:
@@ -110,7 +115,7 @@ def test_old_schema_without_note_column_runs_as_script(workdir: Path) -> None:
     assert payload["jobs"] == []
 
 
-def test_read_css_inlines_sources_in_order(workdir: Path) -> None:
+def test_read_css_bundles_sources_in_order(workdir: Path) -> None:
     write_css(workdir)
     assert build_dashboard.read_css() == ":root{--a:1}\n.a{}\n.b{}\nbody{}"
 
@@ -131,20 +136,52 @@ def test_job_posting() -> None:
     assert "addressCountry" not in abroad["jobLocation"]["address"]
 
 
-def test_page_gets_css_and_json_ld(db: sqlite3.Connection, workdir: Path) -> None:
+def test_site_files_are_written_next_to_the_page(db: sqlite3.Connection, workdir: Path) -> None:
     write_css(workdir)
+    write_static(workdir)
     write_json(workdir / "data" / "companies.json", [])
-    (workdir / "templates" / "dashboard.html").write_text(
-        "<style>__CSS__</style><script>__JSONLD__</script><script>__DATA__</script>", encoding="utf-8"
-    )
-    add_job(db, "Acme", "1", "Product Manager __CSS__ </script>")
+    add_job(db, "Acme", "1", "Product Manager </script> é")
     add_job(db, "Acme", "2", "Accountant", location="London")
     db.close()
     build_dashboard.main()
-    html = (workdir / "docs" / "index.html").read_text(encoding="utf-8")
-    css, ld, data = re.fullmatch(r"<style>(.*)</style><script>(.*)</script><script>(.*)</script>", html, re.S).groups()  # type: ignore[union-attr]
-    assert css.endswith("body{}")
-    listing = json.loads(ld.replace("<\\/", "</"))
-    assert [i["item"]["title"] for i in listing["itemListElement"]] == ["Product Manager __CSS__ </script>"]
+    docs = workdir / "docs"
+    assert sorted(p.name for p in docs.iterdir()) == [
+        "dashboard.css",
+        "dashboard.js",
+        "index.html",
+        "jobs.json",
+        "jobs.jsonld",
+        "theme.js",
+    ]
+    assert (docs / "index.html").read_text(encoding="utf-8") == "<!doctype html><title>x</title>"
+    assert (docs / "dashboard.js").read_text(encoding="utf-8") == "const dashboard = 1;\n"
+    assert (docs / "theme.js").read_text(encoding="utf-8") == "const theme = 1;\n"
+    assert (docs / "dashboard.css").read_text(encoding="utf-8").endswith("body{}")
+    listing = json.loads((docs / "jobs.jsonld").read_text(encoding="utf-8"))
+    assert [i["item"]["title"] for i in listing["itemListElement"]] == ["Product Manager </script> é"]
     assert listing["itemListElement"][0]["position"] == 1
-    assert "__CSS__" in json.loads(data.replace("<\\/", "</"))["jobs"][0]["t"]
+    assert "é" in (docs / "jobs.json").read_text(encoding="utf-8")
+
+
+def test_page_gets_integrity_hashes_of_its_files(db: sqlite3.Connection, workdir: Path) -> None:
+    write_css(workdir)
+    write_static(workdir)
+    write_json(workdir / "data" / "companies.json", [])
+    (workdir / "templates" / "dashboard.html").write_text(
+        '<link integrity="__SRI_DASHBOARD_CSS__"><script integrity="__SRI_THEME_JS__"></script>'
+        '<script integrity="__SRI_DASHBOARD_JS__"></script>',
+        encoding="utf-8",
+    )
+    db.close()
+    build_dashboard.main()
+    docs = workdir / "docs"
+    html = (docs / "index.html").read_text(encoding="utf-8")
+
+    def expected(name: str) -> str:
+        return "sha384-" + base64.b64encode(hashlib.sha384((docs / name).read_bytes()).digest()).decode()
+
+    assert html == (
+        f'<link integrity="{expected("dashboard.css")}"><script integrity="{expected("theme.js")}"></script>'
+        f'<script integrity="{expected("dashboard.js")}"></script>'
+    )
+    assert "__SRI" not in html
