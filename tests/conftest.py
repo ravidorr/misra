@@ -1,11 +1,14 @@
 import json
+import os
 import sqlite3
-from collections.abc import Iterator
+from collections.abc import AsyncIterator, Iterator
 from pathlib import Path
 from typing import Any
 
 import pytest
+from playwright.async_api import Page, async_playwright
 
+import browser_crawl
 import run
 
 
@@ -91,3 +94,21 @@ def add_job(conn: sqlite3.Connection, company: str, job_id: str, title: str, **k
         ),
     )
     conn.commit()
+
+
+@pytest.fixture
+async def page() -> AsyncIterator[Page]:
+    async with async_playwright() as p:
+        try:
+            launch_args = {"args": ["--no-sandbox"]}
+            if browser_crawl.EXE:
+                launch_args["executable_path"] = browser_crawl.EXE
+            browser = await p.chromium.launch(**launch_args)  # type: ignore[arg-type]
+        except Exception as exc:
+            if os.environ.get("CI"):
+                raise
+            pytest.skip(f"no Chromium to run the browser tests: {str(exc).splitlines()[0]}")
+        try:
+            yield await browser.new_page()
+        finally:
+            await browser.close()

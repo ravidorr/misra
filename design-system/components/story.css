@@ -1,8 +1,10 @@
 /*
  * Story: a company with new roles. Tap to filter the feed to it.
- *   <button type="button" class="story story-new" aria-pressed="false" aria-label="Acme, 2 new roles">
- *     <span class="story-badge">A</span><span class="story-name">Acme</span>
+ *   <button type="button" class="story story-new" aria-pressed="false">
+ *     <span class="story-badge" aria-hidden="true">A</span><span class="story-name">Acme</span>
+ *     <span class="sr-only">, 2 new roles</span>
  *   </button>
+ * Do not use aria-label here: the visible text (badge letter and name) must be part of the accessible name.
  */
 .story {
   flex: 0 0 auto;

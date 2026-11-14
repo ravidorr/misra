@@ -10,7 +10,7 @@ Misra's readers are students and early-career people in Israel (early 20s). They
 - Loud only about what is new. Lime means new, violet means act, amber means be careful.
 - Chunky borders and hard offset shadows keep it playful. Two colors keep it calm. It is a feed with a headline number, not a table with a filter bar.
 - Mobile first: most readers are on a phone. Light and dark follow the phone's setting by default, with a manual switch. `theme-color` tints the browser bar in both, safe-area insets clear notches, and hover effects only apply where a hover exists.
-- Readable by agents: semantic markup, `data-*` hooks, JSON-LD, and WebMCP tools.
+- Readable by agents: semantic markup, `data-*` hooks, JSON-LD (`jobs.jsonld`), and WebMCP tools.
 
 ## Layout
 
@@ -21,7 +21,7 @@ Misra's readers are students and early-career people in Israel (early 20s). They
 | `index.html`, `showcase.css` | The showcase page. Open it directly, no build step. |
 | `logo-brief.md` | Brief for the graphic designer creating the logo and favicon. |
 
-`build_dashboard.py` inlines `tokens.css`, `components/*.css` and `templates/dashboard.css` into `docs/index.html`, so the dashboard stays one self-contained file.
+`build_dashboard.py` bundles `tokens.css`, `components/*.css` and `templates/dashboard.css` into `docs/dashboard.css`. The page loads it, `theme.js` and `dashboard.js` as separate files (with Subresource Integrity hashes), under a Content-Security-Policy that allows only its own origin.
 
 ## Rules
 
@@ -47,7 +47,7 @@ The dashboard registers tools on `navigator.modelContext` when the browser suppo
 - `discard_job(id)` and `restore_job(id)`
 - `list_coverage_gaps()`
 
-Without WebMCP, agents can read each role from the `data-*` attributes on `article.card`, the schema.org `JobPosting` JSON-LD block, or the `#data` script.
+Without WebMCP, agents can read each role from the `data-*` attributes on `article.card`, `jobs.json`, or the schema.org `JobPosting` list in `jobs.jsonld`.
 
 ## Adding a component
 

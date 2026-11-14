@@ -69,7 +69,7 @@ jobs:
           python3 -c "import sqlite3,sys; r=sqlite3.connect('data/jobs.db').execute('pragma integrity_check').fetchone()[0]; sys.exit(0 if r == 'ok' else 'integrity_check: ' + r)"
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          for f in data/jobs.db docs/index.html; do
+          for f in data/jobs.db docs/index.html docs/dashboard.css docs/dashboard.js docs/theme.js docs/jobs.json docs/jobs.jsonld; do
             if [ -f "$f" ]; then
               git add "$f"
             fi

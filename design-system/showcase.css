@@ -30,6 +30,11 @@ h1 {
   line-height: 0.98;
 }
 
+h1 .highlight {
+  display: block;
+  width: fit-content;
+}
+
 h2 {
   margin: 0 0 var(--space-2);
   font-size: var(--text-xl);

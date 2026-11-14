@@ -1,5 +1,7 @@
-"""Build docs/index.html: every open job embedded as JSON in a single self-contained page."""
+"""Build the dashboard in docs/: a static page plus cacheable stylesheet, scripts and job data files."""
 
+import base64
+import hashlib
 import json
 import re
 import sqlite3
@@ -10,9 +12,13 @@ from typing import Any
 from digest import DB, PM_CORE
 from discover import ISRAEL
 
-# Stylesheets inlined into the page, in order. Raw colors live only in tokens.css.
+# Stylesheets bundled into docs/dashboard.css, in order. Raw colors live only in tokens.css.
 CSS_SOURCES = ("design-system/tokens.css", "design-system/components/*.css", "templates/dashboard.css")
-PLACEHOLDER = re.compile(r"__(DATA|CSS|JSONLD)__")
+# Files copied to docs/ as they are.
+STATIC_FILES = ("templates/dashboard.html", "templates/dashboard.js", "templates/theme.js")
+OUTPUT_NAMES = {"templates/dashboard.html": "index.html"}
+# Placeholders in the page for the integrity hash of the file with that name in docs/.
+INTEGRITY = re.compile(r"__SRI_([A-Z]+)_([A-Z]+)__")
 
 JUNIOR = re.compile(r"intern\b|internship|student|junior|\bjr\b|graduate|entry|trainee|סטודנט", re.I)
 
@@ -46,9 +52,13 @@ def job_posting(job: dict[str, Any]) -> dict[str, Any]:
     return posting
 
 
-def safe_json(obj: Any) -> str:
-    """Compact JSON that is safe inside a <script> element."""
-    return json.dumps(obj, ensure_ascii=False, separators=(",", ":")).replace("</", "<\\/")
+def integrity(path: Path) -> str:
+    """Subresource Integrity value for a built file, so the browser rejects a stale or altered copy."""
+    return "sha384-" + base64.b64encode(hashlib.sha384(path.read_bytes()).digest()).decode()
+
+
+def dump_json(obj: Any) -> str:
+    return json.dumps(obj, ensure_ascii=False, separators=(",", ":"))
 
 
 def main() -> None:
@@ -98,7 +108,7 @@ def main() -> None:
                 "s": company in failing,
             }
         )
-    payload = safe_json({"jobs": jobs, "gaps": gaps, "generated": time.strftime("%Y-%m-%d %H:%M UTC", time.gmtime())})
+    payload = dump_json({"jobs": jobs, "gaps": gaps, "generated": time.strftime("%Y-%m-%d %H:%M UTC", time.gmtime())})
     listing = {
         "@context": "https://schema.org",
         "@type": "ItemList",
@@ -107,14 +117,23 @@ def main() -> None:
             for n, j in enumerate((j for j in jobs if j["il"]), start=1)
         ],
     }
-    values = {"DATA": payload, "CSS": read_css(), "JSONLD": safe_json(listing)}
-    with open("templates/dashboard.html", encoding="utf-8") as fh:
-        # one pass, so job text can never be mistaken for a placeholder
-        html = PLACEHOLDER.sub(lambda m: values[m.group(1)], fh.read())
-    with open("docs/index.html", "w", encoding="utf-8") as fh:
-        fh.write(html)
+    out = Path("docs")
+    (out / "jobs.json").write_text(payload, encoding="utf-8")
+    (out / "jobs.jsonld").write_text(dump_json(listing), encoding="utf-8")
+    (out / "dashboard.css").write_text(read_css(), encoding="utf-8")
+    for source in STATIC_FILES:
+        text = Path(source).read_text(encoding="utf-8")
+        (out / OUTPUT_NAMES.get(source, Path(source).name)).write_text(text, encoding="utf-8")
+    page = out / "index.html"
+    # __SRI_DASHBOARD_CSS__ becomes the integrity hash of docs/dashboard.css; one pass over the page
+    page.write_text(
+        INTEGRITY.sub(lambda m: integrity(out / f"{m[1]}.{m[2]}".lower()), page.read_text(encoding="utf-8")),
+        encoding="utf-8",
+    )
     print(f"gaps: {[g['c'] for g in gaps['blocked']]} failing, {len(untracked)} untracked")
-    print(f"dashboard: {len(jobs)} open jobs, {sum(j['il'] for j in jobs)} in Israel, {len(html) // 1024} KB")
+    print(
+        f"dashboard: {len(jobs)} open jobs, {sum(j['il'] for j in jobs)} in Israel, jobs.json {len(payload) // 1024} KB"
+    )
 
 
 if __name__ == "__main__":
