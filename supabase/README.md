@@ -12,7 +12,7 @@ Project region: EU (Ireland). Either way works on a fresh project; do it once, a
 
 Check: `select count(*) from public.jobs;` returns 0 before the first sync. With the anon key,
 `GET <project url>/rest/v1/jobs?select=company&limit=1` returns `[]` before the first sync and one open job after it;
-the same request to `crawl_log` returns `[]`, and any `POST`, `PATCH` or `DELETE` with the anon key is refused.
+a request to `crawl_log`, and any `POST`, `PATCH` or `DELETE` with the anon key, is refused with a permission error.
 
 ## Which key is used where
 
@@ -27,4 +27,6 @@ the same request to `crawl_log` returns `[]`, and any `POST`, `PATCH` or `DELETE
 - `jobs`: anonymous and signed-in users read rows whose `status` is `open`. Nobody but the service role writes.
 - `crawl_log`: no policy, so only the service role reads or writes it.
 - `tests/test_migrations.py` checks these rules on every push: row-level security on every table, no write policy,
-  no write privilege for `anon` or `authenticated`.
+  no write privilege for `anon` or `authenticated`. It accepts only the statement kinds it knows (tables, indexes, row-level
+  security, grants, revokes, select policies), so a view, a function or a default-privileges change fails it until it is
+  taught about it. It is a lint, not a proof: the live check above is the real test.
