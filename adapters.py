@@ -442,7 +442,7 @@ def _amazon_page(slug: str, offset: int) -> tuple[int, list[Job]] | None:
             return None
         where = j.get("normalized_location") or j.get("location")
         url = f"https://www.amazon.jobs{j['job_path']}"
-        out.append(_job(j["id_icims"], j["title"], where, url, team=j.get("job_category")))
+        out.append(_job(j["id_icims"], j["title"], where, url, team=j.get("job_category"), posted=j.get("posted_date")))
     return hits, out
 
 
@@ -450,16 +450,22 @@ def amazon(slug: str) -> list[Job] | None:
     """slug is the country code of amazon.jobs ('ISR'). The site's own search JSON, filtered by `country`, lists every
     job there (the job page is `https://www.amazon.jobs<job_path>`). The list is trusted only when every page answers
     with that JSON, every job is in the asked country and has an id, a title and a path, and the pages add up to the
-    reported `hits`: a partial list would close the jobs it lacks."""
+    reported `hits`, which must be the same on every page and above zero (a wrong country code answers 200 with no
+    job), with no job twice: a partial list would close the jobs it lacks."""
     out: list[Job] = []
+    first_hits: int | None = None
     for page in range(AMAZON_MAX_PAGES):
         got = _amazon_page(slug, page * AMAZON_PAGE)
         if got is None:
             return None
         hits, jobs = got
+        if first_hits is None:
+            first_hits = hits
+        if hits == 0 or hits != first_hits:  # no job at all is a wrong code, not a board; a moving total is a torn list
+            return None
         out.extend(jobs)
         if len(out) >= hits or not jobs:
-            return out if len(out) == hits else None
+            return out if len(out) == hits and len({j["job_id"] for j in out}) == hits else None
     return None  # more pages than the limit: the list is not complete
 
 

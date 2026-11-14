@@ -795,6 +795,7 @@ def fake_amz(monkeypatch: pytest.MonkeyPatch, *responses: FakeHttpResponse | Non
 
 def test_amazon_reads_the_jobs_of_a_country(monkeypatch: pytest.MonkeyPatch) -> None:
     jobs_in = [amz_job("10", "A", "/en/jobs/10/a"), amz_job("11", "B", "/en/jobs/11/b")]
+    jobs_in[0]["posted_date"] = "November 12, 2026"
     jobs_in[1]["normalized_location"] = None  # falls back to the plain location
     calls = fake_amz(monkeypatch, amz_answer(jobs_in))
     jobs = adapters.amazon("ISR")
@@ -806,6 +807,7 @@ def test_amazon_reads_the_jobs_of_a_country(monkeypatch: pytest.MonkeyPatch) -> 
         ("10", "A", "Tel Aviv-Yafo, Tel Aviv, ISR", "Software Development", "https://www.amazon.jobs/en/jobs/10/a"),
         ("11", "B", "IL, Tel Aviv", "Software Development", "https://www.amazon.jobs/en/jobs/11/b"),
     ]
+    assert [j["posted"] for j in jobs] == ["November 12, 2026", ""]
     assert all(discover.ISRAEL.search(j["location"]) for j in jobs)
 
 
@@ -819,9 +821,23 @@ def test_amazon_reads_every_page(monkeypatch: pytest.MonkeyPatch) -> None:
     assert [c["params"]["offset"] for c in calls] == [0, AMAZON_PAGE_SIZE]
 
 
-def test_amazon_no_job_is_an_empty_board(monkeypatch: pytest.MonkeyPatch) -> None:
-    fake_amz(monkeypatch, amz_answer([]))
-    assert adapters.amazon("ISR") == []
+def test_amazon_no_job_at_all_is_a_failure_not_an_empty_board(monkeypatch: pytest.MonkeyPatch) -> None:
+    fake_amz(monkeypatch, amz_answer([]))  # what a wrong country code answers
+    assert adapters.amazon("XXX") is None
+
+
+def test_amazon_a_total_that_moves_between_pages_is_a_failure(monkeypatch: pytest.MonkeyPatch) -> None:
+    first = amz_answer([amz_job(str(i)) for i in range(AMAZON_PAGE_SIZE)], hits=AMAZON_PAGE_SIZE + 1)
+    second = amz_answer([amz_job("last")], hits=AMAZON_PAGE_SIZE)  # a job closed between the two requests
+    fake_amz(monkeypatch, first, second)
+    assert adapters.amazon("ISR") is None
+
+
+def test_amazon_a_job_listed_twice_is_a_failure(monkeypatch: pytest.MonkeyPatch) -> None:
+    first = amz_answer([amz_job(str(i)) for i in range(AMAZON_PAGE_SIZE)], hits=AMAZON_PAGE_SIZE + 1)
+    second = amz_answer([amz_job("0")], hits=AMAZON_PAGE_SIZE + 1)  # a job added in between shifted page one's last
+    fake_amz(monkeypatch, first, second)
+    assert adapters.amazon("ISR") is None
 
 
 def test_amazon_fewer_jobs_than_the_hits_is_a_failure(monkeypatch: pytest.MonkeyPatch) -> None:
