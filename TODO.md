@@ -87,10 +87,10 @@ item. Observations about live sites below come from checks made on 2026-11-14 an
 
 ## Research the remaining unresolved companies
 
-- [ ] `data/unresolved_candidates.csv` lists 139 researched companies with no usable job feed (as of 2026-11-14: 51
-  multinational, 48 deeptech, 20 cyber_infra, 20 biz_software). It includes the twelve Workday companies above. Each needs
+- [ ] `data/unresolved_candidates.csv` lists 137 researched companies with no usable job feed (as of 2026-11-14: 51
+  multinational, 48 deeptech, 19 cyber_infra, 19 biz_software). It includes the twelve Workday companies above. Each needs
   its own research; there is no batch fix left. Every observation about a live site below is from the checks of
-  2026-11-14, a crawl of the 105 rows that had a careers URL that day (102 today) and a scan of their rendered pages. The
+  2026-11-14, a crawl of the 105 rows that had a careers URL that day (100 today) and a scan of their rendered pages. The
   remaining work falls into these groups:
   - **No careers URL (37).** Status `not_found` in `data/new/*_companies.json`: OX Security, Upsolver, Ceva, Speedata,
     Teramount, X-Globe, Q Factor, Gilat, Siklu, Silicom, Sight Diagnostics, Brainsway, EarlySign, Diagnostic Robotics,
@@ -106,9 +106,9 @@ item. Observations about live sites below come from checks made on 2026-11-14 an
     Workday item: pinning it there also closes its entry under the partial lists below.
   - **A board was found but its address is wrong or dead.**
     - Pliops: on 2026-11-14 the Comeet page for `pliops/05.004` said "This Spark Hire Recruit account has been
-      deactivated". Find where they moved.
-    - D-ID and Autofleet: the stored Workable slug is `j`, which is a path, not a board. Find the real slug in
-      `apply.workable.com/<slug>`.
+      deactivated", and it still does, but `pliops.com/careers` still links to that page, so the company has published no
+      new board. A Workable account `pliops` exists (`adapters.workable("pliops")` answers with no job) but nothing links
+      to it, so it is not pinned: pin it, or the board the careers page ends up linking to, once it lists a job.
     - Western Digital: the SmartRecruiters board (`WesternDigital`, 325 jobs) has no Israel job today, so there is
       nothing to show. It can be pinned with `israel_only` now that the matcher and the new-company rule are fixed, but it
       would fetch 325 jobs a day to store none.
@@ -135,6 +135,8 @@ item. Observations about live sites below come from checks made on 2026-11-14 an
     1. Find the real careers page, then look for the job board it uses: an embedded or linked Greenhouse, Lever, Ashby,
        Workable, SmartRecruiters, Comeet or Workday board (`discover.ATS_LINK` has the patterns, and the page's HTML,
        links and iframes all need a look, since scripts hide them) or a JSON feed in its network requests.
+       A Workable job link is `apply.workable.com/j/<shortcode>` on a page: `ATS_LINK` read its `j` as the account, so
+       open the link, which redirects to `apply.workable.com/<account>/j/<shortcode>`, and take the account from there.
     2. With an existing adapter, probe it from a shell (`adapters.ADAPTERS["greenhouse"]("slug")` and so on). Without
        one, the browser crawler is the fallback: `browser_crawl.crawl_many([url])` (set `PW_CHROMIUM` to a Chromium
        build, or run `playwright install chromium`) shows what it reads.
