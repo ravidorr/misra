@@ -31,16 +31,94 @@ def test_render_groups_and_escapes() -> None:
     jobs = [
         {"company": "A&B", "title": "PM <1>", "location": "TLV", "url": "http://u?a=1&b=2", "pm": True},
         {"company": "C", "title": "Intern", "location": None, "url": None, "pm": False},
+        {"company": "D", "title": "Junior Developer", "location": None, "url": None, "pm": False},
     ]
     subject, body = digest.render(jobs)
-    assert subject.startswith("New Israel jobs: 2 (")
+    assert subject.startswith("New Israel jobs: 3 (")
     assert "<h3>Product roles (1)</h3>" in body
-    assert "<h3>Student / junior / intern (non-product titles)</h3>" not in body
-    assert "Student / junior / intern (non-product titles) (1)" in body
+    assert "<h3>Intern roles (non-product titles) (1)</h3>" in body
+    assert "<h3>Junior roles (non-product titles) (1)</h3>" in body
+    assert "Student / junior / intern" not in body
     assert "A&amp;B" in body
     assert "PM &lt;1&gt;" in body
     assert 'href=""' in body
     assert "No new matching jobs" not in body
+
+
+@pytest.mark.parametrize(
+    ("title", "bucket"),
+    [
+        ("Product Manager", "pm"),
+        ("Junior Product Manager", "pm"),
+        ("Product Intern", "pm"),
+        ("Software Intern", "intern"),
+        ("Engineering Internship", "intern"),
+        ("Student QA", "intern"),
+        ("סטודנט QA", "intern"),
+        ("Junior Intern", "intern"),
+        ("Graduate Student", "intern"),
+        ("Junior Developer", "junior"),
+        ("Jr Analyst", "junior"),
+        ("Graduate Program", "junior"),
+        ("Entry Level Analyst", "junior"),
+        ("QA Trainee", "junior"),
+        ("International Accountant", None),
+        ("Internal Tools Engineer", None),
+    ],
+)
+def test_title_buckets(title: str, bucket: str | None) -> None:
+    got = (
+        "pm"
+        if digest.PM_CORE.search(title)
+        else "intern"
+        if digest.INTERN.search(title)
+        else "junior"
+        if digest.JUNIOR.search(title)
+        else None
+    )
+    assert got == bucket
+    assert bool(digest.ROLE.search(title)) is (bucket is not None)
+
+
+def test_render_sections_partition_jobs() -> None:
+    def job(title: str, *, pm: bool = False) -> dict[str, Any]:
+        return {"company": "Co", "title": title, "location": "TLV", "url": "http://u", "pm": pm}
+
+    jobs = [
+        job("Product Intern", pm=True),
+        job("Junior Intern"),
+        job("Graduate Student"),
+        job("Junior Developer"),
+        job("QA Trainee"),
+        job("Entry Level Analyst"),
+    ]
+    _, body = digest.render(jobs)
+    product, rest = body.split("<h3>Intern roles", 1)
+    interns, juniors = rest.split("<h3>Junior roles", 1)
+    assert "Product roles (1)" in product
+    assert "Intern roles" not in product
+    assert body.index("Product roles") < body.index("Intern roles") < body.index("Junior roles")
+    assert "Product Intern" in product
+    assert "(non-product titles) (2)" in interns
+    assert "Junior Intern" in interns
+    assert "Graduate Student" in interns
+    assert "Junior Developer" not in interns
+    assert "(non-product titles) (3)" in juniors
+    for title in ("Junior Developer", "QA Trainee", "Entry Level Analyst"):
+        assert title in juniors
+    assert body.count("Junior Intern</a>") == 1
+
+
+def test_render_omits_empty_sections() -> None:
+    intern_only = [{"company": "C", "title": "Intern", "location": None, "url": None, "pm": False}]
+    _, body = digest.render(intern_only)
+    assert "Intern roles" in body
+    assert "Junior roles" not in body
+    assert "Product roles" not in body
+    junior_only = [{"company": "C", "title": "Junior Dev", "location": None, "url": None, "pm": False}]
+    _, body = digest.render(junior_only)
+    assert "Junior roles" in body
+    assert "Intern roles" not in body
 
 
 def test_render_empty() -> None:

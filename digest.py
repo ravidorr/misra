@@ -12,17 +12,18 @@ from common import DROP_BELIEVED, DROP_NOTE
 from discover import ISRAEL
 
 DB = "data/jobs.db"
-# title must match one of these (product-focused + entry level + student)
-ROLE = re.compile(
-    r"product|\bPM\b|\bAPM\b|intern\b|internship|student|junior|\bjr\b|graduate|entry|trainee|סטודנט|מוצר", re.I
-)
+PM_CORE = re.compile(r"product|\bPM\b|\bAPM\b|מוצר", re.I)
+# Buckets for titles that are not product: Intern wins over Junior. Used by build_dashboard.py and render().
+INTERN = re.compile(r"intern\b|internship|student|סטודנט", re.I)
+JUNIOR = re.compile(r"junior|\bjr\b|graduate|entry|trainee", re.I)
+# a title must match a product, intern or junior pattern (derived, so a new keyword is picked up here too)
+ROLE = re.compile("|".join(p.pattern for p in (PM_CORE, INTERN, JUNIOR)), re.I)
 # drop clearly irrelevant senior or non-product matches
 EXCLUDE = re.compile(
     r"sales|counsel|architect|partnerships|\b(senior|sr\.?|staff|principal|director|head|vp|lead)\b"
     r"|product (marketing|designer|design|security|support)|software (engineer|developer)",
     re.I,
 )
-PM_CORE = re.compile(r"product|\bPM\b|\bAPM\b|מוצר", re.I)
 
 
 def select(c: sqlite3.Connection, only_unreported: bool = True) -> list[dict[str, Any]]:
@@ -140,7 +141,8 @@ def render(
     gaps = gaps or []
     today = time.strftime("%Y-%m-%d")
     pm = [j for j in jobs if j["pm"]]
-    other = [j for j in jobs if not j["pm"]]
+    interns = [j for j in jobs if not j["pm"] and INTERN.search(j["title"])]
+    juniors = [j for j in jobs if not j["pm"] and not INTERN.search(j["title"]) and JUNIOR.search(j["title"])]
 
     def block(title: str, items: list[dict[str, Any]]) -> str:
         if not items:
@@ -154,7 +156,8 @@ def render(
         return h + "</ul>"
 
     body = f"<h2>New Israel jobs, {today}</h2>"
-    body += block("Product roles", pm) + block("Student / junior / intern (non-product titles)", other)
+    body += block("Product roles", pm) + block("Intern roles (non-product titles)", interns)
+    body += block("Junior roles (non-product titles)", juniors)
     if not jobs:
         body += "<p>No new matching jobs today.</p>"
     if gaps:

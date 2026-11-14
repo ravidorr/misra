@@ -71,6 +71,9 @@ def test_main_builds_dashboard(db: sqlite3.Connection, workdir: Path, capsys: py
     add_job(db, "Acme", "4", "Accountant", location="London " + "y" * 100)
     add_job(db, "Acme", "5", "Closed Product", status="closed")
     add_job(db, "Down", "6", "Junior Dev")
+    add_job(db, "Acme", "7", "Junior Intern")
+    add_job(db, "Acme", "8", "Graduate Program")
+    add_job(db, "Acme", "9", "Junior Product Manager")
     db.close()
     build_dashboard.main()
     payload = read_payload(workdir)
@@ -81,10 +84,14 @@ def test_main_builds_dashboard(db: sqlite3.Connection, workdir: Path, capsys: py
     assert gaps["blocked"][0]["why"].startswith("the last crawl failed")
     assert gaps["blocked"][1]["last"] == "never"
     jobs = {j["i"]: j for j in payload["jobs"]}
-    assert sorted(jobs) == ["1", "2", "3", "4", "6"]
+    assert sorted(jobs) == ["1", "2", "3", "4", "6", "7", "8", "9"]
     assert jobs["1"]["k"] == "pm"
     assert jobs["2"]["k"] == "pm"
-    assert jobs["3"]["k"] == "junior"
+    assert jobs["3"]["k"] == "intern"
+    assert jobs["6"]["k"] == "junior"
+    assert jobs["7"]["k"] == "intern"
+    assert jobs["8"]["k"] == "junior"
+    assert jobs["9"]["k"] == "pm"
     assert jobs["4"]["k"] == "other"
     assert jobs["1"]["il"] is True
     assert jobs["3"]["il"] is False

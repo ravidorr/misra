@@ -2,6 +2,13 @@
 
 All notable changes are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses [Semantic Versioning](https://semver.org/).
 
+## [0.4.0] - 2026-11-14
+
+### Changed
+
+- The dashboard's "Intern & junior" filter is now two filters, "Intern" and "Junior". Titles with intern, internship, student or סטודנט are Intern; junior, jr, graduate, entry and trainee titles are Junior. A title matching both is Intern, and Product titles stay Product. The `category` option of the WebMCP search tool accepts `intern` and `junior`: `junior` no longer returns intern or student roles, use `intern` for those. The dashboard stores its filters under a new key, so a saved "Intern & junior" choice resets to Everything instead of silently narrowing to Junior.
+- The digest email lists Intern roles and Junior roles in separate sections instead of one "Student / junior / intern" section. `ROLE`, the Intern and Junior patterns now live together in `digest.py`, and the dashboard imports them, so the email and the dashboard classify titles the same way.
+
 ## [0.3.2] - 2026-11-14
 
 ### Fixed

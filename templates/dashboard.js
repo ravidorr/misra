@@ -1,10 +1,10 @@
 /* Dashboard script. Loaded as a deferred module by docs/index.html; the roles come from jobs.json. */
 const $ = (id) => document.getElementById(id);
 const LS_D = 'il-jobs-discarded-v1';
-const LS_F = 'il-jobs-filters-v1';
+const LS_F = 'il-jobs-filters-v2';
 const LS_T = 'misra-theme';
-const CATS = { pm: 'product', junior: 'junior', other: 'other' };
-const KIND = { pm: 'Product', junior: 'Intern / junior', other: 'Other' };
+const CATS = { pm: 'product', intern: 'intern', junior: 'junior', other: 'other' };
+const KIND = { pm: 'Product', intern: 'Intern', junior: 'Junior', other: 'Other' };
 const MODES = ['auto', 'light', 'dark'];
 const SIZES = [10, 25, 50, 100];
 const ANNOUNCE_DELAY_MS = 600;
@@ -496,7 +496,12 @@ const TOOLS = [
       type: 'object',
       properties: {
         query: { type: 'string', description: 'Words to match in title, company, team or location.' },
-        category: { type: 'string', enum: ['product', 'junior', 'other'] },
+        category: {
+          type: 'string',
+          enum: ['product', 'intern', 'junior', 'other'],
+          description:
+            'product: product titles. intern: intern, internship and student titles. junior: junior, jr, graduate, entry and trainee titles. Product wins over both, and intern over junior.',
+        },
         company: { type: 'string', description: 'Exact company name.' },
         newOnly: { type: 'boolean', description: 'Only roles first seen in the last 7 days.' },
         includeDiscarded: { type: 'boolean' },
