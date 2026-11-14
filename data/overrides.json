@@ -767,5 +767,15 @@
   "ats": "browser",
   "slug": "https://apply.hp.com/careers?location=Israel",
   "israel_only": true
+ },
+ "Broadcom": {
+  "ats": "workday",
+  "slug": "broadcom/wd1/External_Career",
+  "israel_only": true
+ },
+ "Philips": {
+  "ats": "workday",
+  "slug": "philips/wd3/jobs-and-careers",
+  "israel_only": true
  }
 }

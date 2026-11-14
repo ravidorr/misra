@@ -276,6 +276,114 @@ def test_workday_on_a_recorded_criteo_answer_has_no_israel_facet_and_checks_by_s
     assert [(b["appliedFacets"], b["searchText"]) for b in bodies] == [({}, ""), ({}, "Israel")]  # not just assumed
 
 
+def test_workday_on_a_recorded_philips_answer_uses_the_israel_value_with_its_own_id(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    philips_israel = "6e1b2a934716103c2adde8e0944f00ee"  # not Workday's id: this tenant gave the country its own
+    page = wd_page([wd_posting(1, "Haifa"), wd_posting(2, "2 Locations")], total=10)
+    bodies = fake_post(monkeypatch, recorded("philips"), page)
+    jobs = adapters.workday("philips/wd3/jobs-and-careers")
+    assert jobs is not None
+    assert [j["location"] for j in jobs] == ["Haifa, Israel", "2 Locations, Israel"]
+    assert bodies[1]["appliedFacets"] == {"locationHierarchy1": [philips_israel]}  # not the State/Province "Haifa"
+
+
+def test_workday_on_a_recorded_broadcom_answer_uses_the_israeli_places_of_its_location_facet(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    page = wd_page([wd_posting(1, "ISR-Tel Aviv University"), wd_posting(2, "2 Locations")], total=1)
+    bodies = fake_post(monkeypatch, recorded("broadcom"), page)
+    jobs = adapters.workday("broadcom/wd1/External_Career")
+    assert jobs is not None
+    assert [j["location"] for j in jobs] == ["ISR-Tel Aviv University, Israel", "2 Locations, Israel"]
+    ids = bodies[1]["appliedFacets"]["locations"]
+    assert len(ids) == 1  # the one ISR value; the Australian, Singapore and Illinois values are not Israel
+    assert bodies[1]["searchText"] == ""
+
+
+def places_facet(*values: tuple[str, int | None], param: str = "locations") -> dict[str, Any]:
+    return {
+        "facetParameter": param,
+        "values": [
+            {"descriptor": d, "id": f"id{n}", **({} if c is None else {"count": c})} for n, (d, c) in enumerate(values)
+        ],
+    }
+
+
+def test_workday_a_country_value_wins_over_places_even_when_the_places_come_first(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    facets = [places_facet(("Israel - Tel Aviv", 2)), israel_facet("Country")]
+    bodies = fake_post(monkeypatch, wd_page([], facets=facets), wd_page([wd_posting(1)]))
+    assert adapters.workday(SLUG) is not None
+    assert bodies[1]["appliedFacets"] == {"Country": [ISRAEL_ID]}
+
+
+def test_workday_a_country_named_israel_is_found_by_its_name_in_any_case(monkeypatch: pytest.MonkeyPatch) -> None:
+    facets = [{"facetParameter": "Country", "values": [{"descriptor": " ISRAEL ", "id": "zz"}, {"id": "yy"}]}]
+    bodies = fake_post(monkeypatch, wd_page([], facets=facets), wd_page([wd_posting(1)]))
+    assert adapters.workday(SLUG) is not None
+    assert bodies[1]["appliedFacets"] == {"Country": ["zz"]}
+
+
+def test_workday_place_facet_applies_every_israeli_place_and_tags_what_the_filter_returned(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    facet = places_facet(("Office - Israel - Tel Aviv", 2), ("Spain-Madrid", 5), ("Haifa", 1), ("Madrid", None))
+    page = wd_page([wd_posting(1, "Tel Aviv, Israel"), wd_posting(2, "2 Locations"), wd_posting(3, "Haifa")], total=3)
+    bodies = fake_post(monkeypatch, wd_page([], facets=[facet]), page)
+    jobs = adapters.workday(SLUG)
+    assert jobs is not None
+    assert [j["location"] for j in jobs] == ["Tel Aviv, Israel", "2 Locations, Israel", "Haifa, Israel"]
+    assert bodies[1]["appliedFacets"] == {"locations": ["id0", "id2"]}
+
+
+@pytest.mark.parametrize(
+    "facet",
+    [
+        places_facet(("Remote (IL)", 3)),  # the bare code is Illinois as often as Israel
+        places_facet(("AUS-Parramatta", 4)),  # "ramat" inside another word
+        places_facet(("Israel - Tel Aviv", 2), param="jobFamily"),  # not a location facet
+    ],
+)
+def test_workday_place_facet_ignores_values_that_are_not_clearly_israeli(
+    monkeypatch: pytest.MonkeyPatch, facet: dict[str, Any]
+) -> None:
+    bodies = fake_post(monkeypatch, wd_page([], facets=[facet]), wd_page([wd_posting(1)]))
+    assert adapters.workday(SLUG) is not None
+    assert (bodies[1]["appliedFacets"], bodies[1]["searchText"]) == ({}, "Israel")
+
+
+def test_workday_a_filtered_total_above_what_the_facet_holds_is_none_not_a_worldwide_list(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    facet = places_facet(("Israel - Tel Aviv", 2), ("Israel - Haifa", 1))
+    fake_post(monkeypatch, wd_page([], facets=[facet]), wd_page([wd_posting(1)], total=776))  # the filter was ignored
+    assert adapters.workday(SLUG) is None
+    country = {"facetParameter": "Country", "values": [{"descriptor": "Israel", "id": "zz", "count": 4}]}
+    fake_post(monkeypatch, wd_page([], facets=[country]), wd_page([wd_posting(1)], total=776))
+    assert adapters.workday(SLUG) is None
+
+
+@pytest.mark.parametrize("count", [None, "3", True])
+def test_workday_without_a_usable_count_the_total_cannot_be_checked_and_is_trusted(
+    monkeypatch: pytest.MonkeyPatch, count: Any
+) -> None:
+    value = {"descriptor": "Israel", "id": "zz", **({} if count is None else {"count": count})}
+    fake_post(
+        monkeypatch,
+        wd_page([], facets=[{"facetParameter": "Country", "values": [value]}]),
+        wd_page([wd_posting(1)], total=776),
+    )
+    assert adapters.workday(SLUG) is not None
+
+
+def test_workday_a_filtered_total_that_matches_the_facet_is_fine(monkeypatch: pytest.MonkeyPatch) -> None:
+    facet = places_facet(("Israel - Tel Aviv", 2), ("Israel - Haifa", 1))
+    fake_post(monkeypatch, wd_page([], facets=[facet]), wd_page([wd_posting(1)], total=3))
+    assert adapters.workday(SLUG) is not None
+
+
 def test_workday_search_route_keeps_only_postings_located_in_israel(monkeypatch: pytest.MonkeyPatch) -> None:
     postings = [
         wd_posting(1, "Tel Aviv, Israel"),
@@ -283,13 +391,18 @@ def test_workday_search_route_keeps_only_postings_located_in_israel(monkeypatch:
         wd_posting(3, "2 Locations"),  # cannot be told: left out rather than guessed
         wd_posting(4, None),
         wd_posting(5, "HAIFA, ISRAEL"),
+        wd_posting(6, "Ra'anana"),  # a place the matcher knows, without the country
+        wd_posting(7, "Milano"),
+        wd_posting(8, "Chicago, IL"),  # Illinois
+        wd_posting(9, "Peoria, IL"),  # Illinois, in no list of US cities
+        wd_posting(10, "Remote, IL"),
     ]
     fake_post(
         monkeypatch, wd_page([], facets=[{"facetParameter": "jobFamily", "values": [{"id": "bb"}]}]), wd_page(postings)
     )
     jobs = adapters.workday(SLUG)
     assert jobs is not None
-    assert [j["title"] for j in jobs] == ["Job 1", "Job 5"]
+    assert [j["title"] for j in jobs] == ["Job 1", "Job 5", "Job 6"]
 
 
 def test_workday_tags_a_posting_found_through_the_israel_facet(monkeypatch: pytest.MonkeyPatch) -> None:

@@ -9,8 +9,7 @@ from typing import Any
 
 from adapters import ADAPTERS
 from browser_crawl import WHY, crawl_many
-from common import DROP_BELIEVED, DROP_HOLD_DAYS, DROP_NOTE
-from discover import ISRAEL
+from common import DROP_BELIEVED, DROP_HOLD_DAYS, DROP_NOTE, ISRAEL
 
 DB = "data/jobs.db"
 DROP_MIN_OPEN = 10  # fewer open jobs swing too much to judge a drop; this many returning nothing is a broken page

@@ -6,6 +6,7 @@ from typing import Any
 
 import pytest
 
+import common
 import discover
 from tests.conftest import write_json
 from tests.fakes import FakeHttpResponse
@@ -61,6 +62,11 @@ def test_israel_count() -> None:
         ("Austin, TX; Chicago, IL", False),
         ("Boston, MA; Rehovot, IL", True),
         ("Migdal HaEmek", True),
+        ("Ramat Gan", True),
+        ("Kiryat Ramat-Hasharon", True),
+        ("AUS-Parramatta", False),  # "ramat" inside another word
+        ("ISR-Tel Aviv University", True),
+        ("ISR-Remote", True),
         ("Omer, IL", True),  # SmartRecruiters' country code, written in capitals by its adapter
         ("Chicago, US", False),
         ("Haifa, IL", True),
@@ -71,7 +77,22 @@ def test_israel_count() -> None:
     ],
 )
 def test_israel_matcher(location: str, expected: bool) -> None:
-    assert discover.ISRAEL.search(location) is expected
+    assert common.ISRAEL.search(location) is expected
+
+
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [
+        ("Tel Aviv", True),
+        ("Israel - Remote", True),
+        ("ISR-Haifa", True),
+        ("Remote (IL)", False),
+        ("Omer, IL", False),
+        ("", False),
+    ],
+)
+def test_israel_matcher_names_a_place_never_on_the_bare_code(text: str, expected: bool) -> None:
+    assert common.ISRAEL.names_a_place(text) is expected
 
 
 def test_load_overrides(workdir: Path) -> None:
