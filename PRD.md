@@ -1,7 +1,7 @@
 # PRD: Accounts, personalisation and reach
 
 Status: draft for discussion, 2026-11-14. Nothing here is built yet. Once agreed, it is broken into a step-by-step plan
-and the steps are tracked in `TODO.md`.
+and the steps are tracked in `PLAN.md`.
 
 ## Background
 
