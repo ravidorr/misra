@@ -404,12 +404,14 @@ def oraclehcm(slug: str) -> list[Job] | None:
         if found is None:
             return None
         total, reqs = found
+        if len(reqs) < min(ORACLEHCM_PAGE, total - page * ORACLEHCM_PAGE):  # fewer than the total promises
+            return None
         for req in reqs:
             place = _oraclehcm_place(req)
             if place:
                 url = f"https://{host}/hcmUI/CandidateExperience/en/sites/{site}/job/{req['Id']}"
                 out.append(_job(req["Id"], req["Title"], place, url, posted=req.get("PostedDate")))
-        if (page + 1) * ORACLEHCM_PAGE >= total or not reqs:
+        if (page + 1) * ORACLEHCM_PAGE >= total:
             return out
     return None  # more pages than the limit: the list is not complete
 

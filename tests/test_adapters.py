@@ -692,9 +692,18 @@ def test_oraclehcm_no_match_is_an_empty_board(monkeypatch: pytest.MonkeyPatch) -
     assert adapters.oraclehcm(HCM_SLUG) == []
 
 
-def test_oraclehcm_stops_on_an_empty_page_even_if_the_total_says_more(monkeypatch: pytest.MonkeyPatch) -> None:
-    fake_hcm(monkeypatch, hcm_answer([], total=500))
-    assert adapters.oraclehcm(HCM_SLUG) == []
+@pytest.mark.parametrize("total", [3, 51, 500])
+def test_oraclehcm_an_empty_page_the_total_contradicts_is_a_failure(
+    monkeypatch: pytest.MonkeyPatch, total: int
+) -> None:
+    fake_hcm(monkeypatch, hcm_answer([], total=total))
+    assert adapters.oraclehcm(HCM_SLUG) is None
+
+
+def test_oraclehcm_a_short_second_page_is_a_failure(monkeypatch: pytest.MonkeyPatch) -> None:
+    first = hcm_answer([hcm_req(str(i), "T", "IL", "Haifa, Israel") for i in range(50)], total=60)
+    fake_hcm(monkeypatch, first, hcm_answer([hcm_req("50", "T", "IL", "Haifa, Israel")], total=60))
+    assert adapters.oraclehcm(HCM_SLUG) is None
 
 
 def test_oraclehcm_more_pages_than_the_limit_is_a_failure(monkeypatch: pytest.MonkeyPatch) -> None:
