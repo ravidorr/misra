@@ -2,6 +2,12 @@
 
 All notable changes are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses [Semantic Versioning](https://semver.org/).
 
+## [0.4.0] - 2026-11-14
+
+### Changed
+
+- The dashboard's "Intern & junior" filter is now two filters, "Intern" and "Junior". Titles with intern, internship or student (and the Hebrew student word) are Intern; junior, jr, graduate, entry and trainee titles are Junior. Product titles stay Product. The digest email likewise lists Intern roles and Junior roles in separate sections instead of one "Student / junior / intern" section; both use the same patterns as the dashboard. The `category` option of the WebMCP search tool accepts `intern` and `junior` in place of the old combined `junior` value, which now means Junior only.
+
 ## [0.3.2] - 2026-11-14
 
 ### Fixed

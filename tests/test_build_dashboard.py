@@ -84,7 +84,8 @@ def test_main_builds_dashboard(db: sqlite3.Connection, workdir: Path, capsys: py
     assert sorted(jobs) == ["1", "2", "3", "4", "6"]
     assert jobs["1"]["k"] == "pm"
     assert jobs["2"]["k"] == "pm"
-    assert jobs["3"]["k"] == "junior"
+    assert jobs["3"]["k"] == "intern"
+    assert jobs["6"]["k"] == "junior"
     assert jobs["4"]["k"] == "other"
     assert jobs["1"]["il"] is True
     assert jobs["3"]["il"] is False

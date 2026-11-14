@@ -23,6 +23,9 @@ EXCLUDE = re.compile(
     re.I,
 )
 PM_CORE = re.compile(r"product|\bPM\b|\bAPM\b|מוצר", re.I)
+# non-product titles are Intern first, then Junior (shared with the dashboard)
+INTERN = re.compile(r"intern\b|internship|student|סטודנט", re.I)
+JUNIOR = re.compile(r"junior|\bjr\b|graduate|entry|trainee", re.I)
 
 
 def select(c: sqlite3.Connection, only_unreported: bool = True) -> list[dict[str, Any]]:
@@ -140,7 +143,8 @@ def render(
     gaps = gaps or []
     today = time.strftime("%Y-%m-%d")
     pm = [j for j in jobs if j["pm"]]
-    other = [j for j in jobs if not j["pm"]]
+    interns = [j for j in jobs if not j["pm"] and INTERN.search(j["title"])]
+    juniors = [j for j in jobs if not j["pm"] and not INTERN.search(j["title"]) and JUNIOR.search(j["title"])]
 
     def block(title: str, items: list[dict[str, Any]]) -> str:
         if not items:
@@ -154,7 +158,8 @@ def render(
         return h + "</ul>"
 
     body = f"<h2>New Israel jobs, {today}</h2>"
-    body += block("Product roles", pm) + block("Student / junior / intern (non-product titles)", other)
+    body += block("Product roles", pm) + block("Intern roles (non-product titles)", interns)
+    body += block("Junior roles (non-product titles)", juniors)
     if not jobs:
         body += "<p>No new matching jobs today.</p>"
     if gaps:

@@ -31,12 +31,14 @@ def test_render_groups_and_escapes() -> None:
     jobs = [
         {"company": "A&B", "title": "PM <1>", "location": "TLV", "url": "http://u?a=1&b=2", "pm": True},
         {"company": "C", "title": "Intern", "location": None, "url": None, "pm": False},
+        {"company": "D", "title": "Junior Developer", "location": None, "url": None, "pm": False},
     ]
     subject, body = digest.render(jobs)
-    assert subject.startswith("New Israel jobs: 2 (")
+    assert subject.startswith("New Israel jobs: 3 (")
     assert "<h3>Product roles (1)</h3>" in body
-    assert "<h3>Student / junior / intern (non-product titles)</h3>" not in body
-    assert "Student / junior / intern (non-product titles) (1)" in body
+    assert "<h3>Intern roles (non-product titles) (1)</h3>" in body
+    assert "<h3>Junior roles (non-product titles) (1)</h3>" in body
+    assert "Student / junior / intern" not in body
     assert "A&amp;B" in body
     assert "PM &lt;1&gt;" in body
     assert 'href=""' in body

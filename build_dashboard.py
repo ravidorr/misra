@@ -9,7 +9,7 @@ import time
 from pathlib import Path
 from typing import Any
 
-from digest import DB, PM_CORE
+from digest import DB, INTERN, JUNIOR, PM_CORE
 from discover import ISRAEL
 
 # Stylesheets bundled into docs/dashboard.css, in order. Raw colors live only in tokens.css.
@@ -19,8 +19,6 @@ STATIC_FILES = ("templates/dashboard.html", "templates/dashboard.js", "templates
 OUTPUT_NAMES = {"templates/dashboard.html": "index.html"}
 # Placeholders in the page for the integrity hash of the file with that name in docs/.
 INTEGRITY = re.compile(r"__SRI_([A-Z]+)_([A-Z]+)__")
-
-JUNIOR = re.compile(r"intern\b|internship|student|junior|\bjr\b|graduate|entry|trainee|סטודנט", re.I)
 
 
 def reason(note: str | None) -> str:
@@ -90,9 +88,14 @@ def main() -> None:
         "SELECT company, job_id, title, team, location, url, first_seen FROM jobs WHERE status='open'"
     ):
         f = (fs or "")[:10]
-        kind = "pm" if PM_CORE.search(title) else ("junior" if JUNIOR.search(title) else "other")
-        if kind == "pm" and JUNIOR.search(title):
+        if PM_CORE.search(title):
             kind = "pm"
+        elif INTERN.search(title):
+            kind = "intern"
+        elif JUNIOR.search(title):
+            kind = "junior"
+        else:
+            kind = "other"
         jobs.append(
             {
                 "c": company,
