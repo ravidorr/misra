@@ -16,6 +16,12 @@ class FakeSession:
             raise requests.ConnectionError("down")
         return FakeHttpResponse()
 
+    def post(self, url: str, **kw: object) -> FakeHttpResponse:
+        self.calls.append((url, {"post": True, **kw}))
+        if self.error:
+            raise requests.ConnectionError("down")
+        return FakeHttpResponse()
+
 
 @pytest.fixture
 def session(monkeypatch: pytest.MonkeyPatch) -> FakeSession:
@@ -40,6 +46,23 @@ def test_get_returns_none_on_request_error(monkeypatch: pytest.MonkeyPatch) -> N
     monkeypatch.setattr(common, "_s", FakeSession(error=True))
     monkeypatch.setattr(common, "_last", {})
     assert common.get("https://a.test/x") is None
+
+
+def test_post_sends_the_body_with_the_default_timeout_and_shares_the_throttle(
+    session: FakeSession, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    sleeps: list[float] = []
+    monkeypatch.setattr(common.time, "sleep", sleeps.append)
+    assert common.get("https://a.test/x") is not None
+    assert common.post("https://a.test/y", json={"k": 1}) is not None  # the same host: it waits like a second get
+    assert len(sleeps) == 1
+    assert session.calls[1] == ("https://a.test/y", {"post": True, "json": {"k": 1}, "timeout": 20})
+
+
+def test_post_returns_none_on_request_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(common, "_s", FakeSession(error=True))
+    monkeypatch.setattr(common, "_last", {})
+    assert common.post("https://a.test/x", json={}) is None
 
 
 def test_slug_candidates_dedupes_and_skips_empty() -> None:

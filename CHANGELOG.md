@@ -2,6 +2,17 @@
 
 All notable changes are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses [Semantic Versioning](https://semver.org/).
 
+## [0.3.1] - 2026-11-14
+
+### Added
+
+- Workday career sites: the `workday` adapter (slug `<tenant>/<wdN>/<site>`, from `<tenant>.<wdN>.myworkdayjobs.com/<site>`) reads the jobs in Israel only. It looks in the facets of an unfiltered first search, nested groups included, for the one that lists Israel (its name differs per tenant) and filters by it; a posting in several places ("2 Locations") found that way is tagged Israel. Without such a facet it searches for the word Israel and keeps only the postings located in Israel, so multi-location postings are left out. Any failure, on any page, is a failed crawl and nothing is closed: a maintenance page, an answer that is not JSON, a later page that fails, or more pages than the limit. Pinned, with `israel_only`, for Samsung (3 Israel jobs) and Criteo (none today, by the facet and by the search).
+
+### Fixed
+
+- An `israel_only` company counts as new until a crawl of the same kind has worked once, not only until a job is stored. Before, the first Israel job of an `israel_only` company with none stored (a board with no Israel job when it was pinned) was baselined silently and never reached the digest. Other companies are unchanged: stored jobs still decide, so adding one never floods the digest.
+- An adapter that raises fails its own company (the crawl log says "adapter error: ...", its jobs stay open) instead of stopping the whole daily run.
+
 ## [0.3.0] - 2026-11-14
 
 ### Changed

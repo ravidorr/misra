@@ -1,0 +1,534 @@
+{
+ "total": 648,
+ "jobPostings": [
+  {
+   "title": "Semiconductor Equipment Engineer – Program Management",
+   "externalPath": "/job/1530-FM-973-Taylor-TX-USA/Equipment-Management-Engineer_R115350",
+   "locationsText": "1530 FM 973 Taylor, TX, USA",
+   "postedOn": "Posted Yesterday",
+   "remoteType": "On-site",
+   "bulletFields": [
+    "R115350"
+   ]
+  },
+  {
+   "title": "Manager, Supply Chain of PSI Planning and Fulfillment (Dishwasher & Dacor)",
+   "externalPath": "/job/6625-Excellence-Way-Plano-TX-USA/Manager--Supply-Chain-of-PSI-Planning-and-Fulfillment--Dishwasher---Dacor-_R119492",
+   "locationsText": "6625 Excellence Way, Plano, TX, USA",
+   "postedOn": "Posted Yesterday",
+   "remoteType": "On-site",
+   "bulletFields": [
+    "R119492"
+   ]
+  }
+ ],
+ "facets": [
+  {
+   "facetParameter": "remoteType",
+   "descriptor": "Remote Type",
+   "values": [
+    {
+     "descriptor": "On-site",
+     "id": "0fee2666525710120f3e0f09e7730000",
+     "count": 504
+    },
+    {
+     "descriptor": "Hybrid",
+     "id": "0fee2666525710120f3e0e6f0ce40000",
+     "count": 24
+    },
+    {
+     "descriptor": "Remote",
+     "id": "0fee2666525710120f3e0f09e7730001",
+     "count": 4
+    }
+   ]
+  },
+  {
+   "facetParameter": "Location_Country",
+   "descriptor": "Country / Region",
+   "values": [
+    {
+     "descriptor": "United States of America",
+     "id": "bc33aa3152ec42d4995f4791a106ed09",
+     "count": 478
+    },
+    {
+     "descriptor": "India",
+     "id": "c4f78be1a8f14da0ab49ce1162348a5e",
+     "count": 31
+    },
+    {
+     "descriptor": "Singapore",
+     "id": "80938777cac5440fab50d729f9634969",
+     "count": 20
+    },
+    {
+     "descriptor": "Egypt",
+     "id": "d865e83093ad42319653b08e61f7db49",
+     "count": 18
+    },
+    {
+     "descriptor": "Israel",
+     "id": "084562884af243748dad7c84c304d89a",
+     "count": 3
+    }
+   ]
+  },
+  {
+   "facetParameter": "hiringCompany",
+   "descriptor": "Company",
+   "values": [
+    {
+     "descriptor": "Samsung Austin Semiconductor, LLC.",
+     "id": "189767dd6c9201aedeefa811a729d283",
+     "count": 312
+    },
+    {
+     "descriptor": "Samsung Electronics America, Inc.",
+     "id": "189767dd6c9201b6d4407011a7296a83",
+     "count": 141
+    },
+    {
+     "descriptor": "Samsung R&D Institute India - Bangalore",
+     "id": "189767dd6c9201554f3e5312a7290a85",
+     "count": 37
+    },
+    {
+     "descriptor": "Samsung Electronics Home Appliance America",
+     "id": "189767dd6c92015edf23a011a729c283",
+     "count": 25
+    }
+   ]
+  },
+  {
+   "facetParameter": "jobFamilyGroup",
+   "descriptor": "Job Category",
+   "values": [
+    {
+     "descriptor": "R&D (JFG)",
+     "id": "189767dd6c9201b4198fe1a6db2997c7",
+     "count": 160
+    },
+    {
+     "descriptor": "EHS (JFG)",
+     "id": "189767dd6c920162dfa8c4a6db2985c7",
+     "count": 100
+    },
+    {
+     "descriptor": "Production Engineering (JFG)",
+     "id": "189767dd6c9201d48510dba6db2993c7",
+     "count": 85
+    },
+    {
+     "descriptor": "Marketing (JFG)",
+     "id": "189767dd6c9201a24f64d1a6db298dc7",
+     "count": 80
+    }
+   ]
+  },
+  {
+   "facetParameter": "workerSubType",
+   "descriptor": "Job Type",
+   "values": [
+    {
+     "descriptor": "Regular",
+     "id": "189767dd6c9201c90a60ce9c2c297619",
+     "count": 576
+    },
+    {
+     "descriptor": "Intern(Empl.)",
+     "id": "189767dd6c920145d5c3e59c2c297819",
+     "count": 40
+    },
+    {
+     "descriptor": "Direct Outsourced",
+     "id": "189767dd6c9201ab5b6a33a42c298319",
+     "count": 21
+    },
+    {
+     "descriptor": "Contractor (Fixed Term)",
+     "id": "189767dd6c920189af34e29c2c297719",
+     "count": 7
+    }
+   ]
+  },
+  {
+   "facetParameter": "timeType",
+   "descriptor": "Time Type",
+   "values": [
+    {
+     "descriptor": "Full time",
+     "id": "02858ad19657019e8b031af2d6264900",
+     "count": 556
+    },
+    {
+     "descriptor": "Part time",
+     "id": "02858ad1965701c3b2f019f2d6264800",
+     "count": 2
+    }
+   ]
+  },
+  {
+   "facetParameter": "locationMainGroup",
+   "values": [
+    {
+     "facetParameter": "locations",
+     "descriptor": "Locations",
+     "values": [
+      {
+       "descriptor": "12100 Samsung Blvd, Austin, TX, USA",
+       "id": "189767dd6c9201c7ec227985a529067b",
+       "count": 114
+      },
+      {
+       "descriptor": "1530 FM 973 Taylor, TX, USA",
+       "id": "e2e963279736101307c7218e23e80000",
+       "count": 194
+      },
+      {
+       "descriptor": "19 Chapin Road, Pine Brook, NJ, USA",
+       "id": "189767dd6c9201bbbb1ba184a529fb79",
+       "count": 1
+      },
+      {
+       "descriptor": "200 Connell Drive, Berkeley Heights, NJ, USA",
+       "id": "38ad101a9fa001b1a0955fce8a5c4f32",
+       "count": 3
+      },
+      {
+       "descriptor": "2050 Derry Rd W Mississauga, Canada",
+       "id": "189767dd6c9201d74aef2585a5299b7a",
+       "count": 7
+      },
+      {
+       "descriptor": "22 Aharon Bert st., Petah Tikva, Israel",
+       "id": "189767dd6c92013c2fa62e7fa5291272",
+       "count": 1
+      },
+      {
+       "descriptor": "240 Dividend Dr, Coppell, TX, USA",
+       "id": "189767dd6c92014da7c68084a529d379",
+       "count": 4
+      },
+      {
+       "descriptor": "284 Mawsons Way Newberry, SC, USA",
+       "id": "189767dd6c920132898dee88a529647f",
+       "count": 25
+      },
+      {
+       "descriptor": "3245 146th Place SE, Bellevue, WA, USA",
+       "id": "189767dd6c920124d517b483a529d778",
+       "count": 1
+      },
+      {
+       "descriptor": "3655 N 1st St, San Jose, CA, USA",
+       "id": "189767dd6c9201d2eed84985a529c87a",
+       "count": 5
+      },
+      {
+       "descriptor": "3900 N Capital of Texas Hwy, Austin, TX, USA",
+       "id": "189767dd6c9201d24193c587a529ed7d",
+       "count": 3
+      },
+      {
+       "descriptor": "565 Great Northern Way, Vancouver, Canada",
+       "id": "189767dd6c920171b3295e88a529af7e",
+       "count": 1
+      },
+      {
+       "descriptor": "595 Bay St, Suite 0408, Toronto, Canada",
+       "id": "157f45e9197f1016939c0b88ddf40000",
+       "count": 1
+      },
+      {
+       "descriptor": "6100 Center Dr., 6th FL, Los Angeles, CA, USA",
+       "id": "c11bab7795e1101f6cbd0120f1f00000",
+       "count": 4
+      },
+      {
+       "descriptor": "645 Clyde Avenue, Mountain View, CA, USA",
+       "id": "189767dd6c9201de7df2a581a529d475",
+       "count": 4
+      },
+      {
+       "descriptor": "6555 Excellence Way, Plano, TX, USA",
+       "id": "502ab515a87601e1dd395608ad1e7f3b",
+       "count": 21
+      },
+      {
+       "descriptor": "6625 Excellence Way, Plano, TX, USA",
+       "id": "31fc7bab264601f2a48f9e5ec5243c60",
+       "count": 87
+      },
+      {
+       "descriptor": "6 Duntes Street, Riga, Latvia",
+       "id": "189767dd6c9201dbbd167787a529837d",
+       "count": 2
+      },
+      {
+       "descriptor": "700 Pennsylvania Avenue, Suite 600, Washington DC, USA",
+       "id": "6a20bab9d029011973c6d88d8e20f38c",
+       "count": 1
+      },
+      {
+       "descriptor": "700 Sylvan Ave Englewood Cliffs, NJ, USA",
+       "id": "1f4238392e88100ef1bbe7f4983e0000",
+       "count": 1
+      },
+      {
+       "descriptor": "700 West Bethel Road, Coppell, TX, USA",
+       "id": "189767dd6c9201782dab8484a529d879",
+       "count": 2
+      },
+      {
+       "descriptor": "9808 Scranton Rd, San Diego, CA, USA",
+       "id": "3ae5f8a2566e01fc79a6e98e55420e52",
+       "count": 1
+      },
+      {
+       "descriptor": "Adrianópolis, Manaus, Brazil",
+       "id": "d18bbfb185c8102520320ecbb2d90000",
+       "count": 1
+      },
+      {
+       "descriptor": "Azrieli Building G, Herzliya, Israel",
+       "id": "189767dd6c9201a82e8a307da5299d6f",
+       "count": 2
+      },
+      {
+       "descriptor": "Bavaria Towers, Munich, Germany",
+       "id": "39065a4e567f0126a5c0e8b862498003",
+       "count": 2
+      },
+      {
+       "descriptor": "BITEXCO Financial Tower, Ho Chi Minh, Vietnam",
+       "id": "189767dd6c920121754ee67da5296470",
+       "count": 5
+      },
+      {
+       "descriptor": "Budapest Gateway Office Centre, Budapest, Hungary",
+       "id": "189767dd6c9201db53c87a87a529887d",
+       "count": 1
+      },
+      {
+       "descriptor": "Calgary, Canada Home Office",
+       "id": "189767dd6c920127c1ab6781a5298475",
+       "count": 1
+      },
+      {
+       "descriptor": "Costa del Este, Panama City, Panama",
+       "id": "189767dd6c9201f5a9a8ab83a529cd78",
+       "count": 1
+      },
+      {
+       "descriptor": "Delegacion Miguel Hidalgo, Mexico city, Mexico",
+       "id": "189767dd6c9201535acc9583a529b278",
+       "count": 1
+      },
+      {
+       "descriptor": "Digital City, Suwon, Korea",
+       "id": "189767dd6c92011e6ff35e81a5297a75",
+       "count": 1
+      },
+      {
+       "descriptor": "Empire Tower, Bangkok, Thailand",
+       "id": "189767dd6c920190e63bf37da5297370",
+       "count": 6
+      },
+      {
+       "descriptor": "Eschborn, Germany Home Office",
+       "id": "270725556edc0105ce06612aaaa80000",
+       "count": 1
+      },
+      {
+       "descriptor": "Illinois, USA Home Office",
+       "id": "189767dd6c92015f51feeb84a529557a",
+       "count": 1
+      },
+      {
+       "descriptor": "Junction City Tower, Yangon, Myanmar",
+       "id": "189767dd6c9201a00f83a187a529be7d",
+       "count": 2
+      },
+      {
+       "descriptor": "Kolao Tower, Vientiane, Laos",
+       "id": "189767dd6c9201538e901a88a5295a7e",
+       "count": 1
+      },
+      {
+       "descriptor": "Kom Abu Radi Industrial Zone, Al Wasta, Beni Suef, Egypt",
+       "id": "189767dd6c9201b3b7505a7da529cf6f",
+       "count": 18
+      },
+      {
+       "descriptor": "Las Mercedes, Caracas, Venezuela",
+       "id": "189767dd6c9201d831d5548ba5298082",
+       "count": 1
+      },
+      {
+       "descriptor": "Luis Alberto de Herrera, Montevideo, Uruguay",
+       "id": "189767dd6c9201140981bb86a5299b7c",
+       "count": 1
+      },
+      {
+       "descriptor": "Mapletree Business City, Singapore, Singapore",
+       "id": "189767dd6c920145a7a1c67da5293c70",
+       "count": 20
+      },
+      {
+       "descriptor": "Mercu 2, Kuala Lumpur, Malaysia",
+       "id": "31fc7bab2646018e0978224f2525908b",
+       "count": 4
+      },
+      {
+       "descriptor": "Metroffice, Bucharest 2, Romania",
+       "id": "189767dd6c9201e693d1c285a529607b",
+       "count": 3
+      },
+      {
+       "descriptor": "Morumbi, SP Sao Paulo, Brazil",
+       "id": "189767dd6c9201c1093b9a83a529b778",
+       "count": 5
+      },
+      {
+       "descriptor": "NSW Sydney, Australia",
+       "id": "189767dd6c9201704d1c4387a529427d",
+       "count": 1
+      },
+      {
+       "descriptor": "Oficina 607, Bogota, Colombia",
+       "id": "189767dd6c92014c227c9e83a529bc78",
+       "count": 1
+      },
+      {
+       "descriptor": "Ohio, USA Home Office",
+       "id": "189767dd6c920116e166fe83a5292c79",
+       "count": 1
+      },
+      {
+       "descriptor": "One Pennsylvania Plaza, 26th Floor, New York, NY, USA",
+       "id": "89abf27ec3f61038a12cbd91f1e80000",
+       "count": 12
+      },
+      {
+       "descriptor": "Parque dos Resedas, Campinas, Brazil",
+       "id": "189767dd6c9201078c8d8983a529a378",
+       "count": 9
+      },
+      {
+       "descriptor": "Pennsylvania, USA Home Office",
+       "id": "189767dd6c9201f9f68f0a84a5293b79",
+       "count": 1
+      },
+      {
+       "descriptor": "Phoenix Building, Bangalore, India",
+       "id": "189767dd6c9201b802603c83a5292c78",
+       "count": 2
+      },
+      {
+       "descriptor": "Postepu, Warszawa, Poland",
+       "id": "38ad101a9fa0017802598d159a5ba231",
+       "count": 4
+      },
+      {
+       "descriptor": "Praterstrasse 31, Vienna, Austria",
+       "id": "189767dd6c9201a14ec85b89a529f07f",
+       "count": 1
+      },
+      {
+       "descriptor": "Radnička cesta, Zagreb, Croatia",
+       "id": "189767dd6c92016ad6c8088aa529e180",
+       "count": 2
+      },
+      {
+       "descriptor": "Ratinger Str. 9, Düsseldorf, Germany",
+       "id": "2079ebb8f54601cecb395316c501f8b4",
+       "count": 5
+      },
+      {
+       "descriptor": "Samsung ESBO Floor 3 Eighty Strand London WC2R 0RE",
+       "id": "911b21efc47610092bc3c3bcc0ff0000",
+       "count": 2
+      },
+      {
+       "descriptor": "Samsung House 2000 Hillswood Drive, Chertsey, United Kingdom",
+       "id": "15ba52b49815011d25f8d295c32c42d0",
+       "count": 3
+      },
+      {
+       "descriptor": "Samsung Space, Eschborn, Germany",
+       "id": "189767dd6c9201ea65ab1287a5290b7d",
+       "count": 2
+      },
+      {
+       "descriptor": "Samsung Ventures Europe",
+       "id": "77b53644f189100e24397190478a0000",
+       "count": 1
+      },
+      {
+       "descriptor": "Science Hub Tower 4, Manila, Philippines",
+       "id": "189767dd6c9201db7267fb7da5297d70",
+       "count": 5
+      },
+      {
+       "descriptor": "Song Plaza, Kuching, Malaysia",
+       "id": "189767dd6c9201ac3c75fa87a529327e",
+       "count": 1
+      },
+      {
+       "descriptor": "SSIR, Angkor West, Bangalore, India",
+       "id": "9903637af4ee10017a5e7c6741a30000",
+       "count": 2
+      },
+      {
+       "descriptor": "SSIR, Goldstone, Bangalore, India",
+       "id": "0c974e8c1228010867596ab21b3c3469",
+       "count": 26
+      },
+      {
+       "descriptor": "The HeadHunter Ltd, Rr., Pristina, Kosovo",
+       "id": "189767dd6c920101c7f8ff85a529ab7b",
+       "count": 1
+      },
+      {
+       "descriptor": "Two Horizon Center, Gurugram, India",
+       "id": "189767dd6c9201004b83aa89a5295a80",
+       "count": 1
+      },
+      {
+       "descriptor": "United States of America",
+       "id": "189767dd6c920156d5cb048ba5291782",
+       "count": 1
+      },
+      {
+       "descriptor": "Vancouver, Canada Home Office",
+       "id": "189767dd6c9201b0d5bf8a81a529b175",
+       "count": 1
+      },
+      {
+       "descriptor": "Via Mike Bongiorno, Milano, Italy",
+       "id": "189767dd6c92016157048a87a5299c7d",
+       "count": 1
+      },
+      {
+       "descriptor": "Virginia, USA Home Office",
+       "id": "189767dd6c9201f478822b84a5296379",
+       "count": 1
+      },
+      {
+       "descriptor": "Washington D.C., USA Home Office",
+       "id": "189767dd6c9201aad39ecd81a5290676",
+       "count": 1
+      },
+      {
+       "descriptor": "Wisma GKBI, Jakarta, Indonesia",
+       "id": "189767dd6c9201bc2d6fce7da5294670",
+       "count": 1
+      }
+     ]
+    }
+   ]
+  }
+ ]
+}
