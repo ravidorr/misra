@@ -1,8 +1,8 @@
 # TODO
 
 Open work, as of 2026-11-14. Each item says what triggers it, how to do it and when it is done. When one is finished,
-delete it and update the counts in the others: the 105 and the four segment counts in the research item (a pin removes
-one row from one segment), its "(30)" if the company had no careers URL.
+delete it and update the counts in the others: the 103 and the four segment counts in the research item (a pin removes
+one row from one segment), its "(30)" if the company had no careers URL, else its "(73 today)".
 Observations about live sites below come from checks made on 2026-11-14 and may have changed.
 
 ## Review the Node and Python pins
@@ -37,10 +37,10 @@ Observations about live sites below come from checks made on 2026-11-14 and may 
 
 ## Research the remaining unresolved companies
 
-- [ ] `data/unresolved_candidates.csv` lists 105 researched companies with no usable job feed (as of 2026-11-14: 24
-  multinational, 47 deeptech, 18 cyber_infra, 16 biz_software). Each needs
+- [ ] `data/unresolved_candidates.csv` lists 103 researched companies with no usable job feed (as of 2026-11-14: 24
+  multinational, 45 deeptech, 18 cyber_infra, 16 biz_software). Each needs
   its own research; there is no batch fix left. Every observation about a live site below is from the checks of
-  2026-11-14, a crawl of the 105 rows that had a careers URL that day (77 today) and a scan of their rendered pages. The
+  2026-11-14, a crawl of the 105 rows that had a careers URL that day (73 today) and a scan of their rendered pages. The
   remaining work falls into these groups:
   - **No careers URL (30).** Status `not_found` in `data/new/*_companies.json`: OX Security, Upsolver, Ceva, Speedata,
     Teramount, X-Globe, Q Factor, Gilat, Siklu, Silicom, Sight Diagnostics, Brainsway, EarlySign, Diagnostic Robotics,
@@ -97,6 +97,12 @@ Observations about live sites below come from checks made on 2026-11-14 and may 
   - **Pages that loaded and showed no job links.** 72 of the 105 pages crawled on 2026-11-14 returned no job, five of
     them with an empty title: the list is probably drawn by JavaScript from a JSON feed. Open the page, watch its network
     requests for the feed, then decide between an adapter and a browser pin.
+    Findings of 2026-11-14 (feed-finding pass): most of these pages were not JavaScript apps but WordPress sites with the
+    Comeet plugin, whose job links look like `/careers/co/<place>/<XX.XXX>/<title>/all`, which the crawler's link pattern
+    does not match. The page source holds `"comeet_uid":"<uid>"` (and a token) when the plugin is configured with the
+    company's account; the `comeet` adapter then reads the board with slug `<name>/<uid>`. Try the careers-api first, as
+    `https://www.comeet.co/careers-api/2.0/company/<uid>/positions?token=<token>&details=true`: its jobs carry the board
+    name in `url_comeet_hosted_page`. Done: Retym (`retym/C6.003`) and Qedma (`qedma/7A.006`).
   - **Bot protection.** Some pages answered 403, "Access Denied" or a browser check. Leave them and record it. Do not try
     to get around bot protection: a few pinned companies (Check Point, Papaya Global, Unity) are already blocked from the CI
     runner this way and show up as gaps in the digest.
