@@ -11,4 +11,4 @@ done
 npm run lint
 npm run typecheck
 npm run test:coverage
-RELEASE_TRIGGER_PATHS=pyproject.toml,adapters.py,browser_crawl.py,build_dashboard.py,classify.py,common.py,digest.py,discover.py,regions.py,run.py,send_alert.py,send_email.py,survey.py,survey2.py BASE_REF=origin/main node scripts/check-release.mjs
+RELEASE_TRIGGER_PATHS=pyproject.toml,adapters.py,browser_crawl.py,build_dashboard.py,classify.py,common.py,digest.py,discover.py,regions.py,run.py,send_alert.py,send_email.py,survey.py,survey2.py,sync_supabase.py BASE_REF=origin/main node scripts/check-release.mjs

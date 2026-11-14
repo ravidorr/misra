@@ -1,6 +1,7 @@
 """Hand-rolled fakes for requests responses and Playwright objects. No network, no browser."""
 
 import asyncio
+import json
 from collections.abc import Callable
 from typing import Any
 
@@ -236,3 +237,34 @@ class FakePlaywright:
 
     async def __aexit__(self, *_a: object) -> None:
         return None
+
+
+class FakeSupabase:
+    """In-memory PostgREST `jobs` table behind the `request` method of a requests session. A POST upserts by
+    (company, job_id) and merges the columns it carries, as `resolution=merge-duplicates` does; a GET with
+    `status=eq.open` returns the (company, job_id) of open rows, `page` rows at most (Supabase caps a response)."""
+
+    def __init__(self, page: int = 1000, fail_on: str | None = None, error: Exception | None = None) -> None:
+        self.table: dict[tuple[str, str], dict[str, Any]] = {}
+        self.calls: list[dict[str, Any]] = []
+        self.page = page
+        self.fail_on = fail_on  # "GET" or "POST": answer that method with HTTP 500
+        self.error = error  # raised by every request
+
+    def request(self, method: str, url: str, **kw: Any) -> FakeHttpResponse:
+        self.calls.append({"method": method, "url": url, **kw})
+        if self.error:
+            raise self.error
+        if method == self.fail_on:
+            return FakeHttpResponse(status_code=500, text="boom")
+        if method == "POST":
+            for row in kw["json"]:
+                self.table.setdefault((row["company"], row["job_id"]), {}).update(row)
+            return FakeHttpResponse(status_code=201)
+        params = kw["params"]
+        keys = sorted(key for key, row in self.table.items() if row.get("status") == "open")
+        window = keys[params["offset"] : params["offset"] + min(params["limit"], self.page)]
+        return FakeHttpResponse(data=[{"company": c, "job_id": j} for c, j in window])
+
+    def snapshot(self) -> str:
+        return json.dumps({"|".join(k): v for k, v in self.table.items()}, sort_keys=True)

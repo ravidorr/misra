@@ -73,5 +73,5 @@ jobs:
         if: github.actor != 'dependabot[bot]'
         env:
           BASE_REF: ${{ github.event_name == 'pull_request' && format('origin/{0}', github.base_ref) || github.event.before }}
-          RELEASE_TRIGGER_PATHS: pyproject.toml,adapters.py,browser_crawl.py,build_dashboard.py,classify.py,common.py,digest.py,discover.py,regions.py,run.py,send_alert.py,send_email.py,survey.py,survey2.py
+          RELEASE_TRIGGER_PATHS: pyproject.toml,adapters.py,browser_crawl.py,build_dashboard.py,classify.py,common.py,digest.py,discover.py,regions.py,run.py,send_alert.py,send_email.py,survey.py,survey2.py,sync_supabase.py
         run: node scripts/check-release.mjs
