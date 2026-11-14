@@ -2,6 +2,13 @@
 
 All notable changes are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses [Semantic Versioning](https://semver.org/).
 
+## [0.15.0] - 2026-11-15
+
+### Changed
+
+- The dashboard loads its jobs from the Supabase `jobs` table over PostgREST with the public anon key instead of reading `docs/jobs.json`. It pages 1,000 rows at a time (`limit` and `offset`, total from `Prefer: count=exact`), shows all of them, and treats a count that differs from the total as an error. The project URL and anon key are constants in `build_dashboard.py`, which injects them into `dashboard.js` and the URL into the page's `connect-src` (now `'self'` plus the project host). The kind filter reads `role_types` and `level`, "in Israel" reads `regions` and `locations`. The coverage gaps and build time ride in a JSON data block of `index.html` (no inline script). `jobs.json` and `jobs.jsonld` are still built and published as open data; the page does not read `jobs.json`.
+- When the backend cannot be reached, answers with an error, or returns an incomplete list, the page shows an error card with a "Try again" button instead of a list; there is no offline copy.
+
 ## [0.14.0] - 2026-11-14
 
 ### Added

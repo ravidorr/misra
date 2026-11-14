@@ -63,12 +63,13 @@ Decisions made in planning (they change the PRD's wording, so update the PRD in 
   before the deploy push, with the secret exposed only to that step, and the maintainer failure alert covering it.
   Done when: a manual daily run fills the table and a second run changes nothing.~~
   Remaining check, live only: save `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` as Actions secrets, run the daily workflow by hand, see the table filled and a second run change nothing (also confirms the key format works as both `apikey` and bearer).
-- [ ] 2.3 Dashboard reads jobs from Supabase (PostgREST with the anon key) instead of `docs/jobs.json`; clear error card
+- [x] ~~2.3 Dashboard reads jobs from Supabase (PostgREST with the anon key) instead of `docs/jobs.json`; clear error card
   when the backend is unreachable, no offline copy; CSP `connect-src` gains the project host only. Keep `jobs.jsonld`
   and the WebMCP tools working from the loaded data. Decide in this PR whether `jobs.json` is still published (the
   PRD says no offline copy for the dashboard; keeping it as a public open-data download is allowed but not read).
   Done when: Constraints "Job data is served from the backend" holds, the card script tests and page tests pass, and
-  the jobs on screen equal the table (supports FR-6 "jobs match the dashboard").
+  the jobs on screen equal the table (supports FR-6 "jobs match the dashboard").~~
+  Decision: `jobs.json` stays published as a public open-data download (the Dataset JSON-LD and the no-script notice point to it); the page never reads it.
 
 ## FR-9 and FR-3 (data classification)
 
