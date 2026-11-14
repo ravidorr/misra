@@ -12,20 +12,18 @@ from common import DROP_BELIEVED, DROP_NOTE
 from discover import ISRAEL
 
 DB = "data/jobs.db"
-# title must match one of these (product-focused + entry level + student)
-ROLE = re.compile(
-    r"product|\bPM\b|\bAPM\b|intern\b|internship|student|junior|\bjr\b|graduate|entry|trainee|סטודנט|מוצר", re.I
-)
+PM_CORE = re.compile(r"product|\bPM\b|\bAPM\b|מוצר", re.I)
+# Buckets for titles that are not product: Intern wins over Junior. Used by build_dashboard.py and render().
+INTERN = re.compile(r"intern\b|internship|student|סטודנט", re.I)
+JUNIOR = re.compile(r"junior|\bjr\b|graduate|entry|trainee", re.I)
+# a title must match a product, intern or junior pattern (derived, so a new keyword is picked up here too)
+ROLE = re.compile("|".join(p.pattern for p in (PM_CORE, INTERN, JUNIOR)), re.I)
 # drop clearly irrelevant senior or non-product matches
 EXCLUDE = re.compile(
     r"sales|counsel|architect|partnerships|\b(senior|sr\.?|staff|principal|director|head|vp|lead)\b"
     r"|product (marketing|designer|design|security|support)|software (engineer|developer)",
     re.I,
 )
-PM_CORE = re.compile(r"product|\bPM\b|\bAPM\b|מוצר", re.I)
-# non-product titles are Intern first, then Junior (shared with the dashboard)
-INTERN = re.compile(r"intern\b|internship|student|סטודנט", re.I)
-JUNIOR = re.compile(r"junior|\bjr\b|graduate|entry|trainee", re.I)
 
 
 def select(c: sqlite3.Connection, only_unreported: bool = True) -> list[dict[str, Any]]:
