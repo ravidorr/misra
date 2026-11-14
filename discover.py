@@ -42,7 +42,7 @@ def scan_page(url: str) -> tuple[str | None, str | None]:
 
 _PLACES = re.compile(
     r"israel|tel[ -]?aviv|jerusalem|haifa|herzliya|ra'?anana|petah|petach|ramat|netanya|rehovot|yokneam|kfar"
-    r"|beer[ -]?sheva|holon|rishon|hod hasharon|airport city|\bISR\b",
+    r"|beer[ -]?sheva|holon|rishon|hod hasharon|airport city|migdal|\bISR\b",
     re.I,
 )
 _US_WORDS = re.compile(

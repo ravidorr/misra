@@ -1,6 +1,6 @@
 [project]
 name = "misra"
-version = "0.3.1"
+version = "0.3.2"
 description = "Daily batch pipeline: crawls career pages, keeps history in SQLite, and emails a digest."
 readme = "README.md"
 license = "MIT"

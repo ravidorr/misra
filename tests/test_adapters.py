@@ -5,6 +5,7 @@ from typing import Any
 import pytest
 
 import adapters
+import discover
 from tests.fakes import FakeHttpResponse
 
 
@@ -115,6 +116,18 @@ def test_smartrecruiters_paginates(monkeypatch: pytest.MonkeyPatch) -> None:
     assert jobs[0]["url"] == "https://jobs.smartrecruiters.com/acme/1"
     assert jobs[0]["team"] == "D"
     assert urls[1].endswith("offset=100")
+
+
+def test_smartrecruiters_writes_the_country_code_in_capitals(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The API says "il" and "us"; the Israel matcher tells Israel's IL from Illinois by the capital code."""
+    israel = {**posting("1"), "location": {"city": "Omer", "country": "il"}}
+    usa = {**posting("2"), "location": {"city": "Chicago", "country": "us"}}
+    nowhere = {**posting("3"), "location": {"city": "Remote", "country": None}}
+    fake_get(monkeypatch, FakeHttpResponse(data={"content": [israel, usa, nowhere], "totalFound": 3}))
+    jobs = adapters.smartrecruiters("acme")
+    assert jobs is not None
+    assert [j["location"] for j in jobs] == ["Omer, IL", "Chicago, US", "Remote"]
+    assert [discover.ISRAEL.search(j["location"]) for j in jobs] == [True, False, False]
 
 
 def test_smartrecruiters_failures(monkeypatch: pytest.MonkeyPatch) -> None:
