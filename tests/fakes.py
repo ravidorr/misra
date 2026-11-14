@@ -262,7 +262,12 @@ class FakeSupabase:
                 self.table.setdefault((row["company"], row["job_id"]), {}).update(row)
             return FakeHttpResponse(status_code=201)
         params = kw["params"]
-        keys = sorted(key for key, row in self.table.items() if row.get("status") == "open")
+        status = params["status"].removeprefix("eq.")
+        keys = [key for key, row in self.table.items() if row.get("status") == status]
+        if params.get("order") == "company.asc,job_id.asc":  # without an order, Postgres gives no stable pages
+            keys.sort()
+        else:
+            keys.reverse()
         window = keys[params["offset"] : params["offset"] + min(params["limit"], self.page)]
         return FakeHttpResponse(data=[{"company": c, "job_id": j} for c, j in window])
 

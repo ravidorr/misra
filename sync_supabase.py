@@ -24,7 +24,7 @@ import regions
 from digest import DB
 
 BATCH = 500  # rows per upsert request
-PAGE = 1000  # rows per read; Supabase caps a response at 1,000 rows by default
+PAGE = 1000  # rows asked per read; Supabase caps a response at 1,000 rows by default, a project may set less
 TIMEOUT = 60
 HTTP_OK, HTTP_REDIRECT = 200, 300
 COLUMNS = ("company", "job_id", "title", "team", "location", "url", "posted", "first_seen", "last_seen")
@@ -69,7 +69,7 @@ class Client:
             headers["Prefer"] = "resolution=merge-duplicates,return=minimal"
         try:
             response = self.session.request(
-                method, self.base, params=params, json=body, headers=headers, timeout=TIMEOUT
+                method, self.base, params=params, json=body, headers=headers, timeout=TIMEOUT, allow_redirects=False
             )
         except requests.RequestException as exc:
             raise SyncError(f"{method} jobs failed: {type(exc).__name__}") from None
@@ -95,10 +95,10 @@ class Client:
             page = self.call("GET", params).json()
             if not isinstance(page, list):
                 raise SyncError("GET jobs returned something other than a list")
-            keys.update((row["company"], row["job_id"]) for row in page)
-            if len(page) < PAGE:
+            if not page:  # a server may cap a response below PAGE, so only an empty page ends the read
                 return keys
-            offset += PAGE
+            keys.update((row["company"], row["job_id"]) for row in page)
+            offset += len(page)
 
 
 def open_rows(conn: sqlite3.Connection) -> Iterator[dict[str, Any]]:

@@ -10,7 +10,7 @@ import classify
 import sync_supabase
 from sync_supabase import Client, Result, SyncError, sync
 from tests.conftest import add_job
-from tests.fakes import FakeSupabase
+from tests.fakes import FakeHttpResponse, FakeSupabase
 
 URL = "https://abc.supabase.co"
 KEY = "service-role-key-xyz"
@@ -105,12 +105,46 @@ def test_large_runs_go_in_batches_and_read_every_page(db: sqlite3.Connection, mo
         add_job(db, "Acme", str(n), "Designer")
     fake = FakeSupabase(page=2)
     sync(db, client(fake))
+    assert [len(c["json"]) for c in fake.calls if c["method"] == "POST"] == [2, 2, 1]  # the 5 open jobs
+    assert sorted(fake.table) == [("Acme", str(n)) for n in range(5)]
     db.execute("UPDATE jobs SET status='closed' WHERE job_id IN ('0','3','4')")
     fake.calls.clear()
     assert sync(db, client(fake)) == Result(upserted=2, closed=3)
     sizes = [len(c["json"]) for c in fake.calls if c["method"] == "POST"]
     assert sizes == [2, 2, 1]  # two rows, then the three closes in batches of two and one
-    assert [c["params"]["offset"] for c in fake.calls if c["method"] == "GET"] == [0, 2, 4]  # 5 rows: 2, 2, 1
+    assert [c["params"]["offset"] for c in fake.calls if c["method"] == "GET"] == [
+        0,
+        2,
+        4,
+        5,
+    ]  # 2, 2, 1 rows, then an empty page
+
+
+def test_a_server_cap_below_the_page_size_still_closes_every_stale_job(jobs: sqlite3.Connection) -> None:
+    fake = FakeSupabase(page=2)  # PAGE stays 1000: every response is short but not the last
+    for n in range(5):
+        fake.table[("Zed", str(n))] = {"company": "Zed", "job_id": str(n), "status": "open"}
+    assert sync(jobs, client(fake)) == Result(upserted=3, closed=5)
+    assert {row["status"] for key, row in fake.table.items() if key[0] == "Zed"} == {"closed"}
+
+
+def test_the_read_asks_for_a_stable_order_and_only_open_rows(jobs: sqlite3.Connection) -> None:
+    fake = FakeSupabase()
+    sync(jobs, client(fake))
+    get = next(c for c in fake.calls if c["method"] == "GET")
+    assert get["params"]["order"] == "company.asc,job_id.asc"
+    assert get["params"]["select"] == "company,job_id"
+    assert get["allow_redirects"] is False  # the key is in a header that a redirect would forward
+
+
+def test_closed_jobs_are_not_closed_again(jobs: sqlite3.Connection) -> None:
+    fake = FakeSupabase()
+    sync(jobs, client(fake))
+    for n in range(3):
+        fake.table[("Zed", str(n))] = {"company": "Zed", "job_id": str(n), "status": "closed"}
+    fake.calls.clear()
+    assert sync(jobs, client(fake)) == Result(upserted=3, closed=0)
+    assert not any(c["method"] == "POST" and c["json"][0]["status"] == "closed" for c in fake.calls)
 
 
 def test_an_empty_local_database_refuses_to_close_everything(db: sqlite3.Connection) -> None:
@@ -125,6 +159,42 @@ def test_an_http_error_is_a_sync_error(jobs: sqlite3.Connection, method: str) ->
     fake = FakeSupabase(fail_on=method)
     with pytest.raises(SyncError, match=f"{method} jobs failed: HTTP 500 boom"):
         sync(jobs, client(fake))
+    # a failed upsert reads and closes nothing; a failed read closes nothing
+    assert [c["method"] for c in fake.calls] == (["POST"] if method == "POST" else ["POST", "GET"])
+
+
+def test_a_failed_read_after_the_first_page_closes_nothing(
+    jobs: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(sync_supabase, "PAGE", 2)
+    fake = FakeSupabase(page=2)
+    for n in range(3):
+        fake.table[("Zed", str(n))] = {"company": "Zed", "job_id": str(n), "status": "open"}
+    original = fake.request
+    gets: list[int] = []
+
+    def flaky(method: str, url: str, **kw: Any) -> Any:
+        if method == "GET":
+            gets.append(1)
+            if len(gets) > 1:
+                return FakeHttpResponse(status_code=503, text="down")
+        return original(method, url, **kw)
+
+    fake.request = flaky  # type: ignore[method-assign]
+    with pytest.raises(SyncError, match="HTTP 503"):
+        sync(jobs, client(fake))
+    assert {row["status"] for key, row in fake.table.items() if key[0] == "Zed"} == {"open"}
+
+
+@pytest.mark.parametrize(("status", "ok"), [(200, True), (299, True), (300, False), (401, False)])
+def test_only_2xx_statuses_are_success(status: int, ok: bool) -> None:
+    fake = FakeSupabase()
+    fake.request = lambda *_a, **_k: FakeHttpResponse(status_code=status, data=[], text="x" * 500)  # type: ignore[method-assign]
+    if ok:
+        assert client(fake).call("GET", {}).status_code == status
+    else:
+        with pytest.raises(SyncError, match=f"HTTP {status} x{{300}}$"):
+            client(fake).call("GET", {})
 
 
 def test_a_network_error_is_a_sync_error_without_the_message_of_the_exception(jobs: sqlite3.Connection) -> None:
@@ -166,7 +236,15 @@ def test_quality_report_has_both_shares(jobs: sqlite3.Connection) -> None:
     assert "jobs in Israel are in a region" in report
 
 
-@pytest.mark.parametrize("env", [{}, {"SUPABASE_URL": URL}, {"SUPABASE_URL": "", "SUPABASE_SERVICE_ROLE_KEY": KEY}])
+@pytest.mark.parametrize(
+    "env",
+    [
+        {},
+        {"SUPABASE_URL": URL},
+        {"SUPABASE_URL": "", "SUPABASE_SERVICE_ROLE_KEY": KEY},
+        {"SUPABASE_URL": URL, "SUPABASE_SERVICE_ROLE_KEY": " \n"},
+    ],
+)
 def test_main_is_skipped_cleanly_without_the_secrets(
     env: dict[str, str], monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], workdir: Any
 ) -> None:
@@ -184,9 +262,10 @@ def test_main_syncs_and_prints_the_log(
     jobs.commit()
     fake = FakeSupabase()
     monkeypatch.setenv("SUPABASE_URL", f" {URL} ")
-    monkeypatch.setenv("SUPABASE_SERVICE_ROLE_KEY", KEY)
+    monkeypatch.setenv("SUPABASE_SERVICE_ROLE_KEY", f"{KEY}\n")  # a pasted secret often ends in a newline
     monkeypatch.setattr(sync_supabase.requests, "Session", lambda: fake)
     sync_supabase.main()
+    assert fake.calls[0]["headers"]["apikey"] == KEY
     out = capsys.readouterr().out
     assert "Supabase: 3 open jobs upserted, 0 closed" in out
     assert "Role types: " in out
