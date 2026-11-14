@@ -67,11 +67,35 @@ def close_unseen(c: sqlite3.Connection, name: str, seen: set[str]) -> None:
             c.execute("UPDATE jobs SET status='closed' WHERE company=? AND job_id=?", (name, jid))
 
 
+def is_known(c: sqlite3.Connection, co: dict[str, Any], now: str) -> bool:
+    """Has this company been seen before? A company seen for the first time is baselined silently, so adding one never
+    floods the digest. Stored jobs say it was seen. An israel_only company stores only its Israel jobs, so one with
+    none stored counts as seen once a crawl of the same kind has worked: otherwise the first Israel job it ever lists
+    would be baselined silently and never reach the digest."""
+    if c.execute("SELECT 1 FROM jobs WHERE company=?", (co["name"],)).fetchone():
+        return True
+    if not co.get("israel_only"):
+        return False
+    worked = c.execute(
+        "SELECT 1 FROM crawl_log WHERE company=? AND ats=? AND ok=1 AND ts < ?", (co["name"], co["ats"], now)
+    ).fetchone()
+    return bool(worked)
+
+
+def fetch(co: dict[str, Any]) -> list[dict[str, Any]] | None:
+    """One adapter call. An adapter that raises fails its own company, not the whole run."""
+    try:
+        return ADAPTERS[co["ats"]](co["slug"])
+    except Exception as exc:
+        WHY[co["slug"]] = f"adapter error: {type(exc).__name__}: {exc}"[:200]
+        return None
+
+
 def crawl(co: dict[str, Any]) -> tuple[dict[str, Any], list[dict[str, Any]] | None]:
-    jobs = ADAPTERS[co["ats"]](co["slug"])
+    jobs = fetch(co)
     if jobs is None:  # one retry: most failures are transient rate limits
         time.sleep(4)
-        jobs = ADAPTERS[co["ats"]](co["slug"])
+        jobs = fetch(co)
     return co, jobs
 
 
@@ -116,14 +140,7 @@ def main() -> None:  # noqa: PLR0912
         if held:
             failed.append(name)  # a crawl that probably lost most of the list: record what it saw, close nothing
         seen: set[str] = set()
-        # a company is new until a crawl has worked once: counting stored jobs alone would baseline silently the first
-        # Israel job of an israel_only company that had none, which is never stored before it appears
-        known = (
-            c.execute("SELECT COUNT(*) FROM jobs WHERE company=?", (name,)).fetchone()[0]
-            or c.execute("SELECT COUNT(*) FROM crawl_log WHERE company=? AND ok=1 AND ts < ?", (name, now)).fetchone()[
-                0
-            ]
-        )
+        known = is_known(c, co, now)
         for j in jobs:
             seen.add(j["job_id"])
             cur = c.execute("SELECT 1 FROM jobs WHERE company=? AND job_id=?", (name, j["job_id"])).fetchone()
