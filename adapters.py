@@ -6,6 +6,7 @@ import json
 import re
 from collections.abc import Callable, Iterator
 from typing import Any
+from urllib.parse import urlparse
 
 from common import get, post
 
@@ -158,36 +159,44 @@ def comeet(slug: str) -> list[Job] | None:
 
 
 _JAZZHR_ITEM = '<li class="list-group-item">'
+_JAZZHR_ITEM_END = re.compile(r"</ul>\s*</li>")
 _JAZZHR_LINK = re.compile(r'<a href="(https://[^"]+/apply/([A-Za-z0-9]+)/[^"]*)">(.*?)</a>', re.S)
+_JAZZHR_ANY_JOB_LINK = re.compile(r'href="https://[^"]+/apply/([A-Za-z0-9]+)/')
 _JAZZHR_FACT = re.compile(r"<li><i class='fa fa-(map-marker|sitemap)'></i>(.*?)</li>", re.S)
+_JAZZHR_TAG = re.compile(r"<[^>]+>")
 
 
 def _jazzhr_text(raw: str) -> str:
-    return html.unescape(re.sub(r"\s+", " ", raw)).strip()
+    return html.unescape(re.sub(r"\s+", " ", _JAZZHR_TAG.sub(" ", raw))).strip()
 
 
 def jazzhr(slug: str) -> list[Job] | None:
     """slug is the `<slug>` of `<slug>.applytojob.com`. JazzHR has no public feed: the board page lists the jobs as HTML
-    (a title link, then a map-marker location and a sitemap department)."""
+    (a title link, then a map-marker location and a sitemap department). Only a page that reads cleanly gives a list:
+    anything else is None, because an empty list would close every stored job."""
     r = get(f"https://{slug}.applytojob.com/apply")
     # an unknown slug redirects to jazzhr.com, and a changed page layout loses the job list: neither is "no jobs"
-    if r is None or r.status_code != HTTP_OK or ".applytojob.com/" not in r.url or "jobs-list" not in r.text:
+    if r is None or r.status_code != HTTP_OK or urlparse(r.url).hostname != f"{slug}.applytojob.com":
+        return None
+    _, marker, board = r.text.partition("jobs-list")
+    if not marker:
         return None
     out: list[Job] = []
-    for item in r.text.split(_JAZZHR_ITEM)[1:]:
+    for chunk in board.split(_JAZZHR_ITEM)[1:]:
+        item = _JAZZHR_ITEM_END.split(chunk)[0]  # the footer and anything after the list is not part of the last job
         link = _JAZZHR_LINK.search(item)
-        if not link:
+        title = _jazzhr_text(link.group(3)) if link else ""
+        if not link or not title:
             return None  # an entry we cannot read: a partial list would close the jobs we missed
-        facts = {kind: _jazzhr_text(value) for kind, value in _JAZZHR_FACT.findall(item)}
+        facts: dict[str, str] = {}
+        for kind, value in _JAZZHR_FACT.findall(item):
+            facts.setdefault(kind, _jazzhr_text(value))
         out.append(
-            _job(
-                link.group(2),
-                _jazzhr_text(link.group(3)),
-                facts.get("map-marker"),
-                html.unescape(link.group(1)),
-                team=facts.get("sitemap"),
-            )
+            _job(link.group(2), title, facts.get("map-marker"), html.unescape(link.group(1)), team=facts.get("sitemap"))
         )
+    # job links the item markup did not yield (a changed layout) mean the list is not complete
+    if len(set(_JAZZHR_ANY_JOB_LINK.findall(board))) != len({j["job_id"] for j in out}):
+        return None
     return out
 
 
