@@ -762,5 +762,10 @@
   "ats": "phenom",
   "slug": "careers.gehealthcare.com/global/en",
   "israel_only": true
+ },
+ "HP": {
+  "ats": "browser",
+  "slug": "https://apply.hp.com/careers?location=Israel",
+  "israel_only": true
  }
 }

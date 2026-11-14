@@ -2657,5 +2657,17 @@
   "n_jobs": 34,
   "n_israel": 34,
   "israel_only": true
+ },
+ {
+  "name": "HP",
+  "domain": "hp.com",
+  "careers_url": "https://apply.hp.com/careers?location=Israel",
+  "ats": "browser",
+  "slug": "https://apply.hp.com/careers?location=Israel",
+  "source": "override",
+  "status": "ok",
+  "n_jobs": null,
+  "n_israel": null,
+  "israel_only": true
  }
 ]
