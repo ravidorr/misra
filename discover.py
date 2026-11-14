@@ -23,8 +23,11 @@ ATS_LINK = [
     ),
     ("lever", re.compile(r"jobs\.lever\.co/([A-Za-z0-9_\-]+)", re.I)),
     ("ashby", re.compile(r"jobs\.ashbyhq\.com/([A-Za-z0-9_.\-%]+)", re.I)),
-    ("workable", re.compile(r"apply\.workable\.com/([A-Za-z0-9_\-]+)", re.I)),
+    # `apply.workable.com/j/<shortcode>` is a job link, not a board: its `j` is not an account
+    ("workable", re.compile(r"apply\.workable\.com/(?!j/)([A-Za-z0-9_\-]+)", re.I)),
     ("smartrecruiters", re.compile(r"(?:jobs|careers)\.smartrecruiters\.com/([A-Za-z0-9_\-]+)", re.I)),
+    ("jazzhr", re.compile(r"(?<![A-Za-z0-9_\-])(?!www\.)([A-Za-z0-9_\-]+)\.applytojob\.com", re.I)),
+    ("bamboohr", re.compile(r"(?<![A-Za-z0-9_\-])(?!www\.)([A-Za-z0-9_\-]+)\.bamboohr\.com", re.I)),
 ]
 CAREER_PATHS = ["/careers", "/jobs", "/careers/", "/company/careers", "/about/careers", "/join-us", "/careers/jobs"]
 
