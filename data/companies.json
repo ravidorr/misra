@@ -2322,5 +2322,89 @@
   "status": "ok",
   "n_jobs": null,
   "n_israel": null
+ },
+ {
+  "name": "DoubleVerify",
+  "domain": "doubleverify.com",
+  "careers_url": "",
+  "ats": "workday",
+  "slug": "doubleverify/wd5/DV_Careers",
+  "source": "override",
+  "status": "ok",
+  "n_jobs": 3,
+  "n_israel": 3,
+  "israel_only": true
+ },
+ {
+  "name": "Visa",
+  "domain": "visa.com",
+  "careers_url": "",
+  "ats": "workday",
+  "slug": "visa/wd5/Visa",
+  "source": "override",
+  "status": "ok",
+  "n_jobs": 0,
+  "n_israel": 0,
+  "israel_only": true
+ },
+ {
+  "name": "Motorola Solutions",
+  "domain": "motorolasolutions.com",
+  "careers_url": "",
+  "ats": "workday",
+  "slug": "motorolasolutions/wd5/Careers",
+  "source": "override",
+  "status": "ok",
+  "n_jobs": 13,
+  "n_israel": 13,
+  "israel_only": true
+ },
+ {
+  "name": "Palo Alto Networks",
+  "domain": "paloaltonetworks.com",
+  "careers_url": "",
+  "ats": "workday",
+  "slug": "paloaltonetworks/wd5/panwexternalcareers",
+  "source": "override",
+  "status": "ok",
+  "n_jobs": 110,
+  "n_israel": 110,
+  "israel_only": true
+ },
+ {
+  "name": "CrowdStrike",
+  "domain": "crowdstrike.com",
+  "careers_url": "",
+  "ats": "workday",
+  "slug": "crowdstrike/wd5/crowdstrikecareers",
+  "source": "override",
+  "status": "ok",
+  "n_jobs": 11,
+  "n_israel": 11,
+  "israel_only": true
+ },
+ {
+  "name": "Proofpoint",
+  "domain": "proofpoint.com",
+  "careers_url": "",
+  "ats": "workday",
+  "slug": "proofpoint/wd5/proofpointcareers",
+  "source": "override",
+  "status": "ok",
+  "n_jobs": 0,
+  "n_israel": 0,
+  "israel_only": true
+ },
+ {
+  "name": "Integral Ad Science",
+  "domain": "integralads.com",
+  "careers_url": "",
+  "ats": "workday",
+  "slug": "integralads/wd1/IAScareers",
+  "source": "override",
+  "status": "ok",
+  "n_jobs": 0,
+  "n_israel": 0,
+  "israel_only": true
  }
 ]
