@@ -2818,5 +2818,16 @@
   "n_jobs": 0,
   "n_israel": 0,
   "israel_only": true
+ },
+ {
+  "name": "DarioHealth",
+  "domain": "dariohealth.com",
+  "careers_url": "",
+  "ats": "comeet",
+  "slug": "Dario.Health/34.006",
+  "source": "override",
+  "status": "ok",
+  "n_jobs": 2,
+  "n_israel": 0
  }
 ]

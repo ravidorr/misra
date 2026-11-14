@@ -1,8 +1,8 @@
 # TODO
 
 Open work, as of 2026-11-14. Each item says what triggers it, how to do it and when it is done. When one is finished,
-delete it and update the counts in the others: the 94 and the four segment counts in the research item (a pin removes
-one row from one segment), its "(30)" if the company had no careers URL, else its "(64 today)".
+delete it and update the counts in the others: the 93 and the four segment counts in the research item (a pin removes
+one row from one segment), its "(30)" if the company had no careers URL, else its "(63 today)".
 Observations about live sites below come from checks made on 2026-11-14 and may have changed.
 
 ## Review the Node and Python pins
@@ -37,8 +37,8 @@ Observations about live sites below come from checks made on 2026-11-14 and may 
 
 ## Research the remaining unresolved companies
 
-- [ ] `data/unresolved_candidates.csv` lists 94 researched companies with no usable job feed (as of 2026-11-14: 24
-  multinational, 43 deeptech, 13 cyber_infra, 14 biz_software). Each needs
+- [ ] `data/unresolved_candidates.csv` lists 93 researched companies with no usable job feed (as of 2026-11-14: 24
+  multinational, 42 deeptech, 13 cyber_infra, 14 biz_software). Each needs
   its own research; there is no batch fix left. Every observation about a live site below is from the checks of
   2026-11-14, a crawl of the 105 rows that had a careers URL that day (64 today) and a scan of their rendered pages. The
   remaining work falls into these groups:
@@ -50,8 +50,11 @@ Observations about live sites below come from checks made on 2026-11-14 and may 
     address or their ATS (see the last group).
   - **A job board was found but there is no adapter.** Playstudios and Booking.com. Playstudios was listed as a Jobvite
     board, but on 2026-11-14 `jobs.jobvite.com/playstudios-inc` is an invalid board and the careers page links to
-    Dayforce (`jobs.dayforcehcm.com/en-US/playstudios/CANDIDATEPORTAL`, a page that renders in a browser); it has a Tel
-    Aviv office, so it needs a Dayforce adapter or a browser pin. Booking.com (iCIMS) is skipped: its iCIMS board answered
+    Dayforce (`jobs.dayforcehcm.com/en-US/playstudios/CANDIDATEPORTAL`). `browser_crawl.crawl_many` reads its 12 jobs with
+    real titles and distinct links but an empty location for every one, so none could be recognised as Israel (the page
+    shows 5 in Tel Aviv-Yafo), so it is not a browser pin. The portal has a JSON search (`POST
+    /api/geo/playstudios/jobposting/search`, locations as `formattedAddress`); a Dayforce adapter would read it, but no
+    other company in the lists is on Dayforce, so write one only when a second appears. Booking.com (iCIMS) is skipped: its iCIMS board answered
     403 to a plain request on 2026-11-14 (bot protection, not to be bypassed) and `careers.booking.com` is a custom site
     with no job feed; revisit it with the large multinationals. A new adapter is its own PR: a function in `adapters.py`,
     an entry in `ADAPTERS`, tests with the fakes in `tests/test_adapters.py`, a version bump and a changelog entry.
@@ -65,8 +68,10 @@ Observations about live sites below come from checks made on 2026-11-14 and may 
       would fetch 325 jobs a day to store none.
     - Cloudflare: the Greenhouse board's locations are "Hybrid" or "Distributed", never a city, so an Israel job could
       not be recognised. The adapter would need to read the offices (`?content=true`) first.
-  - **The page returned links, not jobs.** Ex Libris, Optibus, REE Automotive, Ormat and similar pages gave navigation
-    links such as "View openings". Follow the link to the real list one level down; it may embed a board.
+  - **The page returned links, not jobs.** Checked on 2026-11-14: Ex Libris links to `careers.clarivate.com`, a
+    worldwide Phenom board of its parent Clarivate (not Ex Libris only); Ormat's list is a ViziRecruiter board
+    (`vizi.vizirecruiter.com/OrmatTechnologiesInc-4638`, one company so no adapter); Optibus has no feed in its page or
+    network requests; REE Automotive is in the next group.
   - **Large multinational boards that show a worldwide first page.** Google, Intuit, Apple, IBM
     and others returned jobs, but almost none in Israel (Apple's page had one), because the page is a worldwide search.
     They need a career address filtered to Israel (as `citi.eightfold.ai/careers?location=Israel` is) with `israel_only`,
@@ -108,7 +113,32 @@ Observations about live sites below come from checks made on 2026-11-14 and may 
     the uid is also in a vacancy page), and three boards with no job today, pinned with `israel_only` so the first Israel job
     reaches the digest: Foretellix (`Foretellix/84.007`), XM Cyber (`xmcyber/15.005`) and Dataloop (`dataloop/B5.00A`); Sunbit (`sunbit/37.001`, 40 jobs, 8 in Israel; the uid is in the
     source of a `?job=` page) and Firefly (`firefly/39.000`, `israel_only`: the board holds one "Future Opportunities" entry
-    with no place).
+    with no place), and DarioHealth (`Dario.Health/34.006`, 2 jobs, both in India today).
+    Not done, and why (all checked on 2026-11-14, do not repeat):
+    - Comeet plugin pages whose account answers 400 ("Account uid or token are not valid") and whose hosted board has no
+      data, but whose WordPress page still lists jobs drawn server-side: REE Automotive (uid D3.00B, 2 jobs, one in
+      Glil Yam), Gauzy (C5.003, 9 jobs, none in Israel, the Tel Aviv filter is empty) and Apester (58.002). Guesty (24
+      positions, several in Israel), Kornit (11 positions, 6 in Israel) and SQream (1 position; its uid 45.00B is a
+      board named Scailium with no hosted page) show the same plugin but no uid in the page. Reading them means parsing
+      the plugin's links `/co/<place>/<XX.XXX>/<title>/all` out of the page HTML, whose card markup differs by theme; with
+      REE, Gauzy, Guesty, SQream and Kornit on it, one adapter could be justified (titles from the markup, a failed
+      parse returns None).
+    - Comeet account valid but not the company's own board: Magic Software (19.00F is Matrix IFS, 23 jobs, none in
+      Israel). NeuReality (89.002) answers no job and says there are no open positions: pin it once it lists one (the
+      hosted page is not served, so the `comeet` adapter returns None for it).
+    - No openings at all, no feed to pin: Mitiga ("We don't have any openings right now"), Applitools ("No openings
+      available"), H2Pro and Madgicx (no open positions; Madgicx takes CVs through a ClickUp form).
+    - Own-site pages the crawler's link pattern does not match, no ATS behind them: Pillar Security
+      (`/open-position/<slug>`, 1 Tel Aviv job), Walnut (`/jobs/<slug>`), env0 (`/careers/<slug>`), Deep Instinct (PDF job
+      descriptions, none in Israel), Firefly's own `/positions/` pages (Firefly itself is pinned above), Syte (job list
+      by script, no job link), Tyto Care and StoreDot (list or CV form with no job link), Swimm (an email address).
+    - Dead or unusable: Jelly Button Games, Kahun, Nucleai and Quantum Art (domain parked at GoDaddy), Satixfy (now an
+      MDA Space page), Line 5 (needs a login), lakeFS and Quantum Art (403 or "Access Denied": bot protection), Radware
+      and Camtek (an empty page), Elbit Systems (timeout on the news page; its careers site `elbitsystemscareer.com` is a
+      Hebrew custom site with no feed seen), ReWalk (its list on `golifeward.com/company/careers/` is US jobs, no Israel
+      job), Lumigo, Aniview, AnyClip, Pay-Me, Evogene, Aleph Farms, Remilk, Redefine Meat, Landa, Nano Dimension, Tabit,
+      Cognata: no ATS link, feed or job link in the HTML or the network
+      requests; not investigated further.
   - **Bot protection.** Some pages answered 403, "Access Denied" or a browser check. Leave them and record it. Do not try
     to get around bot protection: a few pinned companies (Check Point, Papaya Global, Unity) are already blocked from the CI
     runner this way and show up as gaps in the digest.
