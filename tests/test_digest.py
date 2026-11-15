@@ -272,13 +272,6 @@ def test_a_company_no_longer_crawled_is_not_a_gap(
     assert bool(gaps_of(db, "Gone")) is listed
 
 
-def test_last_good_is_the_last_successful_day_or_never(db: sqlite3.Connection) -> None:
-    add_crawls(db, "Was", [(1, ""), (1, ""), (0, FAIL), (0, FAIL)])
-    add_crawls(db, "Never", [(0, FAIL), (0, FAIL)])
-    assert only_gap(db, "Was")["last_good"] == "2026-01-02"
-    assert only_gap(db, "Never")["last_good"] == "never"
-
-
 def test_any_kind_of_crawler_can_fail(db: sqlite3.Connection) -> None:
     add_crawls(db, "Acme", [(1, ""), (0, "request failed"), (0, "request failed")], ats="greenhouse")
     assert only_gap(db, "Acme")["kind"] == "failing"
@@ -298,7 +291,7 @@ def test_rows_are_read_in_time_order_with_the_later_row_winning_a_tie(db: sqlite
         [(t, c, "x", o, 0, n) for c, t, o, n in rows],
     )
     late = only_gap(db, "Late")
-    assert (late["since"], late["last_good"]) == (DAY.format(2), "2026-01-01")
+    assert late["since"] == DAY.format(2)
     assert only_gap(db, "Tie")["kind"] == "failing"  # [ok, fail, fail]: the last two failed
 
 
@@ -346,8 +339,8 @@ def test_a_problem_in_the_gap_check_comes_back_as_text(
     assert digest.safe_coverage_gaps(db)[1].startswith("OperationalError")
 
 
-def gap(company: str, kind: str, note: str, new: bool = True, last_good: str = "2026-01-02") -> dict[str, object]:
-    return {"company": company, "kind": kind, "note": note, "new": new, "last_good": last_good, "since": DAY.format(1)}
+def gap(company: str, kind: str, note: str, new: bool = True) -> dict[str, object]:
+    return {"company": company, "kind": kind, "note": note, "new": new, "since": DAY.format(1)}
 
 
 def test_gap_summary_is_counts_and_names_only() -> None:
@@ -355,7 +348,7 @@ def test_gap_summary_is_counts_and_names_only() -> None:
         gap("Blocked & Co", "failing", FAIL),
         gap("Held", "held", HELD, new=False),
         gap("Gone", "closed", PARTIAL),
-        gap("Silent", "failing", "", new=False, last_good="never"),
+        gap("Silent", "failing", "", new=False),
     ]
     line = digest.gap_summary(gaps)
     assert line == "coverage gaps: 4 (2 new): failing 2 (Blocked & Co, Silent); held 1 (Held); closed 1 (Gone)"

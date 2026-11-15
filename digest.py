@@ -65,7 +65,7 @@ def _outage_start(seq: list[tuple[int, str, str]]) -> str:
 
 
 def coverage_gaps(c: sqlite3.Connection) -> list[dict[str, Any]]:
-    """Companies whose crawls need a person's attention, one dict each: company, kind, note, last_good, since, new.
+    """Companies whose crawls need a person's attention, one dict each: company, kind, note, since, new.
 
     kind is "failing" (the last two crawls failed, as in the dashboard's coverage gaps), "held" (the last crawl was
     held back as a sharp drop: nothing closed) or "closed" (a crawl believed a sharp drop and closed the jobs it no
@@ -88,12 +88,12 @@ def coverage_gaps(c: sqlite3.Connection) -> list[dict[str, Any]]:
         return []
     newest = max(seq[-1][2][:10] for seq in history.values())
     cutoff = (datetime.date.fromisoformat(newest) - datetime.timedelta(days=GAP_STALE_DAYS)).isoformat()
-    last_good = dict(c.execute("SELECT company, MAX(substr(ts,1,10)) FROM crawl_log WHERE ok=1 GROUP BY company"))
     gaps: list[dict[str, Any]] = []
 
     def add(company: str, kind: str, note: str, since: str) -> None:
-        gap = {"company": company, "kind": kind, "note": note, "since": since}
-        gaps.append({**gap, "last_good": last_good.get(company, "never"), "new": (company, since) not in alerted})
+        gaps.append(
+            {"company": company, "kind": kind, "note": note, "since": since, "new": (company, since) not in alerted}
+        )
 
     for company, seq in sorted(history.items()):
         if seq[-1][2][:10] < cutoff:

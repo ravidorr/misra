@@ -92,7 +92,7 @@ def test_a_coverage_gap_alone_sends_no_email_but_is_in_the_log(
     send_email.main()
     out = capsys.readouterr().out
     assert FakeSMTP.instances == []
-    assert "coverage gaps: 1 (1 new): failing 1 (Blocked)" in out
+    assert "::warning::coverage gaps: 1 (1 new): failing 1 (Blocked)" in out
     assert "nothing sent" in out
     assert db.execute("SELECT COUNT(*) FROM gap_alerts").fetchone()[0] == 1  # logged: no longer new
 
@@ -103,7 +103,9 @@ def test_a_gap_is_new_in_the_log_once(db: sqlite3.Connection, capsys: pytest.Cap
     add_crawls(db, "Blocked", [(0, "HTTP 403")], start_day=4)  # still blocked tomorrow
     capsys.readouterr()
     send_email.main()
-    assert "coverage gaps: 1 (0 new): failing 1 (Blocked)" in capsys.readouterr().out
+    out = capsys.readouterr().out
+    assert "coverage gaps: 1 (0 new): failing 1 (Blocked)" in out
+    assert "::warning::" not in out  # an old gap is only a log line
 
 
 def test_the_email_never_has_the_not_crawled_section_even_with_crawl_problems(db: sqlite3.Connection) -> None:
@@ -138,10 +140,12 @@ def test_a_failed_send_tries_the_jobs_again_next_day(db: sqlite3.Connection, mon
             raise smtplib.SMTPException("down")
 
     add_job(db, "A", "1", "Product Manager")
+    add_crawls(db, "Blocked", BLOCKED)
     monkeypatch.setattr(send_email.smtplib, "SMTP_SSL", Down)
     with pytest.raises(smtplib.SMTPException):
         send_email.main()
     assert db.execute("SELECT reported FROM jobs").fetchone()[0] == 0
+    assert db.execute("SELECT COUNT(*) FROM gap_alerts").fetchone()[0] == 1  # logged before the send, not tied to it
     monkeypatch.setattr(send_email.smtplib, "SMTP_SSL", FakeSMTP)
     send_email.main()
     assert FakeSMTP.instances[-1].sent[0]["Subject"].startswith("New Israel jobs: 1 (")

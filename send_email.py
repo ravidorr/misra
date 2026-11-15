@@ -17,7 +17,8 @@ def send(dry: bool) -> str:
     jobs = select(c)
     gaps, gap_error = safe_coverage_gaps(c)
     if gaps:  # the email carries jobs only; crawl problems are recorded in the job log, so they are not silent
-        print(gap_summary(gaps))
+        new = any(g["new"] for g in gaps)
+        print(("::warning::" if new else "") + gap_summary(gaps))  # a new gap shows as an annotation on the run
         if not dry:
             mark_alerted(c, gaps)
             c.commit()
