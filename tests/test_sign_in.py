@@ -386,11 +386,17 @@ async def test_fr1_ac7_the_notice_says_what_signing_in_is_for(page: Page, site: 
     await serve(page, site)
     note = page.locator("#signInNote")
     await expect(note).to_be_visible()
-    text = await note.inner_text()
-    assert "By signing in with Google you agree to the Privacy Notice" in text
-    assert "Signing in is voluntary" in text
-    assert "your email is used only to save your choices on your devices" in text
-    assert "to send any email alerts you turn on" in text
+    paragraphs = [" ".join(t.split()) for t in await note.locator("p").all_text_contents()]
+    first, second, *rest = paragraphs
+    assert first == 'Sign in to sync your stars, "Not for me" choices, and saved filters across devices.'
+    assert rest == []  # two paragraphs, no more
+    assert second == (
+        "Signing in is optional. We store only your Google email address and job preferences in our EU database "
+        "(Supabase)\u2014never your CV, password, or tracking cookies. "
+        # accuracy fix: Supabase's own sign-in record also holds the Google name and photo, as PRIVACY.md says
+        "(Supabase's own sign-in record also holds your Google name and photo until you delete your account.) "
+        "By signing in, you agree to the Terms (opens in a new tab) and Privacy Notice (opens in a new tab)."
+    )
     privacy = note.get_by_role("link", name="Privacy Notice (opens in a new tab)")
     assert await privacy.get_attribute("href") == f"{BLOB}/PRIVACY.md"
     assert await note.get_by_role("link", name="Terms (opens in a new tab)").get_attribute("href") == f"{BLOB}/TERMS.md"
@@ -403,8 +409,8 @@ async def test_fr1_ac7_the_notice_says_what_signing_in_is_for(page: Page, site: 
     assert await page.evaluate("document.querySelector('main').firstElementChild.id") == "signInNote"
     await page.focus("#signIn")
     await page.keyboard.press("Tab")  # the theme button
-    await page.keyboard.press("Tab")  # the Privacy Notice link
-    assert await page.evaluate("document.activeElement.textContent.startsWith('Privacy Notice')")
+    await page.keyboard.press("Tab")  # the Terms link (the Privacy Notice link follows)
+    assert await page.evaluate("document.activeElement.textContent.startsWith('Terms')")
 
 
 async def test_fr1_ac7_the_notice_goes_when_signed_in_and_returns_when_signed_out(page: Page, site: Path) -> None:
