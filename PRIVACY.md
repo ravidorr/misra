@@ -66,7 +66,7 @@ The page loads no fonts, scripts or images from any other service, and its secur
 
 ## Your rights
 
-Under the Israeli Privacy Protection Law you have the right to see the data we hold about you (Section 13), and to ask us to correct it or delete it (Section 14). When you are signed in, the dashboard shows your own stars, "Not for me" choices and filters. To see everything we hold about you, to have something corrected, or to have your data deleted by hand, write to <raanan@avidor.org>. We answer within 30 days, and normally much sooner. Deleting your account yourself is described below.
+Under the Israeli Privacy Protection Law, you have the right to see the data we hold about you (Section 13) and to ask us to correct or delete data that is inaccurate, incomplete, unclear, or out of date (Section 14). Beyond what the law requires, you can also delete your entire account and all data we hold about you at any time, for any reason (see "How to delete your data" below). When you are signed in, the dashboard shows your own stars, "Not for me" choices and filters. To see everything we hold about you, to have something corrected, or to have your data deleted by hand, write to <raanan@avidor.org>. We answer within 30 days, and normally much sooner. Deleting your account yourself is described below.
 
 ## Cookies and tracking
 
