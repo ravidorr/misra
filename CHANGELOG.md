@@ -4,6 +4,22 @@ All notable changes are documented here. Format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
+## [0.34.0] - 2026-11-15
+
+### Changed
+
+- The dashboard is built phone first. The search is the first control under the headline at every width, with a longer placeholder ("Search roles, companies, cities"). On a phone (under 561 px wide, or under 500 px tall) a "Filters" button, with the number of active filters ("Filters (2)": a group of values counts once, the search words do not), opens the filters as a bottom sheet; the level chips and "New only" stay in view as quick filters, and the sheet has "Close", "Reset filters" and "Show N roles". The sheet is one native `<dialog>` (new `design-system/components/sheet.css`): a panel in the page on a wide screen, `showModal()` on a phone, so the browser traps focus, closes it on Esc and the focus returns to "Filters". The headline is one line on a phone, and a card there shows the company, the title and Apply before its tags. "Hiring now" is a disclosure (closed on a phone, open on a wide screen) over a grid that wraps; it never scrolls sideways.
+- A notice has the border, radius and shadow of a card (`.notice` uses `--radius-card` and `--shadow-md`; none inside a dialog or a sheet). The "account deleted" message, `.sync-note`, the import offer and the load error now match the cards.
+
+### Fixed
+
+- The whole page scrolled sideways at every width: the hidden count in each "Hiring now" circle (`.sr-only`, absolute) had no positioned parent. `.story` is now `position: relative`.
+
+### Added
+
+- `tests/test_phone_layout.py`: no horizontal page scroll at 320, 375, 393, 430, 768 and 1650 px in both themes (and landscape, with the sheet open), every control a 44 px target on a phone and on a desktop, the search on the first screen at 375 px, the first role on the first screen of a 393x852 iPhone, "Hiring now" shows its 15 companies without a sideways scroll, the count on "Filters", the sheet by keyboard (focus trap, Esc, focus back), and a notice and a card sharing border, radius and shadow.
+- The five finished items (and their screenshots) are gone from `TODO.md`.
+
 ## [0.32.0] - 2026-11-15
 
 ### Added

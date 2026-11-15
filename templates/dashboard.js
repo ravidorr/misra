@@ -1065,6 +1065,18 @@ function sync() {
   }
   for (const box of $('places').querySelectorAll('input')) box.checked = F.places.includes(box.value);
   $('places-title').textContent = F.places.length > 0 ? `Places (${F.places.length} chosen)` : 'Places';
+  const active = activeFilterCount(F);
+  $('filtersOpen').textContent = active > 0 ? `Filters (${active})` : 'Filters';
+}
+
+/* How many filters differ from the defaults, a group of values (levels, role types, regions, places) counting once.
+   The search words are not a filter: the search box shows them. */
+function activeFilterCount(f) {
+  const base = defaults();
+  const groups = ['levels', 'types', 'regions', 'places'].filter((name) => f[name].length > 0);
+  const settings = ['company', 'loc', 'sort'].filter((name) => f[name] !== base[name]);
+  const switches = ['remote', 'onlyNew', 'showGone', 'hideStale'].filter((name) => f[name]);
+  return groups.length + settings.length + switches.length;
 }
 
 /* One chip per value of a filter, after an "All" chip that clears it. */
@@ -1262,7 +1274,7 @@ function announce(text) {
    type), so they are put away while it shows. */
 function showView() {
   const roles = view === 'roles';
-  for (const id of ['controlsBar', 'moreFilters', 'searchBar']) $(id).hidden = !roles;
+  for (const id of ['controlsBar', 'moreFilters', 'searchBar', 'filtersOpen', 'onlyNew']) $(id).hidden = !roles;
   $('starredView').setAttribute('aria-pressed', String(!roles));
   $('starredView').textContent = `Starred (${starredItems().length})`;
 }
@@ -1293,6 +1305,7 @@ function render(focusIdx) {
     const summary = `Showing ${res.length} of ${scope} open roles ${F.loc === 'il' ? 'in Israel' : 'in all locations'}. ${goneN} discarded.`;
     $('summary').textContent = summary;
     announce(summary);
+    $('filtersDone').textContent = `Show ${res.length} ${res.length === 1 ? 'role' : 'roles'}`;
     renderStories();
   }
   const list = $('list');
@@ -1393,6 +1406,37 @@ $('reset').addEventListener('click', () => {
   for (const item of $('places').children) item.hidden = false;
   update();
 });
+/* The filters are a panel in the page on a wide screen and a bottom sheet on a phone. It is one native <dialog>: open
+   as a panel (show) on a wide screen, and opened modally (showModal) from "Filters" on a narrow one, where the browser
+   traps focus, closes it on Esc and hides the page from screen readers. The media query is the one in sheet.css. */
+const sheet = $('moreFilters');
+const compact = matchMedia('(width < 561px), (height < 500px)');
+$('hiring').open = !compact.matches;
+
+function openFilters() {
+  sheet.close(); /* the markup opens it as a panel, and showModal() refuses a dialog that is already open */
+  sheet.showModal();
+  $('sheetTitle').focus();
+}
+function closeFilters() {
+  sheet.close();
+}
+sheet.addEventListener('close', () => {
+  if (sheet.matches(':modal')) return; /* the close() that openFilters made, reported after showModal */
+  if (compact.matches) $('filtersOpen').focus();
+  else sheet.show();
+});
+compact.addEventListener('change', () => {
+  if (compact.matches) return;
+  if (sheet.matches(':modal')) sheet.close(); /* its close event shows the panel */
+  else if (!sheet.open) sheet.show();
+});
+sheet.addEventListener('click', (e) => {
+  if (e.target === sheet) closeFilters(); /* the backdrop */
+});
+$('filtersOpen').addEventListener('click', openFilters);
+$('filtersClose').addEventListener('click', closeFilters);
+$('filtersDone').addEventListener('click', closeFilters);
 $('size').addEventListener('change', (e) => {
   F.size = Number(e.target.value);
   update();

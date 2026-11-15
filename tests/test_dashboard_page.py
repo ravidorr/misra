@@ -9,6 +9,7 @@ import json
 import mimetypes
 import shutil
 import sqlite3
+from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
@@ -58,8 +59,9 @@ def site(db: sqlite3.Connection, workdir: Path, monkeypatch: pytest.MonkeyPatch)
     return build_site(db, workdir)
 
 
-def build_site(db: sqlite3.Connection, workdir: Path) -> Path:
-    """The real templates and design system built over a small database; returns docs/."""
+def build_site(db: sqlite3.Connection, workdir: Path, fill: Callable[[sqlite3.Connection], None] | None = None) -> Path:
+    """The real templates and design system built over a small database (the jobs `fill` adds, else a few of Acme's);
+    returns docs/."""
     shutil.copytree(REPO / "templates", workdir / "templates", dirs_exist_ok=True)
     shutil.copytree(REPO / "design-system", workdir / "design-system")
     shutil.copytree(REPO / "vendor", workdir / "vendor")
@@ -79,12 +81,15 @@ def build_site(db: sqlite3.Connection, workdir: Path) -> Path:
         "Walled,walled.test,https://walled.test/jobs,multinational,bot_protection,\r\n",
         encoding="utf-8",
     )
-    old = (datetime.now(UTC) - timedelta(days=30)).strftime("%Y-%m-%dT00:00:00")
-    today = datetime.now(UTC).strftime("%Y-%m-%dT00:00:00")
-    add_job(db, "Acme", "0", "Accountant", first_seen=old)
-    for n in range(1, ISRAEL_JOBS):
-        add_job(db, "Acme", str(n), f"Product Manager {n}", first_seen=today)
-    add_job(db, "Globex", "1", "Designer", location="London", first_seen=old)
+    if fill is not None:
+        fill(db)
+    else:
+        old = (datetime.now(UTC) - timedelta(days=30)).strftime("%Y-%m-%dT00:00:00")
+        today = datetime.now(UTC).strftime("%Y-%m-%dT00:00:00")
+        add_job(db, "Acme", "0", "Accountant", first_seen=old)
+        for n in range(1, ISRAEL_JOBS):
+            add_job(db, "Acme", str(n), f"Product Manager {n}", first_seen=today)
+        add_job(db, "Globex", "1", "Designer", location="London", first_seen=old)
     write_json(workdir / "rows.json", list(sync_supabase.open_rows(db)))
     db.close()
     build_dashboard.main()
@@ -1145,9 +1150,10 @@ async def test_the_page_data_carries_the_names_the_filters_are_built_from(page: 
 async def test_the_filters_read_well_on_a_phone(page: Page, site: Path) -> None:
     await page.set_viewport_size(FEW)
     await serve_filters(page, site)
+    await page.click("#filtersOpen")  # on a phone the filters are a bottom sheet
     await open_places(page)
     assert await page.evaluate("document.documentElement.scrollWidth <= document.documentElement.clientWidth")
-    targets = page.locator(".chip, .places > summary, .place, #placeSearch, .more > summary, #company, #loc, #sort")
+    targets = page.locator(".chip, .places > summary, .place, #placeSearch, #filtersOpen, #company, #loc, #sort")
     for target in await targets.all():
         box = await target.bounding_box()
         assert box is not None

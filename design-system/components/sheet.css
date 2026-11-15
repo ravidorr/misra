@@ -1,0 +1,129 @@
+/*
+ * Sheet: a group of controls that is a panel in the page on a wide screen and a bottom sheet on a phone. It is a native
+ * <dialog> that the markup opens as a panel (the `open` attribute). A script opens it with showModal() on a narrow
+ * screen, so the browser traps focus, closes it on Esc and returns focus; until then it is hidden there. Keep the
+ * media query below in step with the one in the script.
+ *   <dialog class="sheet" aria-labelledby="t" open>
+ *     <div class="sheet-head"><h2 class="sheet-title" id="t" tabindex="-1">Filters</h2>
+ *     <button type="button" class="btn btn-pill sheet-close">Close</button></div>
+ *     <div class="sheet-body">Controls</div>
+ *     <div class="sheet-foot"><button type="button" class="btn btn-link">Reset</button>
+ *     <button type="button" class="btn btn-pill btn-primary sheet-done">Show 12 roles</button></div>
+ *   </dialog>
+ * Without a script the panel is a plain group of controls: a <div class="sheet"> takes the same panel look.
+ */
+.sheet {
+  box-sizing: border-box;
+  padding: 0;
+  border: var(--border-width) solid var(--line);
+  border-radius: var(--radius-card);
+  background: var(--warn-bg);
+  color: var(--ink);
+  box-shadow: var(--shadow-md);
+}
+
+/* A panel in the page. The UA style of an open dialog is a centred, fit-content box. */
+dialog.sheet[open] {
+  position: static;
+  display: block;
+  width: auto;
+  max-width: none;
+  height: auto;
+  max-height: none;
+  margin: 0 0 var(--space-5);
+  overflow: visible;
+}
+
+.sheet::backdrop {
+  background: color-mix(in srgb, var(--bg) 80%, transparent);
+}
+
+.sheet-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+}
+
+.sheet-title {
+  margin: 0;
+  font-size: var(--text-lg);
+  font-weight: 800;
+}
+
+/* The script puts the focus on the heading when the sheet opens; it is not a control, so it needs no ring. */
+.sheet-title:focus {
+  outline: none;
+}
+
+.sheet-body {
+  padding: 0 var(--space-4) var(--space-3);
+}
+
+.sheet-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-4) var(--space-3);
+}
+
+/* The close and "show roles" buttons only mean something while the sheet covers the page. */
+dialog.sheet:not(:modal) .sheet-close,
+dialog.sheet:not(:modal) .sheet-done {
+  display: none;
+}
+
+/* A narrow or short screen: the sheet leaves the page and rises from the bottom edge. */
+@media (width < 561px), (height < 500px) {
+  dialog.sheet[open]:not(:modal) {
+    display: none;
+  }
+
+  dialog.sheet:modal {
+    position: fixed;
+    inset: auto 0 0;
+    width: min(100%, 40rem);
+    max-width: none;
+    max-height: 88dvh;
+    margin: auto auto 0;
+    overflow-y: auto;
+    border-bottom: 0;
+    border-radius: var(--radius-card) var(--radius-card) 0 0;
+    box-shadow: none;
+  }
+
+  .sheet-head {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    background: var(--warn-bg);
+  }
+
+  .sheet-foot {
+    position: sticky;
+    bottom: 0;
+    z-index: 1;
+    padding-bottom: max(var(--space-3), env(safe-area-inset-bottom));
+    border-top: var(--border-width) solid var(--line);
+    background: var(--warn-bg);
+  }
+
+  .sheet-done {
+    flex: 1 1 auto;
+  }
+}
+
+@media ((width < 561px) or (height < 500px)) and (prefers-reduced-motion: no-preference) {
+  dialog.sheet:modal {
+    animation: sheet-rise 180ms ease-out;
+  }
+
+  @keyframes sheet-rise {
+    from {
+      transform: translateY(100%);
+    }
+  }
+}
