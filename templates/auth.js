@@ -178,6 +178,7 @@ if (typeof globalThis.supabase?.createClient === 'function') {
     confirm.textContent = 'Try again';
     problem.textContent = text;
     problem.hidden = false;
+    if (!dialog.open) dialog.showModal(); /* a second Esc can close it while the request runs: the answer must still be seen */
   }
 
   /* Asks the function. Resolves with 'deleted', or with the words to show when it did not (and what the user can do). */
@@ -205,6 +206,7 @@ if (typeof globalThis.supabase?.createClient === 'function') {
   /* The account is gone: forget it here. dashboard.js drops this user's queues and stored notes first (the event is
      handled synchronously), then the session is cleared without asking the service (it no longer knows the user). */
   async function finishDeletion() {
+    globalThis.misraAccount = null; /* so no auth event in between can attach the deleted account again */
     document.dispatchEvent(new CustomEvent('misra:account-deleted', { detail: { userId: deletingUser } }));
     try {
       await client.auth.signOut({ scope: 'local' });

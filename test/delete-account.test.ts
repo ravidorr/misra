@@ -10,7 +10,7 @@ const BOB_ID = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
 const ANN_TOKEN = 'ann.token.value';
 const BOB_TOKEN = 'bob.token.value';
 
-type AuthMode = 'ok' | 'user-refused' | 'user-down' | 'user-5xx' | 'user-garbage' | 'user-no-role' | 'user-bad-id';
+type AuthMode = 'ok' | 'user-gone' | 'user-429' | 'user-refused' | 'user-down' | 'user-5xx' | 'user-garbage' | 'user-no-role' | 'user-bad-id';
 type DeleteMode = 'ok' | 'gone' | 'refused' | 'down' | 'server-error';
 
 interface World {
@@ -40,6 +40,10 @@ function fakeWorld(options: { auth?: AuthMode; delete?: DeleteMode } = {}): Worl
       switch (options.auth) {
         case 'user-down':
           return Promise.reject(new Error('connection refused'));
+        case 'user-gone':
+          return Promise.resolve(Response.json({ code: 403, error_code: 'user_not_found', msg: 'User from sub claim in JWT does not exist' }, { status: 403 }));
+        case 'user-429':
+          return Promise.resolve(new Response('slow down', { status: 429 }));
         case 'user-5xx':
           return Promise.resolve(new Response('no', { status: 502 }));
         case 'user-refused':
@@ -206,7 +210,7 @@ describe('deleting', () => {
     expect(world.users.has(BOB_ID)).toBe(true);
   });
 
-  it.each(['user-refused', 'user-garbage', 'user-no-role', 'user-bad-id'] as const)(
+  it.each(['user-refused', 'user-no-role', 'user-bad-id'] as const)(
     'never calls the admin endpoint when the token check gives %s',
     async (auth) => {
       const world = fakeWorld({ auth });
@@ -218,7 +222,7 @@ describe('deleting', () => {
     },
   );
 
-  it.each(['user-down', 'user-5xx'] as const)('says the account was not deleted when the token check is unreachable (%s)', async (auth) => {
+  it.each(['user-down', 'user-5xx', 'user-429', 'user-garbage'] as const)('says the account was not deleted when the token check is unreachable (%s)', async (auth) => {
     vi.spyOn(console, 'error').mockImplementation(() => undefined);
     const world = fakeWorld({ auth });
     const response = await handleDelete(post(ANN_TOKEN), world.deps);
@@ -227,6 +231,14 @@ describe('deleting', () => {
     expect(body.error?.code).toBe('service_unavailable');
     expect(body.error?.message).toContain('was not deleted');
     expect(world.deleted).toEqual([]);
+  });
+
+  it('answers done, and deletes nothing, when the token is genuine but its user is already gone', async () => {
+    const world = fakeWorld({ auth: 'user-gone' });
+    const response = await handleDelete(post(ANN_TOKEN), world.deps);
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ ok: true, alreadyDeleted: true });
+    expect(world.calls.map((c) => c.method)).toEqual(['GET']);
   });
 
   it('counts a user who is already gone (404) as done', async () => {

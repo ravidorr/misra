@@ -258,10 +258,13 @@ from that answer only (it must be a UUID of an `authenticated` user), and delete
 
 Every answer is JSON, `{"ok": true}` or `{"ok": false, "error": {"code", "message"}}`:
 
-- 200 `{"ok": true}`: the account is gone (also when the admin call finds it already gone, as when two tabs both ask).
-- 401 `not_signed_in`: no bearer token, or Supabase Auth did not accept it (expired, signed out, or the user no longer
-  exists). A replay after a successful deletion gets this answer and no admin call is made. The page never reads it as
-  "deleted": it tells the user nothing was deleted by this request.
+- 200 `{"ok": true}`: the account is gone. Also when the admin call finds it already gone (two tabs both ask), and when Auth
+  accepts the token's signature but answers `user_not_found` (a retry after the answer to the first request was lost):
+  that reply carries `"alreadyDeleted": true`. Auth checks the signature before it looks the user up, so this says
+  nothing about anyone else. (The exact `user_not_found` error code of Auth is assumed from its documented behaviour:
+  check it in the live test, step 3. If it differs the retry gets the 401 below, which is safe.)
+- 401 `not_signed_in`: no bearer token, or Supabase Auth did not accept it (expired or signed out). No admin call is made.
+  The page never reads it as "deleted": it tells the user nothing was deleted by this request.
 - 403 `origin_not_allowed`, 405 `method_not_allowed`.
 - 502 `delete_failed`: the admin call refused (a 4xx); the account is still there. 502 `delete_unconfirmed`: a timeout, a
   dropped connection or a 5xx; the account may or may not be gone, and the page says it could not confirm and offers a
@@ -322,5 +325,6 @@ redirect URLs set). Signed in on the dashboard with the throwaway account, star 
    `select count(*) from public.profiles where email = '<test email>';` and the same for `public.user_jobs` (by the
    test user's former id) return 0.
 3. Replay: the old access token (copied from the browser's `misra-auth` local storage entry before step 2) sent to the
-   function with `-H "Authorization: Bearer <token>"` answers 401, and nothing else is deleted.
+   function with `-H "Authorization: Bearer <token>"` answers 200 with `"alreadyDeleted": true` (Auth: `user_not_found`)
+   or, if the token was also revoked, 401. Either way nothing else is deleted. Note which one you get.
 4. Signing in again with the same Google account makes a new, empty account.

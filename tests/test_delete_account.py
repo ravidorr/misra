@@ -63,6 +63,7 @@ class DeleteBackend:
             await self.gate.wait()
         answers: dict[str, tuple[int, str]] = {
             "ok": (200, '{"ok":true}'),
+            "already": (200, '{"ok":true,"alreadyDeleted":true}'),
             "refused": (502, '{"ok":false,"error":{"code":"delete_failed","message":"x"}}'),
             "unconfirmed": (502, '{"ok":false,"error":{"code":"delete_unconfirmed","message":"x"}}'),
             "unauthorized": (401, '{"ok":false,"error":{"code":"not_signed_in","message":"x"}}'),
@@ -203,6 +204,18 @@ async def test_fr1_ac4_deleting_clears_this_accounts_queues_and_notes_and_nothin
 async def _has_pending(page: Page) -> bool:
     raw = (await stored(page)).get(PENDING)
     return bool(raw) and bool(json.loads(raw).get(USER_ID))
+
+
+async def test_a_retry_after_a_lost_answer_finishes_the_deletion(page: Page, site: Path) -> None:
+    """The first answer never came back; the retry is told the account is already gone, and the page cleans up."""
+    _, deleter = await signed_in(page, site, "down")
+    await open_dialog(page)
+    await page.click("#deleteConfirm")
+    await expect(page.locator("#deleteError")).to_contain_text("could not confirm")
+    deleter.mode = "already"
+    await page.click("#deleteConfirm")
+    await expect(page.locator("#authMessage")).to_contain_text("were deleted")
+    assert await page.locator("#signIn").is_visible()
 
 
 async def test_the_dialog_is_busy_while_it_waits_and_cannot_be_dismissed(page: Page, site: Path) -> None:
