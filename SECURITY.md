@@ -45,6 +45,9 @@ are the rules that protect the data.
   within 30 days. The restore script, `restore_accounts.py`, and the rehearsal are in `CONTRIBUTING.md`.
 - **Accounts:** two-factor sign-in is on for Supabase, GitHub, Resend and Google. Users sign in with Google only: the
   email-and-password provider is switched off. A database hook empties the personal part of the sign-in token.
+- **Policy tests:** the SQL policy tests of `supabase/tests` run in CI on every pull request and push to `main`, against a
+  plain Postgres 17 database with a stub of Supabase's roles and `auth` schema. They are the real tests of the
+  row-level security; a stub is not a Supabase project, so the live checks in `supabase/README.md` still apply.
 - **Abuse limits:** the report form has a honeypot, a per-visitor daily limit and a daily cap; the email functions have
   per-user, per-address and daily limits.
 - **Deletion:** a person can delete their account in one step, and every row tied to it is removed at once.
@@ -58,7 +61,6 @@ are the rules that protect the data.
   `public`, not Supabase's own sign-in records, so after a restore into a new project people sign in with Google again
   (the restore can recreate the bare sign-in rows). GitHub may keep the replaced history for a short time after it is
   replaced.
-- The SQL policy tests are not run in CI.
 - Two low-risk Dependabot alerts in development tools (not shipped to users) were open on 2026-11-15.
 - One maintainer: no second person for access or recovery.
 

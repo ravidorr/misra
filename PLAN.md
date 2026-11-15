@@ -143,6 +143,9 @@ Decisions made in planning (they change the PRD's wording, so update the PRD in 
   `REPORT_TO_EMAIL` and `IP_HASH_SECRET`, deploy with `supabase functions deploy report-site`, then run the curl checks:
   a good report arrives by email, a bad input is a 400, the wrong origin a 403, and the per-visitor limit still holds when
   `X-Forwarded-For` and `CF-Connecting-IP` are written by the caller (confirms the visitor address the platform reports).~~
+  Added in v0.29.0: a daily cleanup of the two counter tables, so the old hashes really are gone daily (migration `20261119100000_report_site_cleanup.sql`,
+  called by `sync_supabase.py` after a good sync), and the lawyer's one-sentence wording ("expires after 24 hours") in the form and `PRIVACY.md`. Live check
+  left: apply that migration before the first daily run that includes it, or the sync step fails on the missing function (`supabase/README.md`, "Daily cleanup of the counters").
 - [x] ~~5.2 Dashboard: "Report a site" action on the coverage card opens a short form (company, careers link, why it
   matters), confirmation and error messages, no account needed, CSP `connect-src` already covers the host. Process note
   in `CONTRIBUTING.md` for accepting a site (moves to `data/seed_companies.csv` or the gap card with a reason).
@@ -256,6 +259,8 @@ Decisions made in planning (they change the PRD's wording, so update the PRD in 
   on it is never crawled, is deleted from `data/jobs.db` and from Supabase `jobs`, `user_jobs` and `emailed`, and is
   off the exports and the coverage card; the process is in `CONTRIBUTING.md`). Still to do before the gate closes: the
   digest email itself (step 6.3, with its footer and headers), the flag, and the present-tense `PRIVACY.md` edits below. The gate stays open.
+  Small wording and checks done in v0.29.0: the weekly choice reads "Weekly (Sundays)" (the lawyer's suggestion), the coverage card says what happens to the roles of a
+  company skipped for robots.txt in both phases (kept for up to 7 days, then closed, with the days skipped), and the SQL policy tests now run in CI (job `sql-tests`).
   Second lawyer answer (2026-11-15), applied: the `auth.users` sentence in `PRIVACY.md` now says why Supabase keeps
   Google's name and photo, and `TERMS.md` gained the liability, acceptable-use and governing-law points. Still to do on
   the day the flag is switched on (the text is true only then, so it is not in `PRIVACY.md` yet): in `PRIVACY.md`, (a)
@@ -295,7 +300,7 @@ Decisions made in planning (they change the PRD's wording, so update the PRD in 
   restore path) before `data/jobs.db` stops being committed. Update `AGENTS.md`, the workflow, the deploy flow and the
   `protect-main` ruleset note together. Done when: a daily run works without `data/jobs.db`, a restore from the export
   is rehearsed, and the Notes for the plan in `PRD.md` are all met.
-  Backups/export before the first subscriber (part of the restore path), built in v0.29.0: the account tables (`profiles`, `user_prefs`, `user_jobs`,
+  Backups/export before the first subscriber (part of the restore path), built in v0.30.0: the account tables (`profiles`, `user_prefs`, `user_jobs`,
   `subscriptions`, `emailed`; not `jobs`, which the crawl rebuilds) go every day to the PRIVATE repository `ravidorr/misra-backups`, not into this public one.
   `export_accounts.py` (JSON per table, sorted, counts only in the log), `publish_backup.py` (commit if changed; replaces the history with one commit when it
   is 28 days old, so a deleted account leaves the backups within 30 days) and `restore_accounts.py` (one idempotent SQL script, foreign-key order, never deletes).

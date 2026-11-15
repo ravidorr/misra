@@ -4,7 +4,7 @@ All notable changes are documented here. Format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
-## [0.29.0] - 2026-11-15
+## [0.30.0] - 2026-11-15
 
 ### Added
 
@@ -23,6 +23,20 @@ All notable changes are documented here. Format follows [Keep a Changelog](https
 - The lawyer's microcopy on three live touchpoints: the sign-in notice (two short paragraphs: sync across devices, signing in is optional, only the Google email address and job preferences are stored in the EU database, never a CV, password or tracking cookies, with links to the Terms and the Privacy Notice, plus one clause that Supabase's own sign-in record also holds the Google name and photo until the account is deleted, as `PRIVACY.md` says); the "Delete my account" confirmation dialog ("Delete your Misra account?", names the signed-in email address, shown as text, with "Cancel" and "Delete my account permanently"); and one line above Send in the "Report a site" form (reports go to the maintainer, the spam guard keeps a daily non-reversible hash of the network address, useless after that day and deleted when later reports are handled), with a Privacy Notice link.
 - `PRIVACY.md` names the database controller (Raanan Avidor, a private individual) and the contact `raanan@avidor.org`, says why the data is collected and that giving it is voluntary, names the providers and where they are (Supabase and Resend in Ireland, Google and GitHub in the United States), gives the rights to inspect, correct and delete (Sections 13 and 14 of the Israeli Privacy Protection Law) with an answer within 30 days, and states that Supabase's and Resend's standard data processing agreements apply. The digest is still described as planned, not live.
 - `PLAN.md` step 6.3 and the PRD (FR-8) carry the lawyer's exact footer text for every digest email and the Reply-To requirement.
+
+## [0.29.0] - 2026-11-15
+
+### Added
+
+- A daily cleanup of the `report-site` spam-guard counters. Migration `20261119100000_report_site_cleanup.sql` adds `report_site_cleanup(p_day date)` (service role only): it deletes every row of both counter tables from a day before `p_day`, returns how many it deleted and refuses no day or a day later than tomorrow. `sync_supabase.py` calls it right after a good sync (`cleanup`, in the sync step that already holds the service-role key) and logs the count; a failed call exits non-zero like a failed sync, so the privacy promise cannot silently stop being kept. The migration is not applied by this PR: apply it before the first daily run that includes it, otherwise the sync step fails on the missing function (`supabase/README.md`, "Daily cleanup of the counters").
+- The SQL policy tests run in CI: a separate job `sql-tests` in `ci.yml` (the `quality` check is unchanged) starts a `postgres:17-alpine` service container and runs `scripts/run-sql-tests.sh`, which loads the committed stub of Supabase's roles and `auth` schema (`supabase/ci/supabase_stub.sql`), applies every migration in order and runs every file of `supabase/tests/`, stopping at the first error. `SECURITY.md` no longer lists the missing CI run as a known gap, and `supabase/README.md` describes the job and the local run.
+- `supabase/tests/report_limits.sql` tests the cleanup; `tests/test_sql_ci.py`, `tests/test_sync_supabase.py`, `tests/test_migrations.py` and `tests/test_legal_wording.py` pin the job, the call, the function and the wording.
+
+### Changed
+
+- The wording on the spam guard is the lawyer's shorter form, now that a daily cleanup keeps the promise: the "Report a site" form says "To prevent spam, we store a daily non-reversible hash of your network address that expires after 24 hours." and `PRIVACY.md` carries the same sentence, then says what is kept and that a cleanup that runs every day deletes the counters of every earlier day. The old "deleted when later reports are handled" is gone from both.
+- The weekly choice of the Daily email dialog reads "Weekly (Sundays)" (the lawyer's suggestion; the digest sends weekly summaries on Sundays).
+- The coverage card says what is true about a company skipped for `robots.txt` in both phases, with how long it has been skipped (counted from the first skip of the current run to the latest crawl): for fewer than 7 days "its roles are kept for up to 7 days and then closed", after that "its roles were closed after 7 days". It no longer says "its roles may be old" for these companies.
 
 ## [0.28.0] - 2026-11-15
 
