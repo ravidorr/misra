@@ -16,6 +16,7 @@ from common import (
     DROP_NOTE,
     ISRAEL,
     MAX_PURGE_COMPANIES,
+    ROBOTS_CLOSE_DAYS,
     ROBOTS_NOTE,
     ExclusionError,
     is_excluded,
@@ -34,6 +35,7 @@ def init() -> sqlite3.Connection:
       first_seen TEXT, last_seen TEXT, status TEXT DEFAULT 'open', reported INTEGER DEFAULT 0,
       PRIMARY KEY(company, job_id));
     CREATE TABLE IF NOT EXISTS crawl_log(ts TEXT, company TEXT, ats TEXT, ok INTEGER, n_jobs INTEGER);
+    CREATE TABLE IF NOT EXISTS robots_skips(company TEXT PRIMARY KEY, since TEXT);
     """)
     with contextlib.suppress(sqlite3.OperationalError):  # column may already be there
         c.execute("ALTER TABLE crawl_log ADD COLUMN note TEXT")
@@ -75,6 +77,37 @@ def close_unseen(c: sqlite3.Connection, name: str, seen: set[str]) -> None:
     for (jid,) in c.execute("SELECT job_id FROM jobs WHERE company=? AND status='open'", (name,)).fetchall():
         if jid not in seen:
             c.execute("UPDATE jobs SET status='closed' WHERE company=? AND job_id=?", (name, jid))
+
+
+def track_robots_skips(c: sqlite3.Connection, skipped: set[str], crawled: set[str], today: str) -> tuple[int, int]:
+    """Close the open jobs of a company that robots.txt has kept us away from for ROBOTS_CLOSE_DAYS days in a row.
+    Returns (companies closed, jobs closed).
+
+    `skipped` is the companies skipped by robots.txt in this run and `crawled` the ones crawled successfully in this run
+    (two boards can share one company name; a crawled name is never closed and never counts as skipped). The table
+    robots_skips holds the first day of the current streak per company. A company that is not skipped in this run (it
+    crawled, it failed another way, it left the list or the exclusion list took it) loses its row, so the count starts
+    again: one run that is not a skip means the block is not steady. A closing uses the same close_unseen as every
+    other close, so the Supabase sync marks the jobs closed and a later crawl reopens them."""
+    skipped = skipped - crawled
+    since = dict(c.execute("SELECT company, since FROM robots_skips").fetchall())
+    for name in since.keys() - skipped:
+        c.execute("DELETE FROM robots_skips WHERE company=?", (name,))
+    for name in skipped - since.keys():
+        c.execute("INSERT INTO robots_skips(company, since) VALUES(?,?)", (name, today))
+    due = [
+        name
+        for name in sorted(skipped)
+        if c.execute(
+            "SELECT julianday(?) - julianday(since) >= ? FROM robots_skips WHERE company=?",
+            (today, ROBOTS_CLOSE_DAYS, name),
+        ).fetchone()[0]
+    ]
+    closed = 0
+    for name in due:
+        closed += c.execute("SELECT COUNT(*) FROM jobs WHERE company=? AND status='open'", (name,)).fetchone()[0]
+        close_unseen(c, name, set())
+    return len(due), closed
 
 
 def is_known(c: sqlite3.Connection, co: dict[str, Any], now: str) -> bool:
@@ -139,7 +172,7 @@ def purge_excluded(c: sqlite3.Connection, excluded: list[str]) -> dict[str, int]
         )
     tables = {r[0] for r in c.execute("SELECT name FROM sqlite_master WHERE type='table'")}
     for name in excluded:
-        for table in ("jobs", "crawl_log", "gap_alerts"):
+        for table in ("jobs", "crawl_log", "gap_alerts", "robots_skips"):
             if table in tables:
                 c.execute(f"DELETE FROM {table} WHERE company=?", (name,))
     c.commit()
@@ -181,6 +214,7 @@ def main() -> None:  # noqa: PLR0912, PLR0915
         results.extend((co, got.get(co["slug"])) for co in br)
     failed: list[str] = []
     skipped: list[str] = []
+    crawled: set[str] = set()
     for co, fetched in results:
         name = co["name"]
         jobs = fetched
@@ -213,6 +247,7 @@ def main() -> None:  # noqa: PLR0912, PLR0915
         if jobs is None:
             failed.append(name)  # never close jobs when the crawl failed
             continue
+        crawled.add(name)
         if held:
             failed.append(name)  # a crawl that probably lost most of the list: record what it saw, close nothing
         seen: set[str] = set()
@@ -247,10 +282,12 @@ def main() -> None:  # noqa: PLR0912, PLR0915
                 )
         if not held:
             close_unseen(c, name, seen)
+    closed_companies, closed_jobs = track_robots_skips(c, set(skipped), crawled, now[:10])
     c.commit()
     n_open = c.execute("SELECT COUNT(*) FROM jobs WHERE status='open'").fetchone()[0]
     print(f"crawled {len(companies)} companies, failed {len(failed)} {failed}, open jobs {n_open}")
     print(f"skipped by robots.txt {len(skipped)} {skipped}")
+    print(f"robots.txt: closed {closed_jobs} jobs of {closed_companies} companies skipped for {ROBOTS_CLOSE_DAYS} days")
     if not common.ROBOTS_ENFORCED:
         print(
             f"robots.txt would have refused {len(common.ROBOTS_WOULD_BLOCK)} hosts {sorted(common.ROBOTS_WOULD_BLOCK)}"

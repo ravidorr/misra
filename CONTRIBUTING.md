@@ -81,22 +81,27 @@ All of these hold after the run:
 - At most one request a second to a host, for the adapters and the browser crawl alike (`reserve_slot` in `common.py`),
   with 8 companies in parallel for the adapters and 3 pages at once for the browser.
 - `robots.txt`: fetched once per host and run; our `Misra` group wins over `*`. A missing file, a 4xx, a 5xx or a timeout
-  means allowed (a 5xx or a timeout is logged). An ATS's public API (Greenhouse, Lever, SmartRecruiters, Workable,
+  means allowed (a 5xx or a timeout is logged). An ATS's public API (Greenhouse, Lever, Ashby, Workable,
   Workday, Oracle, Phenom) counts as published for programs: a blanket `Disallow: /` does not stop it, a rule naming its
   path does. A company whose host forbids the address is skipped, not failed: it is not retried, does not count as a
   failure, sends no alert and shows on the coverage card as "robots.txt does not allow it".
 - The switch is `ROBOTS_ENFORCED` in `common.py`. Set to `False`, the crawl ignores the rules but logs which hosts it would
   have refused. Every run prints which state it is in.
 - Audit on 2026-11-15 (read-only: only each host's `/robots.txt` was fetched, once, politely): 234 companies on 75
-  hosts, none blocked. The one close call is SmartRecruiters: `api.smartrecruiters.com` answers `User-agent: *` with
-  `Disallow: /` and allows only `LinkedInBot` under `/v1/companies/`. Armis, Kaltura, Atera, Nexar and ServiceNow use that
-  API. They are crawled because the API is documented for programs; removing `api.smartrecruiters.com` from `API_HOSTS`
-  in `common.py` would skip those five instead.
-- The SmartRecruiters exception, made knowingly: `api.smartrecruiters.com` answers `User-agent: *` with `Disallow: /`.
-  It is still called, for Armis, Kaltura, Atera, Nexar and ServiceNow, because its Posting API is SmartRecruiters'
-  documented public interface for career sites and programs, not a page. It is the only such host
-  (`ROBOTS_API_EXCEPTION_HOSTS` in `common.py`, pinned by a test); an explicit rule for the API path would still be
-  honoured.
+  hosts. The one that blocks us is SmartRecruiters: `api.smartrecruiters.com` answers `User-agent: *` with `Disallow: /`
+  and allows only `LinkedInBot` under `/v1/companies/`. Its documentation says nothing about aggregators, and the
+  maintainer has asked SmartRecruiters for permission. Until it is given, Armis, Kaltura, Atera, Nexar and ServiceNow
+  are skipped like any company a host forbids.
+- No host is exempt. `ROBOTS_API_EXCEPTION_HOSTS` in `common.py` is the place for a host that has given WRITTEN
+  permission to be called despite a blanket `Disallow: /`; it is empty on purpose (a test pins that), and such a
+  permission is the only reason to add a host back. A rule that names an API path is honoured either way.
+- A company skipped because of `robots.txt` on every run for 7 days in a row (`ROBOTS_CLOSE_DAYS` in `common.py`) gets
+  its open jobs closed, by the same close the crawl uses, so the Supabase sync marks them closed and a later successful
+  crawl reopens them. Not earlier: a temporary `robots.txt` glitch at a host must not wipe the jobs and bring them back
+  as new. The first skipped day of the streak is kept in the table `robots_skips(company, since)` of `data/jobs.db`
+  (created with `CREATE TABLE IF NOT EXISTS`), and a company that is not skipped in a run (crawled, failed another
+  way, or off the list) loses its row, so the week starts again. The rule never applies to failures, to excluded
+  companies (they have their own removal path) or to a company crawled in the same run. The run logs counts only.
 
 ### Known limits
 
@@ -105,8 +110,6 @@ All of these hold after the run:
   politely", so we choose to keep crawling at one request a second and log the failure.
 - Only the address a request starts from is checked, with its query parameters. Redirects, and requests a browser page
   makes on its own, are paced but not checked.
-- A company skipped because of `robots.txt` keeps its old jobs open (nothing closes on a skip); the page marks them as
-  possibly old.
 - At most 3 companies with data are removed per run; a list that asks for more stops the daily run until the
   companies are added in separate runs.
 

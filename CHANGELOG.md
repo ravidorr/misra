@@ -17,6 +17,13 @@ All notable changes are documented here. Format follows [Keep a Changelog](https
 - `PRIVACY.md` names the database controller (Raanan Avidor, a private individual) and the contact `raanan@avidor.org`, says why the data is collected and that giving it is voluntary, names the providers and where they are (Supabase and Resend in Ireland, Google and GitHub in the United States), gives the rights to inspect, correct and delete (Sections 13 and 14 of the Israeli Privacy Protection Law) with an answer within 30 days, and states that Supabase's and Resend's standard data processing agreements apply. The digest is still described as planned, not live.
 - `PLAN.md` step 6.3 and the PRD (FR-8) carry the lawyer's exact footer text for every digest email and the Reply-To requirement.
 
+## [0.26.0] - 2026-11-15
+
+### Changed
+
+- `api.smartrecruiters.com` is no longer crawled. Its `robots.txt` is `User-agent: LinkedInBot` / `Allow: /v1/companies/`, then `User-agent: *` / `Disallow: /`, its documentation says nothing about aggregators, and permission has been asked. `ROBOTS_API_EXCEPTION_HOSTS` in `common.py` is now empty (the mechanism and its docs stay; a written permission is the only reason to add a host back) and every API host goes through the robots gate. Armis, Kaltura, Atera, Nexar and ServiceNow are skipped, not counted as failures (no retry, no alert email) and appear on the coverage gap card with the reason "robots.txt does not allow it".
+- A company skipped because of `robots.txt` on every run for 7 days in a row (`ROBOTS_CLOSE_DAYS`) has its open jobs closed, by the close the run already uses, so the Supabase sync marks them closed and a later crawl reopens them. This replaces the known limit that a skipped company kept its old jobs open forever. The first skipped day is kept in the new table `robots_skips(company, since)` in `data/jobs.db` (`CREATE TABLE IF NOT EXISTS`, so older databases are upgraded in place); any run in which the company is not skipped clears it, and it never applies to failures, excluded companies or a company crawled in the same run. The run logs counts only. The roughly 39 open jobs of the five SmartRecruiters companies close seven days after the first skipped run.
+
 ## [0.23.0] - 2026-11-18
 
 ### Added

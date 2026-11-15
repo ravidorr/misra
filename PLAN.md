@@ -193,8 +193,9 @@ Decisions made in planning (they change the PRD's wording, so update the PRD in 
   sign-in button (FR-1 AC 7, with links to both) and the footer links on the page. The email footer text is written in
   step 6.3 above and is built there. Crawler politeness is in (v0.23.0): one honest User-Agent
   (`Misra/<version> (+site; contact)`), a per-host delay for the browser crawl equal to the adapters', the `robots.txt`
-  check (enforced: `ROBOTS_ENFORCED` in `common.py`; an audit of every crawl host found nothing blocked, and the
-  published ATS APIs are not treated as pages), and the company exclusion list `data/excluded_companies.csv` (a company
+  check (enforced: `ROBOTS_ENFORCED` in `common.py`; the published ATS APIs are not treated as pages, but SmartRecruiters'
+  `api.smartrecruiters.com` disallows everyone, so its five companies are skipped until SmartRecruiters gives permission;
+  a company skipped for 7 days in a row has its open jobs closed, from v0.26.0), and the company exclusion list `data/excluded_companies.csv` (a company
   on it is never crawled, is deleted from `data/jobs.db` and from Supabase `jobs`, `user_jobs` and `emailed`, and is
   off the exports and the coverage card; the process is in `CONTRIBUTING.md`). Still to do before the gate closes: the
   digest email itself (step 6.3, with its footer and headers), the flag, and the present-tense `PRIVACY.md` edits below. The gate stays open.
