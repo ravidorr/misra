@@ -142,10 +142,26 @@ def _group_rules(text: str) -> list[_Rule]:
     return [rule for rules in ours for rule in rules]
 
 
-def _pattern(pattern: str) -> re.Pattern[str]:
+def _matches(pattern: str, path: str) -> bool:
+    """Does a robots.txt pattern match the start of the path? `*` is any run of characters, a final `$` anchors the
+    end. The pieces between the stars are found one after the other, leftmost first: that is exact for stars alone, and
+    it cannot blow up on a hostile pattern the way a regular expression with many stars can."""
     anchored = pattern.endswith("$")
-    body = unquote(pattern[:-1] if anchored else pattern)
-    return re.compile("".join(".*" if ch == "*" else re.escape(ch) for ch in body) + ("$" if anchored else ""))
+    parts = unquote(pattern[:-1] if anchored else pattern).split("*")
+    if not path.startswith(parts[0]):
+        return False
+    if len(parts) == 1:
+        return path == parts[0] if anchored else True
+    pos = len(parts[0])
+    for part in parts[1:-1]:
+        found = path.find(part, pos)
+        if found < 0:
+            return False
+        pos = found + len(part)
+    last = parts[-1]
+    if anchored:
+        return path.endswith(last) and len(path) - len(last) >= pos
+    return path.find(last, pos) >= 0
 
 
 def _api_url(url: str) -> bool:
@@ -165,7 +181,7 @@ def rules_allow(rules: list[_Rule], url: str, api: bool = False) -> bool:
     for allow, pattern in rules:
         if api and not allow and pattern in ("/", "/*"):
             continue
-        if _pattern(pattern).match(path) and (len(pattern) > best_length or (len(pattern) == best_length and allow)):
+        if _matches(pattern, path) and (len(pattern) > best_length or (len(pattern) == best_length and allow)):
             best_length, allowed = len(pattern), allow
     return allowed
 
