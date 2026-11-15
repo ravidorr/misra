@@ -30,8 +30,9 @@ revoke all on public.report_daily_cap from anon, authenticated;
 
 -- One call takes a place for a report, atomically (the row lock of the upserts serialises concurrent requests), so a
 -- flood of parallel requests cannot all pass the check. It answers 'ok', 'ip_limit' (this visitor has used today's
--- reports) or 'daily_cap' (the maintainer's inbox is full for today). A visitor over the limit does not use up the cap.
--- A place is taken before the email is sent and given back (report_site_release) when sending fails.
+-- reports) or 'daily_cap' (the maintainer's inbox is full for today). A visitor over the limit does not use up the cap,
+-- and a visitor refused because of the cap does not use up their own reports. A place is taken before the email is sent
+-- and given back (report_site_release) when Resend definitely did not send it.
 create function public.report_site_reserve(p_day date, p_ip_hash text, p_ip_limit integer, p_daily_cap integer)
 returns text
 language plpgsql
@@ -52,29 +53,32 @@ begin
   end if;
 
   if p_daily_cap < 1 then
+    update public.report_ip_limits set reports = greatest(reports - 1, 0) where day = p_day and ip_hash = p_ip_hash;
     return 'daily_cap';
   end if;
   insert into public.report_daily_cap as c (day, sent) values (p_day, 1)
     on conflict (day) do update set sent = c.sent + 1 where c.sent < p_daily_cap
     returning c.sent into sent_now;
   if sent_now is null then
+    update public.report_ip_limits set reports = greatest(reports - 1, 0) where day = p_day and ip_hash = p_ip_hash;
     return 'daily_cap';
   end if;
   return 'ok';
 end;
 $$;
 
-create function public.report_site_release(p_day date)
+create function public.report_site_release(p_day date, p_ip_hash text)
 returns void
 language plpgsql
 set search_path = ''
 as $$
 begin
   update public.report_daily_cap set sent = greatest(sent - 1, 0) where day = p_day;
+  update public.report_ip_limits set reports = greatest(reports - 1, 0) where day = p_day and ip_hash = p_ip_hash;
 end;
 $$;
 
 revoke all on function public.report_site_reserve(date, text, integer, integer) from public, anon, authenticated;
-revoke all on function public.report_site_release(date) from public, anon, authenticated;
+revoke all on function public.report_site_release(date, text) from public, anon, authenticated;
 grant execute on function public.report_site_reserve(date, text, integer, integer) to service_role;
-grant execute on function public.report_site_release(date) to service_role;
+grant execute on function public.report_site_release(date, text) to service_role;

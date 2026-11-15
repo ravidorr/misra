@@ -13,7 +13,9 @@ describe('TypeScript of the Edge Functions and their tests', () => {
     const read = ts.readConfigFile(configPath, ts.sys.readFile);
     const parsed = ts.parseJsonConfigFileContent(read.config, ts.sys, root);
     expect(parsed.errors.map((d) => ts.flattenDiagnosticMessageText(d.messageText, '\n'))).toEqual([]);
-    expect(parsed.fileNames.length).toBeGreaterThan(0);
+    for (const name of ['handler.ts', 'validate.ts', 'index.ts', 'report-site.test.ts']) {
+      expect(parsed.fileNames.some((file) => file.endsWith(`/${name}`)), name).toBe(true);
+    }
     const program = ts.createProgram(parsed.fileNames, parsed.options);
     const messages = ts.getPreEmitDiagnostics(program).map((d) => {
       const where = d.file ? `${d.file.fileName}: ` : '';

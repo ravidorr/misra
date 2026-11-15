@@ -70,13 +70,18 @@ function fakeWorld(options: { resend?: number; database?: 'down' | 'garbage' | '
       const used = (reports.get(key) ?? 0) + 1;
       reports.set(key, used);
       if (used > Number(body.p_ip_limit)) return Promise.resolve(Response.json('ip_limit'));
-      if (cap.sent >= Number(body.p_daily_cap)) return Promise.resolve(Response.json('daily_cap'));
+      if (cap.sent >= Number(body.p_daily_cap)) {
+        reports.set(key, used - 1);
+        return Promise.resolve(Response.json('daily_cap'));
+      }
       cap.sent += 1;
       return Promise.resolve(Response.json('ok'));
     }
     if (url.endsWith('/rpc/report_site_release')) {
       if (options.database === 'release-down') return Promise.resolve(new Response('no', { status: 500 }));
       cap.sent = Math.max(0, cap.sent - 1);
+      const key = `${String(body.p_day)}|${String(body.p_ip_hash)}`;
+      reports.set(key, Math.max(0, (reports.get(key) ?? 0) - 1));
       return Promise.resolve(new Response(null, { status: 204 }));
     }
     return Promise.resolve(new Response('unexpected', { status: 404 }));
@@ -196,13 +201,74 @@ describe('the flood', () => {
     const result = await answer(await handleReport(post(GOOD, { 'cf-connecting-ip': '203.0.113.7' }), world.deps));
     expect(result).toMatchObject({ status: 502, json: { ok: false, error: { code: 'send_failed' } } });
     expect(world.cap.sent).toBe(0);
+    expect([...world.reports.values()]).toEqual([0]); // the visitor's own report is given back too
+  });
+
+  it('keeps the place when the outcome is unknown (a 5xx or a timeout may have sent the email)', async () => {
+    silence();
+    const world = fakeWorld({ resend: 503 });
+    const result = await answer(await handleReport(post(GOOD, { 'cf-connecting-ip': '203.0.113.7' }), world.deps));
+    expect(result.status).toBe(502);
+    expect(world.cap.sent).toBe(1);
+    expect(world.calls.some((url) => url.endsWith('report_site_release'))).toBe(false);
   });
 
   it('still answers send_failed when giving the place back fails too', async () => {
-    silence();
-    const world = fakeWorld({ resend: 500, database: 'release-down' });
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const world = fakeWorld({ resend: 422, database: 'release-down' });
     const result = await answer(await handleReport(post(GOOD, { 'cf-connecting-ip': '203.0.113.7' }), world.deps));
     expect(result.status).toBe(502);
+    expect(JSON.stringify(spy.mock.calls)).toContain('could not give the place back for 2026-11-16');
+  });
+
+  it('never releases a place for a refusal, and does not call Resend', async () => {
+    for (const refusal of ['ip_limit', 'daily_cap']) {
+      const world = fakeWorld();
+      const calls: string[] = [];
+      const deps: Deps = {
+        ...world.deps,
+        fetch: (url) => {
+          calls.push(url);
+          return Promise.resolve(Response.json(refusal));
+        },
+      };
+      const response = await handleReport(post(GOOD, { 'cf-connecting-ip': '203.0.113.7' }), deps);
+      expect(response.status).toBe(refusal === 'ip_limit' ? 429 : 503);
+      expect(response.headers.get('access-control-allow-origin')).toBe(ALLOWED_ORIGIN);
+      expect(calls).toEqual(['https://project.supabase.test/rest/v1/rpc/report_site_reserve']);
+    }
+  });
+
+  it('calls the database with the exact function, key and parameters', async () => {
+    const world = fakeWorld();
+    await handleReport(post(GOOD, { 'cf-connecting-ip': '203.0.113.7' }), world.deps);
+    const [url, init] = world.fakeFetch.mock.calls[0] ?? ['', {}];
+    expect(url).toBe('https://project.supabase.test/rest/v1/rpc/report_site_reserve');
+    expect(init.method).toBe('POST');
+    expect(init.headers).toMatchObject({ apikey: 'service-role-test-key', authorization: 'Bearer service-role-test-key' });
+    const sent = JSON.parse(typeof init.body === 'string' ? init.body : '{}') as Record<string, unknown>;
+    expect(Object.keys(sent).sort()).toEqual(['p_daily_cap', 'p_day', 'p_ip_hash', 'p_ip_limit']);
+    expect(sent).toMatchObject({ p_day: '2026-11-16', p_ip_limit: 3, p_daily_cap: 20 });
+    expect(init.signal).toBeInstanceOf(AbortSignal);
+  });
+
+  it('sends only from, to, subject and text to Resend, whatever extra fields the caller adds', async () => {
+    const world = fakeWorld();
+    const extra = { ...GOOD, to: 'x@y.test', from: 'z@y.test', bcc: 'b@y.test', html: '<b>x</b>', headers: {}, reply_to: 'r@y.test' };
+    await handleReport(post(extra, { 'cf-connecting-ip': '203.0.113.7' }), world.deps);
+    expect(Object.keys(world.emails[0]?.body ?? {}).sort()).toEqual(['from', 'subject', 'text', 'to']);
+    expect(world.emails[0]?.body.to).toEqual(['maintainer@example.test']);
+  });
+
+  it('puts the CORS headers on error answers too, so the page can read them', async () => {
+    const world = fakeWorld();
+    const bad = await handleReport(post({ company: '' }), world.deps);
+    const wrongType = await handleReport(post('{}', { 'content-type': 'text/plain' }), world.deps);
+    const unconfigured = await handleReport(post(GOOD), { ...world.deps, config: undefined });
+    for (const response of [bad, wrongType, unconfigured]) {
+      expect(response.headers.get('access-control-allow-origin')).toBe(ALLOWED_ORIGIN);
+      expect(response.headers.get('cache-control')).toBe('no-store');
+    }
   });
 });
 
@@ -275,6 +341,7 @@ describe('failures on our side', () => {
     const response = await handleReport(post(GOOD), { ...world.deps, config: undefined });
     const text = await response.text();
     expect(response.status).toBe(500);
+    expect(world.calls).toEqual([]);
     expect(text).toContain('server_error');
     expect(text).not.toMatch(/re_test_key|service-role|SECRET|RESEND/u);
   });

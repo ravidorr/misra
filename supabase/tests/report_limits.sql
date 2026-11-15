@@ -8,6 +8,7 @@
 -- Needs the migration applied. Uses only plain SQL (assert), no pgTAP.
 
 begin;
+set local plpgsql.check_asserts = on;
 
 do $$
 declare
@@ -40,15 +41,26 @@ begin
   assert (select sent from public.report_daily_cap where day = date '2030-01-02') = 20, 'the cap counter went past the cap';
 
   -- A place given back (the email could not be sent) can be taken again, and the counter never goes below zero.
-  perform public.report_site_release(date '2030-01-02');
+  perform public.report_site_release(date '2030-01-02', 'late');
   assert (select sent from public.report_daily_cap where day = date '2030-01-02') = 19, 'the release did not free a place';
   assert public.report_site_reserve(date '2030-01-02', 'late', 3, 20) = 'ok', 'a freed place was not usable';
   assert public.report_site_reserve(date '2030-01-02', 'later', 3, 20) = 'daily_cap', 'the cap was exceeded after a release';
-  perform public.report_site_release(date '2031-01-01');  -- a day with no row: nothing happens
+  perform public.report_site_release(date '2031-01-01', 'none');  -- a day with no row: nothing happens
   delete from public.report_daily_cap;
   insert into public.report_daily_cap (day, sent) values (date '2030-01-05', 0);
-  perform public.report_site_release(date '2030-01-05');
+  perform public.report_site_release(date '2030-01-05', 'none');
   assert (select sent from public.report_daily_cap where day = date '2030-01-05') = 0, 'the counter went below zero';
+
+  -- A visitor refused because of the cap keeps their own reports, and a release gives the visitor's report back too.
+  delete from public.report_daily_cap;
+  delete from public.report_ip_limits;
+  assert public.report_site_reserve(date '2030-01-07', 'a', 3, 1) = 'ok', 'first report refused';
+  assert public.report_site_reserve(date '2030-01-07', 'b', 3, 1) = 'daily_cap', 'the cap did not hold';
+  assert (select reports from public.report_ip_limits where day = date '2030-01-07' and ip_hash = 'b') = 0,
+    'a visitor refused by the cap lost one of their reports';
+  perform public.report_site_release(date '2030-01-07', 'a');
+  assert (select reports from public.report_ip_limits where day = date '2030-01-07' and ip_hash = 'a') = 0,
+    'a release did not give the visitor their report back';
 
   -- A cap of zero sends nothing.
   assert public.report_site_reserve(date '2030-01-06', 'zero', 3, 0) = 'daily_cap', 'a cap of zero let a report through';
@@ -64,6 +76,17 @@ begin
   assert not exists (select 1 from public.report_daily_cap where day = date '2030-02-01'), 'a cap row older than yesterday was kept';
 end;
 $$;
+
+-- The service role (what PostgREST uses for the function) can really call both functions, with row-level security on.
+set local role service_role;
+do $$
+begin
+  assert public.report_site_reserve(date '2030-04-01', 'svc', 3, 20) = 'ok', 'the service role could not reserve';
+  perform public.report_site_release(date '2030-04-01', 'svc');
+  assert (select sent from public.report_daily_cap where day = date '2030-04-01') = 0, 'the service role could not release';
+end;
+$$;
+reset role;
 
 -- Nobody but the service role may touch the counters or call the functions.
 do $$
@@ -82,11 +105,11 @@ begin
     end loop;
     assert not has_function_privilege(who, 'public.report_site_reserve(date, text, integer, integer)', 'execute'),
       who || ' may call report_site_reserve';
-    assert not has_function_privilege(who, 'public.report_site_release(date)', 'execute'), who || ' may call report_site_release';
+    assert not has_function_privilege(who, 'public.report_site_release(date, text)', 'execute'), who || ' may call report_site_release';
   end loop;
   assert has_function_privilege('service_role', 'public.report_site_reserve(date, text, integer, integer)', 'execute'),
     'the service role may not call report_site_reserve';
-  assert has_function_privilege('service_role', 'public.report_site_release(date)', 'execute'),
+  assert has_function_privilege('service_role', 'public.report_site_release(date, text)', 'execute'),
     'the service role may not call report_site_release';
 end;
 $$;
@@ -115,7 +138,7 @@ set local role authenticated;
 do $$
 begin
   begin
-    perform public.report_site_release(date '2030-03-01');
+    perform public.report_site_release(date '2030-03-01', 'x');
     assert false, 'a signed-in user called report_site_release';
   exception when insufficient_privilege then
     null;

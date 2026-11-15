@@ -138,7 +138,8 @@ Every answer is JSON, `{"ok": true}` or `{"ok": false, "error": {"code", "messag
 - 403 `origin_not_allowed`, 405 `method_not_allowed`, 413 `payload_too_large`, 415 `unsupported_media_type`.
 - 429 `rate_limited`: this visitor has used today's 3 reports. 503 `daily_cap_reached`: 20 reports have been emailed
   today. Both carry `Retry-After` (seconds until 00:00 UTC, when the day rolls over).
-- 502 `send_failed` (Resend refused or timed out; the place is given back, so a failure does not eat the cap),
+- 502 `send_failed` (Resend refused it with a 4xx: the place and the visitor's report are given back. After a timeout,
+  a network error or a 5xx the email may have been sent, so the place is kept: the cap errs on the strict side),
   500 `server_error` (a missing secret or an unreachable database; nothing is sent).
 
 ### What protects the inbox
@@ -155,7 +156,8 @@ Every answer is JSON, `{"ok": true}` or `{"ok": false, "error": {"code", "messag
    keyed by the secret `IP_HASH_SECRET`, so the salt changes every day and a stored hash cannot be turned back into an
    address.
 4. At most 20 emails per day in all. The place is taken in the database (one atomic call, so parallel requests cannot
-   all pass) before the email is sent. If the database is down nothing is sent.
+   all pass) before the email is sent. If the database is down nothing is sent. A visitor refused because of the cap
+   keeps their own reports.
 
 The limits are the constants `IP_DAILY_LIMIT` (3) and `DAILY_CAP` (20) in `handler.ts`; change them there.
 
@@ -218,7 +220,7 @@ curl -s -X POST "$URL" -H 'Content-Type: application/json' \
 # 4. the wrong origin is refused (403), and the preflight answers only the dashboard's origin
 curl -s -i -X POST "$URL" -H 'Content-Type: application/json' -H 'Origin: https://evil.example' -d '{}'
 curl -s -i -X OPTIONS "$URL" -H 'Origin: https://ravidorr.github.io' -H 'Access-Control-Request-Method: POST'
-# 5. the per-visitor limit cannot be dodged by writing the forwarding headers
+# 5. the per-visitor limit cannot be dodged by writing the forwarding headers (run from ONE network)
 for i in 2 3 4 5; do
   curl -s -o /dev/null -w '%{http_code}\n' -X POST "$URL" -H 'Content-Type: application/json' \
     -H "X-Forwarded-For: 10.0.0.$i" -H "CF-Connecting-IP: 10.0.1.$i" \
@@ -227,8 +229,10 @@ done
 ```
 
 Expected for step 5: `200`, `200`, `429`, `429`. Step 1 was this visitor's first report, the loop makes the second and
-third and then hits the limit of 3, which holds only if the headers written by the caller are ignored, which is the
-point of the check. If the fourth call answers `200`, the platform does not set `cf-connecting-ip` the way this function
-assumes: read the real headers in the function logs and fix `visitorNetwork` in `handler.ts` before the form goes live.
-The daily cap needs no live flood: the vitest flood test and `supabase/tests/report_limits.sql` prove it. The limits
-reset at 00:00 UTC.
+third and then hits the limit of 3. This shows the headers written by the caller are ignored, but it does not show that
+visitors are told apart: if the platform gave every request the same address (a proxy's), this check would pass too.
+So also run step 1 once from a second network (a phone on mobile data): it must answer `200` although the first
+network has used up its limit. If it answers `429`, or the logs show `no usable visitor address, using the shared bucket`,
+the platform does not set `cf-connecting-ip` the way this function assumes: read the real headers and fix
+`visitorNetwork` in `handler.ts` before the form goes live. The daily cap needs no live flood: the vitest flood test and
+`supabase/tests/report_limits.sql` prove it. The limits reset at 00:00 UTC.

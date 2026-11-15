@@ -163,7 +163,10 @@ export function visitorNetwork(headers: Headers): string {
   const cloudflare = normalizeAddress(headers.get('cf-connecting-ip') ?? '');
   if (cloudflare) return cloudflare;
   const entries = (headers.get('x-forwarded-for') ?? '').split(',');
-  return normalizeAddress(entries[entries.length - 1] ?? '') ?? 'unknown';
+  const forwarded = normalizeAddress(entries[entries.length - 1] ?? '');
+  if (forwarded) return forwarded;
+  console.warn('report-site: no usable visitor address, using the shared bucket');
+  return 'unknown';
 }
 
 async function hmac(key: BufferSource, message: string): Promise<ArrayBuffer> {
@@ -208,12 +211,15 @@ async function reserve(deps: Deps, config: Config, day: string, ipHash: string):
   throw new Error('report_site_reserve gave an answer this function does not know');
 }
 
-async function release(deps: Deps, config: Config, day: string): Promise<void> {
+async function release(deps: Deps, config: Config, day: string, ipHash: string): Promise<void> {
   try {
-    await callDatabase(deps, config, 'report_site_release', { p_day: day });
+    await callDatabase(deps, config, 'report_site_release', { p_day: day, p_ip_hash: ipHash });
   } catch (error) {
     // Losing a place only means the cap is reached a little earlier today.
-    console.error('report-site: could not give the place back', error instanceof Error ? error.message : 'unknown');
+    console.error(
+      `report-site: could not give the place back for ${day}`,
+      error instanceof Error ? error.message : 'unknown',
+    );
   }
 }
 
@@ -235,6 +241,9 @@ export function renderEmail(report: Report, now: Date): { subject: string; text:
   };
 }
 
+/** Resend answered with a refusal (4xx): the email was definitely not sent, so the place can be given back. */
+class SendRefused extends Error {}
+
 async function sendEmail(deps: Deps, config: Config, report: Report): Promise<void> {
   const { subject, text } = renderEmail(report, deps.now());
   const response = await deps.fetch(RESEND_URL, {
@@ -245,7 +254,9 @@ async function sendEmail(deps: Deps, config: Config, report: Report): Promise<vo
   });
   if (!response.ok) {
     const detail = (await response.text().catch(() => '')).slice(0, 200);
-    throw new Error(`Resend answered ${String(response.status)} ${detail}`);
+    const message = `Resend answered ${String(response.status)} ${detail}`;
+    // A 5xx or a timeout may have queued the email, so only a 4xx counts as "not sent".
+    throw response.status < 500 ? new SendRefused(message) : new Error(message);
   }
 }
 
@@ -291,7 +302,10 @@ export async function handleReport(request: Request, deps: Deps): Promise<Respon
     return fail(origin, 415, 'unsupported_media_type', 'Send the report as application/json.');
   }
   const { config } = deps;
-  if (!config) return fail(origin, 500, 'server_error', 'The service is not set up yet.');
+  if (!config) {
+    console.error('report-site: the secrets are missing or malformed (see the log at start-up for their names)');
+    return fail(origin, 500, 'server_error', 'The service is not set up yet.');
+  }
 
   try {
     const body = await readJson(request);
@@ -337,7 +351,8 @@ export async function handleReport(request: Request, deps: Deps): Promise<Respon
       await sendEmail(deps, config, validation.report);
     } catch (error) {
       console.error('report-site: sending failed', error instanceof Error ? error.message : 'unknown');
-      await release(deps, config, day);
+      // Keep the place when the outcome is unknown (timeout, network error, 5xx): the cap is the stricter side.
+      if (error instanceof SendRefused) await release(deps, config, day, ipHash);
       return fail(origin, 502, 'send_failed', 'The report could not be sent. Please try again later.');
     }
     return reply(origin, 200, { ok: true });

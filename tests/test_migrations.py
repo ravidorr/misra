@@ -37,7 +37,7 @@ REPORT_COLUMNS = {"report_ip_limits": {"day", "ip_hash", "reports"}, "report_dai
 REPORT_TABLES = set(REPORT_COLUMNS)
 REPORT_FUNCTIONS = {
     "report_site_reserve": "p_day date, p_ip_hash text, p_ip_limit integer, p_daily_cap integer",
-    "report_site_release": "p_day date",
+    "report_site_release": "p_day date, p_ip_hash text",
 }
 BACKFILL = (
     "insert into public.profiles (user_id, email) select id, email from auth.users where email is not null "
@@ -72,13 +72,13 @@ REPORT_FUNCTION = re.compile(
     r"create function public\.(?P<name>report_site_reserve|report_site_release)\((?P<args>[a-z_0-9 ,]*)\) "
     r"returns (?:text|void) language plpgsql set search_path = '' as \$\$(?P<body>.*)\$\$"
 )
-REPORT_SIGNATURE = r"(?:jsonb|date|date, text, integer, integer)?"
+REPORT_SIGNATURE = r"(?:jsonb|date, text|date, text, integer, integer)?"
 REVOKE_FUNCTION = re.compile(
     rf"revoke (?:all|execute) on function public\.(?P<name>\w+)\({REPORT_SIGNATURE}\) from (?P<roles>[a-z, ]+)"
 )
 GRANT_REPORT_FUNCTION = re.compile(
     r"grant execute on function public\.(?P<name>report_site_reserve|report_site_release)"
-    r"\((?:date, text, integer, integer|date)\) to service_role"
+    r"\((?:date, text, integer, integer|date, text)\) to service_role"
 )
 TRIGGER = re.compile(
     r"create trigger \w+ (?:before|after) (?:insert|update|delete)(?: or (?:insert|update|delete))*"
@@ -203,10 +203,12 @@ def parse_function(s: str) -> tuple[str, bool, list[str]] | None:
         return "custom_access_token_hook", False, bad
     if m := REPORT_FUNCTION.fullmatch(s):
         touched = set(re.findall(r"public\.(\w+)", m["body"]))
+        elsewhere = re.findall(r"\b(?:auth|storage|vault|extensions|net|pg_catalog|supabase_\w+)\.\w+", m["body"])
         bad = [] if m["args"] == REPORT_FUNCTIONS[m["name"]] else [f"function {m['name']} has another signature: {s}"]
         bad += [f"function {m['name']} may touch only the report tables, not {sorted(touched - REPORT_TABLES)}"] * bool(
             touched - REPORT_TABLES
         )
+        bad += [f"function {m['name']} reaches outside public: {elsewhere}"] * bool(elsewhere)
         return m["name"], False, bad
     if m := FUNCTION.fullmatch(s):
         bad = [f"function {m['name']} reads data the provider sends: {s}"] if PROVIDER_DATA.search(m["body"]) else []
@@ -605,7 +607,9 @@ def test_the_report_counters_have_no_policy_and_no_grant_for_anyone_but_the_serv
     grants = [m for s in stmts if (m := GRANT_REPORT_FUNCTION.fullmatch(s))]
     assert {g["name"] for g in grants} == set(REPORT_FUNCTIONS)  # execute for service_role, and nothing else
     assert not [
-        s for s in stmts if s.startswith("grant execute") and not GRANT_REPORT_FUNCTION.fullmatch(s) and "hook" not in s
+        s
+        for s in stmts
+        if s.startswith("grant execute") and not GRANT_REPORT_FUNCTION.fullmatch(s) and s not in HOOK_GRANTS
     ]
 
 
@@ -645,10 +649,10 @@ def test_the_report_counters_keep_nothing_personal() -> None:
             " from public, anon, authenticated;",
             "revoke all on function public.report_site_reserve(date, text, integer, integer) from public, anon;",
         ),
-        ("revoke all on function public.report_site_release(date) from public, anon, authenticated;", ""),
+        ("revoke all on function public.report_site_release(date, text) from public, anon, authenticated;", ""),
         (
-            "grant execute on function public.report_site_release(date) to service_role;",
-            "grant execute on function public.report_site_release(date) to service_role, anon;",
+            "grant execute on function public.report_site_release(date, text) to service_role;",
+            "grant execute on function public.report_site_release(date, text) to service_role, anon;",
         ),
         (
             "grant execute on function public.report_site_reserve(date, text, integer, integer) to service_role;",
@@ -671,9 +675,14 @@ def test_the_report_counters_keep_nothing_personal() -> None:
         ),
         ("language plpgsql\nset search_path = ''\nas $$\ndeclare", "language plpgsql\nas $$\ndeclare"),
         ("delete from public.report_ip_limits where day < p_day - 1;", "delete from public.user_jobs;"),
+        ("delete from public.report_ip_limits where day < p_day - 1;", "delete from auth.users;"),
         (
-            "create function public.report_site_release(p_day date)",
-            "create function public.report_site_release(p_day date, p_extra text)",
+            "revoke all on function public.report_site_release(date, text) from public, anon, authenticated;",
+            "revoke all on function public.report_site_release(date, text) from anon, authenticated;",
+        ),
+        (
+            "create function public.report_site_release(p_day date, p_ip_hash text)",
+            "create function public.report_site_release(p_day date, p_ip_hash text, p_extra text)",
         ),
     ],
 )
