@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; connect-src __SUPABASE_URL__; base-uri 'none'; form-action 'none'">
+<meta name="referrer" content="no-referrer">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<meta name="robots" content="noindex, nofollow">
+<title>Misra - your email</title>
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="dashboard.css" integrity="__SRI_DASHBOARD_CSS__">
+<script src="theme.js" integrity="__SRI_THEME_JS__"></script>
+<script type="module" src="email.js" integrity="__SRI_EMAIL_JS__"></script>
+</head>
+<body>
+<div class="page">
+<header class="top">
+  <span class="top-name"><a class="wordmark" href="./">misra</a></span>
+</header>
+<main>
+  <h1 class="hero"><span class="highlight" id="heading">Your email</span></h1>
+  <p class="sub" id="message">Checking your link…</p>
+  <p id="actions" hidden><button type="button" class="btn btn-pill btn-primary" id="confirm">Confirm my email</button></p>
+  <p class="sr-only" id="status" role="status"></p>
+  <p><a class="btn btn-pill" href="./" id="back" hidden>Go to the dashboard</a></p>
+</main>
+</div>
+</body>
+</html>

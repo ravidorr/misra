@@ -18,8 +18,48 @@ ALL_WRITES = {"insert", "update", "delete", "truncate"}
 CRUD = {"select", "insert", "update", "delete"}
 # What the signed-in role may do on each table; the anonymous role may only read `jobs`. Each granted command needs a
 # policy, and a policy for any other command is refused.
-AUTHENTICATED_MAY = {"jobs": {"select"}, "profiles": {"select"}, "user_prefs": CRUD, "user_jobs": CRUD}
-USER_TABLES = {"profiles", "user_prefs", "user_jobs"}
+AUTHENTICATED_MAY = {
+    "jobs": {"select"},
+    "profiles": {"select"},
+    "user_prefs": CRUD,
+    "user_jobs": CRUD,
+    "subscriptions": {"select", "update"},
+}
+# `emailed` belongs to the service role alone: no grant, no policy. `subscriptions` is granted column by column only
+# (see COLUMN_GRANTS), never as a whole table, because a table-level select would include the two token hashes.
+USER_TABLES = {"profiles", "user_prefs", "user_jobs", "subscriptions", "emailed"}
+COLUMN_ONLY_TABLES = {"subscriptions"}
+SUBSCRIPTION_COLUMNS = {
+    "user_id",
+    "address",
+    "frequency",
+    "filters",
+    "confirm_token_hash",
+    "confirm_token_expires_at",
+    "unsubscribe_token_hash",
+    "consent_given_at",
+    "consent_confirmed_at",
+    "unsubscribed_at",
+    "created_at",
+    "updated_at",
+}
+EMAILED_COLUMNS = {"user_id", "company", "job_id", "emailed_at"}
+# What the signed-in role may select and update on `subscriptions`, by column: never a token hash or its expiry, and it
+# may change only the two preference columns, so it can neither confirm itself, nor change the address that consent was
+# given for, nor undo an unsubscribe.
+COLUMN_GRANTS = {
+    "select": SUBSCRIPTION_COLUMNS - {"confirm_token_hash", "confirm_token_expires_at", "unsubscribe_token_hash"},
+    "update": {"frequency", "filters"},
+}
+# `address` is the one column that is an address on purpose: the place the digest goes, kept with the consent log.
+PERSONAL_COLUMN_ALLOWED = {("subscriptions", "address")}
+# The two functions behind confirm-email and unsubscribe: each may touch only these two tables, runs as the caller and
+# is executable by the service role alone.
+SUBSCRIPTION_FUNCTIONS = {
+    "confirm_subscription": "p_hash text, p_now timestamptz",
+    "unsubscribe_subscription": "p_hash text, p_now timestamptz",
+}
+SUBSCRIPTION_TABLES = {"subscriptions", "emailed"}
 # The one test that makes a row "mine". `(select auth.uid())` is the same test evaluated once per statement.
 OWN_ROW = {"(select auth.uid()) = user_id", "auth.uid() = user_id"}
 # The only personal detail kept is the email: no column anywhere is for what the provider sends or for contact details.
@@ -50,6 +90,9 @@ CREATE_INDEX = re.compile(
 )
 ENABLE_RLS = re.compile(r"alter table public\.(?P<table>\w+) enable row level security")
 GRANT = re.compile(r"grant (?P<privs>[a-z, ]+) on public\.(?P<table>\w+) to (?P<roles>[a-z, ]+)")
+COLUMN_GRANT = re.compile(
+    r"grant (?P<priv>[a-z]+) \((?P<columns>[a-z_, ]+)\) on public\.(?P<table>\w+) to (?P<roles>[a-z, ]+)"
+)
 REVOKE = re.compile(r"revoke (?P<privs>[a-z, ]+) on public\.(?P<table>\w+) from (?P<roles>[a-z, ]+)")
 POLICY = re.compile(
     r'create policy "[^"]*" on public\.(?P<table>\w+) for (?P<command>\w+) to (?P<roles>[a-z, ]+) '
@@ -72,13 +115,21 @@ REPORT_FUNCTION = re.compile(
     r"create function public\.(?P<name>report_site_reserve|report_site_release)\((?P<args>[a-z_0-9 ,]*)\) "
     r"returns (?:text|void) language plpgsql set search_path = '' as \$\$(?P<body>.*)\$\$"
 )
-REPORT_SIGNATURE = r"(?:jsonb|date, text|date, text, integer, integer)?"
+SUBSCRIPTION_FUNCTION = re.compile(
+    r"create function public\.(?P<name>confirm_subscription|unsubscribe_subscription)\((?P<args>[a-z_0-9 ,]*)\) "
+    r"returns text language plpgsql set search_path = '' as \$\$(?P<body>.*)\$\$"
+)
+REPORT_SIGNATURE = r"(?:jsonb|date, text|date, text, integer, integer|text, timestamptz)?"
 REVOKE_FUNCTION = re.compile(
     rf"revoke (?:all|execute) on function public\.(?P<name>\w+)\({REPORT_SIGNATURE}\) from (?P<roles>[a-z, ]+)"
 )
 GRANT_REPORT_FUNCTION = re.compile(
     r"grant execute on function public\.(?P<name>report_site_reserve|report_site_release)"
     r"\((?:date, text, integer, integer|date, text)\) to service_role"
+)
+GRANT_SUBSCRIPTION_FUNCTION = re.compile(
+    r"grant execute on function public\.(?P<name>confirm_subscription|unsubscribe_subscription)"
+    r"\(text, timestamptz\) to service_role"
 )
 TRIGGER = re.compile(
     r"create trigger \w+ (?:before|after) (?:insert|update|delete)(?: or (?:insert|update|delete))*"
@@ -149,13 +200,28 @@ def allowed_privileges(table: str, role: str) -> set[str]:
 
 
 def grant_problem(s: str) -> str | None:
+    if column := COLUMN_GRANT.fullmatch(s):
+        return column_grant_problem(column, s)
     grant = GRANT.fullmatch(s)
     if not grant:
         return None
+    if grant["table"] in COLUMN_ONLY_TABLES and words(grant["roles"]) & PUBLIC_ROLES:
+        return f"{grant['table']} may be granted column by column only: {s}"
     for role in words(grant["roles"]) & PUBLIC_ROLES:
         if not words(grant["privs"]) <= allowed_privileges(grant["table"], role):
             return f"{role} may not get these privileges on {grant['table']}: {s}"
     return None
+
+
+def column_grant_problem(grant: re.Match[str], s: str) -> str | None:
+    """A column grant is for the signed-in role only, on `subscriptions` only, and only the listed columns."""
+    allowed = COLUMN_GRANTS.get(grant["priv"], set())
+    wrong = (
+        grant["table"] != "subscriptions"
+        or words(grant["roles"]) != {"authenticated"}
+        or not words(grant["columns"]) <= allowed
+    )
+    return f"authenticated may get only these columns of subscriptions: {sorted(allowed)}: {s}" if wrong else None
 
 
 def policy_problem(s: str) -> str | None:
@@ -185,12 +251,16 @@ def table_problems(table: str, body: str) -> list[str]:
     found = [
         f"{table}.{name} looks like personal data other than the email"
         for name in columns
-        if PERSONAL_COLUMN.search(name)
+        if PERSONAL_COLUMN.search(name) and (table, name) not in PERSONAL_COLUMN_ALLOWED
     ]
     if table == "profiles" and set(columns) != PROFILE_COLUMNS:
         found.append(f"profiles may hold only {sorted(PROFILE_COLUMNS)}, not {sorted(columns)}")
     if table in REPORT_COLUMNS and set(columns) != REPORT_COLUMNS[table]:
         found.append(f"{table} may hold only {sorted(REPORT_COLUMNS[table])}, not {sorted(columns)}")
+    if table == "subscriptions" and set(columns) != SUBSCRIPTION_COLUMNS:
+        found.append(f"subscriptions has other columns than {sorted(SUBSCRIPTION_COLUMNS)}: {sorted(columns)}")
+    if table == "emailed" and set(columns) != EMAILED_COLUMNS:
+        found.append(f"emailed has other columns than {sorted(EMAILED_COLUMNS)}: {sorted(columns)}")
     if table in USER_TABLES and CASCADE not in columns.get("user_id", ""):
         found.append(f"{table}.user_id must be `{CASCADE}`")
     return found
@@ -208,6 +278,15 @@ def parse_function(s: str) -> tuple[str, bool, list[str]] | None:
         bad += [f"function {m['name']} may touch only the report tables, not {sorted(touched - REPORT_TABLES)}"] * bool(
             touched - REPORT_TABLES
         )
+        bad += [f"function {m['name']} reaches outside public: {elsewhere}"] * bool(elsewhere)
+        return m["name"], False, bad
+    if m := SUBSCRIPTION_FUNCTION.fullmatch(s):
+        touched = set(re.findall(r"public\.(\w+)", m["body"]))
+        elsewhere = re.findall(r"\b(?:auth|storage|vault|extensions|net|pg_catalog|supabase_\w+)\.\w+", m["body"])
+        bad = [] if m["args"] == SUBSCRIPTION_FUNCTIONS[m["name"]] else [f"function {m['name']} has another signature"]
+        bad += [
+            f"function {m['name']} may touch only the subscription tables: {sorted(touched - SUBSCRIPTION_TABLES)}"
+        ] * bool(touched - SUBSCRIPTION_TABLES)
         bad += [f"function {m['name']} reaches outside public: {elsewhere}"] * bool(elsewhere)
         return m["name"], False, bad
     if m := FUNCTION.fullmatch(s):
@@ -248,7 +327,9 @@ def problems(stmts: list[str]) -> list[str]:
         elif not (
             CREATE_INDEX.fullmatch(s)
             or GRANT.fullmatch(s)
+            or COLUMN_GRANT.fullmatch(s)
             or GRANT_REPORT_FUNCTION.fullmatch(s)
+            or GRANT_SUBSCRIPTION_FUNCTION.fullmatch(s)
             or s in HOOK_GRANTS
             or s == BACKFILL
         ):
@@ -300,7 +381,10 @@ def test_there_are_migrations_with_cli_names() -> None:
 def test_migrations_are_safe() -> None:
     stmts = statements()
     tables = {m["table"] for s in stmts if (m := CREATE_TABLE.fullmatch(s))}
-    assert tables == {"jobs", "crawl_log", "profiles", "user_prefs", "user_jobs"} | REPORT_TABLES
+    assert (
+        tables
+        == {"jobs", "crawl_log", "profiles", "user_prefs", "user_jobs", "subscriptions", "emailed"} | REPORT_TABLES
+    )
     assert any(POLICY.fullmatch(s) for s in stmts)
     assert problems(stmts) == []
 
@@ -609,7 +693,10 @@ def test_the_report_counters_have_no_policy_and_no_grant_for_anyone_but_the_serv
     assert not [
         s
         for s in stmts
-        if s.startswith("grant execute") and not GRANT_REPORT_FUNCTION.fullmatch(s) and s not in HOOK_GRANTS
+        if s.startswith("grant execute")
+        and not GRANT_REPORT_FUNCTION.fullmatch(s)
+        and not GRANT_SUBSCRIPTION_FUNCTION.fullmatch(s)
+        and s not in HOOK_GRANTS
     ]
 
 

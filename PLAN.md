@@ -157,10 +157,18 @@ Decisions made in planning (they change the PRD's wording, so update the PRD in 
 
 ## FR-8 (personalised digest; the lawyer check is a gate in front of step 6.6)
 
-- [ ] 6.1 Subscriber tables and functions: `subscriptions` (user_id, address, frequency default daily, filters
-  snapshot, enabled_at, confirmed_at, unsubscribed_at, unsubscribe token), `emailed` (user_id, job key) to avoid repeats.
-  Edge Functions `confirm-email` and `unsubscribe` (one click, no sign-in, token-based). Done when: FR-8 AC 7 first
-  half and AC 11 (consent log) hold in tests.
+- [x] ~~6.1 Subscriber tables and functions: `subscriptions` (user_id, address, frequency default daily, filters
+  snapshot, the consent log `consent_given_at`, `consent_confirmed_at`, `unsubscribed_at`, hashed confirm and
+  unsubscribe tokens), `emailed` (user_id, job key) to avoid repeats. Edge Functions `confirm-email` and `unsubscribe`
+  (one click, no sign-in, token-based) and the static page `email.html`. Done when: FR-8 AC 7 first half and AC 11 (consent log) hold in tests.~~
+  Remaining checks, live only (`supabase/README.md`, "Subscribers: confirm and unsubscribe"): apply the migration
+  `20261117100000_subscriptions_and_emailed.sql` and record it with `supabase migration repair 20261117100000 --status applied --remote`
+  if it was pasted into the SQL editor, deploy with `supabase functions deploy confirm-email --project-ref dncodqeqpoqwcxdctzco`
+  and `supabase functions deploy unsubscribe --project-ref dncodqeqpoqwcxdctzco`, wait for the next daily build to publish
+  `email.html`, then run the curl checks with a throwaway row: a GET never confirms (405), a POST confirms and a repeat
+  says already confirmed, an RFC 8058 POST with no key unsubscribes (proves `verify_jwt = false`), a GET unsubscribe answers
+  303 to `email.html#unsubscribed` on the default domain, and an unsubscribe keeps the timestamps and clears the filters and
+  `emailed` rows.
 - [ ] 6.2 Dashboard digest settings: on/off, address (Google email by default), daily or weekly, "Use these filters for
   my email" copying regions, levels, role types and keywords only. Sends the confirmation email through Resend.
   Done when: FR-8 AC 1 to 3 hold.

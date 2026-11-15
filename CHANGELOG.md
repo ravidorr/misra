@@ -2,6 +2,22 @@
 
 All notable changes are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses [Semantic Versioning](https://semver.org/).
 
+## [0.22.0] - 2026-11-17
+
+### Added
+
+- Subscriber tables and the confirm and unsubscribe functions (PLAN.md step 6.1, FR-8 AC 7). Migration `20261117100000_subscriptions_and_emailed.sql`: `subscriptions` (one row per user: address, frequency, filters snapshot, the SHA-256 of a confirmation token and of an unsubscribe token, and the consent log `consent_given_at`, `consent_confirmed_at`, `unsubscribed_at`) and `emailed` (user and job key, so a job is never sent twice). Both cascade from `auth.users`, so deleting an account removes the consent log too. A signed-in user may read their own row without the token hashes and change only `frequency` and `filters`; they cannot insert, delete, confirm themselves, change the address or undo an unsubscribe. `emailed` and the two database functions `confirm_subscription` and `unsubscribe_subscription` are for the service role only. A change of address drops the confirmation.
+- Edge Function `confirm-email`: a POST with `{token}` confirms; a GET never does (mail scanners fetch links), so the email links to a static page with a Confirm button. A replay says "already confirmed"; an expired link, an unknown token and an unsubscribed subscription get their own clear answers.
+- Edge Function `unsubscribe`: one click, no sign-in. A GET unsubscribes and redirects to the static page; a POST answers the RFC 8058 one-click request of a mailbox provider. A repeat is not an error. An unsubscribe stops sending, keeps the address and the consent timestamps as the audit record, and clears the filters snapshot, the frequency, the confirmation token and the emailed list.
+- Tokens are 256 random bits, stored only as a SHA-256 hash; the raw token is only in the emailed link. Nothing logs a token, hash, address or user id.
+- The static page `email.html` (built from `templates/email.html` and `templates/email.js`, no new stylesheet): the Confirm button, and the landing of the unsubscribe redirect. The daily workflow now stages the two new files, and a test fails when the build writes a file the workflow does not stage.
+- `supabase/tests/subscriptions.sql`, `test/confirm-email.test.ts`, `test/unsubscribe.test.ts`, `tests/test_email_page.py` (real browser, light and dark, phone width, axe, keyboard) and the lint of the new migration in `tests/test_migrations_subscriptions.py`.
+
+### Changed
+
+- `PRIVACY.md` describes the consent log, what an unsubscribe keeps and clears, and that deleting the account removes everything.
+- `build_dashboard.py` builds a second page and puts integrity hashes into every page.
+
 ## [0.21.0] - 2026-11-16
 
 ### Added
