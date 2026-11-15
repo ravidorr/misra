@@ -30,7 +30,7 @@
   <svg class="top-mark" aria-hidden="true" viewBox="0 0 64 64"><circle class="mark-disc" cx="32" cy="32" r="29.5" stroke-width="5"/><path class="mark-pulse" d="M9 35h12l5-15 8 28 6-19 3 6h12" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round"/><path class="mark-spark" d="M47 6l2.4 6.6L56 15l-6.6 2.4L47 24l-2.4-6.6L38 15l6.6-2.4z" stroke-width="1.5" stroke-linejoin="round"/></svg>
   <span class="top-name"><span class="wordmark">misra</span></span>
   <div class="account" id="account" hidden>
-    <button type="button" class="btn btn-pill" id="signIn">Sign in<span class="sr-only"> with Google</span></button>
+    <button type="button" class="btn btn-pill" id="signIn" aria-describedby="signInNote">Sign in<span class="sr-only"> with Google</span></button>
     <div class="account-user" id="accountUser" hidden>
       <span class="account-email" id="accountEmail"></span>
       <button type="button" class="btn btn-pill" id="signOut">Sign out</button>
@@ -45,6 +45,7 @@
 </header>
 <div class="auth-message" id="authMessage" role="alert"></div>
 <main>
+  <p class="sign-in-note" id="signInNote" hidden>By signing in with Google you agree to the <a href="https://github.com/ravidorr/misra/blob/main/PRIVACY.md" target="_blank" rel="noopener noreferrer">Privacy Notice<span class="sr-only"> (opens in a new tab)</span></a> and the <a href="https://github.com/ravidorr/misra/blob/main/TERMS.md" target="_blank" rel="noopener noreferrer">Terms<span class="sr-only"> (opens in a new tab)</span></a>. Signing in is voluntary: your email is used only to save your choices on your devices and to send any email alerts you turn on.</p>
   <h1 class="hero"><span class="highlight" id="heroTop">Open roles</span> <span id="heroBottom">in Israel.</span></h1>
   <p class="sub" id="summary">Loading roles…</p>
   <p class="sr-only" id="status" role="status"></p>
@@ -128,7 +129,14 @@
     </div>
   </details>
 </main>
-<footer class="foot"><span id="saveNote">Stars and discards are saved in this browser only.</span> Data updated <time id="upd"></time>.</footer>
+<footer class="foot">
+  <p class="foot-note"><span id="saveNote">Stars and discards are saved in this browser only.</span> Data updated <time id="upd"></time>.</p>
+  <nav class="foot-links" aria-label="About Misra">
+    <a href="https://github.com/ravidorr/misra/blob/main/PRIVACY.md" target="_blank" rel="noopener noreferrer">Privacy<span class="sr-only"> (opens in a new tab)</span></a>
+    <a href="https://github.com/ravidorr/misra/blob/main/TERMS.md" target="_blank" rel="noopener noreferrer">Terms<span class="sr-only"> (opens in a new tab)</span></a>
+    <a href="mailto:raanan@avidor.org">Contact</a>
+  </nav>
+</footer>
 </div>
 <dialog class="dialog" id="deleteDialog" aria-labelledby="deleteTitle" aria-describedby="deleteText">
   <h2 class="dialog-title" id="deleteTitle" tabindex="-1">Delete your account?</h2>

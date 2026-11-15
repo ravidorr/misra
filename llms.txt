@@ -11,6 +11,7 @@
 
 - [Security](/SECURITY.md): Vulnerability reporting and supported versions.
 - [Privacy](/PRIVACY.md): Data-handling policy.
+- [Terms](/TERMS.md): The as-is terms of use.
 - [Support](/SUPPORT.md): Support and troubleshooting information.
 
 ## Miscellaneous

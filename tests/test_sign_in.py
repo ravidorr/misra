@@ -33,6 +33,7 @@ from tests.test_dashboard_page import (
 
 AXE_RUN = "axe.run().then(r => r.violations.map(v => v.id + ': ' + v.nodes.map(n => n.html).join(' | ')))"
 STORAGE_KEY = "misra-auth"
+FOOTER_LINKS = 3
 RETRIES = 50
 POLL_SECONDS = 0.1
 CANCELLED = "The sign-in was cancelled."
@@ -374,6 +375,98 @@ async def test_blocked_browser_storage_does_not_break_the_page_or_the_sign_in_bu
     await start_sign_in(page, AuthBackend())
     assert page.url.startswith(f"{build_dashboard.SUPABASE_URL}/auth/v1/authorize")
     assert problems == []
+
+
+# ---- FR-1 AC 7: the notice next to the sign-in button (PLAN.md step 6.6) ----
+
+BLOB = "https://github.com/ravidorr/misra/blob/main"
+
+
+async def test_fr1_ac7_the_notice_says_what_signing_in_is_for(page: Page, site: Path) -> None:
+    await serve(page, site)
+    note = page.locator("#signInNote")
+    await expect(note).to_be_visible()
+    text = await note.inner_text()
+    assert "By signing in with Google you agree to the Privacy Notice" in text
+    assert "Signing in is voluntary" in text
+    assert "your email is used only to save your choices on your devices" in text
+    assert "to send any email alerts you turn on" in text
+    privacy = note.get_by_role("link", name="Privacy Notice (opens in a new tab)")
+    assert await privacy.get_attribute("href") == f"{BLOB}/PRIVACY.md"
+    assert await note.get_by_role("link", name="Terms (opens in a new tab)").get_attribute("href") == f"{BLOB}/TERMS.md"
+    for link in await note.locator("a").all():
+        assert await link.get_attribute("target") == "_blank"
+        assert await link.get_attribute("rel") == "noopener noreferrer"
+    # the button points to it, so a screen reader reads the notice with the button
+    assert await page.locator("#signIn").get_attribute("aria-describedby") == "signInNote"
+    # it opens the main region (a notice outside a landmark fails axe), and the links work by keyboard
+    assert await page.evaluate("document.querySelector('main').firstElementChild.id") == "signInNote"
+    await page.focus("#signIn")
+    await page.keyboard.press("Tab")  # the theme button
+    await page.keyboard.press("Tab")  # the Privacy Notice link
+    assert await page.evaluate("document.activeElement.textContent.startsWith('Privacy Notice')")
+
+
+async def test_fr1_ac7_the_notice_goes_when_signed_in_and_returns_when_signed_out(page: Page, site: Path) -> None:
+    await sign_in(page, site)
+    await expect(page.locator("#signInNote")).to_be_hidden()
+    await page.click("#signOut")
+    await expect(page.locator("#signInNote")).to_be_visible()
+
+
+async def test_fr1_ac7_without_the_sign_in_script_there_is_no_notice(page: Page, site: Path) -> None:
+    (site / "supabase.js").unlink()
+    await serve(page, site)
+    await expect(page.locator("#signInNote")).to_be_hidden()
+    await expect(page.locator("#signIn")).to_be_hidden()
+
+
+async def test_fr1_ac7_the_notice_shows_with_the_button_before_the_service_has_answered(page: Page, site: Path) -> None:
+    """With a service that never reports a session (the quiet stub) the button shows, so the notice must too."""
+    await page.add_init_script(STUB)
+    await serve(page, site)
+    await expect(page.locator("#signIn")).to_be_visible()
+    await expect(page.locator("#signInNote")).to_be_visible()
+
+
+async def test_fr1_ac7_the_notice_reads_well_on_a_phone(page: Page, site: Path) -> None:
+    await page.set_viewport_size(PHONE)
+    await serve(page, site)
+    assert await page.evaluate("document.documentElement.scrollWidth <= document.documentElement.clientWidth")
+    box = await page.locator("#signInNote").bounding_box()
+    assert box is not None
+    assert 0 <= box["x"] <= box["x"] + box["width"] <= PHONE["width"]
+
+
+# ---- The footer: links to the privacy notice, the terms and the contact ----
+
+
+async def test_the_footer_links_to_the_privacy_notice_the_terms_and_the_contact(page: Page, site: Path) -> None:
+    await serve(page, site)
+    nav = page.get_by_role("navigation", name="About Misra")
+    links = nav.locator("a")
+    assert await links.count() == FOOTER_LINKS
+    privacy = nav.get_by_role("link", name="Privacy (opens in a new tab)")
+    assert await privacy.get_attribute("href") == f"{BLOB}/PRIVACY.md"
+    assert await nav.get_by_role("link", name="Terms (opens in a new tab)").get_attribute("href") == f"{BLOB}/TERMS.md"
+    assert await nav.get_by_role("link", name="Contact").get_attribute("href") == "mailto:raanan@avidor.org"
+    for link in await links.all():
+        box = await link.bounding_box()
+        assert box is not None
+        assert box["height"] >= TAP
+        assert box["width"] >= TAP
+    assert "Data updated" in await page.locator("footer.foot").inner_text()  # the existing line is still there
+
+
+async def test_the_footer_links_read_well_on_a_phone(page: Page, site: Path) -> None:
+    await page.set_viewport_size(PHONE)
+    await serve(page, site)
+    assert await page.evaluate("document.documentElement.scrollWidth <= document.documentElement.clientWidth")
+    for link in await page.locator("footer.foot a").all():
+        box = await link.bounding_box()
+        assert box is not None
+        assert box["height"] >= TAP
+        assert 0 <= box["x"] <= box["x"] + box["width"] <= PHONE["width"]
 
 
 # ---- The header: small, phone width, light and dark, accessible ----

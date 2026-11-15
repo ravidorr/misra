@@ -216,7 +216,10 @@ starting with the ones that matter most to users.
 - AC: A consent log is kept for each subscriber: when the email was turned on, when it was confirmed and when the user
   unsubscribed. When a user only unsubscribes, those timestamps are kept and the filters are cleared. When the account is
   deleted, everything is removed, including the log.
-- AC: Every email has a footer that names Misra, the site and the contact address (`raanan@avidor.org`).
+- AC: Every email has a footer that names Misra, the site and the contact address (`raanan@avidor.org`). The wording, from the
+  lawyer: `You are receiving this email because you signed up for job alerts on Misra (https://ravidorr.github.io/misra/). Misra is a free, non-commercial project. Unsubscribe in one click | Contact: raanan@avidor.org` ("Unsubscribe in one click" is the unsubscribe link.) Replies go to a real mailbox: the
+  email sets Reply-To to `raanan@avidor.org`, because the lawyer said people may reply "Remove" and the sending address
+  (`digest@send.avidor.org`) cannot receive mail.
 
 ### FR-9: Level and role type
 
