@@ -535,7 +535,7 @@ async def test_fr8_ac3_daily_is_the_default_and_weekly_is_sent_when_chosen(page:
     await signed_in(page, digest_site, world)
     await open_dialog(page)
     labels = await page.locator(".digest-frequency label").all_inner_texts()
-    assert [t.strip() for t in labels] == ["Daily", "Weekly"]
+    assert [t.strip() for t in labels] == ["Daily", "Weekly (Sundays)"]
     assert await page.locator("input[name=digestFrequency][value=daily]").is_checked()
     await page.check("input[name=digestFrequency][value=weekly]")
     await page.click("#digestSend")
@@ -937,7 +937,7 @@ async def test_the_lawyers_wording_is_on_the_control_with_big_links(page: Page, 
     await page.fill("#digestAddress", OTHER)
     await expect(page.locator("#digestConsentTo")).to_have_text(OTHER)
     labels = await page.locator(".digest-frequency label").all_inner_texts()
-    assert [t.strip() for t in labels] == ["Daily", "Weekly"]
+    assert [t.strip() for t in labels] == ["Daily", "Weekly (Sundays)"]
 
 
 @pytest.mark.parametrize("word", ["daily", "weekly"])

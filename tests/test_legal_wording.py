@@ -86,6 +86,21 @@ def test_the_privacy_notice_keeps_the_accurate_points_about_the_providers_own_re
     assert "Provider logs" in text
 
 
+SPAM_GUARD = (
+    "To prevent spam, we store a daily non-reversible hash of your network address that expires after 24 hours."
+)
+
+
+def test_the_spam_guard_sentence_is_the_lawyers_in_the_notice_and_the_form_and_a_daily_cleanup_backs_it() -> None:
+    text = read("PRIVACY.md")
+    assert SPAM_GUARD in text
+    assert "A cleanup that runs every day deletes the counters of every earlier day." in text
+    assert "whenever the next report is handled" not in text  # the old promise, replaced by the daily cleanup
+    assert f"Reports are emailed directly to the maintainer. {SPAM_GUARD} <a" in read("templates/dashboard.html")
+    assert "report_site_cleanup" in read("sync_supabase.py")  # the promise is kept by this call
+    assert "report_site_cleanup" in read("supabase/migrations/20261119100000_report_site_cleanup.sql")
+
+
 def test_the_privacy_notice_contact_is_a_direct_address_not_only_a_public_issue() -> None:
     body = sections(read("PRIVACY.md"))["Contact"]
     assert CONTACT in body

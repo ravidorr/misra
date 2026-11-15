@@ -1,6 +1,7 @@
 import runpy
 import sqlite3
 import sys
+from datetime import UTC, date, datetime
 from typing import Any
 
 import pytest
@@ -14,6 +15,7 @@ from tests.fakes import FakeHttpResponse, FakeSupabase
 
 URL = "https://abc.supabase.co"
 KEY = "service-role-key-xyz"
+COUNT = 4  # rows a cleanup reports
 
 
 def client(fake: FakeSupabase) -> Client:
@@ -306,3 +308,56 @@ def test_main_fails_when_the_list_has_companies_but_the_secrets_are_empty(
     path.write_text("company,reason\n", encoding="utf-8")
     with pytest.raises(SystemExit, match="header"):
         sync_supabase.main()
+
+
+# ---- the daily cleanup of the report-site spam-guard counters ----
+
+
+def test_cleanup_calls_the_database_function_with_today_and_returns_the_count() -> None:
+    fake = FakeSupabase(rpc_answer=COUNT)
+    assert sync_supabase.cleanup(client(fake), date(2026, 11, 16)) == COUNT
+    (call,) = fake.calls
+    assert (call["method"], call["url"]) == ("POST", f"{URL}/rest/v1/rpc/report_site_cleanup")
+    assert call["json"] == {"p_day": "2026-11-16"}
+    assert call["headers"]["apikey"] == KEY
+    assert call["headers"]["Prefer"] == "return=representation"
+
+
+@pytest.mark.parametrize("answer", [None, "4", [4], True])
+def test_cleanup_refuses_an_answer_that_is_not_a_count(answer: Any) -> None:
+    with pytest.raises(SyncError, match="something other than a count"):
+        sync_supabase.cleanup(client(FakeSupabase(rpc_answer=answer)), date(2026, 11, 16))
+
+
+def test_cleanup_fails_loudly_when_the_function_is_missing_or_the_call_fails() -> None:
+    with pytest.raises(SyncError, match="POST rpc/report_site_cleanup failed: HTTP 500 boom"):
+        sync_supabase.cleanup(client(FakeSupabase(fail_on="POST")), date(2026, 11, 16))
+
+
+def test_main_cleans_the_counters_after_the_sync_and_logs_the_count(
+    jobs: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    jobs.commit()
+    fake = FakeSupabase(rpc_answer=7)
+    monkeypatch.setenv("SUPABASE_URL", URL)
+    monkeypatch.setenv("SUPABASE_SERVICE_ROLE_KEY", KEY)
+    monkeypatch.setattr(sync_supabase.requests, "Session", lambda: fake)
+    sync_supabase.main()
+    rpc = [c for c in fake.calls if "/rpc/" in c["url"]]
+    assert len(rpc) == 1 and fake.calls[-1] is rpc[0]  # once, after the sync
+    assert rpc[0]["json"] == {"p_day": datetime.now(UTC).date().isoformat()}
+    assert "Supabase: 7 spam-guard counter rows deleted" in capsys.readouterr().out
+
+
+def test_main_exits_non_zero_when_the_cleanup_fails_after_a_good_sync(
+    jobs: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    jobs.commit()
+    fake = FakeSupabase(rpc_answer="not a count")
+    monkeypatch.setenv("SUPABASE_URL", URL)
+    monkeypatch.setenv("SUPABASE_SERVICE_ROLE_KEY", KEY)
+    monkeypatch.setattr(sync_supabase.requests, "Session", lambda: fake)
+    with pytest.raises(SystemExit, match="rpc/report_site_cleanup returned something other than a count"):
+        sync_supabase.main()
+    assert ("Beta", "9") in fake.table  # the jobs were already synced
+    assert "3 open jobs upserted" in capsys.readouterr().out

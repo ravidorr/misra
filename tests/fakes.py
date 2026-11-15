@@ -244,7 +244,10 @@ class FakeSupabase:
     (company, job_id) and merges the columns it carries, as `resolution=merge-duplicates` does; a GET with
     `status=eq.open` returns the (company, job_id) of open rows, `page` rows at most (Supabase caps a response)."""
 
-    def __init__(self, page: int = 1000, fail_on: str | None = None, error: Exception | None = None) -> None:
+    def __init__(
+        self, page: int = 1000, fail_on: str | None = None, error: Exception | None = None, rpc_answer: Any = 0
+    ) -> None:
+        self.rpc_answer = rpc_answer  # what a call of a database function (/rest/v1/rpc/<name>) answers
         self.table: dict[tuple[str, str], dict[str, Any]] = {}
         self.calls: list[dict[str, Any]] = []
         self.page = page
@@ -260,6 +263,8 @@ class FakeSupabase:
         if method == self.fail_on:
             return FakeHttpResponse(status_code=500, text="boom")
         table = url.rsplit("/", 1)[1]
+        if "/rpc/" in url:
+            return FakeHttpResponse(data=self.rpc_answer)
         if "company" in kw["params"]:  # a read or removal of one company's rows, by exact name, in any table
             return self.by_company(method, table, kw["params"]["company"].removeprefix("eq."))
         if method == "POST":

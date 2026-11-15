@@ -19,6 +19,29 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # The SQL policy tests of supabase/tests against a plain Postgres with a stub of Supabase's roles and auth schema
+  # (supabase/ci/supabase_stub.sql). A separate job: the `quality` check keeps its name and steps. It is quick, so it runs
+  # on every pull request, which includes every one that touches supabase/, and on every push to main.
+  sql-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_HOST_AUTH_METHOD: trust  # a throwaway container on the runner
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v7
+      - name: Stub, migrations and SQL tests
+        run: scripts/run-sql-tests.sh postgresql://postgres@localhost:5432/postgres
+
   quality:
     runs-on: ubuntu-latest
     steps:

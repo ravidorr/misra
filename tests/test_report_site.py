@@ -151,11 +151,9 @@ async def test_the_form_says_where_the_report_goes_and_what_the_spam_guard_keeps
     note = page.locator("#reportForm #reportPrivacy")
     text = " ".join((await note.text_content() or "").split())
     assert text == (
-        "Reports are emailed directly to the maintainer. To prevent spam, we keep a daily, non-reversible hash of your "
-        "network address. It matches nothing after that day, and old ones are deleted when later reports are handled. "
-        "Privacy Notice"
+        "Reports are emailed directly to the maintainer. To prevent spam, we store a daily non-reversible hash of your "
+        "network address that expires after 24 hours. Privacy Notice"
     )
-    assert "24 hours" not in text  # accuracy fix: the code keeps today's and yesterday's rows
     link = note.get_by_role("link", name="Privacy Notice")
     assert await link.get_attribute("href") == "privacy.html"
     assert await link.get_attribute("target") is None
