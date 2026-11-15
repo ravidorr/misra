@@ -115,10 +115,10 @@ function returnedError() {
   return code === 'access_denied' ? MESSAGES.cancelled : MESSAGES.finish;
 }
 
-/* Tells dashboard.js who is signed in, to save stars and discards in the account: the user's id and the client (which
-   renews the token). The page script may not have started yet, so the account is also kept on `globalThis`. */
+/* Tells dashboard.js (and digest.js, the daily email settings) who is signed in, to save stars and discards in the account:
+   the user's id and email and the client (which renews the token). The page script may not have started yet, so the account is also kept on `globalThis`. */
 function publish(client, session) {
-  globalThis.misraAccount = session?.user?.id ? { client, userId: session.user.id } : null;
+  globalThis.misraAccount = session?.user?.id ? { client, userId: session.user.id, email: session.user.email ?? null } : null;
   document.dispatchEvent(new CustomEvent('misra:account'));
 }
 

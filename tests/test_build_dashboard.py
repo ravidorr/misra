@@ -65,6 +65,7 @@ def write_static(workdir: Path) -> None:
     for legal in build_dashboard.LEGAL_PAGES:
         (workdir / legal.source).write_text(f"# {legal.source}\n", encoding="utf-8")
     (workdir / "templates" / "report.js").write_text("const report = '__SUPABASE_URL__/report';\n", encoding="utf-8")
+    (workdir / "templates" / "digest.js").write_text("const digest = '__SUPABASE_URL__/digest';\n", encoding="utf-8")
     (workdir / "vendor").mkdir(exist_ok=True)
     (workdir / "vendor" / "supabase.js").write_bytes(b"var supabase = '__SUPABASE_URL__'; \xc3\xa9\r\n")
 
@@ -418,7 +419,7 @@ def test_the_vendored_supabase_script_is_the_pinned_release_unmodified() -> None
 
 
 def test_every_file_the_build_writes_to_docs_is_staged_by_the_daily_workflow(
-    db: sqlite3.Connection, workdir: Path
+    db: sqlite3.Connection, workdir: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """A generated file the daily workflow does not `git add` is never published."""
     write_css(workdir)
@@ -427,9 +428,81 @@ def test_every_file_the_build_writes_to_docs_is_staged_by_the_daily_workflow(
     write_unresolved(workdir)
     db.close()
     build_dashboard.main()
+    monkeypatch.setattr(
+        build_dashboard, "DIGEST_SIGNUP_ENABLED", True
+    )  # the one file that only a build with the signup switch on writes
+    build_dashboard.main()
     built = {f"docs/{p.name}" for p in (workdir / "docs").iterdir()}
+    assert "docs/digest.js" in built
     workflow = (Path(__file__).resolve().parents[1] / ".github" / "workflows" / "daily.yml").read_text(encoding="utf-8")
     found = re.search(r"for f in (data/jobs\.db [^;]+); do", workflow)
     assert found, "the staging loop of daily.yml was not found"
     staged = set(found[1].split()) - {"data/jobs.db"}
     assert built == staged
+
+
+def test_the_daily_email_signup_is_off_in_the_repository() -> None:
+    """The maintainer switches it on in a PR of its own (PLAN.md step 6.6); until then nobody can sign up."""
+    assert build_dashboard.DIGEST_SIGNUP_ENABLED is False
+    assert (Path(__file__).resolve().parents[1] / "templates" / "digest.js").is_file()
+
+
+DIGEST_PARTS = 3
+DIGEST_PAGE = (
+    '<head><script integrity="__SRI_AUTH_JS__"></script>'
+    '<!--digest--><script integrity="__SRI_DIGEST_JS__" src="digest.js"></script><!--/digest--></head>'
+    '<body>a<!--digest--><button id="digestOpen">Daily email</button><!--/digest-->b'
+    '<!--digest-->\n<dialog id="digestDialog"></dialog>\n<!--/digest-->c</body>'
+)
+
+
+def build_with_digest_page(db: sqlite3.Connection, workdir: Path) -> Path:
+    write_css(workdir)
+    write_static(workdir)
+    write_json(workdir / "data" / "companies.json", [])
+    write_unresolved(workdir)
+    (workdir / "templates" / "dashboard.html").write_text(DIGEST_PAGE, encoding="utf-8")
+    db.close()
+    build_dashboard.main()
+    return workdir / "docs"
+
+
+def test_with_the_signup_switch_off_the_page_has_no_daily_email_control_script_or_file(
+    db: sqlite3.Connection, workdir: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(build_dashboard, "DIGEST_SIGNUP_ENABLED", False)
+    (workdir / "docs" / "digest.js").write_text("a file of an earlier build", encoding="utf-8")
+    docs = build_with_digest_page(db, workdir)
+    html = (docs / "index.html").read_text(encoding="utf-8")
+    assert "digest" not in html.lower()
+    assert "Daily email" not in html
+    assert html.startswith('<head><script integrity="sha384-')
+    assert html.endswith("</head><body>abc</body>")
+    assert not (docs / "digest.js").exists()  # not built, and an old one does not outlive the switch
+
+
+def test_with_the_signup_switch_on_the_page_has_the_control_the_script_and_its_integrity_hash(
+    db: sqlite3.Connection, workdir: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(build_dashboard, "DIGEST_SIGNUP_ENABLED", True)
+    docs = build_with_digest_page(db, workdir)
+    html = (docs / "index.html").read_text(encoding="utf-8")
+    digest = (docs / "digest.js").read_bytes()
+    integrity = "sha384-" + base64.b64encode(hashlib.sha384(digest).digest()).decode()
+    assert f'<script integrity="{integrity}" src="digest.js"></script>' in html
+    assert '<button id="digestOpen">Daily email</button>' in html
+    assert '<dialog id="digestDialog"></dialog>' in html
+    assert "<!--digest-->" not in html
+    assert "<!--/digest-->" not in html
+    assert "__SRI" not in html
+    assert digest.decode() == f"const digest = '{build_dashboard.SUPABASE_URL}/digest';\n"  # the backend is injected
+
+
+def test_the_real_page_marks_every_part_of_the_signup_so_the_switch_cuts_all_of_it() -> None:
+    template = (Path(__file__).resolve().parents[1] / "templates" / "dashboard.html").read_text(encoding="utf-8")
+    regions = build_dashboard.DIGEST_REGION.findall(template)
+    assert len(regions) == DIGEST_PARTS  # the script tag, the button and the dialog
+    assert template.count("<!--digest-->") == template.count("<!--/digest-->") == DIGEST_PARTS
+    cut = build_dashboard.DIGEST_REGION.sub("", template)
+    assert not re.search(r"digest\.js|id=\"digest|data-digest|digestOpen|digestDialog", cut)  # nothing is left outside
+    assert 'src="digest.js" integrity="__SRI_DIGEST_JS__"' in regions[0]

@@ -18,10 +18,12 @@ describe('TypeScript of the Edge Functions and their tests', () => {
       'validate.ts',
       'index.ts',
       'subscription.ts',
+      'identity.ts',
       'report-site.test.ts',
       'delete-account.test.ts',
       'confirm-email.test.ts',
       'unsubscribe.test.ts',
+      'email-settings.test.ts',
     ];
     for (const name of names) {
       expect(parsed.fileNames.some((file) => file.endsWith(`/${name}`)), name).toBe(true);

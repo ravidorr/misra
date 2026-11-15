@@ -104,6 +104,19 @@ def test_the_digest_is_described_as_planned_and_not_live() -> None:
     assert "no real subscription exists" in text
 
 
+def test_the_signup_cannot_be_switched_on_while_the_privacy_notice_still_says_the_digest_is_not_live() -> None:
+    if not build_dashboard.DIGEST_SIGNUP_ENABLED:
+        return
+    text = read("PRIVACY.md")
+    stale = [phrase for phrase in ("not live", "no real subscription exists") if phrase in text]
+    assert not stale, (
+        f"DIGEST_SIGNUP_ENABLED is True in build_dashboard.py but PRIVACY.md still says {stale}. "
+        "Before the signup opens, apply the present-tense PRIVACY.md edits written in PLAN.md step 6.6 "
+        '(the "Why we collect it", "Email settings" and "Resend" passages), '
+        "so the notice describes a digest that is live."
+    )
+
+
 def test_the_terms_say_what_the_lawyer_asked_and_no_more() -> None:
     text = read("TERMS.md")
     for phrase in [

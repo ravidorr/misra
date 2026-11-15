@@ -36,6 +36,14 @@ STATIC_FILES = (
     "templates/email.html",
     "templates/email.js",
 )
+# The daily-email signup (PLAN.md steps 6.2 and 6.6). While False the page has no "Daily email" button, no settings
+# dialog and no script for them, and docs/digest.js is not built: everything between `<!--digest-->` and
+# `<!--/digest-->` in templates/dashboard.html is cut out. Switch it on (True) only when the maintainer opens signups,
+# together with the function secret DIGEST_SIGNUP_ENABLED=true (supabase/README.md), which the function checks again on
+# its own.
+DIGEST_SIGNUP_ENABLED = False
+DIGEST_SCRIPT = "templates/digest.js"
+DIGEST_REGION = re.compile(r"<!--digest-->(.*?)<!--/digest-->", re.DOTALL)
 # The built pages that carry __SRI_*__ placeholders.
 PAGES = ("index.html", "email.html")
 OUTPUT_NAMES = {"templates/dashboard.html": "index.html"}
@@ -94,7 +102,8 @@ NEW_TAB = '<span class="sr-only"> (opens in a new tab)</span>'
 
 # The backend the page reads the jobs from: the one place for the project URL and the PUBLIC anon key. Row-level
 # security lets the anon key read open jobs only, so the key may live in docs/. The build puts both values into the
-# page scripts (dashboard.js, auth.js and report.js) and the URL into the page's connect-src; later steps (stars) read
+# page scripts (dashboard.js, auth.js, report.js and digest.js) and the URL into the page's connect-src; later steps
+# (stars) read
 # them too.
 # Never put the service-role key here.
 SUPABASE_URL = "https://dncodqeqpoqwcxdctzco.supabase.co"
@@ -410,8 +419,13 @@ def main() -> None:
             "regions": list(regions.REGION_NAMES),
         }
     ).replace("<", "\\u003c")
-    for source in STATIC_FILES:
+    if not DIGEST_SIGNUP_ENABLED:
+        (out / Path(DIGEST_SCRIPT).name).unlink(
+            missing_ok=True
+        )  # a file of an earlier build must not outlive the switch
+    for source in (*STATIC_FILES, *((DIGEST_SCRIPT,) if DIGEST_SIGNUP_ENABLED else ())):
         text = Path(source).read_text(encoding="utf-8")
+        text = DIGEST_REGION.sub(r"\1" if DIGEST_SIGNUP_ENABLED else "", text)
         text = text.replace("__SUPABASE_URL__", SUPABASE_URL).replace("__SUPABASE_ANON_KEY__", SUPABASE_ANON_KEY)
         text = text.replace("__PAGE_DATA__", page_data)
         (out / OUTPUT_NAMES.get(source, Path(source).name)).write_text(text, encoding="utf-8")
