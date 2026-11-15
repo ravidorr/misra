@@ -130,6 +130,11 @@ a {
   font-size: 0.875rem;
 }
 
+/* Inline links keep the line height and still get a 44px hit area: padding on an inline box grows the target, not the line. */
+.sign-in-note a {
+  padding: 14px 4px;
+}
+
 .sign-in-note[hidden] {
   display: none;
 }

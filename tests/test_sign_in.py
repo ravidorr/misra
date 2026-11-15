@@ -436,6 +436,11 @@ async def test_fr1_ac7_the_notice_reads_well_on_a_phone(page: Page, site: Path) 
     box = await page.locator("#signInNote").bounding_box()
     assert box is not None
     assert 0 <= box["x"] <= box["x"] + box["width"] <= PHONE["width"]
+    for link in await page.locator("#signInNote a").all():  # the consent links are 44px targets too
+        target = await link.bounding_box()
+        assert target is not None
+        assert target["height"] >= TAP
+        assert target["width"] >= TAP
 
 
 # ---- The footer: links to the privacy notice, the terms and the contact ----
