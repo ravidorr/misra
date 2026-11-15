@@ -34,9 +34,9 @@ Decisions made in planning (they change the PRD's wording, so update the PRD in 
 
 ## Step 0: Backend ground work (the maintainer does the account steps; nothing ships to users)
 
-- [ ] 0.1 ~~Create accounts: a free Supabase project, a Google Cloud OAuth client (consent screen limited to email scope),
+- [x] ~~0.1 Create accounts: a free Supabase project, a Google Cloud OAuth client (consent screen limited to email scope),
   a Resend account with a verified project sending address. Store keys as Actions secrets only.~~
-  Done except two items: add the Google test user, and verify the Resend sending domain (it will be on avidor.org, not yet verified).
+  Done in full: the Google test user is added and the Resend sending domain `send.avidor.org` is verified.
 - [x] ~~0.2 Trial and limits (PR: a short `docs/`-free note in `CONTRIBUTING.md`, docs-only so no bump). Check on the
   day, from the providers' own pages, not from memory: Supabase free database size, pausing after inactivity, backups,
   Edge Function and egress limits; Resend free daily and monthly send limits and whether they are shared with
@@ -187,12 +187,14 @@ Decisions made in planning (they change the PRD's wording, so update the PRD in 
   address and links to the Terms and the Privacy Notice, and "Check ADDRESS for a confirmation link..." after turning on);
   the confirmation email is his text verbatim. To close signups again, unset the secret; never set the build constant back
   to `False` once anyone has subscribed (it also removes "Turn the email off" from the page).
-  Remaining checks, live only: apply the migration and record it, deploy `email-settings`, then run the five curl checks of
+  Done live on 2026-11-15: the migration is applied and `email-settings` is deployed; the checks that create no subscription passed
+  (no token 401, the publishable key as the bearer 401, the preflight 204). Still to check, signed in, when signups open: turning on is 403 `signup_closed` while the secret is unset, turning off with no row is a 200, and the maintainer's own turn-on flow below.
+  (The original list of checks, for reference: apply the migration and record it, deploy `email-settings`, then run the five curl checks of
   `supabase/README.md` ("Check it live", none of them creates a subscription): no token and the publishable key as the bearer
   are 401 from the gateway, the preflight answers 204 with `authorization` allowed (if the gateway refuses it, set
   `verify_jwt = false`), turning on is 403 `signup_closed` while the secret is unset, and turning off with no row is a 200. Once signups open (step 6.6),
   with the maintainer's own account: turn it on, read the confirmation email (plain text, `Reply-To` `raanan@avidor.org`, the
-  link opens `email.html`), confirm it, and see the dialog say "on". Settled in step 6.3: the unsubscribe link is a stateless
+  link opens `email.html`), confirm it, and see the dialog say "on".) Settled in step 6.3: the unsubscribe link is a stateless
   HMAC token, so this function no longer makes an unsubscribe token (the `NOT NULL` hash column gets a random value that nothing reads).
 - [x] ~~6.3 `send_digests.py` replaces the per-recipient logic of `send_email.py`: match each confirmed subscriber's
   filters against jobs first seen after their confirmation, never emailed before, via the new `level`/`role_types`
@@ -224,8 +226,21 @@ Decisions made in planning (they change the PRD's wording, so update the PRD in 
 - [ ] 6.4 Daily workflow: add the digest step after the sync with the service-role key and Resend key in that step
   only, keep the failure alert, and make the maintainer an ordinary subscriber. Done when: FR-8 AC 10 holds, and a manual run with a test
   subscriber delivers one email and a second run delivers none.
-- [ ] 6.5 Volume check before opening: count subscribers against the Resend free limit shared with `easy-theory`, write
-  the number and the upgrade trigger in `CONTRIBUTING.md`. Done when: the limit and current use are written down.
+  Built in v0.28.0, in two halves; the step stays open until the second is done.
+  - Done: `daily.yml` runs `send_digests.py` after the sync and before the build and the deploy push, only after a good sync; the four secrets are on that
+    step only; a failure fails the run, sends the `send_alert.py` email (its step list shows `digests=`) and does not stop the build or the data commit;
+    the manual input `digest_dry_run` passes `--dry-run`. `tests/test_daily_workflow.py` pins all of it. No built file was added, so the staging list is unchanged.
+  - Switch, still on until the maintainer subscribes: the old single-recipient digest (`send_email.py`) runs behind the workflow constant
+    `LEGACY_MAINTAINER_DIGEST: "true"`. Nothing of it was deleted, so the maintainer's daily email is unchanged. When the maintainer has subscribed,
+    confirmed and received one digest from `send_digests.py`, one PR sets the constant to `"false"` and deletes `send_email.py` and the selection logic that FR-9
+    replaced in `digest.py` (`select`, `ROLE`, `EXCLUDE`), with the module-list clean-up (`CONTRIBUTING.md`, "The daily digest"). Keep `send_alert.py`.
+  - Live checks left: run the workflow by hand with `digest_dry_run` ticked and read the counts (all four secrets are Actions secrets already), and,
+    once signups open (step 6.6), run it with a test subscriber twice: one email, then none.
+- [x] ~~6.5 Volume check before opening: count subscribers against the Resend free limit shared with `easy-theory`, write
+  the number and the upgrade trigger in `CONTRIBUTING.md`. Done when: the limit and current use are written down.~~
+  Done in v0.28.0: `CONTRIBUTING.md`, "Resend volume", states the free limits as Resend's pricing and quotas pages give them on 2026-11-15, the arithmetic, zero real subscribers today, the
+  upgrade trigger (about 60 daily subscribers, or 80 of 100 a day or 2,400 of 3,000 a month in use, then Pro or close signups) and a query for the count. Not confirmed by the pages: whether the quota is per team or per domain
+  and how much `easy-theory` uses; read both in the Resend dashboard.
 - [ ] 6.6 GATE: the lawyer review from "Before launch" and the addendum, with written answers (answered 2026-11-15; the
   outcome is in the PRD's "Before launch"; the gate stays until its wording is in). Nothing sends to a real
   user, and the sign-up control stays hidden behind a flag, until the answers are in and any required wording is added
@@ -288,5 +303,6 @@ Decisions made in planning (they change the PRD's wording, so update the PRD in 
   AC 10: 7.4; AC 11: policy. FR-5: 1.1. FR-6 AC 1-4, 8: 8.1; AC 5-7: 8.2. FR-7: 5.1 (spam AC), 5.2. FR-8 AC 1-3: 6.2;
   AC 4-6, 8, 9: 6.3; AC 7: 6.1; AC 10: 6.4; AC 11 (consent log): 6.1; AC 12 (footer): 6.3. FR-1 AC 7 (sign-in notice) and the `TERMS.md` disclaimer: 6.6. FR-4 AC 12: policy, applied in 7.1. FR-9 AC 3-6, 10: 3.1; AC 1, 2, 7, 8: 3.4; AC 9: 6.3. Re-check this when a
   step is split.
-- [ ] Success metrics are read from Supabase tables and Resend reports monthly; add the queries to `CONTRIBUTING.md`
-  with step 6.4 (sign-ins, 30-day returns, subscribers, share starring, region and description shares, accepted sites).
+- [x] ~~Success metrics are read from Supabase tables and Resend reports monthly; add the queries to `CONTRIBUTING.md`
+  with step 6.4 (sign-ins, 30-day returns, subscribers, share starring, region and description shares, accepted sites).~~
+  Done in v0.28.0 ("Monthly success metrics" in `CONTRIBUTING.md`). Accepted sites are not in a table (a report is an email), so that one is a `git log` count of additions to `data/seed_companies.csv`.

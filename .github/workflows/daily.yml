@@ -3,7 +3,12 @@ name: daily-job-digest
 on:
   schedule:
     - cron: "30 4 * * *"   # 04:30 UTC = 06:30/07:30 Israel time
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      digest_dry_run:
+        description: "Digest step only: pass --dry-run (counts in the log, nothing sent, nothing recorded)"
+        type: boolean
+        default: false
 
 concurrency:
   group: daily-job-digest
@@ -11,6 +16,13 @@ concurrency:
 
 permissions:
   contents: read
+
+env:
+  # The maintainer's own single-recipient digest (send_email.py, through Gmail). It keeps running until the maintainer is a
+  # confirmed subscriber and send_digests.py has delivered to them (PLAN.md step 6.4). Then set this to "false" in a PR
+  # that also deletes send_email.py and the selection logic of digest.py (CONTRIBUTING.md, "The daily digest").
+  # Not a secret: no secret is ever set at the workflow or job level.
+  LEGACY_MAINTAINER_DIGEST: "true"
 
 jobs:
   run:
@@ -48,9 +60,10 @@ jobs:
         id: crawl
         timeout-minutes: 20
         run: python run.py
-      - name: Send digest
+      - name: Send the maintainer digest (legacy, single recipient)
         id: digest
         timeout-minutes: 5
+        if: ${{ success() && env.LEGACY_MAINTAINER_DIGEST == 'true' }}
         env:
           GMAIL_USER: ${{ secrets.GMAIL_USER }}
           GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
@@ -65,6 +78,21 @@ jobs:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: python sync_supabase.py
+      - name: Send the subscriber digests
+        id: digests
+        timeout-minutes: 10
+        # After the sync, so the digests and the dashboard read the same rows; only when the sync succeeded. A failure
+        # here fails the run (the alert below fires) but the build and the data commit still run.
+        if: ${{ always() && steps.sync.outcome == 'success' }}
+        env:
+          # Exposed to this step only, never to the crawl or the job. All four empty: the script skips with exit 0.
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          UNSUBSCRIBE_SECRET: ${{ secrets.UNSUBSCRIBE_SECRET }}
+          # "--dry-run" for a manual run with digest_dry_run ticked (a boolean, so nothing typed reaches the shell).
+          DRY_RUN_FLAG: ${{ inputs.digest_dry_run && '--dry-run' || '' }}
+        run: python send_digests.py $DRY_RUN_FLAG
       - name: Build dashboard
         if: ${{ always() && steps.checkout.outcome == 'success' }}
         run: python build_dashboard.py
@@ -115,5 +143,5 @@ jobs:
           GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
           DIGEST_TO: ${{ secrets.DIGEST_TO }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-          STEPS: verify=${{ steps.verify.outcome }} crawl=${{ steps.crawl.outcome }} digest=${{ steps.digest.outcome }} sync=${{ steps.sync.outcome }} commit=${{ steps.commit.outcome }}
+          STEPS: verify=${{ steps.verify.outcome }} crawl=${{ steps.crawl.outcome }} digest=${{ steps.digest.outcome }} sync=${{ steps.sync.outcome }} digests=${{ steps.digests.outcome }} commit=${{ steps.commit.outcome }}
         run: python3 send_alert.py "$RUN_URL"
