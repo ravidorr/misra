@@ -293,8 +293,63 @@ class ChoicesBackend:
             self.rows.pop((ids["company"], ids["job_id"]), None)
         else:
             body = json.loads(request.post_data or "{}")
+            ignore = "ignore-duplicates" in request.headers.get("prefer", "")
+            if isinstance(
+                body, list
+            ):  # a chunk of choices brought over from a browser: existing rows are left as they are
+                assert ignore, "a chunk is only sent as an import that never replaces a row"
+                self.writes.append(
+                    {"op": "import", "on_conflict": query["on_conflict"][0], "rows": body, "ignore_duplicates": ignore}
+                )
+                for row in body:
+                    self.rows.setdefault((row["company"], row["job_id"]), row)
+                return
             self.writes.append({"op": "upsert", "on_conflict": query["on_conflict"][0], **body})
             self.rows[(body["company"], body["job_id"])] = body
+
+
+class PrefsBackend:
+    """A stand-in for the `user_prefs` table behind PostgREST, as the signed-in user sees it: their one row (or none),
+    every body written, and every request seen. `mode` breaks it like ChoicesBackend does: down, error, expired,
+    refused (400) or load_down (reads fail, writes work). `gate`, when set, holds every read until it is set."""
+
+    def __init__(self, filters: dict[str, Any] | None = None, mode: str = "ok") -> None:
+        self.row: dict[str, Any] | None = None if filters is None else {"user_id": USER_ID, "filters": filters}
+        self.mode = mode
+        self.gate: asyncio.Event | None = None
+        self.requests: list[Any] = []
+        self.writes: list[dict[str, Any]] = []
+
+    async def handle(self, route: Route) -> None:
+        request = route.request
+        if request.method == "OPTIONS":
+            await route.fulfill(status=204, headers=ROWS_CORS)
+            return
+        self.requests.append(request)
+        reading = request.method == "GET"
+        if self.gate is not None and reading:
+            await self.gate.wait()
+        answers = {"error": (503, {}), "expired": (401, {"code": "PGRST301", "message": "JWT expired"})}
+        if self.mode == "down" or (self.mode == "load_down" and reading):
+            await route.abort()
+        elif self.mode in answers:
+            status, body = answers[self.mode]
+            await route.fulfill(
+                status=status, headers=ROWS_CORS, body=json.dumps(body), content_type="application/json"
+            )
+        elif not reading and self.mode == "refused":
+            await route.fulfill(
+                status=400, headers=ROWS_CORS, body=json.dumps(REFUSED_BODY), content_type="application/json"
+            )
+        elif reading:
+            rows = [{"filters": self.row["filters"]}] if self.row else []
+            headers = {**ROWS_CORS, "content-range": f"0-{len(rows) - 1}/{len(rows)}" if rows else "*/0"}
+            await route.fulfill(body=json.dumps(rows), content_type="application/json", headers=headers)
+        else:
+            body = json.loads(request.post_data or "{}")
+            self.writes.append({"on_conflict": parse_qs(urlparse(request.url).query)["on_conflict"][0], **body})
+            self.row = {**(self.row or {}), **body}
+            await route.fulfill(status=201, headers=ROWS_CORS)
 
 
 async def serve(  # noqa: PLR0913  (each stand-in is optional, and a test names the ones it wants)
@@ -305,6 +360,7 @@ async def serve(  # noqa: PLR0913  (each stand-in is optional, and a test names 
     backend: Backend | None = None,
     auth: AuthBackend | None = None,
     choices: ChoicesBackend | None = None,
+    prefs: PrefsBackend | None = None,
 ) -> list[str]:
     """Serve docs/ at ORIGIN without a network, the jobs from a fake backend and the sign-in from a fake service;
     returns the console errors and page errors seen. The backend defaults to the rows of the site fixture."""
@@ -326,6 +382,7 @@ async def serve(  # noqa: PLR0913  (each stand-in is optional, and a test names 
     # the later route wins: sign-in requests never reach the jobs backend
     await page.route(f"{build_dashboard.SUPABASE_URL}/auth/v1/**", (auth or AuthBackend()).handle)
     await page.route(f"{build_dashboard.SUPABASE_URL}/rest/v1/user_jobs**", (choices or ChoicesBackend()).handle)
+    await page.route(f"{build_dashboard.SUPABASE_URL}/rest/v1/user_prefs**", (prefs or PrefsBackend()).handle)
     page.on("console", lambda m: problems.append(m.text) if m.type == "error" else None)
     page.on("pageerror", lambda e: problems.append(str(e)))
     await page.goto(f"{ORIGIN}/index.html")

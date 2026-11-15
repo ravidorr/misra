@@ -1,7 +1,7 @@
 """Stars and discards that follow the user (PLAN.md step 4.2; PRD FR-2 AC 1 to 3 and 7 to 10), run in a real browser
 against the built page with a fake sign-in service and a fake `user_jobs` table. The first-sign-in import and the
-filters are step 4.3. The database rules (the row limit, a discard going when its job closes) are in
-supabase/tests/job_choices.sql and are linted in tests/test_migrations.py.
+filters are step 4.3 (tests/test_account_sync.py). The database rules (the row limit, a discard going when its job
+closes) are in supabase/tests/job_choices.sql and are linted in tests/test_migrations.py.
 
 Locally the tests skip when Chromium is missing; in CI (CI=true) a missing browser is a failure."""
 
@@ -655,8 +655,8 @@ async def test_signing_out_returns_to_the_choices_of_this_browser(page: Page, si
     choices = ChoicesBackend([star_row("1", "Product Manager 1", "Tel Aviv, Israel", "Acme")])
     await sign_in(page, site, choices)
     assert await page.locator(PM1).get_attribute("data-starred") == "true"
-    assert await page.locator("#exp").is_hidden()  # this browser's discards file is not the account's
-    assert await page.locator("#imp").is_hidden()
+    assert await page.locator("#exp").is_visible()  # the discards file works for the account too (step 4.3)
+    assert await page.locator("#imp").is_visible()
     await page.click("#signOut")
     await page.wait_for_selector("#signIn")
     assert await page.locator(PM1).get_attribute("data-starred") == "false"  # the account's stars do not stay on screen

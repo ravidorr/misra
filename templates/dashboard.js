@@ -4,6 +4,8 @@ const LS_D = 'il-jobs-discarded-v1';
 const LS_S = 'il-jobs-starred-v1';
 const LS_Q = 'misra-pending-choices-v1';
 const LS_F = 'il-jobs-filters-v3';
+const LS_PF = 'misra-pending-filters-v1';
+const LS_I = 'misra-imported-v1';
 const LS_T = 'misra-theme';
 const OTHER = 'Other';
 const REMOTE_REGION = 'Remote';
@@ -203,9 +205,9 @@ const defaults = () => ({
   size: 10,
 });
 
-/* Saved filters, minus values the data no longer has (a stale choice would hide jobs with no way to see why). */
-function savedFilters() {
-  const saved = lsGet(LS_F, {});
+/* A filters object (saved in this browser or read from the account), made safe: every field the right type, minus values
+   the data no longer has (a stale choice would hide jobs with no way to see why). */
+function cleanFilters(saved) {
   const f = { ...defaults(), ...(saved && typeof saved === 'object' ? saved : {}) };
   const base = defaults();
   for (const [name, known] of Object.entries(CHOICES)) {
@@ -215,9 +217,12 @@ function savedFilters() {
   for (const name of ['remote', 'onlyNew', 'showGone', 'hideStale']) f[name] = f[name] === true;
   if (!['il', 'all'].includes(f.loc)) f.loc = base.loc;
   if (!['new', 'co', 'title'].includes(f.sort)) f.sort = base.sort;
+  if (!SIZES.includes(Number(f.size))) f.size = base.size;
   if (f.company !== '' && !JOBS.some((j) => j.c === f.company)) f.company = '';
   return f;
 }
+/* The filters this browser keeps for itself (signed out; signed in they are left alone, like the browser's stars). */
+const savedFilters = () => cleanFilters(lsGet(LS_F, {}));
 let F = savedFilters();
 
 function h(tag, attrs = {}, kids = []) {
@@ -257,6 +262,11 @@ const MAX_TEXT = 500;
 const MAX_URL = 2000;
 const LIMIT_CODE = '54000'; /* the migration's per-user row limit: program_limit_exceeded */
 const RETRY_MS = [2000, 5000, 15000, 60000];
+const MAX_CHOICES = 2000; /* the per-user row limit of the migration */
+const IMPORT_CHUNK = 200; /* rows per request when a browser's choices are brought over */
+const FILTER_SAVE_MS = 800; /* a search changes with every key: save once typing pauses */
+const MAX_QUERY = 200;
+const MAX_FILTERS_BYTES = 15000; /* the table accepts 16384 */
 const HTTP_UNAUTHORIZED = 401;
 const HTTP_TIMEOUT = 408;
 const HTTP_TOO_MANY = 429;
@@ -265,6 +275,10 @@ const SYNC_MESSAGES = {
   limit: 'You have reached the limit of stars and discards an account can keep, so the last choice was not saved. Take some back (Restore, or remove a star), then try again.',
   refused: 'The service did not accept the last star or discard, so it was not saved.',
   load: 'Your saved stars and discards could not be loaded, so only the changes made on this device show.',
+  filtersLoad: 'Your saved filters could not be loaded, so this device uses its own filters for now.',
+  filtersLater: 'Your filter change is kept on this device and saved to your account when the service answers.',
+  filtersRefused: 'The service did not accept your filters, so they were not saved to your account.',
+  filtersRestored: 'Your filters were restored from your account.',
 };
 const savedHere = 'Stars and discards are saved in this browser only.';
 const savedThere = 'Stars and discards are saved to your account.';
@@ -327,15 +341,18 @@ function loadPending(userId) {
 /* Saves one change (or, with op null, forgets one) in this browser. It reads what is stored first and touches only that
    job, and forgets a change only if it is the very one the service confirmed (each has an id), so another tab of the
    same account keeps the changes it has not sent yet, also newer ones to the same job. */
-function savePending(a, k, op, acknowledged) {
+function savePendingBatch(a, sets, forgets) {
   const all = lsGet(LS_Q, {});
   const mine = all[a.userId] && typeof all[a.userId] === 'object' ? all[a.userId] : {};
-  if (op) mine[k] = op;
-  else if (mine[k]?.id === acknowledged?.id) Reflect.deleteProperty(mine, k); /* not a newer change of another tab */
+  for (const [k, op] of sets) mine[k] = op;
+  for (const [k, acknowledged] of forgets) {
+    if (mine[k]?.id === acknowledged?.id) Reflect.deleteProperty(mine, k); /* not a newer change of another tab */
+  }
   if (Object.keys(mine).length > 0) all[a.userId] = mine;
   else Reflect.deleteProperty(all, a.userId);
   lsSet(LS_Q, all);
 }
+const savePending = (a, k, op, acknowledged) => savePendingBatch(a, op ? [[k, op]] : [], op ? [] : [[k, acknowledged]]);
 
 /* A failure worth trying again: no answer, a service error, an expired token (it renews), a timeout or a rate limit.
    Anything else (the row limit, a refused row) will not change by waiting. */
@@ -344,32 +361,58 @@ function isTransient(error, status) {
   return !status || status >= HTTP_SERVER_ERROR || [HTTP_UNAUTHORIZED, HTTP_TIMEOUT, HTTP_TOO_MANY].includes(status);
 }
 
-/* One request for one pending change. Discards keep no title, location or link: only a star needs them later. The
-   library's own retries are off (here and in loadServer): the page keeps the change and tries again itself, and says so
-   at once, instead of looking stuck for several seconds. */
-async function send(a, op, k) {
+/* The row for one pending change. Discards keep no title, location or link: only a star needs them later. */
+function rowOf(a, op) {
+  const row = { user_id: a.userId, company: op.c, job_id: op.i, state: op.state, title: null, location: null, url: null };
+  if (op.state === 'star') Object.assign(row, { title: op.t || null, location: op.l || null, url: op.u });
+  return row;
+}
+
+/* One request for one pending change, or, for choices brought over from this browser (`keep`), one request for a chunk of
+   them that never replaces a row the account already has: a choice made on another device meanwhile wins. The library's
+   own retries are off (here and in loadServer): the page keeps the change and tries again itself, and says so at once,
+   instead of looking stuck for several seconds. */
+async function send(a, batch) {
+  const table = a.client.from('user_jobs');
+  const onConflict = 'user_id,company,job_id';
   try {
-    const table = a.client.from('user_jobs');
+    const op = batch[0][1];
+    if (op.keep) {
+      return await table.upsert(batch.map(([, o]) => rowOf(a, o)), { onConflict, ignoreDuplicates: true }).retry(false);
+    }
     if (op.state === null) {
       return await table.delete().eq('user_id', a.userId).eq('company', op.c).eq('job_id', op.i).retry(false);
     }
-    const row = { user_id: a.userId, company: op.c, job_id: op.i, state: op.state, title: null, location: null, url: null };
-    if (op.state === 'star') Object.assign(row, { title: op.t || null, location: op.l || null, url: op.u });
-    return await table.upsert(row, { onConflict: 'user_id,company,job_id' }).retry(false);
+    return await table.upsert(rowOf(a, op), { onConflict }).retry(false);
   } catch (error) {
-    console.error(k, error);
+    console.error(batch[0][0], error);
     return { error: { code: '', message: String(error) }, status: 0 };
   }
 }
 
-/* Sends the pending changes one at a time, oldest first, until none is left or one cannot be sent now. */
+/* The next change to send: one, or the run of brought-over choices at the head of the queue (a chunk). */
+function nextBatch(a) {
+  const entries = a.pending.entries();
+  const first = entries.next().value;
+  const batch = [first];
+  if (first[1].keep) {
+    for (const entry of entries) {
+      if (!entry[1].keep || batch.length >= IMPORT_CHUNK) break;
+      batch.push(entry);
+    }
+  }
+  return batch;
+}
+
+/* Sends the pending changes oldest first (a chunk of brought-over choices at a time) until none is left or one cannot be
+   sent now. */
 async function drain(a) {
   while (a.pending.size > 0) {
-    const [k, op] = a.pending.entries().next().value;
-    const { error, status } = await send(a, op, k);
+    const batch = nextBatch(a);
+    const { error, status } = await send(a, batch);
     if (account !== a) return false; /* signed out meanwhile: what is left stays saved in this browser */
     if (error) {
-      console.error(k, error);
+      console.error(batch[0][0], error);
       if (isTransient(error, status)) {
         a.failure = 'later';
         scheduleRetry(a);
@@ -377,18 +420,22 @@ async function drain(a) {
       }
       /* The notice stays until the user acts again: a later change that is saved must not wipe it. */
       a.failure = error.code === LIMIT_CODE ? 'limit' : 'refused';
-      fates.set(op, a.failure);
-    } else {
-      fates.set(op, 'saved');
-      a.retries = 0;
-      if (op.state === null) a.server.delete(k);
-      else a.server.set(k, op);
-      a.touched.add(k);
     }
-    if (a.pending.get(k) === op) {
-      a.pending.delete(k); /* a newer change to the same job stays */
-      savePending(a, k, null, op);
+    const forgets = [];
+    for (const [k, op] of batch) {
+      fates.set(op, error ? a.failure : 'saved');
+      if (!error) {
+        a.retries = 0;
+        if (op.state === null) a.server.delete(k);
+        else a.server.set(k, op);
+        a.touched.add(k);
+      }
+      if (a.pending.get(k) === op) {
+        a.pending.delete(k); /* a newer change to the same job stays */
+        forgets.push([k, op]);
+      }
     }
+    savePendingBatch(a, [], forgets);
     if (error) render(); /* the refused choice is gone from the view too */
   }
   if (a.failure === 'later') a.failure = null;
@@ -414,6 +461,7 @@ function scheduleRetry(a) {
 /* The account's rows from the service, all pages. The count must match, so a short list is an error, not "no stars". */
 async function loadServer(a) {
   a.touched = new Set();
+  a.choicesState = 'loading';
   try {
     const rows = [];
     for (;;) {
@@ -439,15 +487,18 @@ async function loadServer(a) {
     }
     a.server = fresh;
     a.loadFailed = false;
+    a.choicesState = 'loaded';
     $('list').dataset.choices = 'loaded';
   } catch (error) {
     console.error(error);
     if (account !== a) return;
     a.loadFailed = true;
+    a.choicesState = 'failed';
     $('list').dataset.choices = 'failed';
   }
   render();
   renderSyncNote();
+  settle(a);
 }
 
 /* The one way a choice changes: item is a job, or what was kept of a closed starred one; state is 'star', 'discard' or
@@ -484,25 +535,47 @@ function attach(next) {
     touched: new Set(),
     failure: null,
     loadFailed: false,
+    choicesState: 'loading',
     flushing: null,
     retryTimer: 0,
     retries: 0,
+    decided: Boolean(lsGet(LS_I, {})[next.userId]),
+    offer: null,
+    result: '',
+    prefs: {
+      state: 'loading',
+      remote: null,
+      pending: loadPendingFilters(next.userId),
+      paused: false,
+      restored: false,
+      failure: null,
+      flushing: null,
+      timer: 0,
+      retries: 0,
+    },
   };
   account = a;
   leftBehind = 0;
   $('list').dataset.choices = 'loading';
+  if (a.prefs.pending) F = cleanFilters(a.prefs.pending); /* the last change made here, not yet saved */
   renderAccount();
+  sync();
   render();
   loadServer(a);
+  loadPrefs(a);
   flush();
 }
 
 function detach() {
   clearTimeout(account.retryTimer);
-  leftBehind = account.pending.size;
+  clearTimeout(account.prefs.timer);
+  leftBehind = account.pending.size + (account.prefs.pending ? 1 : 0);
   account = null;
+  F = savedFilters(); /* the browser's own filters were never touched */
+  page = 0;
   $('list').dataset.choices = 'browser';
   renderAccount();
+  sync();
   render();
 }
 
@@ -521,6 +594,8 @@ function onAccount() {
 
 function retryNow() {
   if (account.loadFailed) loadServer(account);
+  if (account.prefs.state === 'failed') loadPrefs(account);
+  else if (account.prefs.pending && canPushFilters(account)) pushFilters(account);
   flush();
 }
 
@@ -531,37 +606,345 @@ function renderSyncNote() {
   }
   const box = $('syncNote');
   const pending = account?.pending.size ?? 0;
-  let text = '';
+  const prefs = account?.prefs;
+  const notes = [];
   let retry = false;
   if (!account && leftBehind > 0) {
-    text = `${leftBehind} ${leftBehind === 1 ? 'change' : 'changes'} made while you were signed in could not be saved to your account. They stay on this device and are saved the next time you sign in.`;
-  } else if (account?.failure === 'limit' || account?.failure === 'refused') {
-    text = SYNC_MESSAGES[account.failure];
+    notes.push(`${leftBehind} ${leftBehind === 1 ? 'change' : 'changes'} made while you were signed in could not be saved to your account. They stay on this device and are saved the next time you sign in.`);
+  }
+  if (account?.failure === 'limit' || account?.failure === 'refused') {
+    notes.push(SYNC_MESSAGES[account.failure]);
   } else if (pending > 0 && account.failure === 'later') {
-    text = `${pending} ${pending === 1 ? 'change is' : 'changes are'} not saved to your account yet. ${pending === 1 ? 'It is' : 'They are'} kept on this device and saved when the service answers.`;
+    notes.push(`${pending} ${pending === 1 ? 'change is' : 'changes are'} not saved to your account yet. ${pending === 1 ? 'It is' : 'They are'} kept on this device and saved when the service answers.`);
     retry = true;
   } else if (account?.loadFailed) {
-    text = SYNC_MESSAGES.load;
+    notes.push(SYNC_MESSAGES.load);
     retry = true;
   }
-  const note = text === '' ? [] : [h('p', { class: 'notice', text })];
+  if (prefs?.failure === 'refused') notes.push(SYNC_MESSAGES.filtersRefused);
+  else if (prefs?.failure === 'later') {
+    notes.push(SYNC_MESSAGES.filtersLater);
+    retry = true;
+  }
+  if (prefs?.state === 'failed') {
+    notes.push(SYNC_MESSAGES.filtersLoad);
+    retry = true;
+  } else if (prefs?.restored) notes.push(SYNC_MESSAGES.filtersRestored);
+  const note = notes.map((text) => h('p', { class: 'notice', text }));
   if (retry) {
     const button = h('button', { type: 'button', class: 'btn btn-pill', id: 'syncRetry', text: 'Try again' });
     button.addEventListener('click', retryNow);
     note.push(button);
   }
   box.replaceChildren(...note);
+  $('list').dataset.filters = filtersState();
+  renderImportResult();
 }
 
-/* What depends on who is signed in: where choices are saved, and the browser file import and export (which are for
-   this browser's discards only). */
+/* What depends on who is signed in: where choices are saved. */
 function renderAccount() {
   $('list').dataset.choices ||= 'browser'; /* where the choices live: browser, or the account while loading, loaded, failed */
   $('saveNote').textContent = account ? savedThere : savedHere;
-  $('exp').hidden = Boolean(account);
-  $('imp').hidden = Boolean(account);
+  $('importBox').hidden = true;
   renderSyncNote();
 }
+
+/* ---- Filters that follow the user ----
+   Signed out, the filters are saved in this browser (LS_F). Signed in they are the account's: they are read from the
+   user's `user_prefs` row, saved there when the user changes them, and the browser's own are left alone (they come
+   back at sign-out, like the browser's own stars and discards).
+
+   The rule when the two differ, in one line: the account's filters win when the page loads, except for a change made on
+   this device that the account has not confirmed yet (it is kept in this browser, by user id, until the service takes
+   it), which is saved over them; after that the last save wins, for the whole set. A change is never dropped silently:
+   a failed save is kept and tried again, and the page says so. If the account's filters cannot be loaded, nothing is
+   saved over them by itself; only an explicit change made now is sent. The first sign-in can bring this browser's
+   filters over (see "Bringing this browser's choices over"). Only `filters` is written, never `email_settings`. */
+const PREF_KEYS = Object.keys(defaults());
+const asSet = (value) => JSON.stringify(Array.isArray(value) ? [...value].sort() : value); /* the order of chosen values means nothing */
+const filtersEqual = (a, b) => PREF_KEYS.every((name) => asSet(a[name]) === asSet(b[name]));
+const isDefaultFilters = (f) => filtersEqual(f, defaults());
+
+/* What is sent to the account: the clean filters, with the search words cut to a sane length. */
+const syncable = (f) => {
+  const clean = cleanFilters(f);
+  return { ...clean, q: clean.q.slice(0, MAX_QUERY) };
+};
+const fitsPrefs = (f) => new TextEncoder().encode(JSON.stringify(f)).length <= MAX_FILTERS_BYTES;
+
+function loadPendingFilters(userId) {
+  const saved = lsGet(LS_PF, {})[userId];
+  return saved && typeof saved === 'object' ? cleanFilters(saved) : null;
+}
+
+function savePendingFilters(a) {
+  const all = lsGet(LS_PF, {});
+  if (a.prefs.pending) all[a.userId] = a.prefs.pending;
+  else Reflect.deleteProperty(all, a.userId);
+  lsSet(LS_PF, all);
+}
+
+const canPushFilters = (a) => (a.prefs.state === 'ready' || a.prefs.state === 'failed') && !a.prefs.paused;
+
+/* 'browser' signed out; else loading, paused (an offer is waiting), synced, saving, later (kept, tried again), refused or
+   failed (the account's filters could not be loaded). */
+function filtersState() {
+  const p = account?.prefs;
+  if (!p) return 'browser';
+  if (p.failure === 'refused') return 'refused';
+  if (p.failure === 'later') return 'later';
+  if (p.state === 'failed') return 'failed';
+  if (p.state === 'loading' || account.choicesState === 'loading') return 'loading';
+  if (p.paused) return 'paused';
+  return p.pending ? 'saving' : 'synced';
+}
+
+function setFilters(next) {
+  if (filtersEqual(F, next)) return false;
+  F = next;
+  page = 0;
+  sync();
+  render();
+  return true;
+}
+
+async function loadPrefs(a) {
+  const p = a.prefs;
+  p.state = 'loading';
+  try {
+    const { data, error } = await a.client.from('user_prefs').select('filters').eq('user_id', a.userId).retry(false);
+    if (error) throw error;
+    if (account !== a) return;
+    p.remote = data.length > 0 ? cleanFilters(data[0].filters) : null;
+    p.state = 'ready';
+  } catch (error) {
+    console.error(error);
+    if (account !== a) return;
+    p.state = 'failed';
+  }
+  renderSyncNote();
+  settle(a);
+}
+
+async function sendFilters(a, filters) {
+  try {
+    return await a.client.from('user_prefs').upsert({ user_id: a.userId, filters }, { onConflict: 'user_id' }).retry(false);
+  } catch (error) {
+    console.error(error);
+    return { error: { code: '', message: String(error) }, status: 0 };
+  }
+}
+
+/* Sends the pending filters; a change made while one is on its way goes next. */
+async function pushLoop(a) {
+  const p = a.prefs;
+  while (p.pending) {
+    const sending = p.pending;
+    if (!fitsPrefs(sending)) {
+      p.failure = 'refused';
+      p.pending = null;
+      savePendingFilters(a);
+      return;
+    }
+    const { error, status } = await sendFilters(a, sending);
+    if (account !== a) return;
+    if (error) {
+      console.error(error);
+      if (isTransient(error, status)) {
+        p.failure = 'later';
+        clearTimeout(p.timer);
+        p.timer = setTimeout(() => pushFilters(a), RETRY_MS[Math.min(p.retries, RETRY_MS.length - 1)]);
+        p.retries += 1;
+        return;
+      }
+      p.failure = 'refused';
+      if (p.pending === sending) p.pending = null;
+      savePendingFilters(a);
+      return;
+    }
+    p.failure = null;
+    p.retries = 0;
+    p.remote = sending;
+    p.state = 'ready';
+    if (p.pending === sending) p.pending = null;
+    savePendingFilters(a);
+  }
+}
+
+function pushFilters(a) {
+  clearTimeout(a.prefs.timer);
+  a.prefs.flushing ??= pushLoop(a).finally(() => {
+    a.prefs.flushing = null;
+    renderSyncNote();
+  });
+  return a.prefs.flushing;
+}
+
+/* The user changed a filter while signed in: keep it (also in this browser) and save it once typing pauses. */
+function queueFilters(a) {
+  const p = a.prefs;
+  p.pending = syncable(F);
+  p.restored = false;
+  if (p.failure === 'refused') p.failure = null;
+  savePendingFilters(a);
+  if (canPushFilters(a)) {
+    clearTimeout(p.timer);
+    p.timer = setTimeout(() => pushFilters(a), FILTER_SAVE_MS);
+  }
+  renderSyncNote();
+}
+
+/* Both of the account's lists have answered: offer this browser's choices once, else apply the account's filters. */
+function settle(a) {
+  if (account !== a || a.choicesState === 'loading' || a.prefs.state === 'loading') return;
+  if (!a.decided && a.choicesState === 'loaded' && a.prefs.state === 'ready') {
+    const offer = importOffer(a);
+    if (offer.discards.length + offer.stars.length > 0 || offer.filters) {
+      a.offer = offer;
+      a.prefs.paused = true;
+      showOffer(a);
+      return;
+    }
+  }
+  a.offer = null;
+  $('importBox').hidden = true;
+  applyAccountFilters(a);
+}
+
+function applyAccountFilters(a) {
+  const p = a.prefs;
+  p.paused = false;
+  if (p.state === 'ready' && !p.pending && setFilters(p.remote ?? defaults())) p.restored = true;
+  if (p.pending && canPushFilters(a)) pushFilters(a);
+  renderSyncNote();
+}
+
+/* ---- Bringing this browser's choices over ----
+   The first time a user signs in on a browser that holds discards, stars or filters the account does not have, the page
+   offers to copy them (copy, not move: the browser's own stay as they are for when the user is signed out). Choices the
+   account already has are never touched, in either state, so a star or a discard made in the account is never replaced
+   and nothing is duplicated; they are sent so the service ignores a row it already has even if another device made it
+   meanwhile. Only open roles are brought over (a discard of a closed role means nothing). Stars are included, though the
+   PRD names discards only: a star made signed out lives on this device alone and would otherwise be stranded. Filters:
+   if the account has none, the browser's are saved; if it has some, bringing them replaces those, and the offer says so.
+   The offer is answered once per account and browser (LS_I); it waits until both lists are loaded, so a failed load
+   never leads to an import that cannot tell what is already there. */
+function importOffer(a) {
+  const mine = (k) => choiceOf(k) !== null;
+  const browser = savedFilters();
+  const remote = a.prefs.remote ?? defaults();
+  let filters = null;
+  if (!isDefaultFilters(browser) && !filtersEqual(browser, remote)) filters = isDefaultFilters(remote) ? 'new' : 'replace';
+  return {
+    discards: Object.keys(gone).filter((k) => JOB_BY_KEY.has(k) && !mine(k)),
+    stars: Object.entries(starred)
+      .filter(([k]) => !gone[k] && !mine(k))
+      .map(([, entry]) => entry),
+    filters,
+    browser,
+  };
+}
+
+const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
+
+function showOffer(a) {
+  const { discards, stars, filters } = a.offer;
+  const box = $('importBox');
+  box.dataset.discards = String(discards.length);
+  box.dataset.stars = String(stars.length);
+  box.dataset.filters = filters ?? 'none';
+  const choices = discards.length + stars.length > 0;
+  $('importChoicesRow').hidden = !choices;
+  $('importChoices').checked = true;
+  $('importChoicesText').textContent = `${plural(discards.length, 'discard', 'discards')} and ${plural(stars.length, 'star', 'stars')}`;
+  $('importFiltersRow').hidden = !filters;
+  $('importFilters').checked = true;
+  $('importFiltersText').textContent =
+    filters === 'replace' ? 'Your filters (they replace the filters saved in your account)' : 'Your filters (your account has none saved yet)';
+  box.hidden = false;
+  $('status').textContent = 'This browser has choices that are not in your account yet. You can bring them over.';
+  renderSyncNote();
+}
+
+function renderImportResult() {
+  const box = $('importResult');
+  const text = account?.result ?? '';
+  if (text === '') {
+    box.replaceChildren();
+    return;
+  }
+  const close = h('button', { type: 'button', class: 'btn btn-pill', id: 'importClose', text: 'Close' });
+  close.addEventListener('click', () => {
+    account.result = '';
+    renderImportResult();
+    $('list-h').focus();
+  });
+  box.replaceChildren(h('p', { class: 'notice', text }), close);
+}
+
+/* Sends choices as changes that never replace a row the account has, and resolves with what became of them. The browser
+   keeps them until the service confirms (a reload or an outage loses nothing). */
+async function bringOver(a, wanted) {
+  const owned = [...new Set([...a.server.keys(), ...a.pending.keys()])].filter((k) => choiceOf(k) !== null).length;
+  const ops = wanted
+    .slice(0, Math.max(0, MAX_CHOICES - owned))
+    .map(({ item, state }) => ({ ...snapshotOf(item), state, keep: true, id: `${Date.now()}-${Math.random()}` }));
+  for (const op of ops) a.pending.set(key(op), op);
+  savePendingBatch(a, ops.map((op) => [key(op), op]), []);
+  render();
+  await flush();
+  const kept = ops.filter((op) => a.pending.get(key(op)) === op).length;
+  const saved = ops.filter((op) => fates.get(op) === 'saved').length;
+  if (account === a && ops.length > 0 && kept === 0) await loadServer(a); /* some rows may have been there already */
+  return { saved, kept, refused: ops.length - saved - kept, left: wanted.length - ops.length };
+}
+
+/* What became of a bringing over, in words. */
+function describeBringOver({ saved, kept, refused, left }, from) {
+  const parts = [];
+  if (saved > 0) parts.push(`Brought over ${plural(saved, 'choice', 'choices')} from ${from}.`);
+  if (kept > 0) parts.push(`${plural(kept, 'choice', 'choices')} from ${from} ${kept === 1 ? 'is' : 'are'} kept on this device and saved when the service answers.`);
+  if (refused > 0) parts.push(`${plural(refused, 'choice was', 'choices were')} not accepted by the service.`);
+  if (left > 0) parts.push(`${plural(left, 'choice was', 'choices were')} left out: an account keeps at most ${MAX_CHOICES.toLocaleString('en-US')}.`);
+  return parts.join(' ');
+}
+
+const wantedOf = (offer) => [
+  ...offer.discards.map((k) => ({ item: JOB_BY_KEY.get(k), state: 'discard' })),
+  ...offer.stars.map((item) => ({ item, state: 'star' })),
+];
+
+/* The user answered the offer. It is not made again on this browser for this account (LS_I). */
+async function answerOffer(a, bring) {
+  const offer = a.offer;
+  a.decided = true;
+  a.offer = null;
+  const all = lsGet(LS_I, {});
+  all[a.userId] = TODAY;
+  lsSet(LS_I, all);
+  $('importBox').hidden = true;
+  const parts = [];
+  if (bring.filters && offer.filters) {
+    a.prefs.pending = syncable(offer.browser);
+    savePendingFilters(a);
+    F = cleanFilters(a.prefs.pending);
+    page = 0;
+    sync();
+    parts.push('Your filters are saved to your account.');
+  }
+  applyAccountFilters(a);
+  $('list-h').focus();
+  if (bring.choices) parts.unshift(describeBringOver(await bringOver(a, wantedOf(offer)), 'this browser'));
+  if (account === a) a.result = parts.filter(Boolean).join(' ');
+  renderSyncNote();
+}
+
+$('importYes').addEventListener('click', () => {
+  if (account?.offer) answerOffer(account, { choices: $('importChoices').checked, filters: $('importFilters').checked });
+});
+$('importNo').addEventListener('click', () => {
+  if (account?.offer) answerOffer(account, { choices: false, filters: false });
+});
 
 const TODAY = DATA.generated.slice(0, 10);
 const dayNum = (date) => Math.floor(Date.parse(`${date}T00:00:00Z`) / 86400000);
@@ -633,6 +1016,7 @@ function sync() {
   $('company').value = F.company;
   $('loc').value = F.loc;
   $('sort').value = F.sort;
+  $('size').value = SIZES.includes(Number(F.size)) ? Number(F.size) : defaults().size;
   $('hideStale').checked = F.hideStale;
   $('showGone').checked = F.showGone;
   $('onlyNew').setAttribute('aria-pressed', String(F.onlyNew));
@@ -901,7 +1285,8 @@ function render(focusIdx) {
 
 function update() {
   page = 0;
-  lsSet(LS_F, F);
+  if (account) queueFilters(account); /* the account's filters; the browser's own are left alone while signed in */
+  else lsSet(LS_F, F);
   sync();
   render();
 }
@@ -1017,15 +1402,35 @@ $('starredView').addEventListener('click', () => {
   render();
 });
 
+/* The discards as a file: this browser's, or the account's while signed in. */
 $('exp').addEventListener('click', () => {
+  const discards = account ? Object.fromEntries(JOBS.filter((j) => isDiscarded(key(j))).map((j) => [key(j), TODAY])) : gone;
   const link = h('a', { download: 'discarded-jobs.json' });
-  link.href = URL.createObjectURL(new Blob([JSON.stringify(gone, null, 1)], { type: 'application/json' }));
+  link.href = URL.createObjectURL(new Blob([JSON.stringify(discards, null, 1)], { type: 'application/json' }));
   link.click();
   URL.revokeObjectURL(link.href);
 });
 $('imp').addEventListener('click', () => {
   $('file').click();
 });
+
+/* A discards file, signed in: its open roles the account has no choice about become discards, the others are left as
+   they are (the same rule as bringing the browser's choices over). */
+async function importFileToAccount(a, imported) {
+  if (a.choicesState !== 'loaded') {
+    a.result = 'Your account\'s stars and discards have not loaded, so the file was not imported. Try again once they have.';
+    renderSyncNote();
+    return;
+  }
+  const keys = Object.keys(imported).filter((k) => JOB_BY_KEY.has(k) && choiceOf(k) === null);
+  const done = await bringOver(a, keys.map((k) => ({ item: JOB_BY_KEY.get(k), state: 'discard' })));
+  if (account === a) {
+    const same = Object.keys(imported).length - keys.length;
+    a.result = [describeBringOver(done, 'the file') || 'Nothing new to bring over from the file.', same > 0 ? `${plural(same, 'entry was', 'entries were')} skipped: already chosen in your account, or not an open role.` : ''].filter(Boolean).join(' ');
+    renderSyncNote();
+  }
+}
+
 $('file').addEventListener('change', (e) => {
   const file = e.target.files[0];
   if (!file) return;
@@ -1033,7 +1438,9 @@ $('file').addEventListener('change', (e) => {
   reader.onload = () => {
     try {
       const imported = JSON.parse(reader.result);
-      if (imported && typeof imported === 'object') {
+      if (imported && typeof imported === 'object' && account) {
+        importFileToAccount(account, imported);
+      } else if (imported && typeof imported === 'object') {
         Object.assign(gone, imported);
         for (const k of Object.keys(imported)) Reflect.deleteProperty(starred, k); /* a job is never both */
         lsSet(LS_D, gone);
@@ -1286,6 +1693,37 @@ const TOOLS = [
     execute: () => {
       const items = starredItems();
       return Promise.resolve(reply({ total: items.length, jobs: items.map(describeStarred) }));
+    },
+  },
+  {
+    name: 'get_sync_status',
+    description:
+      'Say where the user\'s stars, discards and filters are saved (this browser, or the account when signed in), whether the filters are in step with the account, how many changes still wait to be saved, and what the first-sign-in offer would bring over from this browser.',
+    inputSchema: { type: 'object', properties: {} },
+    annotations: { readOnlyHint: true },
+    execute: () => {
+      const offer = account?.offer;
+      return Promise.resolve(
+        reply({
+          signedIn: Boolean(account),
+          choices: account ? account.choicesState : 'browser',
+          filters: filtersState(),
+          pendingChanges: (account?.pending.size ?? 0) + (account?.prefs.pending ? 1 : 0),
+          filtersInUse: F,
+          offer: offer ? { discards: offer.discards.length, stars: offer.stars.length, filters: offer.filters } : null,
+        }),
+      );
+    },
+  },
+  {
+    name: 'import_browser_choices',
+    description:
+      'Answer the offer made at the first sign-in: copy this browser\'s discards and stars (and, when `filters` is true, its filters, which replace any saved in the account) into the account. Choices the account already has are never changed. Only works while an offer is waiting (see get_sync_status); the user asked for it by calling this.',
+    inputSchema: { type: 'object', properties: { filters: { type: 'boolean', description: 'Also bring the browser\'s filters.' } } },
+    execute: async (a) => {
+      if (!account?.offer) return reply({ error: 'There is nothing to bring over: no offer is waiting.' }, true);
+      await answerOffer(account, { choices: true, filters: Boolean((a ?? {}).filters) });
+      return reply({ saved: account?.failure === null, failure: account?.failure ?? null, result: account?.result ?? '' });
     },
   },
   {

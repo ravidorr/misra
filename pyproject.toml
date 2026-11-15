@@ -1,6 +1,6 @@
 [project]
 name = "misra"
-version = "0.18.0"
+version = "0.19.0"
 description = "Daily batch pipeline: crawls career pages, keeps history in SQLite, and emails a digest."
 readme = "README.md"
 license = "MIT"
@@ -49,6 +49,7 @@ select = ["E", "F", "W", "I", "B", "UP", "SIM", "C4", "PL", "RUF"]
 # The browser tests reuse the `site` fixture of test_dashboard_page.py, imported by name.
 "tests/test_sign_in.py" = ["F811"]
 "tests/test_job_choices.py" = ["F811"]
+"tests/test_account_sync.py" = ["F811"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
