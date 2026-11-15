@@ -10,7 +10,7 @@ from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
 from adapters import ADAPTERS
-from common import ISRAEL, get, slug_candidates
+from common import ISRAEL, get, is_excluded, load_excluded, slug_candidates
 
 HTTP_OK = 200
 MIN_DST_ARGS = 2
@@ -144,8 +144,9 @@ def discover(row: dict[str, str]) -> dict[str, Any]:  # noqa: PLR0912
 def main() -> None:
     src = sys.argv[1] if len(sys.argv) > 1 else "data/seed_companies.csv"
     dst = sys.argv[2] if len(sys.argv) > MIN_DST_ARGS else "data/companies.json"
+    excluded = load_excluded()  # a company that asked to be removed is never looked at again
     with open(src) as fh:
-        rows = list(csv.DictReader(fh))
+        rows = [r for r in csv.DictReader(fh) if not is_excluded(r["name"], excluded)]
     seen: set[str] = set()
     uniq: list[dict[str, str]] = []
     for r in rows:

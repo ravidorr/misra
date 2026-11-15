@@ -191,9 +191,13 @@ Decisions made in planning (they change the PRD's wording, so update the PRD in 
   Progress: the wording is in for `PRIVACY.md` (controller, why and voluntary, providers and countries, rights under
   Sections 13 and 14, contact), `TERMS.md` (linked from the site footer and the sign-in notice), the notice next to the
   sign-in button (FR-1 AC 7, with links to both) and the footer links on the page. The email footer text is written in
-  step 6.3 above and is built there. Still to do before the gate closes: the company exclusion list (a company that asks to be
-  removed is deleted and never crawled again), the `robots.txt` check in the crawler, the digest email itself (step 6.3, with
-  its footer), and switching the flag on. The gate stays open.
+  step 6.3 above and is built there. Crawler politeness is in (v0.23.0): one honest User-Agent
+  (`Misra/<version> (+site; contact)`), a per-host delay for the browser crawl equal to the adapters', the `robots.txt`
+  check (enforced: `ROBOTS_ENFORCED` in `common.py`; an audit of every crawl host found nothing blocked, and the
+  published ATS APIs are not treated as pages), and the company exclusion list `data/excluded_companies.csv` (a company
+  on it is never crawled, is deleted from `data/jobs.db` and from Supabase `jobs`, `user_jobs` and `emailed`, and is
+  off the exports and the coverage card; the process is in `CONTRIBUTING.md`). Still to do before the gate closes: the
+  digest email itself (step 6.3, with its footer), and switching the flag on. The gate stays open.
 
 ## FR-4 (richer job data)
 

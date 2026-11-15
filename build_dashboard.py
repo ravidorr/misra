@@ -13,6 +13,7 @@ from typing import Any
 
 import classify
 import regions
+from common import ROBOTS_NOTE, is_excluded, load_excluded
 from digest import DB
 
 # Stylesheets bundled into docs/dashboard.css, in order. Raw colors live only in tokens.css.
@@ -57,6 +58,7 @@ REASONS = {
     "site_unusable": "Site down, parked or unreachable",
     "no_openings": "No open roles in Israel, or the board is closed",
     "needs_reader": "Roles are listed, but we cannot read them yet",
+    "robots_disallowed": "robots.txt does not allow it",
     "no_feed_found": "No job feed found yet",
 }
 
@@ -68,14 +70,15 @@ def reason(note: str | None) -> str:
     return n[:120] or "the last crawl failed"
 
 
-def read_unresolved() -> list[dict[str, str]]:
-    """The rows of the unresolved-candidates CSV; a reason that is not in REASONS stops the build."""
+def read_unresolved(excluded: list[str] | None = None) -> list[dict[str, str]]:
+    """The rows of the unresolved-candidates CSV, without the companies on the exclusion list; a reason that is not in
+    REASONS stops the build."""
     with open(UNRESOLVED, newline="", encoding="utf-8") as fh:
         reader = csv.DictReader(fh)
         missing = {"name", "reason", "note"} - set(reader.fieldnames or ())
         if missing:
             raise ValueError(f"{UNRESOLVED}: no {', '.join(sorted(missing))} column")
-        rows = list(reader)
+        rows = [row for row in reader if not is_excluded(row["name"], excluded or [])]
     for row in rows:
         row["note"] = row["note"] or ""
         if row["reason"] not in REASONS:
@@ -89,6 +92,11 @@ def gap_groups(
     """Every site that is not crawled, grouped by why, in REASONS order. A site named twice is counted once."""
     sites: dict[str, tuple[str, str]] = {}
     for gap in blocked:
+        if gap["why"].startswith(ROBOTS_NOTE):  # a decision to respect the site, not a failure
+            sites.setdefault(
+                gap["c"], ("robots_disallowed", f"{gap['why']}; its roles may be old (last good crawl {gap['last']})")
+            )
+            continue
         code = "bot_protection" if gap["why"] == BLOCKED_WHY else "crawl_failing"
         sites.setdefault(
             gap["c"],
@@ -158,6 +166,7 @@ def dump_json(obj: Any) -> str:
 
 
 def main() -> None:
+    excluded = load_excluded()  # an excluded company is on no list and no card, whatever the data still holds
     c = sqlite3.connect(DB)
     # latest crawl per company, and the last time it worked
     latest: dict[str, tuple[Any, Any, str]] = {}
@@ -166,17 +175,20 @@ def main() -> None:
     q = "SELECT company, ts, ok, " + note_col + " FROM crawl_log ORDER BY ts"
     recent: dict[str, list[Any]] = {}
     for company, ts, ok, note in c.execute(q):
+        if is_excluded(company, excluded):
+            continue
         latest[company] = (ts, ok, note)
         recent.setdefault(company, []).append(ok)
     last_good = dict(c.execute("SELECT company, MAX(substr(ts,1,10)) FROM crawl_log WHERE ok=1 GROUP BY company"))
     # failing = the last two crawls both failed (one-off errors do not count)
-    failing = {co: v for co, v in latest.items() if not any(recent[co][-2:])}
+    # a company skipped for robots.txt is listed at once: it is a decision, so there is no second crawl to wait for
+    failing = {co: v for co, v in latest.items() if not any(recent[co][-2:]) or v[2].startswith(ROBOTS_NOTE)}
     with open("data/companies.json") as fh:
-        companies = json.load(fh)
+        companies = [x for x in json.load(fh) if not is_excluded(x["name"], excluded)]
     unfed = [x for x in companies if x["status"] != "ok"]
     untracked = sorted(x["name"] for x in unfed)
     blocked = [{"c": co, "why": reason(v[2]), "last": last_good.get(co, "never")} for co, v in sorted(failing.items())]
-    groups = gap_groups(blocked, unfed, read_unresolved())
+    groups = gap_groups(blocked, unfed, read_unresolved(excluded))
     gaps = {
         "blocked": blocked,
         "untracked": untracked,
@@ -188,6 +200,8 @@ def main() -> None:
     for company, job_id, title, team, loc, url, fs in c.execute(
         "SELECT company, job_id, title, team, location, url, first_seen FROM jobs WHERE status='open'"
     ):
+        if is_excluded(company, excluded):
+            continue
         f = (fs or "")[:10]
         place = regions.place(loc)
         jobs.append(

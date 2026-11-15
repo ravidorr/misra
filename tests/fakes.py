@@ -248,8 +248,10 @@ class FakeSupabase:
         self.table: dict[tuple[str, str], dict[str, Any]] = {}
         self.calls: list[dict[str, Any]] = []
         self.page = page
-        self.fail_on = fail_on  # "GET" or "POST": answer that method with HTTP 500
+        self.fail_on = fail_on  # "GET", "POST" or "DELETE": answer that method with HTTP 500
         self.error = error  # raised by every request
+        # rows of the tables a user's choices and emails keep (user_jobs, emailed), each a dict with a `company`
+        self.others: dict[str, list[dict[str, Any]]] = {"user_jobs": [], "emailed": []}
 
     def request(self, method: str, url: str, **kw: Any) -> FakeHttpResponse:
         self.calls.append({"method": method, "url": url, **kw})
@@ -257,6 +259,9 @@ class FakeSupabase:
             raise self.error
         if method == self.fail_on:
             return FakeHttpResponse(status_code=500, text="boom")
+        table = url.rsplit("/", 1)[1]
+        if "company" in kw["params"]:  # a read or removal of one company's rows, by exact name, in any table
+            return self.by_company(method, table, kw["params"]["company"].removeprefix("eq."))
         if method == "POST":
             for row in kw["json"]:
                 self.table.setdefault((row["company"], row["job_id"]), {}).update(row)
@@ -270,6 +275,20 @@ class FakeSupabase:
             keys.reverse()
         window = keys[params["offset"] : params["offset"] + min(params["limit"], self.page)]
         return FakeHttpResponse(data=[{"company": c, "job_id": j} for c, j in window])
+
+    def by_company(self, method: str, table: str, company: str) -> FakeHttpResponse:
+        """GET answers one matching row at most (the code asks for limit 1); DELETE removes and returns them all."""
+        if table == "jobs":
+            hit = [key for key in self.table if key[0] == company]
+            if method == "DELETE":
+                for key in hit:
+                    self.table.pop(key)
+        else:
+            hit = [row["company"] for row in self.others[table] if row["company"] == company]
+            if method == "DELETE":
+                self.others[table] = [row for row in self.others[table] if row["company"] != company]
+        found = hit[:1] if method == "GET" else hit
+        return FakeHttpResponse(data=[{"company": company} for _ in found])
 
     def snapshot(self) -> str:
         return json.dumps({"|".join(k): v for k, v in self.table.items()}, sort_keys=True)

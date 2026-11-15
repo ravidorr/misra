@@ -24,6 +24,72 @@ python3 -m venv .venv
 - There is no UI; the dashboard is generated from `templates/dashboard.html`.
 - See [AGENTS.md](./AGENTS.md) for the full rule list.
 
+## Removing a company on request
+
+The policy (the lawyer's answer, PRD "Before launch"): when a company asks to be removed, its data is deleted at once
+and it goes on an exclusion list, so it is never crawled again. `TERMS.md` promises "removed promptly". It takes minutes.
+
+1. Find the exact name the crawl uses: the `name` of the company in `data/companies.json` (for example `Acme`). A company
+   that appears under two names needs a row for each.
+2. Add one row to `data/excluded_companies.csv`: `company,reason,date_added`, for example
+   `Acme,asked to be removed by email,2026-11-20`. The reason is a few words: no person's name, no address, no copy of the
+   message. The date is `YYYY-MM-DD`. Never delete a row: the list is what keeps a company from coming back.
+3. Merge it through a draft PR (`main` is protected: `gh pr ready` then `gh pr merge --admin --squash`).
+4. Run the daily workflow from `main` (Actions, `daily-job-digest`, Run workflow). It does the rest in one run: the crawl
+   step skips the company and deletes its jobs from `data/jobs.db`; the sync step deletes its rows from Supabase `jobs`,
+   and the stars and discards (`user_jobs`, which keep a title and a link) and emailed keys (`emailed`) of every user,
+   by exact name; the build drops it from `docs/jobs.json`, `docs/jobs.jsonld` and the coverage card; the commit step
+   publishes. A user's star for that company is deleted too: the removal is complete, and the star row would keep the
+   title and the link.
+5. Verify, and reply to the company the same day.
+
+### The test of success
+
+All of these hold after the run:
+
+- The log of the crawl step has `exclusion list: deleted <n> jobs of Acme` (a later run has no such line: there is
+  nothing left), and the sync step has `Supabase: exclusion list, deleted {...} for Acme`.
+- `sqlite3 data/jobs.db "select count(*) from jobs where company='Acme'"` prints `0` on the new commit of `main`.
+- `curl -s https://ravidorr.github.io/misra/jobs.json | grep -c Acme` and the same for `jobs.jsonld` print `0` once
+  GitHub Pages has published (a minute or two).
+- In the Supabase SQL editor,
+  `select (select count(*) from jobs where company='Acme') + (select count(*) from user_jobs where company='Acme') + (select count(*) from emailed where company='Acme')`
+  is `0`.
+- The coverage card on the page does not mention the company.
+
+### What to know
+
+- The match is the exact name when deleting (`Acme` does not delete `Acme Corp` or `acme`) and ignores case when
+  skipping a crawl. Read the log line: if it says nothing was deleted, the name is not the one in the data.
+- The list is checked on every run. A missing file, a wrong header, a blank or one-letter name, a repeated name, a
+  missing reason or a bad date stops the run, and the failure alert is sent: that is deliberate, because nobody could
+  say who must not be crawled. `tests/test_politeness.py` reads the real file, so CI catches a typo before it merges.
+- At most 3 companies that still have data are deleted in one run; more is refused before anything is deleted. Add them
+  in separate runs.
+- Earlier commits of `data/jobs.db` and `docs/jobs.json` still hold the old links. A removal request does not rewrite
+  history; if a company insists, that is a separate decision.
+- Nothing here is applied to the Supabase project by hand: no migration is involved, and the service-role key that the
+  sync step already has does the deleting.
+
+## How the crawler behaves
+
+- One User-Agent everywhere: `Misra/<version> (+https://ravidorr.github.io/misra/; raanan@avidor.org)`, the constant
+  `USER_AGENT` in `common.py`. Do not put another string in a module.
+- At most one request a second to a host, for the adapters and the browser crawl alike (`reserve_slot` in `common.py`),
+  with 8 companies in parallel for the adapters and 3 pages at once for the browser.
+- `robots.txt`: fetched once per host and run; our `Misra` group wins over `*`. A missing file, a 4xx, a 5xx or a timeout
+  means allowed (a 5xx or a timeout is logged). An ATS's public API (Greenhouse, Lever, SmartRecruiters, Workable,
+  Workday, Oracle, Phenom) counts as published for programs: a blanket `Disallow: /` does not stop it, a rule naming its
+  path does. A company whose host forbids the address is skipped, not failed: it is not retried, does not count as a
+  failure, sends no alert and shows on the coverage card as "robots.txt does not allow it".
+- The switch is `ROBOTS_ENFORCED` in `common.py`. Set to `False`, the crawl ignores the rules but logs which hosts it would
+  have refused. Every run prints which state it is in.
+- Audit on 2026-11-15 (read-only: only each host's `/robots.txt` was fetched, once, politely): 234 companies on 75
+  hosts, none blocked. The one close call is SmartRecruiters: `api.smartrecruiters.com` answers `User-agent: *` with
+  `Disallow: /` and allows only `LinkedInBot` under `/v1/companies/`. Armis, Kaltura, Atera, Nexar and ServiceNow use that
+  API. They are crawled because the API is documented for programs; removing `api.smartrecruiters.com` from `API_HOSTS`
+  in `common.py` would skip those five instead.
+
 ## Free-tier limits and what we watch
 
 Checked on 2026-11-15 from the providers' own pages (PLAN.md step 0.2). Provider pages change: re-check the figures

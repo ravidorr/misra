@@ -7,9 +7,20 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
+import common
 from adapters import ADAPTERS
 from browser_crawl import WHY, crawl_many
-from common import DROP_BELIEVED, DROP_HOLD_DAYS, DROP_NOTE, ISRAEL
+from common import (
+    DROP_BELIEVED,
+    DROP_HOLD_DAYS,
+    DROP_NOTE,
+    ISRAEL,
+    MAX_PURGE_COMPANIES,
+    ROBOTS_NOTE,
+    ExclusionError,
+    is_excluded,
+    load_excluded,
+)
 
 DB = "data/jobs.db"
 DROP_MIN_OPEN = 10  # fewer open jobs swing too much to judge a drop; this many returning nothing is a broken page
@@ -81,27 +92,67 @@ def is_known(c: sqlite3.Connection, co: dict[str, Any], now: str) -> bool:
     return bool(worked)
 
 
+def robots_skipped(co: dict[str, Any]) -> bool:
+    """Was this company left uncrawled because its host's robots.txt does not allow it? That is a decision, not a
+    failure: no retry, no failure count, no alert."""
+    return WHY.get(co["slug"], "").startswith(ROBOTS_NOTE)
+
+
 def fetch(co: dict[str, Any]) -> list[dict[str, Any]] | None:
-    """One adapter call. An adapter that raises fails its own company, not the whole run."""
+    """One adapter call. An adapter that raises fails its own company, not the whole run. A request that robots.txt
+    refused makes the answer None with the reason ROBOTS_NOTE."""
+    WHY.pop(co["slug"], None)
+    common.reset_robots_block()
     try:
-        return ADAPTERS[co["ats"]](co["slug"])
+        jobs = ADAPTERS[co["ats"]](co["slug"])
     except Exception as exc:
         WHY[co["slug"]] = f"adapter error: {type(exc).__name__}: {exc}"[:200]
         return None
+    if jobs is None and common.robots_blocked():
+        WHY[co["slug"]] = f"{ROBOTS_NOTE} ({common.robots_blocked()})"
+    return jobs
 
 
 def crawl(co: dict[str, Any]) -> tuple[dict[str, Any], list[dict[str, Any]] | None]:
     jobs = fetch(co)
-    if jobs is None:  # one retry: most failures are transient rate limits
+    if jobs is None and not robots_skipped(co):  # one retry: most failures are transient rate limits
         time.sleep(4)
         jobs = fetch(co)
     return co, jobs
 
 
-def main() -> None:  # noqa: PLR0912
+def purge_excluded(c: sqlite3.Connection, excluded: list[str]) -> dict[str, int]:
+    """Delete everything stored about the companies on the exclusion list: their jobs, crawl log and gap alerts. The
+    match is the exact company name. Returns the number of jobs deleted per company that had any. A list that would
+    clear more than MAX_PURGE_COMPANIES companies at once is refused before anything is deleted: add companies to
+    the list in separate runs."""
+    held = {
+        name: n
+        for name in excluded
+        if (n := c.execute("SELECT COUNT(*) FROM jobs WHERE company=?", (name,)).fetchone()[0])
+    }
+    if len(held) > MAX_PURGE_COMPANIES:
+        raise ExclusionError(
+            f"refusing to delete the jobs of {len(held)} companies at once (limit {MAX_PURGE_COMPANIES}): "
+            "add them to the exclusion list in separate runs"
+        )
+    tables = {r[0] for r in c.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+    for name in excluded:
+        for table in ("jobs", "crawl_log", "gap_alerts"):
+            if table in tables:
+                c.execute(f"DELETE FROM {table} WHERE company=?", (name,))
+    c.commit()
+    return held
+
+
+def main() -> None:  # noqa: PLR0912, PLR0915
+    excluded = load_excluded()  # a bad list stops the run: nobody can say who must not be crawled
     with open("data/companies.json") as fh:
-        companies = [c for c in json.load(fh) if c["status"] == "ok"]
+        companies = [c for c in json.load(fh) if c["status"] == "ok" and not is_excluded(c["name"], excluded)]
     c = init()
+    for name, n in purge_excluded(c, excluded).items():
+        print(f"exclusion list: deleted {n} jobs of {name}")
+    print(f"robots.txt: {'enforced' if common.ROBOTS_ENFORCED else 'NOT enforced (ROBOTS_ENFORCED is False)'}")
     now = time.strftime("%Y-%m-%dT%H:%M:%S")
     api = [co for co in companies if co["ats"] != "browser"]
     br = [co for co in companies if co["ats"] == "browser"]
@@ -111,9 +162,17 @@ def main() -> None:  # noqa: PLR0912
         got = crawl_many([co["slug"] for co in br])
         results.extend((co, got.get(co["slug"])) for co in br)
     failed: list[str] = []
+    skipped: list[str] = []
     for co, fetched in results:
         name = co["name"]
         jobs = fetched
+        if jobs is None and robots_skipped(co):  # not a failure: logged on its own, nothing closes
+            skipped.append(name)
+            c.execute(
+                "INSERT INTO crawl_log(ts,company,ats,ok,n_jobs,note) VALUES(?,?,?,?,?,?)",
+                (now, name, co["ats"], False, 0, WHY[co["slug"]]),
+            )
+            continue
         if fetched is not None and co.get("israel_only"):  # large multinational boards: keep Israel jobs only
             jobs = [j for j in fetched if ISRAEL.search(j["location"] or "")]
         drop, held = (
@@ -173,12 +232,17 @@ def main() -> None:  # noqa: PLR0912
     c.commit()
     n_open = c.execute("SELECT COUNT(*) FROM jobs WHERE status='open'").fetchone()[0]
     print(f"crawled {len(companies)} companies, failed {len(failed)} {failed}, open jobs {n_open}")
+    print(f"skipped by robots.txt {len(skipped)} {skipped}")
+    if not common.ROBOTS_ENFORCED:
+        print(
+            f"robots.txt would have refused {len(common.ROBOTS_WOULD_BLOCK)} hosts {sorted(common.ROBOTS_WOULD_BLOCK)}"
+        )
     for co, jobs in results:
         if co["ats"] == "browser":
-            print(
-                f"  browser {co['name']:15s} {'FAILED' if jobs is None or co['name'] in failed else len(jobs)}"
-                + (f"  <- {WHY[co['slug']]}" if co["slug"] in WHY else "")
+            state = (
+                "SKIPPED" if co["name"] in skipped else "FAILED" if jobs is None or co["name"] in failed else len(jobs)
             )
+            print(f"  browser {co['name']:15s} {state}" + (f"  <- {WHY[co['slug']]}" if co["slug"] in WHY else ""))
 
 
 if __name__ == "__main__":
