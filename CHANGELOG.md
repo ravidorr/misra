@@ -12,11 +12,17 @@ All notable changes are documented here. Format follows [Keep a Changelog](https
 - Two switches, both off: `DIGEST_SIGNUP_ENABLED = False` in `build_dashboard.py` (the page has no button, dialog or script, and `docs/digest.js` is not built) and the function secret `DIGEST_SIGNUP_ENABLED`, without which the function refuses to create a subscription (403 `signup_closed`), so calling the API directly cannot get around the page. Turning off always works.
 - Migration `20261118100000_digest_signup_and_limits.sql`: the counter tables `confirm_limits` and `confirm_daily_cap` and the service-role-only functions `subscribe_start`, `unsubscribe_user`, `confirm_email_reserve` and `confirm_email_release`. `supabase/tests/digest_signup.sql` tests them against a database, including that both ways of unsubscribing leave identical rows. The lint of `tests/test_migrations.py` knows the new tables and functions.
 - `templates/digest.js`, `supabase/functions/email-settings/`, `supabase/functions/_shared/identity.ts`, `test/email-settings.test.ts` and `tests/test_digest_settings.py` (real browser, every state and error, light and dark, phone width, axe, keyboard). The daily workflow stages `docs/digest.js` once it exists.
+- `TERMS.md`: a short as-is disclaimer (free, non-commercial hobby project, no warranties, listings collected automatically from public pages and not guaranteed, trademarks belong to their employers, signing in accepts the privacy notice including processing in the EU and the US, employers write to `raanan@avidor.org` to have their links removed). Linked from the page footer, the sign-in notice, `PRIVACY.md`, `README.md` and `llms.txt`.
+- The dashboard footer links to the privacy notice, the terms and the contact address (44px targets, new-tab links say so).
+- The notice next to the sign-in button (PLAN.md step 6.6, FR-1 AC 7): signing in is voluntary, the email is used only to save choices and send alerts the user turns on, with links to the privacy notice and the terms. It shows only while signed out and the button names it with `aria-describedby`.
+- `tests/test_legal_wording.py` and tests of the notice and the footer links in `tests/test_sign_in.py`.
 
 ### Changed
 
 - `PRIVACY.md` says the email settings are built but switched off, what turning the email on stores, that one confirmation email is sent and nothing else until it is confirmed, the confirmation-email counters, and Resend's part.
 - `auth.js` also shares the signed-in email with the page scripts, and `dashboard.js` exposes a read-only copy of the four email filters.
+- `PRIVACY.md` names the database controller (Raanan Avidor, a private individual) and the contact `raanan@avidor.org`, says why the data is collected and that giving it is voluntary, names the providers and where they are (Supabase and Resend in Ireland, Google and GitHub in the United States), gives the rights to inspect, correct and delete (Sections 13 and 14 of the Israeli Privacy Protection Law) with an answer within 30 days, and states that Supabase's and Resend's standard data processing agreements apply. The digest is still described as planned, not live.
+- `PLAN.md` step 6.3 and the PRD (FR-8) carry the lawyer's exact footer text for every digest email and the Reply-To requirement.
 
 ## [0.22.0] - 2026-11-17
 

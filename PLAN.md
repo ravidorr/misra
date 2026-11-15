@@ -172,6 +172,8 @@ Decisions made in planning (they change the PRD's wording, so update the PRD in 
 - [x] ~~6.2 Dashboard digest settings: on/off, address (Google email by default), daily or weekly, "Use these filters for
   my email" copying regions, levels, role types and keywords only. Sends the confirmation email through Resend.
   Done when: FR-8 AC 1 to 3 hold.~~
+  The confirmation email is plain text with `Reply-To` `raanan@avidor.org` and a footer naming Misra, the site and the
+  contact; it does not carry the digest's "you signed up" sentence, because its reader may be someone who did not ask.
   Built as the Edge Function `email-settings` (turn on, turn off; the user id only from the verified token; limits of 3
   confirmation emails per user, 3 per address and 30 in all per day, counted in the database; the same unsubscribe
   clean-up as the link), the migration `20261118100000_digest_signup_and_limits.sql` and the "Daily email" dialog
@@ -189,7 +191,7 @@ Decisions made in planning (they change the PRD's wording, so update the PRD in 
 - [ ] 6.3 `send_digests.py` replaces the per-recipient logic of `send_email.py`: match each confirmed subscriber's
   filters against jobs first seen after their confirmation, never emailed before, via the new `level`/`role_types`
   columns (this removes the Product-plus-Intern/Junior bug); no email when nothing new; weekly summary; per-user
-  try block; project From address via Resend; unsubscribe link and List-Unsubscribe headers. Coverage-gap content
+  try block; project From address via Resend; unsubscribe link and List-Unsubscribe headers; the footer of every email is exactly this (the lawyer's wording): `You are receiving this email because you signed up for job alerts on Misra (https://ravidorr.github.io/misra/). Misra is a free, non-commercial project. Unsubscribe in one click | Contact: raanan@avidor.org` with "Unsubscribe in one click" being the unsubscribe link; and set Reply-To to `raanan@avidor.org`, because the lawyer said people can reply "Remove" and the sending address `digest@send.avidor.org` cannot receive mail. Coverage-gap content
   never appears in it. Remove `digest.py` selection logic that FR-9 replaces; keep the maintainer failure email on
   `send_alert.py`. The old single-recipient digest keeps running until this path has delivered to the maintainer. Done when: FR-8 AC 4 to 9 and AC 12 (footer) hold in tests, FR-9 AC 9 holds.
 - [ ] 6.4 Daily workflow: add the digest step after the sync with the service-role key and Resend key in that step
@@ -201,6 +203,12 @@ Decisions made in planning (they change the PRD's wording, so update the PRD in 
   outcome is in the PRD's "Before launch"; the gate stays until its wording is in). Nothing sends to a real
   user, and the sign-up control stays hidden behind a flag, until the answers are in and any required wording is added
   to the emails, `PRIVACY.md`, a new `TERMS.md` (as-is disclaimer) and the notice next to the sign-in button (FR-1 AC 7). Done when: the answers are filed, those four are in, and the flag is switched on (both switches of step 6.2: the constant in `build_dashboard.py` and the function secret).
+  Progress: the wording is in for `PRIVACY.md` (controller, why and voluntary, providers and countries, rights under
+  Sections 13 and 14, contact), `TERMS.md` (linked from the site footer and the sign-in notice), the notice next to the
+  sign-in button (FR-1 AC 7, with links to both) and the footer links on the page. The email footer text is written in
+  step 6.3 above and is built there. Still to do before the gate closes: the company exclusion list (a company that asks to be
+  removed is deleted and never crawled again), the `robots.txt` check in the crawler, the digest email itself (step 6.3, with
+  its footer), and switching the flag on. The gate stays open.
 
 ## FR-4 (richer job data)
 
