@@ -56,7 +56,8 @@ consent log (when it was turned on, confirmed and unsubscribed).</li>
 <li>Never a CV, a phone number, a postal address or a password. Google's name and photo sit only in Supabase's own
 sign-in record until the account is deleted. The jobs data is public job postings.</li>
 <li>Where it lives: Supabase (EU, Ireland) for the database, sign-in and Edge Functions; Resend (Ireland) for email;
-Google for sign-in; GitHub for the repository, the dashboard and the daily job. One maintainer runs all of them.</li>
+Google for sign-in; GitHub for the repository, the dashboard and the daily job, and for a private repository
+(<code>ravidorr/misra-backups</code>) that holds the daily backup copy of the account tables. One maintainer runs all of them.</li>
 </ul>
 <h3 id="controls-in-place">Controls in place</h3>
 <ul>
@@ -64,7 +65,14 @@ Google for sign-in; GitHub for the repository, the dashboard and the daily job. 
 and the public (anon) key can read open jobs only. The policy tests are in <code>supabase/tests/</code>.</li>
 <li><strong>Secrets:</strong> the service-role key lives only in Supabase's function settings and in GitHub Actions secrets, never in
 the browser or the repository. Other secrets by name: <code>RESEND_API_KEY</code> (limited to sending from <code>send.avidor.org</code>),
-<code>REPORT_TO_EMAIL</code>, <code>IP_HASH_SECRET</code> and the GitHub deploy key. Values are typed into the providers' own pages.</li>
+<code>REPORT_TO_EMAIL</code>, <code>IP_HASH_SECRET</code>, the GitHub deploy key and <code>BACKUP_DEPLOY_KEY</code> (a write deploy key of the private
+backup repository only, used by the backup step of the daily job and nothing else). Values are typed into the
+providers' own pages.</li>
+<li><strong>Backups:</strong> every daily run copies the account tables, as JSON files, to the private repository
+<code>ravidorr/misra-backups</code> (only the maintainer has access). The export runs with the service-role key in its own step,
+writes outside the checkout, never prints rows (the public log shows counts only) and uploads no artifact. The
+repository's history is replaced by one new commit when it is 28 days old, so a deleted account leaves the backups
+within 30 days. The restore script, <code>restore_accounts.py</code>, and the rehearsal are in <code>CONTRIBUTING.md</code>.</li>
 <li><strong>Accounts:</strong> two-factor sign-in is on for Supabase, GitHub, Resend and Google. Users sign in with Google only: the
 email-and-password provider is switched off. A database hook empties the personal part of the sign-in token.</li>
 <li><strong>Policy tests:</strong> the SQL policy tests of <code>supabase/tests</code> run in CI on every pull request and push to <code>main</code>, against a
@@ -78,25 +86,30 @@ the Supabase project.</li>
 </ul>
 <h3 id="known-gaps-accepted-for-now">Known gaps (accepted for now)</h3>
 <ul>
-<li>Supabase's free plan has no backups. Before the first daily-email subscriber, upgrade to a plan with backups or build
-the export in plan step 9.1.</li>
+<li>Supabase's free plan keeps no backups for us. The daily export above is the backup: a restore was rehearsed on
+2026-11-15 against a local Postgres, not yet against a real Supabase project. The export holds the account tables of
+<code>public</code>, not Supabase's own sign-in records, so after a restore into a new project people sign in with Google again
+(the restore can recreate the bare sign-in rows). GitHub may keep the replaced history for a short time after it is
+replaced.</li>
 <li>Two low-risk Dependabot alerts in development tools (not shipped to users) were open on 2026-11-15.</li>
 <li>One maintainer: no second person for access or recovery.</li>
 </ul>
 <h3 id="yearly-review-by-2027-11-15-then-every-year">Yearly review (by 2027-11-15, then every year)</h3>
 <ol>
 <li>Read Supabase's auth and API logs for odd sign-ins or request patterns.</li>
-<li>List who has access to the Supabase organisation, the GitHub repository (collaborators, deploy keys, tokens) and
-the Resend team, and remove anyone or anything not needed.</li>
+<li>List who has access to the Supabase organisation, the GitHub repository (collaborators, deploy keys, tokens), the
+private backup repository <code>ravidorr/misra-backups</code> (collaborators and its one deploy key) and the Resend team, and
+remove anyone or anything not needed.</li>
 <li>Confirm two-factor sign-in is still on for all four providers.</li>
-<li>Rotate the service-role key and the Resend key, and update the secrets.</li>
+<li>Rotate the service-role key, the Resend key and <code>BACKUP_DEPLOY_KEY</code>, and update the secrets.</li>
 <li>Check Dependabot and CodeQL alerts and update dependencies.</li>
 <li>Re-read <code>PRIVACY.md</code> and <code>TERMS.md</code> against what the product really does.</li>
+<li>Check that the last backup is recent and rehearse a restore again (<code>CONTRIBUTING.md</code>, &quot;Backups of the account tables&quot;).</li>
 </ol>
 <p>Reviews done: none yet.</p>
 <h3 id="if-there-is-a-breach">If there is a breach</h3>
 <ol>
-<li><strong>Contain it:</strong> rotate the service-role key and any exposed secret, disable the affected Edge Function or sign-in
+<li><strong>Contain it:</strong> rotate the service-role key, <code>BACKUP_DEPLOY_KEY</code> and any exposed secret, disable the affected Edge Function or sign-in
 provider, and fix the hole.</li>
 <li><strong>Find out what was exposed:</strong> which tables, which people, since when (use the provider logs).</li>
 <li><strong>Tell the affected people</strong> by a short, plain email: what was exposed (their email address and saved choices, for
