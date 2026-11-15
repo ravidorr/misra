@@ -1,6 +1,6 @@
 # Privacy
 
-Last updated: 2026-11-16
+Last updated: 2026-11-15
 
 This is a plain statement of what the Misra dashboard does with data. It describes what the code and the setup do today. It is not legal advice.
 
@@ -24,7 +24,7 @@ If you sign in with Google, these are stored in our Supabase database (EU, Irela
 - Your **filters** (regions, places, levels, role types, search words, company, sort order and the show or hide options), so they follow you to your other devices. The first time you sign in on a browser, the page offers to copy that browser's own discards, stars and filters into your account.
 - **Email settings** have a place in the database for a later feature (the personalised digest). That feature does not exist yet and nothing is stored there.
 
-The sign-in service also keeps its own record of your account. Google sends your name and photo to Supabase's sign-in service, and Supabase keeps them in its own account record (in its `auth` tables) until the account is deleted. Our own tables never copy them, the dashboard never shows them, and the page does not save them in the sign-in it keeps in your browser. The signed token your browser holds would also carry them; the project has a database function that empties that part of the token, which the maintainer switches on in the Supabase dashboard.
+The sign-in service also keeps its own record of your account. Google sends your name and photo to Supabase's sign-in service, and Supabase keeps them in its own account record (in its `auth` tables) until the account is deleted. Our own tables never copy them, the dashboard never shows them, and the page does not save them in the sign-in it keeps in your browser. The signed token your browser holds would also carry them; a database function, switched on in the Supabase dashboard, empties that part of the token.
 
 Technical records, none of them personal to an account:
 
@@ -69,4 +69,4 @@ If the button does not work for you, ask us (below) and the maintainer will dele
 
 ## Contact
 
-Questions or a deletion request: open a [GitHub issue](https://github.com/ravidorr/misra/issues) and do not put personal details in it. For anything private, use the private route in [SECURITY.md](./SECURITY.md).
+Questions: open a [GitHub issue](https://github.com/ravidorr/misra/issues) and do not put personal details in it. A deletion request that has to name your account, and anything else private, goes through the private route in [SECURITY.md](./SECURITY.md), not a public issue.
