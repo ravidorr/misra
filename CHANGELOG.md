@@ -4,7 +4,7 @@ All notable changes are documented here. Format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
-## [0.34.0] - 2026-11-15
+## [0.35.0] - 2026-11-15
 
 ### Changed
 
