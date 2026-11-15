@@ -325,3 +325,33 @@ def test_an_empty_profiles_table_beside_full_ones_means_the_key_is_wrong(tmp_pat
         export(source(FakeAccounts(tables)), tmp_path / "out")
     assert not (tmp_path / "out").exists()
     assert export(source(FakeAccounts({})), tmp_path / "none")["profiles"] == 0  # all empty: a real empty project
+
+
+def test_a_sign_in_between_the_reads_makes_the_export_read_everything_again(tmp_path: Path) -> None:
+    tables = fixture()
+    fake = FakeAccounts(tables)
+    late = {"user_id": U3, "email": "late@test.example"}
+    reads = {"n": 0}
+
+    def hook(name: str, offset: int) -> Answer | None:
+        if name == "user_prefs" and offset == 0 and reads["n"] == 0:
+            reads["n"] += 1  # the person signs in after profiles was read and saves prefs before user_prefs is read
+            tables["user_prefs"].append({**tables["user_prefs"][0], "user_id": U3})
+            tables["user_prefs"].sort(key=lambda row: row["user_id"])
+            tables["profiles"].append(late)
+        return None
+
+    fake.hook = hook
+    export(source(fake), tmp_path / "out")
+    profiles = json.loads((tmp_path / "out" / "profiles.json").read_text(encoding="utf-8"))
+    assert U3 in [row["user_id"] for row in profiles]
+
+
+def test_rows_of_users_without_a_profile_that_stay_fail_the_export(tmp_path: Path) -> None:
+    tables = fixture()
+    tables["emailed"] = [
+        {"user_id": U3, "company": "Acme", "job_id": "1", "emailed_at": "t"},
+    ]
+    with pytest.raises(ExportError, match="without a profile kept appearing"):
+        export(source(FakeAccounts(tables)), tmp_path / "out")
+    assert not (tmp_path / "out").exists()

@@ -197,14 +197,25 @@ def write_files(directory: Path, data: Mapping[str, Sequence[Mapping[str, Any]]]
         scratch.replace(target)
 
 
+def orphans(data: Mapping[str, Sequence[Mapping[str, Any]]]) -> int:
+    """Rows of the other tables whose user has no row in `profiles`: a person who signed in between the reads."""
+    known = {row["user_id"] for row in data["profiles"]}
+    return sum(1 for name, rows in data.items() if name != "profiles" for row in rows if row["user_id"] not in known)
+
+
 def export(source: Source, directory: Path) -> dict[str, int]:
-    """Read all the tables, then write all the files. Returns the row count of each table."""
+    """Read all the tables, then write all the files. Returns the row count of each table. A row that points at a
+    user missing from `profiles` means the tables were read around a sign-in: everything is read again (ATTEMPTS
+    times), and the export fails rather than write a set the restore could not rebuild the users from."""
     directory = outside_repository(directory)
-    data = {table.name: source.read(table) for table in TABLES}
-    if not data["profiles"] and any(data[name] for name in data):  # a wrong key sees nothing through row-level security
-        raise ExportError("profiles is empty but other tables are not: the key may be wrong, nothing was written")
-    write_files(directory, data)
-    return {name: len(rows) for name, rows in data.items()}
+    for _ in range(ATTEMPTS):
+        data = {table.name: source.read(table) for table in TABLES}
+        if not data["profiles"] and any(data[name] for name in data):  # a wrong key sees nothing through RLS
+            raise ExportError("profiles is empty but other tables are not: the key may be wrong, nothing was written")
+        if not orphans(data):
+            write_files(directory, data)
+            return {name: len(rows) for name, rows in data.items()}
+    raise ExportError(f"rows of users without a profile kept appearing, {ATTEMPTS} times: try again")
 
 
 def main(argv: Sequence[str] | None = None) -> None:
