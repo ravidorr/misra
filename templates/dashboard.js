@@ -597,6 +597,29 @@ function onAccount() {
   }
 }
 
+/* The account was deleted (auth.js, after the service confirmed it): nothing of it may stay behind or be sent again. Its
+   queued changes, its unsent filters and its first-sign-in answer are dropped from memory and from this browser (only this
+   user's entries: another account's are not touched), and the page goes back to the signed-out state with nothing to
+   save "next time". The browser's own signed-out stars, discards and filters are not the account's and stay. */
+document.addEventListener('misra:account-deleted', (event) => {
+  const userId = event.detail?.userId ?? account?.userId;
+  if (account && account.userId === userId) {
+    account.pending.clear();
+    account.prefs.pending = null;
+    detach();
+    leftBehind = 0;
+    renderSyncNote();
+  }
+  if (typeof userId !== 'string') return;
+  for (const name of [LS_Q, LS_PF, LS_I]) {
+    const all = lsGet(name, {});
+    if (userId in all) {
+      Reflect.deleteProperty(all, userId);
+      lsSet(name, all);
+    }
+  }
+});
+
 function retryNow() {
   if (account.loadFailed) loadServer(account);
   if (account.prefs.state === 'failed') loadPrefs(account);

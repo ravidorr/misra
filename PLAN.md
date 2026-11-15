@@ -119,10 +119,17 @@ Decisions made in planning (they change the PRD's wording, so update the PRD in 
   Remaining check, live only: the launch test against the real project: sign in on the laptop and star, discard and set
   filters, then sign in on a phone and see them all; sign in on a browser that holds its own discards, stars and
   filters, accept the offer and see them in the account and on a second device. No migration is needed for this step.
-- [ ] 4.4 Delete account in one step (Edge Function `delete-account`, verifies the caller's token, removes the auth
+- [x] ~~4.4 Delete account in one step (Edge Function `delete-account`, verifies the caller's token, removes the auth
   user and cascades rows), a sign-out and delete control in the page, `PRIVACY.md` rewritten: email, stars, discards,
   preferences, technical records, never a CV, who can see it, providers abroad, how to delete. Done when: FR-1 AC 4, 5
-  hold. This lands before any real user is invited.
+  hold. This lands before any real user is invited.~~
+  Remaining checks, live only (`supabase/README.md`, "Delete account"): deploy with
+  `supabase functions deploy delete-account --project-ref dncodqeqpoqwcxdctzco`, run the curl checks (401 without a
+  token, 403 for the wrong origin, 405 for GET), then with a throwaway Google account delete the account from the page and
+  confirm the user and its rows are gone in the Supabase dashboard, that the old token now answers 401, and that signing
+  in again makes a new empty account. This needs the step 4.1 live setup (Google provider, redirect URLs) first.
+  Before the first real user is invited, the maintainer also reads `PRIVACY.md` once against the live setup (the access
+  token hook switched on, Supabase backups and log retention).
 
 ## FR-7 (report a site)
 

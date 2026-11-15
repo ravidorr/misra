@@ -239,3 +239,95 @@ network has used up its limit. If it answers `429`, or the logs show `no usable 
 the platform does not set `cf-connecting-ip` the way this function assumes: read the real headers and fix
 `visitorNetwork` in `handler.ts` before the form goes live. The daily cap needs no live flood: the vitest flood test and
 `supabase/tests/report_limits.sql` prove it. The limits reset at 00:00 UTC.
+
+## Delete account (Edge Function `delete-account`)
+
+PLAN.md step 4.4, PRD FR-1 AC 4. A signed-in user deletes their own account in one step from the dashboard ("Delete my
+account", after a confirmation). The function removes the auth user through the Admin API, and because every table that
+holds user data (`profiles`, `user_prefs`, `user_jobs`) points at `auth.users (id)` with `on delete cascade`, every row
+goes with it. No migration and no new secret are needed: `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` are supplied to
+every function by Supabase, and the service-role key exists only inside the function, never in the page or the repository.
+
+Files: `supabase/functions/delete-account/` (`index.ts` starts the server and is the only file that knows Deno,
+`handler.ts` holds the logic) and `supabase/config.toml` (`verify_jwt = false`).
+
+### The delete request and the answers
+
+`POST <project url>/functions/v1/delete-account` with `Authorization: Bearer <the user's access token>` and the public
+key as `apikey`. There is no body, and nothing in the request can name a user: the function asks Supabase Auth who owns
+the token (`GET /auth/v1/user`, which checks the signature, the expiry and that the session still exists), takes the id
+from that answer only (it must be a UUID of an `authenticated` user), and deletes that user (`DELETE
+/auth/v1/admin/users/<id>`, a hard delete). It can therefore delete only the caller.
+
+Every answer is JSON, `{"ok": true}` or `{"ok": false, "error": {"code", "message"}}`:
+
+- 200 `{"ok": true}`: the account is gone. Also when the admin call finds it already gone (two tabs both ask), and when Auth
+  accepts the token's signature but answers `user_not_found` (a retry after the answer to the first request was lost):
+  that reply carries `"alreadyDeleted": true`. Auth checks the signature before it looks the user up, so this says
+  nothing about anyone else. (The exact `user_not_found` error code of Auth is assumed from its documented behaviour:
+  check it in the live test, step 3. If it differs the retry gets the 401 below, which is safe.)
+- 401 `not_signed_in`: no bearer token, or Supabase Auth did not accept it (expired or signed out). No admin call is made.
+  The page never reads it as "deleted": it tells the user nothing was deleted by this request.
+- 403 `origin_not_allowed`, 405 `method_not_allowed`.
+- 502 `delete_failed`: the admin call refused (a 4xx); the account is still there. 502 `delete_unconfirmed`: a timeout, a
+  dropped connection or a 5xx; the account may or may not be gone, and the page says it could not confirm and offers a
+  retry. 503 `service_unavailable`: the token check could not be reached; nothing was deleted. 500 `server_error`: a
+  missing secret.
+
+CORS answers only `https://ravidorr.github.io`. Only status codes are logged: no token, email or user id.
+
+`verify_jwt = false` in `config.toml`: the gateway's JWT check would reject the CORS preflight (it carries no
+`Authorization` header), and the function has to ask Supabase Auth who owns the token anyway, to learn the id. The
+function refuses everything that Auth does not accept.
+
+### What the page does
+
+`templates/auth.js` shows "Delete my account" next to "Sign out" for a signed-in user. It opens a native `dialog` (focus
+trap, Esc and screen-reader support from the browser) that says what is removed and that it cannot be undone, with
+"Keep my account" focused first. While the request runs the buttons are busy and Esc is ignored. If it fails, the
+account stays, the dialog says what happened and the button reads "Try again". On success the page clears this user's
+queued changes, unsent filters and first-sign-in answer from the browser (`misra-pending-choices-v1`,
+`misra-pending-filters-v1`, `misra-imported-v1`, this user's entries only), signs out locally, and shows a short
+confirmation. The browser's own signed-out stars, discards and filters are not the account's and are kept. No WebMCP tool
+deletes an account: that needs a person to confirm.
+
+### How delete-account is tested
+
+`test/delete-account.test.ts` (vitest, part of `npm run test`) runs the handler against a fake Supabase Auth: the
+caller is the only user deleted whatever the body, query string or headers say, a rejected token never reaches the admin
+endpoint, replay, 404, 4xx, 5xx and timeouts, CORS, methods, and that nothing secret is logged. The same type-check and
+lint as `report-site` apply. `tests/test_delete_account.py` runs the page in a real browser against a fake function. The
+cascade itself is `supabase/tests/accounts_rls.sql` (deleting a user removes only that user's rows).
+
+### Deploy delete-account (the maintainer; nothing here is done by the pull request)
+
+1. `supabase functions deploy delete-account --project-ref dncodqeqpoqwcxdctzco` (`config.toml` sets `verify_jwt = false`).
+   Logs: [Edge Functions, delete-account](https://supabase.com/dashboard/project/dncodqeqpoqwcxdctzco/functions/delete-account/logs).
+2. Check the deploy and the gateway setting with the checks below.
+
+### Check delete-account live
+
+Use a throwaway Google account made for this test, never your own. It depends on the step 4.1 setup (Google provider on,
+redirect URLs set). Signed in on the dashboard with the throwaway account, star one role first.
+
+1. Preflight and method, from any shell (no token, nothing is deleted):
+
+   ```sh
+   URL=https://dncodqeqpoqwcxdctzco.supabase.co/functions/v1/delete-account
+   curl -s -i -X OPTIONS "$URL" -H 'Origin: https://ravidorr.github.io' -H 'Access-Control-Request-Method: POST'   # 204, allow-origin is the dashboard only
+   curl -s -i -X GET "$URL" -H 'Origin: https://ravidorr.github.io'                                                # 405
+   curl -s -i -X POST "$URL" -H 'Origin: https://evil.example'                                                     # 403
+   curl -s -i -X POST "$URL" -H 'Origin: https://ravidorr.github.io'                                               # 401 not_signed_in
+   curl -s -i -X POST "$URL" -H 'Origin: https://ravidorr.github.io' -H 'Authorization: Bearer not.a.token'        # 401 not_signed_in
+   ```
+
+2. On the dashboard, choose "Delete my account", read the notice, confirm. The page signs out and says the account was
+   deleted. In the Supabase dashboard,
+   [Authentication, Users](https://supabase.com/dashboard/project/dncodqeqpoqwcxdctzco/auth/users) no longer lists the test
+   user, and in the [SQL editor](https://supabase.com/dashboard/project/dncodqeqpoqwcxdctzco/sql/new)
+   `select count(*) from public.profiles where email = '<test email>';` and the same for `public.user_jobs` (by the
+   test user's former id) return 0.
+3. Replay: the old access token (copied from the browser's `misra-auth` local storage entry before step 2) sent to the
+   function with `-H "Authorization: Bearer <token>"` answers 200 with `"alreadyDeleted": true` (Auth: `user_not_found`)
+   or, if the token was also revoked, 401. Either way nothing else is deleted. Note which one you get.
+4. Signing in again with the same Google account makes a new, empty account.

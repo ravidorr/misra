@@ -1,6 +1,6 @@
 """Optional Google sign-in (PLAN.md step 4.1; PRD FR-1 AC 1, 2, 3 and 6), run in a real browser against the built page
 with a fake sign-in service. AC 3 (a user sees and changes only their own rows) lives in the database: see
-tests/test_migrations.py and supabase/tests/accounts_rls.sql. AC 4 and 5 are step 4.4.
+tests/test_migrations.py and supabase/tests/accounts_rls.sql. AC 4 and 5 are in tests/test_delete_account.py.
 
 Locally the tests skip when Chromium is missing; in CI (CI=true) a missing browser is a failure."""
 

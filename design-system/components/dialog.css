@@ -1,0 +1,57 @@
+/*
+ * Dialog: a native <dialog> opened with showModal(), so the browser traps focus, closes on Esc and hides the rest of the
+ * page from screen readers. Name it with aria-labelledby and describe it with aria-describedby.
+ *   <dialog class="dialog" aria-labelledby="t" aria-describedby="d">
+ *     <h2 class="dialog-title" id="t" tabindex="-1">Delete your account?</h2>
+ *     <div id="d"><p>What happens.</p></div>
+ *     <p class="dialog-actions"><button type="button" class="btn btn-pill">Keep</button>
+ *     <button type="button" class="btn btn-pill btn-danger">Delete</button></p>
+ *   </dialog>
+ */
+.dialog {
+  box-sizing: border-box;
+  width: min(34rem, calc(100vw - 2 * var(--space-4)));
+  max-height: calc(100dvh - 2 * var(--space-4));
+  padding: var(--space-5);
+  overflow-y: auto;
+  border: var(--border-width) solid var(--line);
+  border-radius: var(--radius-card);
+  background: var(--panel);
+  color: var(--ink);
+  box-shadow: var(--shadow-md);
+}
+
+.dialog::backdrop {
+  background: color-mix(in srgb, var(--bg) 80%, transparent);
+}
+
+.dialog-title {
+  margin: 0 0 var(--space-3);
+  font-size: var(--text-xl);
+  letter-spacing: -0.03em;
+}
+
+.dialog p,
+.dialog ul {
+  margin: 0 0 var(--space-3);
+}
+
+.dialog ul {
+  padding-inline-start: var(--space-5);
+}
+
+.dialog .notice[hidden] {
+  display: none;
+}
+
+.dialog-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  margin: var(--space-4) 0 0;
+}
+
+.dialog-actions .btn[aria-disabled="true"] {
+  opacity: 0.6;
+  cursor: progress;
+}
