@@ -29,7 +29,7 @@ export interface Subscriber {
   unsubscribeToken: string;
 }
 
-export type Fault = 'down' | 'status-500' | 'garbage' | 'unknown-word' | undefined;
+export type Fault = 'down' | 'status-500' | 'garbage' | 'unknown-word' | 'schedule-down' | 'schedule-500' | 'schedule-garbage' | 'schedule-odd' | undefined;
 
 export interface World {
   deps: Deps;
@@ -69,6 +69,7 @@ export function world(subscribers: Subscriber[], fault?: Fault, now: Date = NOW)
     const headers = init.headers as Record<string, string>;
     const body = typeof init.body === 'string' ? init.body : '';
     requests.push({ url, method: String(init.method), headers, body });
+    if (init.method === 'GET') return Promise.resolve(schedule(rows, url, fault));
     if (fault === 'down') return Promise.reject(new Error('connection refused'));
     if (fault === 'status-500') return Promise.resolve(new Response('{"message":"secret detail"}', { status: 500 }));
     if (fault === 'garbage') return Promise.resolve(new Response('<html>', { status: 200 }));
@@ -79,6 +80,17 @@ export function world(subscribers: Subscriber[], fault?: Fault, now: Date = NOW)
   });
   const secrets = subscribers.flatMap((s) => [s.confirmToken, s.unsubscribeToken, s.row.confirmHash ?? '', s.row.unsubscribeHash, s.row.address]);
   return { deps: { config: CONFIG, fetch: fakeFetch, now: () => now }, rows, requests, fakeFetch, secrets };
+}
+
+/** The PostgREST read of `frequency` by confirmation token hash (what `readSchedule` sends). */
+function schedule(rows: Row[], url: string, fault: Fault): Response {
+  if (fault === 'schedule-down') throw new Error('connection refused');
+  if (fault === 'schedule-500') return new Response('{"message":"secret detail"}', { status: 500 });
+  if (fault === 'schedule-garbage') return new Response('<html>', { status: 200 });
+  if (fault === 'schedule-odd') return Response.json([{ frequency: 'hourly' }]);
+  const hash = new URL(url).searchParams.get('confirm_token_hash')?.replace(/^eq\./u, '');
+  const row = rows.find((candidate) => candidate.confirmHash === hash);
+  return Response.json(row ? [{ frequency: row.frequency }] : []);
 }
 
 function confirm(rows: Row[], args: { p_hash: string; p_now: string }): string {

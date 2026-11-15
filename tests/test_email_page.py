@@ -20,9 +20,15 @@ from tests.test_sign_in import AXE_RUN
 FUNCTION = f"{build_dashboard.SUPABASE_URL}/functions/v1/confirm-email"
 TOKEN = "Abcdefghijklmnopqrstuvwxyz0123456789_-ABCDE"
 CORS = {"access-control-allow-origin": "*", "access-control-allow-headers": "*"}
+CONFIRMED = "Your job digest is confirmed"
+NOT_VALID = "This link is no longer valid"
+UNSUBSCRIBED = "You have been unsubscribed"
+KEEP = "It may have already been used, expired, or been replaced by a newer link."
 ANSWERS = {
-    "ok": (200, {"ok": True, "status": "confirmed"}),
-    "already": (200, {"ok": True, "status": "already_confirmed"}),
+    "ok": (200, {"ok": True, "status": "confirmed", "schedule": "weekly"}),
+    "daily": (200, {"ok": True, "status": "confirmed", "schedule": "daily"}),
+    "no_schedule": (200, {"ok": True, "status": "confirmed"}),
+    "already": (200, {"ok": True, "status": "already_confirmed", "schedule": "daily"}),
     "expired": (410, {"ok": False, "error": {"code": "link_expired", "message": "x"}}),
     "unsubscribed": (409, {"ok": False, "error": {"code": "unsubscribed", "message": "x"}}),
     "not_valid": (404, {"ok": False, "error": {"code": "link_not_valid", "message": "x"}}),
@@ -79,9 +85,15 @@ async def test_a_confirmation_link_shows_a_button_and_confirms_nothing_until_it_
     assert page.url == f"{ORIGIN}/email.html"  # the token is out of the address bar
     assert await page.evaluate("location.hash") == ""
     await page.click("#confirm")
-    await expect(page.locator("#heading")).to_have_text("Your email is confirmed")
+    await expect(page.locator("#heading")).to_have_text(CONFIRMED)
+    await expect(page.locator("#message")).to_have_text(
+        "You will now receive a weekly email when new roles match your saved filters. Your first digest will include "
+        "only roles posted from now on, and you can unsubscribe in one click from any email."
+    )
     await expect(page.locator("#confirm")).to_be_hidden()
     await expect(page.locator("#back")).to_be_visible()
+    await expect(page.locator("#back")).to_have_text("Open Misra dashboard")
+    assert await page.locator("#back").get_attribute("href") == "./"
     assert [r.method for r in confirm.requests] == ["POST"]
     request = confirm.requests[0]
     assert request.url == FUNCTION  # no token in the URL
@@ -92,17 +104,32 @@ async def test_a_confirmation_link_shows_a_button_and_confirms_nothing_until_it_
 
 
 @pytest.mark.parametrize(
-    ("mode", "heading"),
+    ("mode", "words"),
     [
-        ("expired", "This link has expired"),
-        ("unsubscribed", "You have unsubscribed"),
-        ("not_valid", "This link does not work"),
+        ("ok", "a weekly email"),
+        ("daily", "a daily email"),
+        ("already", "a daily email"),
+        ("no_schedule", "a daily or weekly email, as you chose, when new roles"),
     ],
 )
-async def test_the_answers_of_the_function_are_told_plainly(page: Page, site: Path, mode: str, heading: str) -> None:
+async def test_the_confirmed_text_names_the_schedule_and_never_says_undefined(
+    page: Page, site: Path, mode: str, words: str
+) -> None:
     await open_page(page, site, f"#token={TOKEN}", mode)
     await page.click("#confirm")
-    await expect(page.locator("#heading")).to_have_text(heading)
+    await expect(page.locator("#heading")).to_have_text(CONFIRMED)
+    await expect(page.locator("#message")).to_contain_text(words)
+    assert "undefined" not in await page.locator("#message").inner_text()
+    assert CONFIRMED in await page.locator("#status").inner_text()
+
+
+@pytest.mark.parametrize("mode", ["expired", "unsubscribed", "not_valid"])
+async def test_every_link_that_cannot_confirm_gets_the_same_plain_words(page: Page, site: Path, mode: str) -> None:
+    await open_page(page, site, f"#token={TOKEN}", mode)
+    await page.click("#confirm")
+    await expect(page.locator("#heading")).to_have_text(NOT_VALID)
+    await expect(page.locator("#message")).to_contain_text(KEEP)
+    await expect(page.locator("#message")).to_contain_text("sign in on the Misra dashboard")
     await expect(page.locator("#confirm")).to_be_hidden()
     await expect(page.locator("#back")).to_be_visible()
 
@@ -116,16 +143,16 @@ async def test_a_failure_leaves_the_button_to_try_again(page: Page, site: Path, 
     await expect(page.locator("#heading")).to_have_text("Confirm your email")
     confirm.mode = "ok"
     await page.click("#confirm")
-    await expect(page.locator("#heading")).to_have_text("Your email is confirmed")
+    await expect(page.locator("#heading")).to_have_text(CONFIRMED)
     assert len(confirm.requests) == 2  # noqa: PLR2004
 
 
 @pytest.mark.parametrize(
     ("fragment", "heading"),
     [
-        ("#unsubscribed", "You are unsubscribed"),
-        ("#already-unsubscribed", "You are unsubscribed"),
-        ("#link-not-valid", "This link does not work"),
+        ("#unsubscribed", UNSUBSCRIBED),
+        ("#already-unsubscribed", UNSUBSCRIBED),
+        ("#link-not-valid", NOT_VALID),
         ("#try-again", "Something went wrong"),
         ("", "This link is incomplete"),
         ("#token=short", "This link is incomplete"),
@@ -144,7 +171,7 @@ async def test_the_landing_for_the_unsubscribe_and_for_a_broken_link(
 
 
 @pytest.mark.parametrize("scheme", ["light", "dark"])
-@pytest.mark.parametrize("fragment", [f"#token={TOKEN}", "#unsubscribed"])
+@pytest.mark.parametrize("fragment", [f"#token={TOKEN}", "#unsubscribed", "#link-not-valid", "#try-again"])
 async def test_the_page_is_accessible_in_light_and_dark_on_a_phone(
     page: Page, site: Path, scheme: str, fragment: str
 ) -> None:
@@ -161,13 +188,25 @@ async def test_the_page_is_accessible_in_light_and_dark_on_a_phone(
     assert await page.evaluate("document.documentElement.lang") == "en"
 
 
+async def test_the_unsubscribed_text_says_what_was_deleted_and_what_was_not(page: Page, site: Path) -> None:
+    await open_page(page, site, "#unsubscribed")
+    message = await page.locator("#message").inner_text()
+    assert message == (
+        "We have stopped your email digest at once and deleted your digest filters and history of emailed jobs. "
+        'Your Misra account (stars, "Not for me" choices, and dashboard filters) is unchanged. To delete your entire '
+        'account and all stored data, sign in on the dashboard and choose "Delete my account".'
+    )
+    assert await page.locator("#status").inner_text() == f"{UNSUBSCRIBED}. {message}"
+    await expect(page.locator("#back")).to_have_text("Open Misra dashboard")
+
+
 async def test_the_button_works_from_the_keyboard(page: Page, site: Path) -> None:
     confirm, _ = await open_page(page, site, f"#token={TOKEN}")
     await page.keyboard.press("Tab")
     await page.keyboard.press("Tab")
     assert await page.evaluate("document.activeElement.id") == "confirm"
     await page.keyboard.press("Enter")
-    await expect(page.locator("#heading")).to_have_text("Your email is confirmed")
+    await expect(page.locator("#heading")).to_have_text(CONFIRMED)
     assert len(confirm.requests) == 1
     assert await page.locator("#status").inner_text() != ""  # announced to a screen reader
 
@@ -175,7 +214,7 @@ async def test_the_button_works_from_the_keyboard(page: Page, site: Path) -> Non
 async def test_a_replay_is_told_as_a_confirmation_and_a_double_click_sends_one_request(page: Page, site: Path) -> None:
     confirm, _ = await open_page(page, site, f"#token={TOKEN}", "already")
     await page.dblclick("#confirm")
-    await expect(page.locator("#heading")).to_have_text("Your email is confirmed")
+    await expect(page.locator("#heading")).to_have_text(CONFIRMED)
     assert len(confirm.requests) == 1
     request = confirm.requests[0]
     assert set(request.headers) & {"authorization", "apikey"} == set()  # no key or token but the one in the body

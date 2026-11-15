@@ -14,17 +14,34 @@ const actions = document.getElementById('actions');
 const button = document.getElementById('confirm');
 const back = document.getElementById('back');
 
+const NOT_VALID = [
+  'This link is no longer valid',
+  'It may have already been used, expired, or been replaced by a newer link. To manage your email settings or delete your account, sign in on the Misra dashboard.',
+];
+const UNSUBSCRIBED = [
+  'You have been unsubscribed',
+  'We have stopped your email digest at once and deleted your digest filters and history of emailed jobs. Your Misra account (stars, "Not for me" choices, and dashboard filters) is unchanged. To delete your entire account and all stored data, sign in on the dashboard and choose "Delete my account".',
+];
 const WORDS = {
-  unsubscribed: ['You are unsubscribed', 'No more emails will be sent. Your saved email filters were deleted.'],
-  'already-unsubscribed': ['You are unsubscribed', 'This was done already. No more emails will be sent.'],
-  'link-not-valid': ['This link does not work', 'It is not valid, or it is no longer active. If you still get emails, use the unsubscribe link in the newest one.'],
+  unsubscribed: UNSUBSCRIBED,
+  'already-unsubscribed': UNSUBSCRIBED,
+  'link-not-valid': NOT_VALID,
   'try-again': ['Something went wrong', 'We could not finish this. Please open the link in your email again in a moment.'],
 };
 const CONFIRM_ERRORS = {
-  link_not_valid: ['This link does not work', 'It is not valid, or it is no longer active. Turn the email on again from the dashboard to get a new one.'],
-  link_expired: ['This link has expired', 'Turn the email on again from the dashboard to get a new link.'],
-  unsubscribed: ['You have unsubscribed', 'Turn the email on again from the dashboard if you want it back.'],
+  link_not_valid: NOT_VALID,
+  link_expired: NOT_VALID,
+  unsubscribed: NOT_VALID,
 };
+
+/** The confirmed state. `schedule` is what the function read from the subscription; without it the text stays true. */
+function confirmed(schedule) {
+  const which = schedule === 'daily' || schedule === 'weekly' ? `a ${schedule} email` : 'a daily or weekly email, as you chose,';
+  return [
+    'Your job digest is confirmed',
+    `You will now receive ${which} when new roles match your saved filters. Your first digest will include only roles posted from now on, and you can unsubscribe in one click from any email.`,
+  ];
+}
 
 function show([title, text], { done = true } = {}) {
   heading.textContent = title;
@@ -52,7 +69,7 @@ async function confirm(token) {
     });
     const answer = await response.json().catch(() => ({}));
     if (answer.ok === true) {
-      show(['Your email is confirmed', 'The digest will start with the next new roles that match your filters. Every email has a link to unsubscribe.']);
+      show(confirmed(answer.schedule));
     } else if (CONFIRM_ERRORS[answer.error?.code]) {
       show(CONFIRM_ERRORS[answer.error.code]);
     } else {
@@ -63,8 +80,8 @@ async function confirm(token) {
     button.removeAttribute('aria-busy');
     const text =
       error instanceof Error && error.message === 'server'
-        ? 'Something went wrong on our side. Please press Confirm again in a moment.'
-        : 'We could not reach the service. Check your connection and press Confirm again.';
+        ? 'Something went wrong on our side. Please press the button again in a moment.'
+        : 'We could not reach the service. Check your connection and press the button again.';
     message.textContent = text;
     status.textContent = text;
     console.error('confirm failed:', error instanceof Error ? error.name : 'unknown'); // never the token or the answer
@@ -74,7 +91,7 @@ async function confirm(token) {
 const fragment = readFragment();
 const token = fragment.startsWith('token=') ? fragment.slice('token='.length) : '';
 if (TOKEN.test(token)) {
-  show(['Confirm your email', 'Press the button to start the Misra digest by email. Nothing is sent until you do.'], { done: false });
+  show(['Confirm your email', 'Press the button to start your Misra job digest by email. Nothing is sent until you do.'], { done: false });
   actions.hidden = false;
   button.addEventListener('click', () => {
     void confirm(token);

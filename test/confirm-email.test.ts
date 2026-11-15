@@ -24,6 +24,7 @@ function post(body: unknown, origin: string | null = ALLOWED_ORIGIN, init: Reque
 interface Answer {
   ok: boolean;
   status?: string;
+  schedule?: string;
   error?: { code: string; message: string };
 }
 
@@ -87,12 +88,15 @@ describe('confirming', () => {
     const w = world([ann]);
     const response = await handleConfirm(post({ token: ann.confirmToken }), w.deps);
     expect(response.status).toBe(200);
-    expect(await answer(response)).toEqual({ ok: true, status: 'confirmed' });
+    expect(await answer(response)).toEqual({ ok: true, status: 'confirmed', schedule: 'weekly' });
     expect(response.headers.get('cache-control')).toBe('no-store');
     expect(response.headers.get('access-control-allow-origin')).toBe(ALLOWED_ORIGIN);
     expect(ann.row.confirmedAt).toBe(NOW.toISOString());
-    expect(w.requests).toHaveLength(1);
-    const [request] = w.requests;
+    expect(w.requests).toHaveLength(2);
+    const [request, read] = w.requests;
+    expect(read?.method).toBe('GET'); // the schedule, read after the confirm
+    expect(read?.url).toBe(`${CONFIG.supabaseUrl}/rest/v1/subscriptions?confirm_token_hash=eq.${await hashOf(ann.confirmToken)}&select=frequency&limit=1`);
+    expect(JSON.stringify(read)).not.toContain(ann.confirmToken);
     expect(request?.url).toBe(`${CONFIG.supabaseUrl}/rest/v1/rpc/confirm_subscription`);
     expect(request?.headers.authorization).toBe(`Bearer ${CONFIG.serviceRoleKey}`);
     expect(JSON.parse(request?.body ?? '{}')).toEqual({ p_hash: await hashOf(ann.confirmToken), p_now: NOW.toISOString() });
@@ -106,8 +110,41 @@ describe('confirming', () => {
     const later = world([ann], undefined, new Date('2030-01-03T09:00:00.000Z'));
     const replay = await handleConfirm(post({ token: ann.confirmToken }), later.deps);
     expect(replay.status).toBe(200);
-    expect(await answer(replay)).toEqual({ ok: true, status: 'already_confirmed' });
+    expect(await answer(replay)).toEqual({ ok: true, status: 'already_confirmed', schedule: 'weekly' });
     expect(ann.row.confirmedAt).toBe(NOW.toISOString());
+  });
+
+  it('tells the schedule the subscription has, daily or weekly', async () => {
+    for (const frequency of ['daily', 'weekly'] as const) {
+      const ann = await subscriber({ frequency });
+      const response = await handleConfirm(post({ token: ann.confirmToken }), world([ann]).deps);
+      expect((await answer(response)).schedule).toBe(frequency);
+    }
+  });
+
+  it('still confirms, and only leaves the schedule out, when the schedule cannot be read', async () => {
+    for (const fault of ['schedule-down', 'schedule-500', 'schedule-garbage', 'schedule-odd'] as const) {
+      const ann = await subscriber();
+      const response = await handleConfirm(post({ token: ann.confirmToken }), world([ann], fault).deps);
+      expect(response.status, fault).toBe(200);
+      expect(await response.json(), fault).toEqual({ ok: true, status: 'confirmed' });
+      expect(ann.row.confirmedAt, fault).toBe(NOW.toISOString());
+    }
+  });
+
+  it('leaves the schedule out when the row is gone by the time it is read (an unsubscribe in between)', async () => {
+    const ann = await subscriber();
+    const w = world([ann]);
+    const deps = {
+      ...w.deps,
+      fetch: async (url: string, init: RequestInit) => {
+        const result = await w.fakeFetch(url, init);
+        if (init.method !== 'GET') ann.row.confirmHash = null; // the user unsubscribes right after the confirm
+        return result;
+      },
+    };
+    const response = await handleConfirm(post({ token: ann.confirmToken }), deps);
+    expect(await response.json()).toEqual({ ok: true, status: 'confirmed' });
   });
 
   it('refuses an expired link with a clear answer and confirms nothing', async () => {
@@ -165,10 +202,24 @@ describe('confirming', () => {
     expect(w.fakeFetch).not.toHaveBeenCalled();
   });
 
-  it('never confirms from a GET, a HEAD or any other method, so a mail scanner cannot give consent', async () => {
+  it('answers a HEAD with 200 and no body, and never touches the database (what a link scanner sends)', async () => {
     const ann = await subscriber();
     const w = world([ann]);
-    for (const method of ['GET', 'HEAD', 'PUT', 'DELETE', 'PATCH']) {
+    const request = new Request(`${URL_OF_FUNCTION}?token=${ann.confirmToken}`, { method: 'HEAD' });
+    const response = await handleConfirm(request, w.deps);
+    expect(response.status).toBe(200);
+    expect(await response.text()).toBe('');
+    expect(response.headers.get('cache-control')).toBe('no-store');
+    const noSecrets = await handleConfirm(request, { config: undefined, fetch: w.fakeFetch, now: () => NOW });
+    expect(noSecrets.status).toBe(200);
+    expect(w.fakeFetch).not.toHaveBeenCalled();
+    expect(ann.row.confirmedAt).toBeNull();
+  });
+
+  it('never confirms from a GET or any other method, so a mail scanner cannot give consent', async () => {
+    const ann = await subscriber();
+    const w = world([ann]);
+    for (const method of ['GET', 'PUT', 'DELETE', 'PATCH']) {
       const request = new Request(`${URL_OF_FUNCTION}?token=${ann.confirmToken}&t=${ann.confirmToken}`, {
         method,
         headers: { origin: ALLOWED_ORIGIN },
@@ -176,7 +227,7 @@ describe('confirming', () => {
       const response = await handleConfirm(request, w.deps);
       expect(response.status, method).toBe(405);
       expect(response.headers.get('allow')).toBe('POST, OPTIONS');
-      if (method !== 'HEAD') expect((await answer(response)).error?.code).toBe('method_not_allowed');
+      expect((await answer(response)).error?.code).toBe('method_not_allowed');
     }
     expect(w.fakeFetch).not.toHaveBeenCalled();
     expect(ann.row.confirmedAt).toBeNull();
