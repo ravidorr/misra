@@ -65,7 +65,7 @@ def test_the_privacy_notice_gives_the_rights_to_inspect_correct_and_delete_with_
 
 def test_the_privacy_notice_keeps_the_accurate_points_about_the_providers_own_records() -> None:
     text = read("PRIVACY.md")
-    assert "Supabase keeps them in its own account record" in text
+    assert "Supabase keeps them in its own internal account record" in text
     assert "until the account is deleted" in text
     assert "the caller's IP address" in text  # the provider logs
     assert "Provider logs" in text
@@ -93,13 +93,17 @@ def test_the_terms_say_what_the_lawyer_asked_and_no_more() -> None:
     text = read("TERMS.md")
     for phrase in [
         "free, non-commercial hobby project",
-        "provided as is, without warranties",
+        'provided "as is" and "as available", without warranties',
         "collected automatically from public career pages",
         "do not guarantee that they are accurate, complete or still open",
-        "All trademarks and company names belong to their employers",
+        "All trademarks and company names belong to their respective employers",
         "you accept the [privacy notice](./PRIVACY.md)",
         "third-party infrastructure in the EU and the United States",
-        f"write to <{CONTACT}> and they are removed promptly",
+        f"write to <{CONTACT}> and they will be removed promptly",
+        "not liable for any loss or damage",
+        "personal, non-commercial job searching",
+        "governed by the laws of the State of Israel",
+        "courts of the Tel Aviv District",
     ]:
         assert phrase in text, phrase
     assert re.search(r"^Last updated: \d{4}-\d{2}-\d{2}$", text, flags=re.MULTILINE)
