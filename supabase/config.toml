@@ -25,3 +25,11 @@ verify_jwt = false
 # redeploy would put the gateway's JWT check back and every unsubscribe link would answer 401.
 [functions.unsubscribe]
 verify_jwt = false
+
+# Turning the personalised email on or off needs a signed-in user, so here the gateway checks the access token itself
+# (verify_jwt = true): a request without a valid token never reaches the function. The CORS preflight carries no token;
+# the platform is expected to let OPTIONS requests through its JWT check (the live checks in supabase/README.md confirm
+# it, and if they do not, set this to false: the function asks Supabase Auth who owns the token anyway and takes the
+# user id only from that answer).
+[functions.email-settings]
+verify_jwt = true
