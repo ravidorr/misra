@@ -171,12 +171,12 @@ Decisions made in planning (they change the PRD's wording, so update the PRD in 
   `emailed` rows.
 - [ ] 6.2 Dashboard digest settings: on/off, address (Google email by default), daily or weekly, "Use these filters for
   my email" copying regions, levels, role types and keywords only. Sends the confirmation email through Resend, with the
-  same footer and Reply-To as the digest (the wording is in step 6.3).
+  the lawyer's confirmation wording (subject "Confirm your Misra job alerts"; body: "Someone (hopefully you) turned on the {{schedule}} job digest for {{user_email}} on Misra." with the confirm link, "No emails will be sent unless you click the link above. Once confirmed, your first digest will include only roles that appear after confirmation." and the footer: `Misra (https://ravidorr.github.io/misra/) is a free, non-commercial project run by Raanan Avidor (raanan@avidor.org). If you did not ask for this email, ignore it, and nothing will be sent to you. Privacy: https://github.com/ravidorr/misra/blob/main/PRIVACY.md | Terms: https://github.com/ravidorr/misra/blob/main/TERMS.md`) and Reply-To `raanan@avidor.org`.
   Done when: FR-8 AC 1 to 3 hold.
 - [ ] 6.3 `send_digests.py` replaces the per-recipient logic of `send_email.py`: match each confirmed subscriber's
   filters against jobs first seen after their confirmation, never emailed before, via the new `level`/`role_types`
   columns (this removes the Product-plus-Intern/Junior bug); no email when nothing new; weekly summary; per-user
-  try block; project From address via Resend; unsubscribe link and List-Unsubscribe headers; the footer of every email is exactly this (the lawyer's wording): `You are receiving this email because you signed up for job alerts on Misra (https://ravidorr.github.io/misra/). Misra is a free, non-commercial project. Unsubscribe in one click | Contact: raanan@avidor.org` with "Unsubscribe in one click" being the unsubscribe link; and set Reply-To to `raanan@avidor.org`, because the lawyer said people can reply "Remove" and the sending address `digest@send.avidor.org` cannot receive mail. Coverage-gap content
+  try block; project From address via Resend; unsubscribe link and List-Unsubscribe headers; the confirmation email, the digest footer and the headers are exactly the texts in `supabase/email-texts.md` (copy them line for line, line breaks included); set Reply-To to `raanan@avidor.org`, because the lawyer said people can reply "Remove" and the sending address `digest@send.avidor.org` cannot receive mail; and send these headers in the Resend payload of EVERY digest email (RFC 8058 one-click, as Gmail and Yahoo require): `List-Unsubscribe: <https://dncodqeqpoqwcxdctzco.supabase.co/functions/v1/unsubscribe?token={{raw_token}}>` and `List-Unsubscribe-Post: List-Unsubscribe=One-Click`. The `unsubscribe` function already accepts both GET (a person clicks the footer link) and POST (the mail client's own button), verified live. DESIGN NOTE FOR THIS STEP: step 6.1 stores only the SHA-256 hash of the unsubscribe token, so the sender cannot rebuild the raw link for each email. Solve it before sending: make the unsubscribe token stateless and recomputable, for example `<subscription id>.<HMAC-SHA256(secret, id)>` verified by recomputing the MAC (the same `UNSUBSCRIBE_SECRET` as an Edge Function secret and an Actions secret), and change the `unsubscribe` function and its tests to accept it (no real subscription exists yet, so nothing needs migrating). Coverage-gap content
   never appears in it. Remove `digest.py` selection logic that FR-9 replaces; keep the maintainer failure email on
   `send_alert.py`. The old single-recipient digest keeps running until this path has delivered to the maintainer. Done when: FR-8 AC 4 to 9 and AC 12 (footer) hold in tests, FR-9 AC 9 holds.
 - [ ] 6.4 Daily workflow: add the digest step after the sync with the service-role key and Resend key in that step
@@ -197,7 +197,17 @@ Decisions made in planning (they change the PRD's wording, so update the PRD in 
   published ATS APIs are not treated as pages), and the company exclusion list `data/excluded_companies.csv` (a company
   on it is never crawled, is deleted from `data/jobs.db` and from Supabase `jobs`, `user_jobs` and `emailed`, and is
   off the exports and the coverage card; the process is in `CONTRIBUTING.md`). Still to do before the gate closes: the
-  digest email itself (step 6.3, with its footer), and switching the flag on. The gate stays open.
+  digest email itself (step 6.3, with its footer and headers), the flag, and the present-tense `PRIVACY.md` edits below. The gate stays open.
+  Second lawyer answer (2026-11-15), applied: the `auth.users` sentence in `PRIVACY.md` now says why Supabase keeps
+  Google's name and photo, and `TERMS.md` gained the liability, acceptable-use and governing-law points. Still to do on
+  the day the flag is switched on (the text is true only then, so it is not in `PRIVACY.md` yet): in `PRIVACY.md`, (a)
+  "Why we collect it": "If you turn on the email digest, your email address is also used to send you the job alerts you
+  asked for, and for nothing else."; (b) "Email settings": rewrite the paragraph in the present tense (the address, the
+  filters you copied, daily or weekly, when you turned it on, when you confirmed, when you unsubscribed, the jobs
+  already emailed to you, and what an unsubscribe keeps and deletes); (c) "Resend": "Resend (Ireland): sends the
+  site-report email to the maintainer and, if you turn on the email digest, processes your email address and the
+  matched job links to deliver your confirmation and digest emails." Also on that day, the line "By turning this on you
+  agree to the Terms and the Privacy notice" next to the email control (built in 6.2) must be visible.
 
 ## FR-4 (richer job data)
 

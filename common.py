@@ -32,8 +32,14 @@ HTTP_OK = 200
 HTTP_SERVER_ERROR = 500
 # Hosts and paths a service publishes for programmatic use (an ATS's public job-board API). A blanket `Disallow: /`
 # written for crawlers of pages does not cover them; a rule that names the API path does.
-API_HOSTS = frozenset(
-    {"boards-api.greenhouse.io", "api.lever.co", "api.eu.lever.co", "api.ashbyhq.com", "api.smartrecruiters.com"}
+# THE ONE EXCEPTION we knowingly make: api.smartrecruiters.com answers `User-agent: *` with `Disallow: /` and allows
+# only LinkedInBot under /v1/companies/. We still call it, because its Posting API is documented by SmartRecruiters as
+# the public interface for career sites and programs, not a page to crawl. Five companies depend on it (Armis, Kaltura,
+# Atera, Nexar, ServiceNow). Removing the host from this set skips those five. See CONTRIBUTING.md, "How the crawler
+# behaves". Nothing else may be added here without the same written reason.
+ROBOTS_API_EXCEPTION_HOSTS = frozenset({"api.smartrecruiters.com"})
+API_HOSTS = frozenset({"boards-api.greenhouse.io", "api.lever.co", "api.eu.lever.co", "api.ashbyhq.com"}) | (
+    ROBOTS_API_EXCEPTION_HOSTS
 )
 API_PATHS = ("/api/v1/widget/", "/wday/cxs/", "/hcmRestApi/", "/widgets")
 
@@ -242,7 +248,9 @@ def robots_blocked() -> str:
 
 
 def _request(method: str, url: str, **kw: Any) -> requests.Response | None:
-    if not robots_gate(url):
+    # the address that is actually fetched, query parameters included, is the one robots.txt is asked about
+    full = requests.Request(method, url, params=kw.get("params")).prepare().url or url
+    if not robots_gate(full):
         return None
     return _send(method, url, **kw)
 

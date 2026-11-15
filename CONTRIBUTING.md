@@ -92,6 +92,23 @@ All of these hold after the run:
   `Disallow: /` and allows only `LinkedInBot` under `/v1/companies/`. Armis, Kaltura, Atera, Nexar and ServiceNow use that
   API. They are crawled because the API is documented for programs; removing `api.smartrecruiters.com` from `API_HOSTS`
   in `common.py` would skip those five instead.
+- The SmartRecruiters exception, made knowingly: `api.smartrecruiters.com` answers `User-agent: *` with `Disallow: /`.
+  It is still called, for Armis, Kaltura, Atera, Nexar and ServiceNow, because its Posting API is SmartRecruiters'
+  documented public interface for career sites and programs, not a page. It is the only such host
+  (`ROBOTS_API_EXCEPTION_HOSTS` in `common.py`, pinned by a test); an explicit rule for the API path would still be
+  honoured.
+
+### Known limits
+
+- A `robots.txt` that cannot be fetched (a timeout, a connection error or a 5xx) counts as allowed, and so does a 404
+  or another 4xx. RFC 9309 would treat a 5xx as a full disallow; the lawyer's rule is "respect robots.txt or rate-limit
+  politely", so we choose to keep crawling at one request a second and log the failure.
+- Only the address a request starts from is checked, with its query parameters. Redirects, and requests a browser page
+  makes on its own, are paced but not checked.
+- A company skipped because of `robots.txt` keeps its old jobs open (nothing closes on a skip); the page marks them as
+  possibly old.
+- At most 3 companies with data are removed per run; a list that asks for more stops the daily run until the
+  companies are added in separate runs.
 
 ## Free-tier limits and what we watch
 

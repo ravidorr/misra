@@ -929,3 +929,87 @@ def test_a_robots_skip_between_crawls_does_not_turn_one_failure_into_a_streak(db
     assert digest.coverage_gaps(db) == []
     add_crawls(db, "T", [(0, "boom"), (0, common.ROBOTS_NOTE), (0, "boom")])
     assert [g["company"] for g in digest.coverage_gaps(db)] == ["T"]
+
+
+def test_the_smartrecruiters_api_is_the_only_host_crawled_despite_a_blanket_disallow() -> None:
+    # the one knowingly made exception (see the comment in common.py and CONTRIBUTING.md): adding a host is a decision
+    assert {"api.smartrecruiters.com"} == set(common.ROBOTS_API_EXCEPTION_HOSTS)
+    assert common.ROBOTS_API_EXCEPTION_HOSTS <= common.API_HOSTS
+
+
+def test_the_query_parameters_are_part_of_the_address_robots_txt_is_asked_about(
+    blocked_adapter: list[str],
+) -> None:
+    common._robots["https://a.test"] = [(False, "/*?country=ISR")]
+    assert common.get("https://a.test/jobs", params={"country": "ISR"}) is None
+    assert common.robots_blocked() == "a.test"
+    common.reset_robots_block()
+    assert common.get("https://a.test/jobs", params={"country": "US"}) is not None
+    assert common.get("https://a.test/jobs") is not None
+
+
+def test_a_partly_blocked_adapter_is_a_skip_and_closes_nothing(
+    workdir: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setattr(common, "_s", RobotsSession({}))
+    common._robots["https://paged.test"] = [(False, "/*offset=100")]
+
+    def paged(slug: str) -> Any:  # the first page is allowed, the second is not, and the adapter returns what it has
+        common.get(f"https://{slug}.test/jobs")
+        common.get(f"https://{slug}.test/jobs", params={"offset": 100})
+        return [job("1")]
+
+    monkeypatch.setitem(run.ADAPTERS, "fake", paged)
+    conn = run.init()
+    add_job(conn, "Paged", "old", "Old job")
+    conn.close()
+    write_json(workdir / "data" / "companies.json", [co("Paged")])
+    run.main()
+    assert "skipped by robots.txt 1 ['Paged']" in capsys.readouterr().out
+    check = sqlite3.connect(run.DB)
+    assert check.execute("SELECT status FROM jobs WHERE job_id='old'").fetchone() == ("open",)
+    check.close()
+
+
+def test_main_stops_on_too_many_companies_before_crawling_or_deleting(
+    workdir: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    crawled: list[str] = []
+    monkeypatch.setitem(run.ADAPTERS, "fake", lambda slug: crawled.append(slug) or [])
+    names = ["A1", "B2", "C3", "D4"]
+    conn = run.init()
+    for name in names:
+        add_job(conn, name, "1", "T")
+    add_crawls(conn, "A1", [(1, "")], ats="fake")
+    conn.close()
+    write_json(workdir / "data" / "companies.json", [co(n) for n in names] + [co("Keep")])
+    exclude(workdir, *names)
+    with pytest.raises(ExclusionError, match="refusing to delete the jobs of 4 companies"):
+        run.main()
+    assert crawled == []
+    check = sqlite3.connect(run.DB)
+    assert check.execute("SELECT COUNT(*) FROM jobs").fetchone() == (4,)
+    assert check.execute("SELECT COUNT(*) FROM crawl_log").fetchone() == (1,)
+    check.close()
+
+
+def test_a_delete_that_fails_half_way_is_finished_by_the_next_run(local: sqlite3.Connection) -> None:
+    fake = FakeSupabase()
+    fill(fake, "Acme")
+    real = fake.request
+
+    def flaky(method: str, url: str, **kw: Any) -> FakeHttpResponse:
+        if method == "DELETE" and url.endswith("/jobs"):
+            return FakeHttpResponse(status_code=500, text="boom")
+        return real(method, url, **kw)
+
+    fake.request = flaky  # type: ignore[method-assign]
+    with pytest.raises(sync_supabase.SyncError, match="DELETE jobs failed"):
+        sync_supabase.sync(local, supabase_client(fake), ["Acme"])
+    assert not fake.others["user_jobs"] and not fake.others["emailed"]  # the stars went first
+    assert fake.table  # the jobs are still there, so the next run still sees the company
+    assert not [c for c in fake.calls if c["method"] == "POST"]
+    jobs_left = list(fake.table)
+    fake.request = real  # type: ignore[method-assign]
+    assert sync_supabase.sync(local, supabase_client(fake), ["Acme"]).purged == len(jobs_left)
+    assert not [key for key in fake.table if key[0] == "Acme"]

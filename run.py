@@ -108,8 +108,9 @@ def fetch(co: dict[str, Any]) -> list[dict[str, Any]] | None:
     except Exception as exc:
         WHY[co["slug"]] = f"adapter error: {type(exc).__name__}: {exc}"[:200]
         return None
-    if jobs is None and common.robots_blocked():
+    if common.robots_blocked():  # even a part of the list is not the list: nothing may close on it
         WHY[co["slug"]] = f"{ROBOTS_NOTE} ({common.robots_blocked()})"
+        return None
     return jobs
 
 
