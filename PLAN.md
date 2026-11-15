@@ -194,6 +194,16 @@ Decisions made in planning (they change the PRD's wording, so update the PRD in 
   step 6.3 above and is built there. Still to do before the gate closes: the company exclusion list (a company that asks to be
   removed is deleted and never crawled again), the `robots.txt` check in the crawler, the digest email itself (step 6.3, with
   its footer), and switching the flag on. The gate stays open.
+  Second lawyer answer (2026-11-15), applied: the `auth.users` sentence in `PRIVACY.md` now says why Supabase keeps
+  Google's name and photo, and `TERMS.md` gained the liability, acceptable-use and governing-law points. Still to do on
+  the day the flag is switched on (the text is true only then, so it is not in `PRIVACY.md` yet): in `PRIVACY.md`, (a)
+  "Why we collect it": "If you turn on the email digest, your email address is also used to send you the job alerts you
+  asked for, and for nothing else."; (b) "Email settings": rewrite the paragraph in the present tense (the address, the
+  filters you copied, daily or weekly, when you turned it on, when you confirmed, when you unsubscribed, the jobs
+  already emailed to you, and what an unsubscribe keeps and deletes); (c) "Resend": "Resend (Ireland): sends the
+  site-report email to the maintainer and, if you turn on the email digest, processes your email address and the
+  matched job links to deliver your confirmation and digest emails." Also on that day, the line "By turning this on you
+  agree to the Terms and the Privacy notice" next to the email control (built in 6.2) must be visible.
 
 ## FR-4 (richer job data)
 
