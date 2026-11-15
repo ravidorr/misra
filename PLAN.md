@@ -37,13 +37,14 @@ Decisions made in planning (they change the PRD's wording, so update the PRD in 
 - [ ] 0.1 ~~Create accounts: a free Supabase project, a Google Cloud OAuth client (consent screen limited to email scope),
   a Resend account with a verified project sending address. Store keys as Actions secrets only.~~
   Done except two items: add the Google test user, and verify the Resend sending domain (it will be on avidor.org, not yet verified).
-- [ ] 0.2 Trial and limits (PR: a short `docs/`-free note in `CONTRIBUTING.md`, docs-only so no bump). Check on the
+- [x] ~~0.2 Trial and limits (PR: a short `docs/`-free note in `CONTRIBUTING.md`, docs-only so no bump). Check on the
   day, from the providers' own pages, not from memory: Supabase free database size, pausing after inactivity, backups,
   Edge Function and egress limits; Resend free daily and monthly send limits and whether they are shared with
   `easy-theory`. Compare with the real data: `data/jobs.db` is 2.7 MB, 6,026 open and 2,681 closed jobs, and full
   descriptions will add perhaps 5 to 20 times the text. Done when: the note states the limits, the projected size
   and the pause-prevention plan (the daily sync counts as activity, to be confirmed). Decide here whether the Supabase
-  project can be paused by inactivity and what the dashboard shows when it is.
+  project can be paused by inactivity and what the dashboard shows when it is.~~
+  Done 2026-11-15: the note is in `CONTRIBUTING.md` ("Free-tier limits and what we watch"). Two figures are not confirmed by the providers' pages: whether the daily sync counts as activity (likely, not stated) and how much `easy-theory` uses of the shared Resend quota. The size of the Supabase tables still has to be read once in the Supabase dashboard.
 - [x] ~~0.3 Update `PRD.md` with the decisions above (docs-only). Done when: the Open questions section still says none.~~
   Done 2026-11-15, with the decisions made since (the lawyer outcome, Resend, the account and privacy facts) and a decisions log at the end of the PRD. New acceptance criteria were added at the end of their lists, so existing numbers hold: FR-1 AC 7 (sign-in notice), FR-4 AC 12 (full-text care), FR-8 AC 11 and 12 (consent log, footer).
 
