@@ -24,6 +24,21 @@ All notable changes are documented here. Format follows [Keep a Changelog](https
 - `api.smartrecruiters.com` is no longer crawled. Its `robots.txt` is `User-agent: LinkedInBot` / `Allow: /v1/companies/`, then `User-agent: *` / `Disallow: /`, its documentation says nothing about aggregators, and permission has been asked. `ROBOTS_API_EXCEPTION_HOSTS` in `common.py` is now empty (the mechanism and its docs stay; a written permission is the only reason to add a host back) and every API host goes through the robots gate. Armis, Kaltura, Atera, Nexar and ServiceNow are skipped, not counted as failures (no retry, no alert email) and appear on the coverage gap card with the reason "robots.txt does not allow it".
 - A company skipped because of `robots.txt` on every run for 7 days in a row (`ROBOTS_CLOSE_DAYS`) has its open jobs closed, by the close the run already uses, so the Supabase sync marks them closed and a later crawl reopens them. This replaces the known limit that a skipped company kept its old jobs open forever. The first skipped day is kept in the new table `robots_skips(company, since)` in `data/jobs.db` (`CREATE TABLE IF NOT EXISTS`, so older databases are upgraded in place); any run in which the company is not skipped clears it, and it never applies to failures, excluded companies or a company crawled in the same run. The run logs counts only. The roughly 39 open jobs of the five SmartRecruiters companies close seven days after the first skipped run.
 
+## [0.24.0] - 2026-11-15
+
+### Added
+
+- The privacy notice, the terms and the security note are pages of the site: `docs/privacy.html`, `docs/terms.html` and `docs/security.html`, built by `build_dashboard.py` from `PRIVACY.md`, `TERMS.md` and `SECURITY.md` with `templates/legal.html` (markdown-it-py, pinned `==4.0.0`, a normal dependency). The Markdown stays the source of truth: raw HTML in it is escaped, a heading gets the id GitHub gives it, a relative link to another legal document becomes a link to its page, a link to any other file becomes a link to it on GitHub, and an image or a link out of the repository stops the build. Each page says it is built from the file and links to the file and its history on GitHub. Prose styles in `templates/dashboard.css`.
+- Sync tests (`tests/test_legal_pages.py`): every heading, link target, paragraph and the date line of each document must be on its page, read back with a parser of its own; plus tests of the converter, the template (same Content-Security-Policy as the email page, no inline script or style), the workflows, and axe in light and dark at phone and desktop width.
+- `.github/workflows/publish-docs.yml`: rebuilds `docs/` and pushes it with the deploy key when `PRIVACY.md`, `TERMS.md`, `SECURITY.md`, `templates/`, `design-system/`, `vendor/` or `build_dashboard.py` change on `main`, so an edit to a legal document is on the site in minutes and not at the next daily run. It runs only `build_dashboard.py`, shares the daily workflow's concurrency group, and cannot start itself (its commit changes `docs/` only).
+- `CONTRIBUTING.md`: how the legal pages are built.
+
+### Changed
+
+- The sign-in notice, the footer, the report-form line and the delete dialog link to `privacy.html` and `terms.html` on the site (same tab), not to the Markdown files on GitHub. The email footers in `supabase/email-texts.md`, `PRD.md` and `PLAN.md`, and `llms.txt`, use the site URLs.
+- The daily workflow stages the three new pages and installs the pinned `markdown-it-py`.
+- "Data updated" on the dashboard is the time of the latest crawl (it was the time of the build), so a rebuild over the same data writes the same files.
+
 ## [0.23.0] - 2026-11-18
 
 ### Added

@@ -101,7 +101,7 @@ All of these hold after the run:
   as new. The first skipped day of the streak is kept in the table `robots_skips(company, since)` of `data/jobs.db`
   (created with `CREATE TABLE IF NOT EXISTS`), and a company that is not skipped in a run (crawled, failed another
   way, or off the list) loses its row, so the week starts again. The rule never applies to failures, to excluded
-  companies (they have their own removal path) or to a company crawled in the same run. The run logs counts only.
+  companies (they have their own removal path) or to a name with any other result in the same run (a second board that crawled or failed). The run logs counts only.
 
 ### Known limits
 
@@ -218,6 +218,17 @@ Visitors report a missing company with "Report a site" on the dashboard's covera
 3. **Decline it** when the link is not a careers page, the company has no roles in Israel, or the report looks like spam. Nothing needs to be recorded.
 
 Rows in `data/seed_companies.csv` and `data/unresolved_candidates.csv` are public, so never copy anything from a report beyond the company and its public site.
+
+## The legal pages
+
+The privacy notice, the terms and the security note are on the site as `privacy.html`, `terms.html` and `security.html`. They are generated, never written by hand: `build_dashboard.py` converts `PRIVACY.md`, `TERMS.md` and `SECURITY.md` into `templates/legal.html`.
+
+- **Edit the Markdown, never the HTML.** The Markdown file is the source of truth. A change to `docs/privacy.html` (or to the body of `templates/legal.html`) is overwritten at the next build. Raw HTML in the Markdown is shown as text, not run.
+- **Links.** Write a link to another legal document as `[terms](./TERMS.md)`: it becomes a link to `terms.html` on the site and still works on GitHub. A link to any other file of the repository (`./CONTRIBUTING.md`) becomes a link to it on GitHub. Keep an unambiguous heading: its anchor is the text lowercased with dashes, as on GitHub. No images.
+- **Look at it locally.** `.venv/bin/python build_dashboard.py` writes the pages to `docs/`; open `docs/privacy.html` in a browser. Do not commit the generated files in a PR: the daily run and the `publish-docs` workflow do.
+- **Tests.** `tests/test_legal_pages.py` checks that every heading, link, paragraph and the date line of each document reach its page, so a Markdown file that the build cannot show whole fails the tests. Keep the "Last updated" line (or, in `SECURITY.md`, the "Written ... Next full review due ..." sentence) in its usual form, or update the test with it.
+- **Publishing.** When a Markdown file, `templates/`, `design-system/`, `vendor/` or `build_dashboard.py` changes on `main`, `.github/workflows/publish-docs.yml` rebuilds `docs/` and pushes it with the deploy key, so the site follows within minutes. It waits for the daily run (same concurrency group) and never runs the crawl.
+- **Pages that link to them.** Link to `https://ravidorr.github.io/misra/privacy.html` and `.../terms.html`, not to the Markdown files on GitHub (the repository `README.md` may keep relative links, as people read it on GitHub).
 
 ## Release policy
 

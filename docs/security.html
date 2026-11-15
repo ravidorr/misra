@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; base-uri 'none'; form-action 'none'">
+<meta name="referrer" content="no-referrer">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" media="(prefers-color-scheme: light)" content="#f5f0e6">
+<meta name="theme-color" media="(prefers-color-scheme: dark)" content="#121116">
+<meta name="description" content="How to report a vulnerability in Misra and how the project protects its data.">
+<title>Security - Misra</title>
+<link rel="canonical" href="https://ravidorr.github.io/misra/security.html">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="dashboard.css" integrity="sha384-amXIlzGH9Vt1pEHqp2Z0zsdZTyOPI2MPha1nVGGQYDIJqrNtgAs5ZL3IaXjQ8Wo1">
+<script src="theme.js" integrity="sha384-HYg7XFf1IJXOEgRXtXu8PaIF1+Z+LZWtoEMko63nPxbGA1OeTRN0ULcwPM+r2ONB"></script>
+</head>
+<body>
+<div class="page">
+<header class="top">
+  <span class="top-name"><a class="wordmark" href="./">misra</a></span>
+</header>
+<main class="legal">
+<h1 id="security-policy">Security Policy</h1>
+<h2 id="supported-versions">Supported versions</h2>
+<table>
+<thead>
+<tr>
+<th>Version</th>
+<th>Supported</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Latest <code>main</code></td>
+<td>Yes</td>
+</tr>
+<tr>
+<td>Older</td>
+<td>No</td>
+</tr>
+</tbody>
+</table>
+<h2 id="reporting-a-vulnerability">Reporting a vulnerability</h2>
+<p>Do not open a public issue. Report vulnerabilities privately through GitHub private vulnerability reporting (Security tab, then Report a vulnerability). If that is unavailable, email <a href="mailto:raanan@avidor.org">raanan@avidor.org</a>. Expect an acknowledgement within 3 business days.</p>
+<h2 id="how-misra-protects-its-data">How Misra protects its data</h2>
+<p>Written 2026-11-15 by the maintainer, Raanan Avidor. Next full review due by 2027-11-15. This is the short security note
+that the Israeli Data Security Regulations (2017) expect for a database at the &quot;basic&quot; level (a computerised database
+of email addresses of people outside the owner's own circle). It is public on purpose: the repository is public and so
+are the rules that protect the data.</p>
+<h3 id="what-the-database-holds">What the database holds</h3>
+<ul>
+<li>The email address of each person who signs in with Google, their stars, their &quot;Not for me&quot; choices and their saved
+filters. When the daily email exists: the address it goes to, the filters copied for it, daily or weekly, and a
+consent log (when it was turned on, confirmed and unsubscribed).</li>
+<li>Never a CV, a phone number, a postal address or a password. Google's name and photo sit only in Supabase's own
+sign-in record until the account is deleted. The jobs data is public job postings.</li>
+<li>Where it lives: Supabase (EU, Ireland) for the database, sign-in and Edge Functions; Resend (Ireland) for email;
+Google for sign-in; GitHub for the repository, the dashboard and the daily job. One maintainer runs all of them.</li>
+</ul>
+<h3 id="controls-in-place">Controls in place</h3>
+<ul>
+<li><strong>Access to rows:</strong> row-level security on every table. A signed-in person can read and change only their own rows,
+and the public (anon) key can read open jobs only. The policy tests are in <code>supabase/tests/</code>.</li>
+<li><strong>Secrets:</strong> the service-role key lives only in Supabase's function settings and in GitHub Actions secrets, never in
+the browser or the repository. Other secrets by name: <code>RESEND_API_KEY</code> (limited to sending from <code>send.avidor.org</code>),
+<code>REPORT_TO_EMAIL</code>, <code>IP_HASH_SECRET</code> and the GitHub deploy key. Values are typed into the providers' own pages.</li>
+<li><strong>Accounts:</strong> two-factor sign-in is on for Supabase, GitHub, Resend and Google. Users sign in with Google only: the
+email-and-password provider is switched off. A database hook empties the personal part of the sign-in token.</li>
+<li><strong>Abuse limits:</strong> the report form has a honeypot, a per-visitor daily limit and a daily cap; the email functions have
+per-user, per-address and daily limits.</li>
+<li><strong>Deletion:</strong> a person can delete their account in one step, and every row tied to it is removed at once.</li>
+<li><strong>Transport:</strong> all traffic is HTTPS, and the page's security policy only allows connections to its own files and to
+the Supabase project.</li>
+</ul>
+<h3 id="known-gaps-accepted-for-now">Known gaps (accepted for now)</h3>
+<ul>
+<li>Supabase's free plan has no backups. Before the first daily-email subscriber, upgrade to a plan with backups or build
+the export in plan step 9.1.</li>
+<li>The SQL policy tests are not run in CI.</li>
+<li>Two low-risk Dependabot alerts in development tools (not shipped to users) were open on 2026-11-15.</li>
+<li>One maintainer: no second person for access or recovery.</li>
+</ul>
+<h3 id="yearly-review-by-2027-11-15-then-every-year">Yearly review (by 2027-11-15, then every year)</h3>
+<ol>
+<li>Read Supabase's auth and API logs for odd sign-ins or request patterns.</li>
+<li>List who has access to the Supabase organisation, the GitHub repository (collaborators, deploy keys, tokens) and
+the Resend team, and remove anyone or anything not needed.</li>
+<li>Confirm two-factor sign-in is still on for all four providers.</li>
+<li>Rotate the service-role key and the Resend key, and update the secrets.</li>
+<li>Check Dependabot and CodeQL alerts and update dependencies.</li>
+<li>Re-read <code>PRIVACY.md</code> and <code>TERMS.md</code> against what the product really does.</li>
+</ol>
+<p>Reviews done: none yet.</p>
+<h3 id="if-there-is-a-breach">If there is a breach</h3>
+<ol>
+<li><strong>Contain it:</strong> rotate the service-role key and any exposed secret, disable the affected Edge Function or sign-in
+provider, and fix the hole.</li>
+<li><strong>Find out what was exposed:</strong> which tables, which people, since when (use the provider logs).</li>
+<li><strong>Tell the affected people</strong> by a short, plain email: what was exposed (their email address and saved choices, for
+example), what was done, and how to delete their account. No report to the regulator is required at this level, but
+telling the people is the right thing to do.</li>
+<li><strong>Write it down:</strong> the date, what happened and what was changed. If the database ever grows past the basic level
+(sensitive data, or a very large number of people), ask a lawyer again whether a report to the authority is required.</li>
+</ol>
+
+</main>
+<footer class="legal-foot">
+  <p class="legal-source">This page is built from SECURITY.md (<a href="https://github.com/ravidorr/misra/blob/main/SECURITY.md" target="_blank" rel="noopener noreferrer">source<span class="sr-only"> (opens in a new tab)</span></a> and <a href="https://github.com/ravidorr/misra/commits/main/SECURITY.md" target="_blank" rel="noopener noreferrer">full history<span class="sr-only"> (opens in a new tab)</span></a> on GitHub).</p>
+  <nav class="legal-nav" aria-label="Legal and security">
+    <a href="privacy.html">Privacy</a>
+    <a href="terms.html">Terms</a>
+    <a href="security.html">Security</a>
+  </nav>
+  <p><a class="btn btn-pill" href="./">Open Misra dashboard</a></p>
+</footer>
+</div>
+</body>
+</html>

@@ -22,7 +22,7 @@ No emails will be sent unless you click the link above. Once confirmed, your fir
 ---
 Misra (https://ravidorr.github.io/misra/) is a free, non-commercial project run by Raanan Avidor (raanan@avidor.org), Ditsa 8, Herzliya 4627825, Israel.
 If you did not ask for this email, ignore it, and nothing will be sent to you.
-Privacy: https://github.com/ravidorr/misra/blob/main/PRIVACY.md | Terms: https://github.com/ravidorr/misra/blob/main/TERMS.md
+Privacy: https://ravidorr.github.io/misra/privacy.html | Terms: https://ravidorr.github.io/misra/terms.html
 ```
 
 ## Digest footer
@@ -38,7 +38,7 @@ Unsubscribe in one click (no sign-in needed):
 {{unsubscribe_url}}
 
 To change your filters or delete your account and all stored data immediately, sign in at https://ravidorr.github.io/misra/
-Privacy: https://github.com/ravidorr/misra/blob/main/PRIVACY.md | Terms: https://github.com/ravidorr/misra/blob/main/TERMS.md
+Privacy: https://ravidorr.github.io/misra/privacy.html | Terms: https://ravidorr.github.io/misra/terms.html
 ```
 
 ## Headers of every digest email
