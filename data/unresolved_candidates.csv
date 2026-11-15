@@ -37,9 +37,9 @@ Cognata,cognata.com,https://www.cognata.com,deeptech,no_feed_found,"No ATS link,
 REE Automotive,ree.auto,https://ree.auto/careers/,deeptech,needs_reader,Comeet plugin page: the jobs are only in the page markup
 Gilat,gilat.com,,deeptech,no_careers_url,
 Siklu,siklu.com,,deeptech,no_careers_url,
-Satixfy,satixfy.com,https://mda.space/communications-satellites,deeptech,site_unusable,The page is now an MDA Space page
+Satixfy,satixfy.com,https://satixfy.com,deeptech,site_unusable,The page is now an MDA Space page
 Silicom,silicom.co.il,,deeptech,no_careers_url,
-Elbit Systems,elbitsystems.com,https://www.elbitsystems.com/news,deeptech,site_unusable,Timeout; its careers site is a Hebrew custom site with no feed seen
+Elbit Systems,elbitsystems.com,https://www.elbitsystems.com,deeptech,site_unusable,Timeout; its careers site is a Hebrew custom site with no feed seen
 Line 5,line5.ai,https://line5.ai/careers,deeptech,site_unusable,Needs a login
 Quantum Art,quantum-art.com,https://www.quantum-art.com/careers,deeptech,bot_protection,Access denied (403); the domain was also reported parked
 Sight Diagnostics,sightdx.com,,deeptech,no_careers_url,
@@ -70,18 +70,18 @@ AIR,air.one,,deeptech,no_careers_url,
 Gauzy,gauzy.com,https://www.gauzy.com/careers/,deeptech,needs_reader,Comeet plugin page: the jobs are only in the page markup
 Google,google.com,https://www.google.com/about/careers/applications/,multinational,needs_reader,The results page embeds its data; a worldwide search
 Apple,apple.com,https://www.apple.com/careers/us/,multinational,needs_reader,A script app; its search API redirects
-Meta,meta.com,https://www.metacareers.com/?utm_source=meta.com&utm_medium=redirect,multinational,no_feed_found,No feed found
+Meta,meta.com,https://www.metacareers.com/,multinational,no_feed_found,No feed found
 Intel,intel.com,,multinational,no_careers_url,Blocks plain requests (403); the Workday address guessed is sent to maintenance
 SAP,sap.com,,multinational,no_careers_url,Blocks plain requests (403)
 IBM,ibm.com,https://www.ibm.com/careers,multinational,no_feed_found,No feed found
 eBay,ebay.com,,multinational,no_careers_url,No feed found in the careers page HTML
-AMD,amd.com,https://www.amd.com/en/corporate/careers.html?utm_campaign=careers&utm_medium=redirect&utm_source=301,multinational,needs_reader,"iCIMS board, no adapter yet"
+AMD,amd.com,https://www.amd.com/en/corporate/careers.html,multinational,needs_reader,"iCIMS board, no adapter yet"
 Synopsys,synopsys.com,https://careers.synopsys.com,multinational,needs_reader,"Avature board, no adapter yet"
 Siemens,siemens.com,https://www.siemens.com/en-us/company/jobs/,multinational,site_unusable,No DNS answer for jobs.siemens.com
 Intuit,intuit.com,https://www.intuit.com/careers/,multinational,needs_reader,Radancy search; many jobs show Multiple Locations
 Autodesk,autodesk.com,,multinational,no_careers_url,Blocks plain requests (403); the Workday address guessed is sent to maintenance
 Akamai,akamai.com,,multinational,no_careers_url,Blocks plain requests (403); the Workday address guessed answers 500
-Walmart Global Tech,walmart.com,https://www.walmart.com/blocked?url=L2NhcmVlcnM=&uuid=2cc2e55e-e010-11f1-bf53-a8f655d904a9&vid=&g=b,multinational,site_unusable,Timeout
+Walmart Global Tech,walmart.com,https://careers.walmart.com,multinational,site_unusable,Timeout
 Ford,ford.com,,multinational,no_careers_url,Blocks plain requests (403)
 General Motors,gm.com,https://search-careers.gm.com/en/,multinational,bot_protection,Blocks plain requests (403)
 Western Digital,westerndigital.com,https://www.westerndigital.com/careers,multinational,no_openings,The SmartRecruiters board has no job in Israel today

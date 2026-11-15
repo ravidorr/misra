@@ -224,9 +224,11 @@ def gap_groups(
     page (`no_careers_url`) or when no careers address is known. `companies` is every company of companies.json; it
     gives the address of the failing and robots.txt sites."""
     known = {c["name"]: c for c in [*untracked, *(companies or [])]}
+    # a company that left companies.json for the CSV can still be in the crawl log: its row gives the address
+    rows = {r["name"]: https_only(r.get("careers_url")) or own_site(r.get("domain")) for r in unresolved}
     sites: dict[str, tuple[str, str, str]] = {}
     for gap in blocked:
-        url = careers_address(known.get(gap["c"], {}))
+        url = careers_address(known.get(gap["c"], {})) or rows.get(gap["c"], "")
         if gap["why"].startswith(ROBOTS_NOTE):  # a decision to respect the site, not a failure
             why = robots_why(gap["why"], gap["days"], gap["last"])
             sites.setdefault(gap["c"], ("robots_disallowed", why, url))
@@ -532,7 +534,10 @@ def main() -> None:
             INTEGRITY.sub(lambda m: integrity(out / f"{m[1]}.{m[2]}".lower()), page.read_text(encoding="utf-8")),
             encoding="utf-8",
         )
+    unlinked = [s["c"] for g in groups for s in g["sites"] if not s["url"]]
     print(f"gaps: {[g['c'] for g in gaps['blocked']]} failing, {len(untracked)} untracked, {gaps['total']} in all")
+    if unlinked:  # the tests catch this on the committed data; the daily run has no tests, so it says so here
+        print(f"WARNING: no link for {unlinked}")
     print(
         f"dashboard: {len(jobs)} open jobs, {sum(j['il'] for j in jobs)} in Israel, jobs.json {len(payload) // 1024} KB"
     )

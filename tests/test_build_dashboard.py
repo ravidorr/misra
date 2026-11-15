@@ -688,3 +688,22 @@ def test_the_real_unresolved_csv_has_an_address_for_every_row() -> None:
             assert row["careers_url"] == "", row["name"]  # it has none: the card links the own site
         else:
             assert build_dashboard.https_only(row["careers_url"]) == row["careers_url"] != "", row["name"]
+            assert "?" not in row["careers_url"], row["name"]  # a tracking or block-page address, not a careers page
+            assert not re.search(r"/(blocked|news|press|blog)\b", row["careers_url"]), row["name"]
+
+
+def test_a_blocked_company_that_left_companies_json_links_to_its_csv_row() -> None:
+    blocked = [{"c": "Gone", "why": build_dashboard.BLOCKED_WHY, "last": "never"}]
+    row = {"name": "Gone", "reason": "needs_reader", "note": "", "domain": "gone.test", "careers_url": ""}
+    (group,) = build_dashboard.gap_groups(blocked, [], [row], [])
+    assert [(s["c"], s["url"]) for s in group["sites"]] == [("Gone", "https://gone.test")]
+
+
+def test_main_warns_when_a_site_has_no_link(
+    db: sqlite3.Connection, workdir: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    prepare(workdir)
+    write_json(workdir / "data" / "companies.json", [{"name": "Alpha", "status": "x"}])  # no domain, no careers page
+    db.close()
+    build_dashboard.main()
+    assert "WARNING: no link for ['Alpha']" in capsys.readouterr().out
