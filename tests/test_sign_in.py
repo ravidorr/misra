@@ -411,3 +411,26 @@ async def test_the_header_reads_well_on_a_phone(page: Page, site: Path, signed_i
         assert await page.locator("#accountEmail").evaluate(
             "e => e.scrollWidth > e.clientWidth"
         )  # cut, with an ellipsis
+
+
+async def test_a_session_that_cannot_be_written_is_read_back_from_memory_not_from_the_stale_copy(
+    page: Page, site: Path
+) -> None:
+    """When the storage quota is full the refreshed session lives in memory, and that copy wins over the old one."""
+    await sign_in(page, site)
+    session = json.loads((await stored(page))[STORAGE_KEY])
+    session["expires_at"] = 1  # expired: the next load renews it
+    await page.evaluate("([key, value]) => localStorage.setItem(key, value)", [STORAGE_KEY, json.dumps(session)])
+    await page.add_init_script(
+        "const set = Storage.prototype.setItem;"
+        "Storage.prototype.setItem = function (key, value) {"
+        " if (key === 'misra-auth') throw new DOMException('full', 'QuotaExceededError');"
+        " return set.call(this, key, value); };"
+    )
+    await page.reload()
+    await page.wait_for_selector("#accountUser:not([hidden])")
+    assert await page.locator("#accountEmail").inner_text() == EMAIL
+    assert json.loads((await stored(page))[STORAGE_KEY])["expires_at"] == 1  # the write failed: the old copy remains
+    await page.click("#signOut")  # and the session in memory is the one that signs out and clears both
+    await page.wait_for_selector("#signIn")
+    assert STORAGE_KEY not in await stored(page)

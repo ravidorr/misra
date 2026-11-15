@@ -40,16 +40,18 @@ function scrubbed(value) {
 const memory = new Map();
 const storage = {
   getItem(key) {
+    if (memory.has(key)) return memory.get(key); /* a write that failed is newer than what the storage still holds */
     try {
-      return localStorage.getItem(key) ?? memory.get(key) ?? null;
+      return localStorage.getItem(key);
     } catch {
-      return memory.get(key) ?? null;
+      return null;
     }
   },
   setItem(key, value) {
     const kept = scrubbed(value);
     try {
       localStorage.setItem(key, kept);
+      memory.delete(key);
     } catch {
       memory.set(key, kept);
     }
