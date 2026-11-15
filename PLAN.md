@@ -150,9 +150,9 @@ Decisions made in planning (they change the PRD's wording, so update the PRD in 
 ## FR-8 (personalised digest; the lawyer check is a gate in front of step 6.6)
 
 - [ ] 6.1 Subscriber tables and functions: `subscriptions` (user_id, address, frequency default daily, filters
-  snapshot, confirmed_at, unsubscribed_at, unsubscribe token), `emailed` (user_id, job key) to avoid repeats.
+  snapshot, enabled_at, confirmed_at, unsubscribed_at, unsubscribe token), `emailed` (user_id, job key) to avoid repeats.
   Edge Functions `confirm-email` and `unsubscribe` (one click, no sign-in, token-based). Done when: FR-8 AC 7 first
-  half holds in tests.
+  half and AC 11 (consent log) hold in tests.
 - [ ] 6.2 Dashboard digest settings: on/off, address (Google email by default), daily or weekly, "Use these filters for
   my email" copying regions, levels, role types and keywords only. Sends the confirmation email through Resend.
   Done when: FR-8 AC 1 to 3 hold.
@@ -161,7 +161,7 @@ Decisions made in planning (they change the PRD's wording, so update the PRD in 
   columns (this removes the Product-plus-Intern/Junior bug); no email when nothing new; weekly summary; per-user
   try block; project From address via Resend; unsubscribe link and List-Unsubscribe headers. Coverage-gap content
   never appears in it. Remove `digest.py` selection logic that FR-9 replaces; keep the maintainer failure email on
-  `send_alert.py`. The old single-recipient digest keeps running until this path has delivered to the maintainer. Done when: FR-8 AC 4 to 9 hold in tests, FR-9 AC 9 holds.
+  `send_alert.py`. The old single-recipient digest keeps running until this path has delivered to the maintainer. Done when: FR-8 AC 4 to 9 and AC 12 (footer) hold in tests, FR-9 AC 9 holds.
 - [ ] 6.4 Daily workflow: add the digest step after the sync with the service-role key and Resend key in that step
   only, keep the failure alert, and make the maintainer an ordinary subscriber. Done when: FR-8 AC 10 holds, and a manual run with a test
   subscriber delivers one email and a second run delivers none.
@@ -170,7 +170,7 @@ Decisions made in planning (they change the PRD's wording, so update the PRD in 
 - [ ] 6.6 GATE: the lawyer review from "Before launch" and the addendum, with written answers (answered 2026-11-15; the
   outcome is in the PRD's "Before launch"; the gate stays until its wording is in). Nothing sends to a real
   user, and the sign-up control stays hidden behind a flag, until the answers are in and any required wording is added
-  to the emails and `PRIVACY.md`. Done when: the answers are filed and the flag is switched on.
+  to the emails, `PRIVACY.md`, a new `TERMS.md` (as-is disclaimer) and the notice next to the sign-in button (FR-1 AC 7). Done when: the answers are filed, those four are in, and the flag is switched on.
 
 ## FR-4 (richer job data)
 

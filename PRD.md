@@ -53,7 +53,7 @@ it and they loved it. Their feedback points at eight gaps:
 - Free to run. Supabase (free plan, EU region, Ireland) is the chosen backend: it holds the jobs, user accounts and
   preferences.
 - No server. The project is a daily batch run on GitHub Actions, a static dashboard, and Supabase. Anything that needs a
-  secret runs as a Supabase Edge Function (`report-site` and `delete-account` today; `confirm-email` and `unsubscribe`
+  secret runs as a Supabase Edge Function (`report-site` and `delete-account` today; `confirm-email`, `unsubscribe` and the assistant endpoint
   are planned) or in the daily Actions workflow, and nowhere else. The public (anon) key is not a secret, so row-level
   security is the whole security model for user data: each user can reach only their own rows.
 - Sign-in uses Google, through Supabase, so account security rests on Google.
@@ -287,8 +287,8 @@ see.
 - **Coverage:** the number of sites on the coverage gap card, and the number of sites reported and accepted.
 - **Assistant:** not measured. The assistant reads public data without signing in, so we cannot see who connects or
   how it is used.
-- **Cost:** monthly cost stays at zero. The free-tier limits that could break this are written down, with the
-  upgrade triggers, in `CONTRIBUTING.md` (PLAN.md steps 0.2 and 6.5).
+- **Cost:** monthly cost stays at zero. The free-tier limits that could break this will be written down, with
+  the upgrade triggers, in `CONTRIBUTING.md` (PLAN.md steps 0.2 and 6.5).
 
 The first-minute sign-in experience is not a metric. It is checked once, by hand, as a launch test: sign in on a phone
 and see the stars and discards made on a laptop.
@@ -318,12 +318,12 @@ outcome, in short:
   company on request; respect `robots.txt`.
 
 The wording changes this asks for are in FR-1, FR-4 and FR-8, and `PLAN.md` step 6.6 stays the gate: nothing sends to a
-real user, and the sign-up control stays hidden, until the wording is in the emails and `PRIVACY.md`. The review is
-answered; the gate closes when that wording is in.
+real user, and the sign-up control stays hidden, until the wording is in the emails (footer), `PRIVACY.md`, `TERMS.md` and
+the notice next to the sign-in button. The review is answered; the gate closes when that wording is in.
 
 ## Proposed order (the plan in `PLAN.md` differs, and is the one followed)
 
-`PLAN.md` starts with a backend trial, moves the jobs into Supabase, then the filters that depend on the new columns, then
+`PLAN.md` puts a backend trial first (the coverage card shipped first, as it needs no backend), moves the jobs into Supabase, then the filters that depend on the new columns, then
 accounts and stars, the report-a-site function, the digest, descriptions and the assistant.
 
 1. Sign-in, plus stars and discards that sync (FR-1, FR-2).
@@ -349,8 +349,8 @@ Technical direction agreed so far. These are inputs to the step plan, not requir
 - The backend choice is made: Supabase, project region EU (Ireland), in use since 2026-11-14.
 - Email sending uses Resend, from the sending domain `send.avidor.org` in the Ireland region. Resend replaces Gmail SMTP
   for the digest only; the maintainer's failure alerts (`send_alert.py`) stay on Gmail, so they still work when Resend
-  does not. The site-report function already sends through Resend. The free tier is shared across the apps on that
-  account, including `easy-theory` (the daily limit is written in `CONTRIBUTING.md`, step 0.2), so check the sending
+  does not. The site-report function is written to send through Resend (the sending domain still has to be verified, PLAN.md step 0.1). The free tier is shared across the apps on that
+  account, including `easy-theory` (the daily limit will be written in `CONTRIBUTING.md`, step 0.2), so check the sending
   volume before opening the digest to many subscribers (step 6.5), and move to a larger plan or another sender if it is
   outgrown.
 
@@ -443,5 +443,3 @@ Recorded 2026-11-15, one line per decision, newest last. The first lines were ma
   wording are required; no registration or data protection officer; providers' standard terms accepted; two-factor
   sign-in done; full-text descriptions are a grey area (Before launch, FR-1, FR-4, FR-8). `PLAN.md` step 6.6 stays the
   gate.
-- 2026-11-15: Checked, not changed: the unresolved-sites count in `TODO.md` is 93 and matches the rows of
-  `data/unresolved_candidates.csv`. The PRD names no company count, and no "94" exists in the PRD or the plan.
