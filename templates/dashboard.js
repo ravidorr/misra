@@ -324,9 +324,14 @@ function loadPending(userId) {
   return new Map(entries.filter(([, entry]) => validEntry(entry)));
 }
 
-function savePending(a) {
+/* Saves one change (or, with op null, forgets one) in this browser. It reads what is stored first and touches only that
+   job, so another tab of the same account keeps the changes it has not sent yet. */
+function savePending(a, k, op) {
   const all = lsGet(LS_Q, {});
-  if (a.pending.size > 0) all[a.userId] = Object.fromEntries(a.pending);
+  const mine = all[a.userId] && typeof all[a.userId] === 'object' ? all[a.userId] : {};
+  if (op) mine[k] = op;
+  else Reflect.deleteProperty(mine, k);
+  if (Object.keys(mine).length > 0) all[a.userId] = mine;
   else Reflect.deleteProperty(all, a.userId);
   lsSet(LS_Q, all);
 }
@@ -369,20 +374,23 @@ async function drain(a) {
         scheduleRetry(a);
         return false;
       }
+      /* The notice stays until the user acts again: a later change that is saved must not wipe it. */
       a.failure = error.code === LIMIT_CODE ? 'limit' : 'refused';
       fates.set(op, a.failure);
     } else {
       fates.set(op, 'saved');
-      a.failure = null;
       a.retries = 0;
       if (op.state === null) a.server.delete(k);
       else a.server.set(k, op);
       a.touched.add(k);
     }
-    if (a.pending.get(k) === op) a.pending.delete(k); /* a newer change to the same job stays */
-    savePending(a);
+    if (a.pending.get(k) === op) {
+      a.pending.delete(k); /* a newer change to the same job stays */
+      savePending(a, k, null);
+    }
     if (error) render(); /* the refused choice is gone from the view too */
   }
+  if (a.failure === 'later') a.failure = null;
   return true;
 }
 
@@ -457,7 +465,7 @@ function setChoice(item, state) {
   if (a.failure === 'limit' || a.failure === 'refused') a.failure = null;
   const op = { ...snapshotOf(item), state };
   a.pending.set(k, op);
-  savePending(a);
+  savePending(a, k, op);
   return flush().then(() => {
     const fate = fates.get(op);
     return { saved: fate === 'saved', failure: fate === 'saved' ? null : (fate ?? 'later') };

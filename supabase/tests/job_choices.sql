@@ -25,6 +25,7 @@ $$;
 ----------------------------------------------------------------------------------------------------------------------
 -- The cap: 2,000 rows per user.
 ----------------------------------------------------------------------------------------------------------------------
+insert into public.jobs (company, job_id, status) select 'Cap', n::text, 'open' from generate_series(1, 2003) n;
 select pg_temp.sign_in_as('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa');
 insert into public.user_jobs (user_id, company, job_id, state)
   select 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', 'Cap', n::text, 'discard' from generate_series(1, 2000) n;
@@ -122,14 +123,34 @@ begin
 end $$;
 
 -- A job first written as closed (an upsert that inserts) clears the discards of that job as well.
+insert into public.jobs (company, job_id, status) values ('Acme', '4', 'open');
 select pg_temp.sign_in_as('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa');
 insert into public.user_jobs (user_id, company, job_id, state)
   values ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', 'Acme', '4', 'discard');
 reset role;
+delete from public.jobs where company = 'Acme' and job_id = '4';
 insert into public.jobs (company, job_id, status) values ('Acme', '4', 'closed');
 do $$
 begin
   assert not exists (select 1 from public.user_jobs where company = 'Acme' and job_id = '4'), 'a discard stayed after its job was written as closed';
+end $$;
+
+-- A stale tab or an old offline queue cannot leave a discard behind for a job that is already closed (or unknown) ...
+select pg_temp.sign_in_as('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa');
+insert into public.user_jobs (user_id, company, job_id, state) values
+  ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', 'Acme', '4', 'discard'),
+  ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', 'Acme', '1', 'discard'),
+  ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', 'Nowhere', '9', 'discard');
+-- ... while a star of such a job is kept, and so is the discard of a job that is open.
+insert into public.user_jobs (user_id, company, job_id, state, title)
+  values ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', 'Acme', '4', 'star', 'Gone Role')
+  on conflict (user_id, company, job_id) do update set state = excluded.state;
+reset role;
+do $$
+begin
+  assert not exists (select 1 from public.user_jobs where company = 'Nowhere'), 'a discard of an unknown job was kept';
+  assert (select state from public.user_jobs where company = 'Acme' and job_id = '4') = 'star', 'a star of a closed job was refused';
+  assert (select count(*) from public.user_jobs where company = 'Acme' and job_id = '1' and state = 'discard') = 1, 'the discard of an open job was refused';
 end $$;
 
 -- Editing an open job does not touch anyone's choices.
@@ -147,7 +168,7 @@ declare
   fn text;
   who text;
 begin
-  foreach fn in array array['public.limit_user_jobs()', 'public.drop_discards_of_closed_job()'] loop
+  foreach fn in array array['public.limit_user_jobs()', 'public.drop_discards_of_closed_job()', 'public.skip_discard_of_closed_job()'] loop
     foreach who in array array['anon', 'authenticated'] loop
       assert not has_function_privilege(who, fn, 'execute'), who || ' can run ' || fn;
     end loop;

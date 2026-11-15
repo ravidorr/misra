@@ -210,9 +210,9 @@ REFUSED_BODY = {"code": "23514", "message": "new row violates check constraint"}
 class ChoicesBackend:
     """A stand-in for the `user_jobs` table behind PostgREST, as the signed-in user sees it (row-level security leaves
     them their own rows only): the rows, the writes it accepted, and every request it saw. `mode` breaks it: down
-    (no answer), error (503), expired (401), limit (the database's row limit refuses a new row), refused (any other
-    refusal), load_down (reads fail, writes work). `delay` holds every write that long; `gate`, when set, holds every
-    read until it is set."""
+    (no answer), error (503), expired (401), limit (the database's row limit refuses a new row), limit_star (the limit
+    refuses stars only), refused (any other refusal), load_down (reads fail, writes work). `delay` holds every
+    write that long; `gate`, when set, holds every read until it is set."""
 
     def __init__(self, rows: list[dict[str, Any]] | None = None, mode: str = "ok") -> None:
         self.rows: dict[tuple[str, str], dict[str, Any]] = {(r["company"], r["job_id"]): r for r in rows or []}
@@ -240,7 +240,7 @@ class ChoicesBackend:
             await self.gate.wait()
         if not reading and self.delay:
             await asyncio.sleep(self.delay)
-        failure = self.failure(reading)
+        failure = self.failure(reading, request)
         if failure == "down":
             await route.abort()
         elif failure:
@@ -252,13 +252,14 @@ class ChoicesBackend:
             first, last = self.window(request, len(rows))
             columns = parse_qs(urlparse(request.url).query)["select"][0].split(",")
             body = [{c: r.get(c) for c in columns} for r in rows[first : last + 1]]
-            headers = {**ROWS_CORS, "content-range": f"{first}-{last}/{len(rows)}"}
+            span = f"{first}-{last}" if rows else "*"  # PostgREST says `*/0` for an empty table
+            headers = {**ROWS_CORS, "content-range": f"{span}/{len(rows)}"}
             await route.fulfill(body=json.dumps(body), content_type="application/json", headers=headers)
         else:
             self.write(request)
             await route.fulfill(status=204 if request.method == "DELETE" else 201, headers=ROWS_CORS)
 
-    def failure(self, reading: bool) -> Any:
+    def failure(self, reading: bool, request: Any) -> Any:
         """None when the request goes through, "down", or the (status, body) of the answer."""
         answers: dict[str, Any] = {
             "down": "down",
@@ -269,7 +270,9 @@ class ChoicesBackend:
             return "down"
         if self.mode in answers:
             return answers[self.mode]
-        if not reading and self.mode == "limit":
+        if not reading and (
+            self.mode == "limit" or (self.mode == "limit_star" and '"star"' in (request.post_data or ""))
+        ):
             return 500, LIMIT_BODY  # PostgREST answers class 54 with 500, so the code is what tells it from an outage
         if not reading and self.mode == "refused":
             return 400, REFUSED_BODY

@@ -52,3 +52,28 @@ revoke all on function public.drop_discards_of_closed_job() from public, anon, a
 
 create trigger drop_discards_of_closed_job after insert or update of status on public.jobs
   for each row when (new.status = 'closed') execute function public.drop_discards_of_closed_job();
+
+-- A discard of a job that is not open is meaningless and would never be cleaned up (the close trigger above only fires
+-- when a job is written as closed), so a stale tab or an old offline queue cannot leave one behind: the row is skipped.
+-- It reads public.jobs as the signed-in user, who may read open jobs, which is all this needs. A star is always kept.
+create function public.skip_discard_of_closed_job() returns trigger
+language plpgsql
+set search_path = ''
+as $$
+begin
+  if new.state = 'discard' and not exists (
+    select 1 from public.jobs where company = new.company and job_id = new.job_id and status = 'open'
+  ) then
+    return null;
+  end if;
+  return new;
+end;
+$$;
+
+revoke all on function public.skip_discard_of_closed_job() from public, anon, authenticated;
+
+create trigger skip_discard_of_closed_job before insert or update on public.user_jobs
+  for each row execute function public.skip_discard_of_closed_job();
+
+-- The close trigger looks discards up by job, which the primary key (it starts with user_id) cannot serve.
+create index user_jobs_discards_idx on public.user_jobs (company, job_id) where state = 'discard';

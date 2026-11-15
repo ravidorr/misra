@@ -92,7 +92,8 @@ only the job's key. Two triggers (migration `20261115180000_job_choices_cap_and_
   as a network failure to retry.
 - `drop_discards_of_closed_job` runs on `public.jobs` when a row is written with `status = 'closed'` (the daily sync
   does this) and deletes every user's discard of that job, so discards never pile up and a job that reopens shows again.
-  Stars stay. It does not clean up discards of jobs that were already closed before it was applied; the table is new and
+  Stars stay. `skip_discard_of_closed_job` (before insert or update on `user_jobs`) skips a discard of a job that is not
+  open in `public.jobs`, so none is left behind for a job that has already closed. It does not clean up discards of jobs that were already closed before it was applied; the table is new and
   empty of such rows.
 
 ## Auth settings the page depends on

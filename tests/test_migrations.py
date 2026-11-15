@@ -37,7 +37,9 @@ BACKFILL = (
 )
 
 CREATE_TABLE = re.compile(r"create table public\.(?P<table>\w+) \((?P<body>.*)\)")
-CREATE_INDEX = re.compile(r"create index \w+ on public\.\w+ (?:using gin )?\(\w+\)")
+CREATE_INDEX = re.compile(
+    r"create index \w+ on public\.\w+ (?:using gin )?\(\w+(?:, \w+)*\)(?: where state = 'discard')?"
+)
 ENABLE_RLS = re.compile(r"alter table public\.(?P<table>\w+) enable row level security")
 GRANT = re.compile(r"grant (?P<privs>[a-z, ]+) on public\.(?P<table>\w+) to (?P<roles>[a-z, ]+)")
 REVOKE = re.compile(r"revoke (?P<privs>[a-z, ]+) on public\.(?P<table>\w+) from (?P<roles>[a-z, ]+)")
@@ -508,6 +510,16 @@ def test_a_user_can_keep_a_limited_number_of_job_choices() -> None:
     assert trigger_on("public.user_jobs", "limit_user_jobs").startswith(
         "create trigger limit_user_jobs before insert on"
     )
+
+
+def test_a_discard_of_a_job_that_is_not_open_is_skipped_and_a_star_is_kept() -> None:
+    skip = function_named("skip_discard_of_closed_job")
+    assert not skip["definer"]  # the signed-in user may read open jobs, which is all it looks at
+    assert "new.state = 'discard'" in skip["body"]
+    assert "status = 'open'" in skip["body"]
+    assert "return null" in skip["body"]
+    trigger = trigger_on("public.user_jobs", "skip_discard_of_closed_job")
+    assert "before insert or update on public.user_jobs" in trigger
 
 
 def test_fr2_ac10_a_discard_goes_when_its_job_closes_and_a_star_stays() -> None:

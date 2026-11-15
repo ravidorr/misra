@@ -100,6 +100,10 @@ async def is_saved(page: Page) -> bool:
     return await pending(page) == {}
 
 
+async def only_other_tab_left(page: Page) -> bool:
+    return list(await pending(page)) == ["Acme|2"]
+
+
 async def pending(page: Page) -> dict[str, Any]:
     raw = (await stored(page)).get(PENDING)
     return json.loads(raw).get(USER_ID, {}) if raw else {}
@@ -435,14 +439,6 @@ async def test_fr2_ac10_a_discard_of_a_job_that_is_not_in_the_feed_is_not_counte
     assert await starred_count(page) == "Starred (0)"
 
 
-async def test_fr2_ac10_a_job_that_is_back_in_the_feed_shows_again_when_its_discard_is_gone(
-    page: Page, site: Path
-) -> None:
-    """The database drops a discard when its job closes, so a job that reopens has none: the page shows it."""
-    await sign_in(page, site, ChoicesBackend())  # the table has no discard for Acme|1
-    assert await page.locator(PM1).get_attribute("data-discarded") == "false"
-
-
 async def test_every_row_of_the_account_is_loaded_across_the_page_limit(page: Page, site: Path) -> None:
     rows = [discard_row("Bulk", f"{n:05d}") for n in range(1000)] + [star_row(f"{n:05d}") for n in range(5)]
     choices = ChoicesBackend(rows)
@@ -492,9 +488,9 @@ async def test_the_list_that_arrives_late_does_not_undo_a_choice_confirmed_meanw
     await page.wait_for_selector("#accountUser:not([hidden])")
     await page.click(f"{PM1} [data-act=star]")
     await until(lambda: choices.state_of("Acme", "1") == "star")  # confirmed while the read is still held
-    choices.gate.set()  # the read now answers with the table as it was when it was asked: without the star
-    await until(lambda: len(choices.requests) >= len(("read", "write")))
-    await asyncio.sleep(0.3)
+    async with page.expect_response(lambda r: r.request.method == "GET" and "user_jobs" in r.url):
+        choices.gate.set()  # the read now answers with the table as it was when it was asked: without the star
+    await asyncio.sleep(0.2)  # the page applies the answer
     assert await starred_count(page) == "Starred (1)"
     assert await page.locator(PM1).get_attribute("data-starred") == "true"
 
@@ -762,3 +758,36 @@ async def test_an_assistant_is_told_when_the_row_limit_refused_a_choice(page: Pa
     choices.mode = "ok"
     answer = await ask(page, "star_job", {"id": "Acme|1"})
     assert (answer["starred"], answer["saved"], answer["failure"]) == (True, True, None)
+
+
+async def test_a_refusal_notice_stays_when_a_later_change_in_the_same_batch_is_saved(page: Page, site: Path) -> None:
+    choices = ChoicesBackend()
+    await sign_in(page, site, choices)
+    choices.mode = "down"
+    await page.click(f"{PM1} [data-act=star]")
+    await page.click(f"{PM2} [data-act=toggle]")
+    await expect(page.locator("#syncNote .notice")).to_contain_text("2 changes are not saved")
+    choices.mode = "limit_star"  # the star is refused, the discard after it is accepted
+    await page.click("#syncRetry")
+    await until(lambda: choices.state_of("Acme", "2") == "discard")
+    await expect(page.locator("#syncNote .notice")).to_contain_text("reached the limit")
+    assert await page.locator(PM1).get_attribute("data-starred") == "false"
+
+
+async def test_changes_of_another_tab_of_the_account_are_not_erased_from_the_browser(page: Page, site: Path) -> None:
+    choices = ChoicesBackend()
+    await sign_in(page, site, choices)
+    choices.mode = "down"
+    await page.click(f"{PM1} [data-act=star]")
+    await expect(page.locator("#syncNote .notice")).to_be_visible()
+    other = {"c": "Acme", "i": "2", "t": "", "l": "", "u": None, "state": "star"}
+    await page.evaluate(  # what a second tab of the same account saved meanwhile
+        "([key, user, entry]) => { const all = JSON.parse(localStorage.getItem(key)); all[user]['Acme|2'] = entry;"
+        " localStorage.setItem(key, JSON.stringify(all)); }",
+        [PENDING, USER_ID, other],
+    )
+    choices.mode = "ok"
+    await page.click("#syncRetry")
+    await until(lambda: choices.state_of("Acme", "1") == "star")
+    await until(lambda: only_other_tab_left(page))
+    assert list(await pending(page)) == ["Acme|2"]  # this tab's change is forgotten, the other tab's is kept

@@ -17,6 +17,9 @@ insert into auth.users (id, email, raw_user_meta_data) values
   ('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', 'bob@test.example',
    '{"full_name": "Bob Example", "avatar_url": "https://photos.test/bob.png", "sub": "2222"}');
 
+-- The jobs the choices below are about (a discard of a job that is not open is skipped by a trigger).
+insert into public.jobs (company, job_id, status) values ('Acme', '1', 'open'), ('Acme', '2', 'open');
+
 -- Acting as a signed-in user: the role and the claims PostgREST sets from the user's token.
 create function pg_temp.sign_in_as(who uuid) returns void language plpgsql as $$
 begin
