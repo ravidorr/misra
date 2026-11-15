@@ -83,20 +83,44 @@ describe('turning the email on', () => {
     expect(logged()).toBe('');
   });
 
-  it('writes the email the way the lawyer outcome asks for', () => {
-    const { subject, text } = renderEmail('daily', `${PAGE_URL}#token=abc`);
-    expect(subject).toBe('Confirm your email for Misra job alerts');
-    expect(text).toContain('Someone entered this email address on Misra (https://ravidorr.github.io/misra/)');
-    expect(text).toContain('a daily list of new job postings that match the filters they chose');
-    expect(text).toContain('Nothing is sent until you confirm.');
-    expect(text).toContain('If this was not you, ignore this email. Nothing is sent to this address unless it is confirmed.');
-    expect(text).toContain('works for 7 days');
-    expect(text.trimEnd().split('\n').slice(-2)).toEqual([
-      '--',
-      'Misra (https://ravidorr.github.io/misra/) is a free, non-commercial project. Contact: raanan@avidor.org',
-    ]);
-    expect(renderEmail('weekly', 'x').text).toContain('a weekly list');
+  it('writes the confirmation email exactly as the lawyer worded it', () => {
+    const link = `${PAGE_URL}#token=abc`;
+    const { subject, text } = renderEmail('daily', 'ann@example.test', link);
+    expect(subject).toBe('Confirm your Misra job alerts');
+    expect(text).toBe(
+      [
+        'Confirm your Misra job alerts',
+        '',
+        'Someone (hopefully you) turned on the daily job digest for ann@example.test on Misra.',
+        '',
+        'Click this link to confirm and start receiving new matching roles:',
+        'https://ravidorr.github.io/misra/email.html#token=abc',
+        '',
+        'No emails will be sent unless you click the link above. Once confirmed, your first digest will include only roles that appear after confirmation.',
+        '',
+        '---',
+        'Misra (https://ravidorr.github.io/misra/) is a free, non-commercial project run by Raanan Avidor (raanan@avidor.org).',
+        'If you did not ask for this email, ignore it, and nothing will be sent to you.',
+        'Privacy: https://github.com/ravidorr/misra/blob/main/PRIVACY.md | Terms: https://github.com/ravidorr/misra/blob/main/TERMS.md',
+        '',
+      ].join('\n'),
+    );
+    expect(renderEmail('weekly', 'x@example.test', 'l').text).toContain('turned on the weekly job digest for x@example.test');
     expect(text).not.toContain('<');
+  });
+
+  it('never writes the token to any log line, whatever fails', async () => {
+    for (const fault of ['ok', '400', '500', 'network'] as const) {
+      const w = world();
+      w.mail.fault = fault;
+      await call(w, ANN, turnOn());
+      const token = tokenIn(w.requests.find((r) => r.url.includes('resend'))?.body ?? ''); /* sent, or refused: the request holds it either way */
+      expect(token.length).toBeGreaterThan(20);
+      const all = logged();
+      expect(all).not.toContain(token);
+      expect(all).not.toContain(await hashToken(token));
+      errors.mockClear();
+    }
   });
 
   it('sends to a different address only when the user typed it, and keeps the account email out of it', async () => {

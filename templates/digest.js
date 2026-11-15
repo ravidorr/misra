@@ -193,6 +193,7 @@ if (open && dialog) {
     if (!keepAddress) address.value = view.row && state !== 'unsubscribed' ? view.row.address : (account()?.email ?? view.row?.address ?? '');
     for (const radio of frequencies) radio.checked = radio.value === frequency;
     renderFilters();
+    $('digestConsentTo').textContent = address.value.trim() || account()?.email || 'your address';
     const typed = address.value.trim().toLowerCase();
     const changed = state === 'on' && typed !== '' && typed !== view.row.address.toLowerCase();
     send.hidden = state === 'on' && !changed;
@@ -256,7 +257,8 @@ if (open && dialog) {
     const answer = await response.json().catch(() => null);
     if (response.ok && answer?.ok === true) return { ok: true, body: answer };
     if (response.ok) return { message: MESSAGES.unclear }; /* a 200 that is not the function's answer: never "done" */
-    const key = BY_CODE[answer?.error?.code] ?? BY_STATUS[response.status] ?? 'unclear';
+    const fromFunction = typeof answer?.error?.code === 'string'; /* a gateway's own error says nothing about what the function did */
+    const key = BY_CODE[answer?.error?.code] ?? (fromFunction ? BY_STATUS[response.status] : undefined) ?? 'unclear';
     return { message: MESSAGES[key], fields: key === 'invalid' ? answer?.error?.fields : null };
   }
 
@@ -321,7 +323,7 @@ if (open && dialog) {
         success: (answer) =>
           answer.state === 'on'
             ? 'The email was already on for this address, so nothing was changed and nothing was sent.'
-            : `We sent a confirmation email to ${sentTo}. Open the link in it and press Confirm. Until you do, nothing is sent.${state === 'on' ? ' The email stays paused until then.' : ''}`,
+            : `Check ${sentTo} for a confirmation link. Your ${running() ? view.row.frequency : view.draft.frequency} digest will start only after you click it.${state === 'on' ? ' The email stays paused until then.' : ''}`,
       },
     );
   }

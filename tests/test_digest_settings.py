@@ -299,7 +299,7 @@ async def test_fr8_ac1_turning_it_on_sends_the_choices_and_waits_for_the_confirm
     await signed_in(page, digest_site, world)
     await open_dialog(page)
     await page.click("#digestSend")
-    await expect(page.locator("#digestNote")).to_contain_text(f"We sent a confirmation email to {EMAIL}")
+    await expect(page.locator("#digestNote")).to_contain_text(f"Check {EMAIL} for a confirmation link")
     assert world.calls == [{"action": "turn_on", "address": None, "frequency": "daily", "filters": EMPTY}]
     headers = world.headers()
     assert headers["authorization"].startswith("Bearer ey")  # the user's own access token
@@ -324,13 +324,13 @@ async def test_fr8_ac1_a_different_address_is_sent_as_typed_and_the_google_email
     await open_dialog(page)
     await page.fill("#digestAddress", f"  {OTHER}  ")
     await page.click("#digestSend")
-    await expect(page.locator("#digestNote")).to_contain_text(f"to {OTHER}")
+    await expect(page.locator("#digestNote")).to_contain_text(f"Check {OTHER} for")
     assert world.calls[0]["address"] == OTHER
     assert await page.locator("#digestAddress").input_value() == OTHER
     # typing the Google email again, in capitals, means "my own": the function takes it from the account
     await page.fill("#digestAddress", EMAIL.upper())
     await page.click("#digestSend")
-    await expect(page.locator("#digestNote")).to_contain_text(f"to {EMAIL}")
+    await expect(page.locator("#digestNote")).to_contain_text(f"Check {EMAIL} for")
     assert world.calls[1]["address"] is None
 
 
@@ -350,7 +350,7 @@ async def test_a_bad_address_is_refused_before_anything_is_sent(page: Page, dige
     assert world.function_requests == []
     await page.fill("#digestAddress", EMAIL)  # fixing it clears the message as soon as the value is fine
     await page.click("#digestSend")
-    await expect(page.locator("#digestNote")).to_contain_text("We sent a confirmation email")
+    await expect(page.locator("#digestNote")).to_contain_text("for a confirmation link")
     assert await error.is_hidden()
 
 
@@ -395,7 +395,7 @@ async def test_turning_it_on_again_after_an_unsubscribe_asks_for_a_new_confirmat
     await open_dialog(page)
     assert await state_of(page) == "unsubscribed"
     await page.click("#digestSend")
-    await expect(page.locator("#digestNote")).to_contain_text("We sent a confirmation email")
+    await expect(page.locator("#digestNote")).to_contain_text("for a confirmation link")
     assert await state_of(page) == "waiting"
 
 
@@ -456,7 +456,7 @@ async def test_fr8_ac2_the_button_copies_exactly_regions_levels_role_types_and_k
     await expect(page.locator("#digestNote")).to_contain_text("Copied.")
     assert world.table_requests[-1].method == "GET"  # a draft: nothing is written until the email is turned on
     await page.click("#digestSend")
-    await expect(page.locator("#digestNote")).to_contain_text("We sent a confirmation email")
+    await expect(page.locator("#digestNote")).to_contain_text("for a confirmation link")
     (body,) = world.calls
     assert set(body["filters"]) == {"regions", "levels", "role_types", "keywords"}
     assert body["filters"]["regions"] == ["Tel Aviv area"]
@@ -476,7 +476,7 @@ async def test_fr8_ac2_later_changes_to_the_dashboard_filters_do_not_change_the_
     await open_dialog(page)
     await page.click("#digestUseFilters")
     await page.click("#digestSend")
-    await expect(page.locator("#digestNote")).to_contain_text("We sent a confirmation email")
+    await expect(page.locator("#digestNote")).to_contain_text("for a confirmation link")
     saved = {**EMPTY, "levels": ["Intern"]}
     assert world.row is not None
     assert world.row["filters"] == saved
@@ -535,11 +535,11 @@ async def test_fr8_ac3_daily_is_the_default_and_weekly_is_sent_when_chosen(page:
     await signed_in(page, digest_site, world)
     await open_dialog(page)
     labels = await page.locator(".digest-frequency label").all_inner_texts()
-    assert [t.strip() for t in labels] == ["Every day, when there is something new", "Once a week, as a summary"]
+    assert [t.strip() for t in labels] == ["Daily", "Weekly"]
     assert await page.locator("input[name=digestFrequency][value=daily]").is_checked()
     await page.check("input[name=digestFrequency][value=weekly]")
     await page.click("#digestSend")
-    await expect(page.locator("#digestNote")).to_contain_text("We sent a confirmation email")
+    await expect(page.locator("#digestNote")).to_contain_text("for a confirmation link")
     assert world.calls[0]["frequency"] == "weekly"
     assert await page.locator("input[name=digestFrequency][value=weekly]").is_checked()
 
@@ -586,7 +586,7 @@ async def test_waiting_offers_to_send_the_confirmation_again_and_says_when_the_l
     assert "Waiting for you to confirm" in await page.locator("#digestState").inner_text()
     assert await page.locator("#digestOff").is_visible()
     await page.click("#digestSend")
-    await expect(page.locator("#digestNote")).to_contain_text(f"We sent a confirmation email to {OTHER}")
+    await expect(page.locator("#digestNote")).to_contain_text(f"Check {OTHER} for a confirmation link")
     assert world.calls[0]["address"] == OTHER  # the address of the waiting row, kept
     world.answer = (429, {"code": "rate_limited", "message": "x"})
     await page.click("#digestSend")
@@ -624,7 +624,7 @@ async def test_each_failure_is_explained_and_never_called_a_success(
         assert await page.locator("#digestAddressError").inner_text() == "Enter one email address."
     world.answer = None
     await page.click("#digestSend")  # a retry that works
-    await expect(page.locator("#digestNote")).to_contain_text("We sent a confirmation email")
+    await expect(page.locator("#digestNote")).to_contain_text("for a confirmation link")
     assert await page.locator("#digestError").is_hidden()
 
 
@@ -669,7 +669,7 @@ async def test_a_frequency_changed_while_a_request_runs_goes_back_to_what_the_ac
     await page.click("input[name=digestFrequency][value=weekly]", force=True)
     assert await page.locator("input[name=digestFrequency][value=daily]").is_checked()
     world.gate.set()
-    await expect(page.locator("#digestNote")).to_contain_text("We sent a confirmation email")
+    await expect(page.locator("#digestNote")).to_contain_text("for a confirmation link")
     assert world.calls[0]["frequency"] == "daily"
     assert world.table_requests[-1].method == "GET"  # nothing was saved for the weekly choice
 
@@ -694,7 +694,7 @@ async def test_a_row_that_cannot_be_read_after_an_answer_is_said_too(page: Page,
     await open_dialog(page)
     world.table_mode = "read_error"
     await page.click("#digestSend")
-    await expect(page.locator("#digestNote")).to_contain_text("We sent a confirmation email")
+    await expect(page.locator("#digestNote")).to_contain_text("for a confirmation link")
     await expect(page.locator("#digestError")).to_contain_text("We could not read your email settings")
 
 
@@ -736,7 +736,7 @@ async def test_the_dialog_is_busy_while_it_waits_and_one_click_sends_one_request
     await page.keyboard.press("Escape")
     await expect(page.locator(DIALOG)).to_be_visible()
     world.gate.set()
-    await expect(page.locator("#digestNote")).to_contain_text("We sent a confirmation email")
+    await expect(page.locator("#digestNote")).to_contain_text("for a confirmation link")
     assert len(world.function_requests) == 1
     assert await send.get_attribute("aria-busy") == "false"
 
@@ -752,7 +752,7 @@ async def test_an_answer_is_shown_even_if_the_dialog_was_closed_while_it_waited(
     await expect(page.locator(DIALOG)).to_be_hidden()
     world.gate.set()
     await expect(page.locator(DIALOG)).to_be_visible()
-    await expect(page.locator("#digestNote")).to_contain_text("We sent a confirmation email")
+    await expect(page.locator("#digestNote")).to_contain_text("for a confirmation link")
 
 
 async def test_the_focus_goes_to_the_outcome_when_the_pressed_button_goes_away(page: Page, digest_site: Path) -> None:
@@ -761,7 +761,7 @@ async def test_the_focus_goes_to_the_outcome_when_the_pressed_button_goes_away(p
     await open_dialog(page)
     await page.fill("#digestAddress", OTHER)
     await page.click("#digestSend")
-    await expect(page.locator("#digestNote")).to_contain_text("We sent a confirmation email")
+    await expect(page.locator("#digestNote")).to_contain_text("for a confirmation link")
     assert await page.evaluate("document.activeElement.id") in {"digestSend", "digestNote"}
     world.row = stored("on")
     await page.click("#digestClose")
@@ -878,20 +878,24 @@ async def test_the_dialog_reads_well_on_a_phone_and_every_control_is_big_enough(
     assert await page.evaluate("document.getElementById('digestOpen').getBoundingClientRect().width") > 0
 
 
-async def test_the_agreement_line_sits_by_the_turn_on_button_with_big_links(page: Page, digest_site: Path) -> None:
-    """The lawyer's wording: agreeing to the Terms and the Privacy notice is stated where the email is turned on."""
+async def test_the_lawyers_wording_is_on_the_control_with_big_links(page: Page, digest_site: Path) -> None:
+    """The lawyer's microcopy: the toggle label, the helper text with the address and both links, Daily and Weekly."""
     world = World()
     await page.set_viewport_size(PHONE)
     await signed_in(page, digest_site, world)
     await open_dialog(page)
+    await expect(page.locator("#digestToggleLabel")).to_have_text("Email me new matching roles")
     line = page.locator("#digestConsent")
     await expect(line).to_be_visible()
-    text = await line.inner_text()
-    assert text.startswith("By turning this on you agree to the Terms")
-    assert "and the Privacy notice" in text
+    text = (await line.evaluate("el => el.textContent")).replace(" (opens in a new tab)", "")
+    assert text == (
+        f"We will first send a confirmation link to {EMAIL}. Nothing is sent until you confirm, and you get an email "
+        "only when there are new matches. One-click unsubscribe is in every email. By turning this on you agree to "
+        "the Terms and the Privacy Notice."
+    )
     blob = "https://github.com/ravidorr/misra/blob/main"
     terms = line.get_by_role("link", name="Terms (opens in a new tab)")
-    privacy = line.get_by_role("link", name="Privacy notice (opens in a new tab)")
+    privacy = line.get_by_role("link", name="Privacy Notice (opens in a new tab)")
     assert await terms.get_attribute("href") == f"{blob}/TERMS.md"
     assert await privacy.get_attribute("href") == f"{blob}/PRIVACY.md"
     for link in await line.locator("a").all():
@@ -901,9 +905,24 @@ async def test_the_agreement_line_sits_by_the_turn_on_button_with_big_links(page
         assert size is not None
         assert size["height"] >= TAP
         assert size["width"] >= TAP
-    # it comes right before the buttons, in the form that holds "Turn the email on"
-    assert await page.evaluate(
-        "document.getElementById('digestConsent').nextElementSibling.contains(document.getElementById('digestSend'))"
+    # the helper names the address that is typed, and follows it
+    await page.fill("#digestAddress", OTHER)
+    await expect(page.locator("#digestConsentTo")).to_have_text(OTHER)
+    labels = await page.locator(".digest-frequency label").all_inner_texts()
+    assert [t.strip() for t in labels] == ["Daily", "Weekly"]
+
+
+@pytest.mark.parametrize("word", ["daily", "weekly"])
+async def test_after_turning_it_on_the_status_names_the_address_and_the_schedule(
+    page: Page, digest_site: Path, word: str
+) -> None:
+    world = World()
+    await signed_in(page, digest_site, world)
+    await open_dialog(page)
+    await page.click(f"input[name=digestFrequency][value={word}]")
+    await page.click("#digestSend")
+    await expect(page.locator("#digestNote")).to_have_text(
+        f"Check {EMAIL} for a confirmation link. Your {word} digest will start only after you click it."
     )
 
 
@@ -925,13 +944,13 @@ async def test_the_dialog_works_from_the_keyboard_and_gives_the_focus_back(page:
         seen.append(
             await page.evaluate("const e = document.activeElement; e.id || e.name || e.textContent.slice(0, 5)")
         )
-    # the two agreement links (Terms, Privacy notice) sit right before the buttons
+    # the two agreement links (Terms, Privacy Notice) come with the helper text, before the frequency
     assert seen == [
         "digestAddress",
-        "digestFrequency",
-        "digestUseFilters",
         "Terms",
         "Priva",
+        "digestFrequency",
+        "digestUseFilters",
         "digestClose",
         "digestSend",
     ]
@@ -942,7 +961,7 @@ async def test_the_dialog_works_from_the_keyboard_and_gives_the_focus_back(page:
     await page.keyboard.press("Enter")
     await page.fill("#digestAddress", EMAIL)
     await page.keyboard.press("Enter")  # submitting the form from a field turns it on
-    await expect(page.locator("#digestNote")).to_contain_text("We sent a confirmation email")
+    await expect(page.locator("#digestNote")).to_contain_text("for a confirmation link")
 
 
 async def test_the_page_loads_the_digest_script_from_its_own_origin_with_an_integrity_hash(digest_site: Path) -> None:

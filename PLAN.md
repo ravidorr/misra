@@ -181,9 +181,10 @@ Decisions made in planning (they change the PRD's wording, so update the PRD in 
   `build_dashboard.py` (the page has no button, dialog or script) and the function secret `DIGEST_SIGNUP_ENABLED` (the
   function refuses to create a subscription unless it is `true`). Step 6.6 switches them on (`supabase/README.md`,
   "Daily email"): set `DIGEST_SIGNUP_ENABLED = True` in `build_dashboard.py` and run
-  `supabase secrets set DIGEST_SIGNUP_ENABLED=true --project-ref dncodqeqpoqwcxdctzco`. Next to "Turn the email on" the
-  dialog says "By turning this on you agree to the Terms and the Privacy notice." (the lawyer's last answer), with both
-  links; it exists only when the flag is on.
+  `supabase secrets set DIGEST_SIGNUP_ENABLED=true --project-ref dncodqeqpoqwcxdctzco`. The control carries the lawyer's wording (label "Email me new matching roles", Daily or Weekly, helper text with the
+  address and links to the Terms and the Privacy Notice, and "Check ADDRESS for a confirmation link..." after turning on);
+  the confirmation email is his text verbatim. To close signups again, unset the secret; never set the build constant back
+  to `False` once anyone has subscribed (it also removes "Turn the email off" from the page).
   Remaining checks, live only: apply the migration and record it, deploy `email-settings`, then run the five curl checks of
   `supabase/README.md` ("Check it live", none of them creates a subscription): no token and the publishable key as the bearer
   are 401 from the gateway, the preflight answers 204 with `authorization` allowed (if the gateway refuses it, set

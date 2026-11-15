@@ -42,6 +42,7 @@ export async function identify(deps: Deps, config: Config, token: string, name: 
   }
   if (!response.ok) {
     await response.body?.cancel().catch(() => undefined);
+    console.error(`${name}: the user check answered ${String(response.status)}`); /* a wrong service key looks like this */
     return 'refused';
   }
   const user = (await response.json().catch(() => null)) as { id?: unknown; role?: unknown; email?: unknown } | null;
@@ -49,6 +50,9 @@ export async function identify(deps: Deps, config: Config, token: string, name: 
     console.error(`${name}: the user check answered with something unreadable`);
     return 'down';
   }
-  if (typeof user.id !== 'string' || !UUID.test(user.id) || user.role !== 'authenticated') return 'refused';
+  if (typeof user.id !== 'string' || !UUID.test(user.id) || user.role !== 'authenticated') {
+    console.error(`${name}: the user check answered 200 but not with an authenticated user`);
+    return 'refused';
+  }
   return { id: user.id, email: typeof user.email === 'string' && user.email.trim() ? user.email.trim() : undefined };
 }

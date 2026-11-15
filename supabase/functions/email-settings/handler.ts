@@ -49,7 +49,7 @@ export const CONFIRM_TTL_DAYS = 7;
 export const DEFAULT_FROM = 'Misra <digest@send.avidor.org>';
 /** Replies must reach a real mailbox: the sending address cannot receive mail. */
 export const DEFAULT_REPLY_TO = 'raanan@avidor.org';
-export const SUBJECT = 'Confirm your email for Misra job alerts';
+export const SUBJECT = 'Confirm your Misra job alerts';
 const RESEND_URL = 'https://api.resend.com/emails';
 const REQUEST_TIMEOUT_MS = 10_000;
 const MAIL_SECRETS_MIN_LENGTH = 16;
@@ -129,24 +129,24 @@ export async function hashKey(secret: string, day: string, kind: 'user' | 'addre
 
 // ---- The email -------------------------------------------------------------------------------------------------------
 
-export function renderEmail(frequency: TurnOn['frequency'], link: string): { subject: string; text: string } {
+/** The lawyer's wording, verbatim, with {{schedule}}, {{user_email}} and {{confirm_url}} filled in. */
+export function renderEmail(frequency: TurnOn['frequency'], to: string, link: string): { subject: string; text: string } {
   return {
     subject: SUBJECT,
     text: [
-      'Hello,',
+      'Confirm your Misra job alerts',
       '',
-      `Someone entered this email address on Misra (${PAGE_URL.replace(/email\.html$/u, '')}) to get a ${frequency} list of new job postings that match the filters they chose.`,
+      `Someone (hopefully you) turned on the ${frequency} job digest for ${to} on Misra.`,
       '',
-      'Nothing is sent until you confirm. To confirm, open this link and press the Confirm button:',
-      '',
+      'Click this link to confirm and start receiving new matching roles:',
       link,
       '',
-      `The link works for ${String(CONFIRM_TTL_DAYS)} days.`,
+      'No emails will be sent unless you click the link above. Once confirmed, your first digest will include only roles that appear after confirmation.',
       '',
-      'If this was not you, ignore this email. Nothing is sent to this address unless it is confirmed.',
-      '',
-      '--',
-      'Misra (https://ravidorr.github.io/misra/) is a free, non-commercial project. Contact: raanan@avidor.org',
+      '---',
+      'Misra (https://ravidorr.github.io/misra/) is a free, non-commercial project run by Raanan Avidor (raanan@avidor.org).',
+      'If you did not ask for this email, ignore it, and nothing will be sent to you.',
+      'Privacy: https://github.com/ravidorr/misra/blob/main/PRIVACY.md | Terms: https://github.com/ravidorr/misra/blob/main/TERMS.md',
       '',
     ].join('\n'),
   };
@@ -300,7 +300,7 @@ async function turnOn(origin: string | null, deps: Deps, config: Config, who: Wh
   }
 
   try {
-    await sendConfirmation(deps, mail, address, renderEmail(request.frequency, `${PAGE_URL}#token=${confirm.token}`));
+    await sendConfirmation(deps, mail, address, renderEmail(request.frequency, address, `${PAGE_URL}#token=${confirm.token}`));
   } catch (error) {
     console.error('email-settings: sending failed', error instanceof SendFailure ? error.message : describe(error));
     if (error instanceof SendFailure && error.refused) {

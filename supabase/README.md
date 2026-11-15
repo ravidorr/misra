@@ -518,6 +518,8 @@ lawyer gate of PLAN.md step 6.6 is still to be closed. There are two switches, a
    everything between `<!--digest-->` and `<!--/digest-->` out of the page (the button, the dialog and the script tag) and does
    not write `docs/digest.js` (it also removes one left by an earlier build). Change the constant in a pull request, merge, and
    the next daily build publishes it. `tests/test_build_dashboard.py` tests both values.
+   To close signups again, unset the secret (turning off keeps working without it). Do not set the constant back to `False` once anyone
+   has subscribed: it also removes "Turn the email off" from the page.
 
 Because the function checks its own switch, calling the API directly does not get around the page's flag.
 
@@ -554,11 +556,12 @@ so a digest cannot rebuild an unsubscribe link from what is stored: step 6.3 has
 (step 6.1 documents the unsubscribe token as stable for the life of the row, and replacing it would break the links of earlier emails).
 
 The confirmation email is plain text from `Misra <digest@send.avidor.org>` with `Reply-To: raanan@avidor.org` (the sending address
-cannot receive mail), subject "Confirm your email for Misra job alerts". It says that the address was entered on Misra, what
-will be sent (a daily or weekly list of new job postings that match the chosen filters), that nothing is sent until the link is
-confirmed, that it can be ignored if it was not the reader, the link
-`https://ravidorr.github.io/misra/email.html#token=<token>` (the token in the fragment, as step 6.1 designed) and the footer
-`Misra (https://ravidorr.github.io/misra/) is a free, non-commercial project. Contact: raanan@avidor.org`. The raw token exists only
+cannot receive mail), subject "Confirm your Misra job alerts". The body is the lawyer's wording, verbatim: "Someone (hopefully
+you) turned on the daily (or weekly) job digest for ADDRESS on Misra", the link
+`https://ravidorr.github.io/misra/email.html#token=<token>` (the token in the fragment, as step 6.1 designed), that nothing is sent
+unless the link is clicked and that the first digest holds only roles that appear after confirmation, and a footer naming Misra and
+Raanan Avidor, saying to ignore the email if it was not asked for, with links to the privacy notice and the terms
+(`renderEmail` in `handler.ts`; `test/email-settings.test.ts` pins the whole text). The raw token exists only
 in that email and in the one request to Resend, and is never logged or returned.
 
 ### Who can mail whom, and the limits
