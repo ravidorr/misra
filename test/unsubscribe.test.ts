@@ -52,6 +52,7 @@ describe('a click on the link in the email (GET)', () => {
     expect(response.headers.get('access-control-allow-origin')).toBeNull();
     expect(ann.row.unsubscribedAt).toBe(NOW.toISOString());
     expect(ann.row.filters).toEqual({});
+    expect(ann.row.frequency).toBe('daily');
     expect(ann.row.emailed).toBe(0);
     expect(ann.row.confirmedAt).toBe('2030-01-01T10:00:00.000Z'); // the audit record stays
     const [request] = w.requests;

@@ -61,7 +61,8 @@ begin
   exception when unique_violation then null; end;
   begin insert into public.emailed (user_id, company, job_id) values (ann, '', '2'); assert false, 'an empty company was accepted';
   exception when check_violation then null; end;
-  assert (select updated_at from public.subscriptions where user_id = ann) >= now() - interval '1 minute', 'updated_at is not kept by the trigger';
+  update public.subscriptions set updated_at = timestamptz '2000-01-01' where user_id = ann;
+  assert (select updated_at from public.subscriptions where user_id = ann) > timestamptz '2020-01-01', 'updated_at can be back-dated: the trigger does not keep it';
 end $$;
 
 ----------------------------------------------------------------------------------------------------------------------
@@ -190,6 +191,13 @@ begin
 
   -- confirming one user touches nothing of another's
   assert (select consent_confirmed_at from public.subscriptions where user_id = bob) is null, 'confirming one user confirmed another';
+
+  -- an unsubscribed row says so before anything else: even when it was confirmed, or its link has expired
+  update public.subscriptions set unsubscribed_at = timestamptz '2030-01-03 00:00+00', filters = '{}', consent_confirmed_at = first_time where user_id = bob;
+  assert public.confirm_subscription(repeat('b', 64), first_time) = 'unsubscribed', 'an unsubscribed, confirmed row did not say unsubscribed';
+  update public.subscriptions set consent_confirmed_at = null, confirm_token_expires_at = timestamptz '2030-01-01 00:00+00' where user_id = bob;
+  assert public.confirm_subscription(repeat('b', 64), first_time) = 'unsubscribed', 'an unsubscribed, expired row did not say unsubscribed';
+  update public.subscriptions set unsubscribed_at = null, filters = '{"regions": ["Haifa"]}', confirm_token_expires_at = timestamptz '2030-01-08 10:00+00' where user_id = bob;
 
   -- a row with no expiry never confirms
   update public.subscriptions set confirm_token_expires_at = null where user_id = bob;

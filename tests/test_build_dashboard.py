@@ -423,5 +423,7 @@ def test_every_file_the_build_writes_to_docs_is_staged_by_the_daily_workflow(
     build_dashboard.main()
     built = {f"docs/{p.name}" for p in (workdir / "docs").iterdir()}
     workflow = (Path(__file__).resolve().parents[1] / ".github" / "workflows" / "daily.yml").read_text(encoding="utf-8")
-    staged = set(re.search(r"for f in (data/jobs\.db [^;]+); do", workflow)[1].split()) - {"data/jobs.db"}  # type: ignore[index]
+    found = re.search(r"for f in (data/jobs\.db [^;]+); do", workflow)
+    assert found, "the staging loop of daily.yml was not found"
+    staged = set(found[1].split()) - {"data/jobs.db"}
     assert built == staged

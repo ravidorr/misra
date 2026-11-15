@@ -75,6 +75,9 @@ export async function newToken(
 
 // ---- The database --------------------------------------------------------------------------------------------------
 
+/** A failure this module raises itself, whose message is safe to log (a function name and a status, nothing else). */
+export class DatabaseError extends Error {}
+
 /**
  * Calls a Postgres function through PostgREST as the service role and returns its answer, which must be one of the
  * `allowed` words (the functions return text, which PostgREST sends as a bare JSON string). Any other outcome throws
@@ -99,17 +102,20 @@ export async function callDatabase<Word extends string>(
   });
   if (!response.ok) {
     await response.body?.cancel().catch(() => undefined);
-    throw new Error(`${name} answered ${String(response.status)}`);
+    throw new DatabaseError(`${name} answered ${String(response.status)}`);
   }
-  const answer: unknown = await response.json();
+  const answer: unknown = await response.json().catch(() => {
+    throw new DatabaseError(`${name} gave an answer that is not JSON`);
+  });
   const word = allowed.find((candidate) => candidate === answer);
-  if (word === undefined) throw new Error(`${name} gave an answer this function does not know`);
+  if (word === undefined) throw new DatabaseError(`${name} gave an answer this function does not know`);
   return word;
 }
 
-/** What may be said about a failure: its message when it is one of ours, never anything from a request. */
+/** What may be said about a failure: the message of our own DatabaseError, else only the kind of error. */
 export function describe(error: unknown): string {
-  return error instanceof Error ? error.message : 'unknown';
+  if (error instanceof DatabaseError) return error.message;
+  return error instanceof Error ? error.name : 'unknown';
 }
 
 // ---- Answers -------------------------------------------------------------------------------------------------------

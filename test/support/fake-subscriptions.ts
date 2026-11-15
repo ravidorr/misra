@@ -19,6 +19,7 @@ export interface Row {
   confirmedAt: string | null;
   unsubscribedAt: string | null;
   filters: Record<string, unknown>;
+  frequency: 'daily' | 'weekly';
   emailed: number;
 }
 
@@ -54,6 +55,7 @@ export async function subscriber(overrides: Partial<Row> = {}): Promise<Subscrib
       confirmedAt: null,
       unsubscribedAt: null,
       filters: { levels: ['Intern'] },
+      frequency: 'weekly',
       emailed: 2,
       ...overrides,
     },
@@ -98,6 +100,7 @@ function unsubscribe(rows: Row[], args: { p_hash: string; p_now: string }): stri
   }
   row.unsubscribedAt = args.p_now;
   row.filters = {};
+  row.frequency = 'daily';
   row.confirmHash = null;
   row.confirmExpires = null;
   row.emailed = 0;

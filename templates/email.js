@@ -56,13 +56,18 @@ async function confirm(token) {
     } else if (CONFIRM_ERRORS[answer.error?.code]) {
       show(CONFIRM_ERRORS[answer.error.code]);
     } else {
-      throw new Error('unexpected answer');
+      throw new Error('server');
     }
-  } catch {
+  } catch (error) {
     button.disabled = false;
     button.removeAttribute('aria-busy');
-    status.textContent = 'We could not reach the service. Please press Confirm again.';
-    message.textContent = 'We could not reach the service. Check your connection and press Confirm again.';
+    const text =
+      error instanceof Error && error.message === 'server'
+        ? 'Something went wrong on our side. Please press Confirm again in a moment.'
+        : 'We could not reach the service. Check your connection and press Confirm again.';
+    message.textContent = text;
+    status.textContent = text;
+    console.error('confirm failed:', error instanceof Error ? error.name : 'unknown'); // never the token or the answer
   }
 }
 

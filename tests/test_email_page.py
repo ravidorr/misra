@@ -5,6 +5,7 @@ Locally the tests skip when Chromium is missing; in CI (CI=true) a missing brows
 
 import json
 import mimetypes
+import re
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
@@ -21,6 +22,7 @@ TOKEN = "Abcdefghijklmnopqrstuvwxyz0123456789_-ABCDE"
 CORS = {"access-control-allow-origin": "*", "access-control-allow-headers": "*"}
 ANSWERS = {
     "ok": (200, {"ok": True, "status": "confirmed"}),
+    "already": (200, {"ok": True, "status": "already_confirmed"}),
     "expired": (410, {"ok": False, "error": {"code": "link_expired", "message": "x"}}),
     "unsubscribed": (409, {"ok": False, "error": {"code": "unsubscribed", "message": "x"}}),
     "not_valid": (404, {"ok": False, "error": {"code": "link_not_valid", "message": "x"}}),
@@ -105,11 +107,11 @@ async def test_the_answers_of_the_function_are_told_plainly(page: Page, site: Pa
     await expect(page.locator("#back")).to_be_visible()
 
 
-@pytest.mark.parametrize("mode", ["down", "weird"])
-async def test_a_failure_leaves_the_button_to_try_again(page: Page, site: Path, mode: str) -> None:
+@pytest.mark.parametrize(("mode", "words"), [("down", "reach the service"), ("weird", "on our side")])
+async def test_a_failure_leaves_the_button_to_try_again(page: Page, site: Path, mode: str, words: str) -> None:
     confirm, _ = await open_page(page, site, f"#token={TOKEN}", mode)
     await page.click("#confirm")
-    await expect(page.locator("#message")).to_contain_text("Confirm again")
+    await expect(page.locator("#message")).to_contain_text(words)
     await expect(page.locator("#confirm")).to_be_enabled()
     await expect(page.locator("#heading")).to_have_text("Confirm your email")
     confirm.mode = "ok"
@@ -168,3 +170,32 @@ async def test_the_button_works_from_the_keyboard(page: Page, site: Path) -> Non
     await expect(page.locator("#heading")).to_have_text("Your email is confirmed")
     assert len(confirm.requests) == 1
     assert await page.locator("#status").inner_text() != ""  # announced to a screen reader
+
+
+async def test_a_replay_is_told_as_a_confirmation_and_a_double_click_sends_one_request(page: Page, site: Path) -> None:
+    confirm, _ = await open_page(page, site, f"#token={TOKEN}", "already")
+    await page.dblclick("#confirm")
+    await expect(page.locator("#heading")).to_have_text("Your email is confirmed")
+    assert len(confirm.requests) == 1
+    request = confirm.requests[0]
+    assert set(request.headers) & {"authorization", "apikey"} == set()  # no key or token but the one in the body
+
+
+def test_the_page_knows_every_word_the_functions_send() -> None:
+    """The unsubscribe redirect words and the confirm error codes are literals on both sides: they must agree."""
+    root = Path(__file__).resolve().parents[1]
+    script = (root / "templates" / "email.js").read_text(encoding="utf-8")
+    unsubscribe = (root / "supabase" / "functions" / "unsubscribe" / "handler.ts").read_text(encoding="utf-8")
+    confirm = (root / "supabase" / "functions" / "confirm-email" / "handler.ts").read_text(encoding="utf-8")
+    words = set(re.findall(r"redirectToPage\(\s*'([a-z-]+)'", unsubscribe)) | {
+        "unsubscribed",
+        "already-unsubscribed",
+        "link-not-valid",
+    }
+    assert words == {w for w in words if f"'{w}'" in script or f"{w}:" in script}
+    codes = set(re.findall(r"fail\(origin, 4\d\d, '([a-z_]+)'", confirm)) - {"origin_not_allowed", "method_not_allowed"}
+    assert {c for c in codes if c not in {"unsupported_media_type", "payload_too_large", "invalid_request"}} == {
+        c for c in ("link_not_valid", "link_expired", "unsubscribed") if f"{c}:" in script
+    }
+    assert "/functions/v1/confirm-email" in script
+    assert (root / "supabase" / "functions" / "confirm-email").is_dir()
