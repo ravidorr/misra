@@ -112,6 +112,37 @@ export async function callDatabase<Word extends string>(
   return word;
 }
 
+export type Schedule = 'daily' | 'weekly';
+
+/**
+ * The schedule (`frequency`) of the subscription whose confirmation token has this hash, read with the service role right
+ * after a confirm so the page can say "daily" or "weekly". Best effort by design: it never throws and answers undefined
+ * when the row is not found (for instance the user unsubscribed in between, which clears the hash), the call fails, or the
+ * value is not one we know. The confirmation has already happened; the page then says "daily or weekly" instead of
+ * guessing. The hash is the same one-way value the database function received, and nothing is logged.
+ */
+export async function readSchedule(deps: Deps, config: Config, hash: string): Promise<Schedule | undefined> {
+  try {
+    const response = await deps.fetch(
+      `${config.supabaseUrl}/rest/v1/subscriptions?confirm_token_hash=eq.${hash}&select=frequency&limit=1`,
+      {
+        method: 'GET',
+        headers: { apikey: config.serviceRoleKey, authorization: `Bearer ${config.serviceRoleKey}`, accept: 'application/json' },
+        signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+      },
+    );
+    if (!response.ok) {
+      await response.body?.cancel().catch(() => undefined);
+      return undefined;
+    }
+    const rows: unknown = await response.json().catch(() => undefined);
+    const frequency = Array.isArray(rows) ? (rows[0] as { frequency?: unknown } | undefined)?.frequency : undefined;
+    return frequency === 'daily' || frequency === 'weekly' ? frequency : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 /** What may be said about a failure: the message of our own DatabaseError, else only the kind of error. */
 export function describe(error: unknown): string {
   if (error instanceof DatabaseError) return error.message;
@@ -158,6 +189,16 @@ export function fail(
   headers: Record<string, string> = {},
 ): Response {
   return reply(origin, status, { ok: false, error: { code, message } }, headers);
+}
+
+/** A bare answer with no body, for HEAD: the caller learns the link is alive and nothing is read or changed. */
+export function emptyOk(): Response {
+  return new Response(null, { status: 200, headers: BASE_HEADERS });
+}
+
+/** A plain-text answer (RFC 8058 asks for no particular body; the mailbox provider only reads the status). */
+export function plainText(status: number, text: string): Response {
+  return new Response(text, { status, headers: { ...BASE_HEADERS, 'content-type': 'text/plain; charset=utf-8' } });
 }
 
 /** A redirect that carries no data but a word in the fragment, which no server ever sees. */
