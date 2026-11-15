@@ -6,11 +6,11 @@ with a message and exit code 0, so the daily workflow keeps working until the se
 non-zero, so the workflow's failure alert fires. The service-role key bypasses row-level security: it is sent only in
 request headers, never printed, and exposed only to the sync step of the workflow.
 
-After a good sync the spam-guard counters of the `report-site` function are cleaned: `report_site_cleanup` (a
-database function only the service role may run) deletes the rows of every day before today, so the daily
-non-reversible hash of a network address is gone within a day or so of its day ending, not only when a later report
-happens to be handled. A failed cleanup exits non-zero like a failed sync, so the privacy notice's promise cannot
-silently stop being kept.
+After a good sync (so not on a day the crawl failed) the spam-guard counters of the `report-site` function are
+cleaned: `report_site_cleanup` (a database function only the service role may run) deletes the rows of every day before
+today, so the daily non-reversible hash of a network address is gone within a day or so of its day ending, not only
+when a later report happens to be handled. A failed cleanup exits non-zero like a failed sync, so the privacy notice's
+promise cannot silently stop being kept.
 
 A company on the exclusion list (`data/excluded_companies.csv`) is deleted before anything is sent: its rows in `jobs`,
 and the rows that keep its title and link or its job keys in `user_jobs` (a user's stars and discards) and `emailed`.

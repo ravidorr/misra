@@ -103,6 +103,12 @@ begin
   assert (select sent from public.report_daily_cap where day = current_date) = 1, 'the cleanup changed today''s cap';
   assert public.report_site_cleanup(current_date) = 0, 'a second cleanup deleted something';
   begin
+    perform public.report_site_cleanup(current_date + 1);  -- tomorrow would delete all of today's rows
+    assert false, 'a cleanup of tomorrow was accepted';
+  exception when invalid_parameter_value then
+    null;
+  end;
+  begin
     perform public.report_site_cleanup(date '2999-01-01');
     assert false, 'a cleanup of a day in the future was accepted';
   exception when invalid_parameter_value then

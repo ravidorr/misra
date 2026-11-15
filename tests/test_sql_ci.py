@@ -22,7 +22,7 @@ def test_the_sql_tests_are_a_separate_job_and_the_quality_job_is_untouched() -> 
     jobs = re.findall(r"^  ([\w-]+):\n", CI.split("\njobs:\n", 1)[1], flags=re.MULTILINE)
     assert jobs == ["sql-tests", "quality"]  # the required check keeps its name
     assert "scripts/run-sql-tests.sh" not in job("quality")
-    assert "run-sql-tests.sh postgresql://postgres:postgres@localhost:5432/postgres" in job("sql-tests")
+    assert "run-sql-tests.sh postgresql://postgres@localhost:5432/postgres" in job("sql-tests")
 
 
 def test_the_job_uses_a_postgres_17_service_container_and_waits_for_it() -> None:

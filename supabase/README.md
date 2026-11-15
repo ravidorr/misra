@@ -98,8 +98,8 @@ A stub is not a Supabase project, so it cannot see a difference in a real projec
 in "Apply the migrations" and "Auth settings" still apply. To run the same thing locally against a throwaway database:
 
 ```sh
-docker run -d --rm --name misra-sql -e POSTGRES_PASSWORD=postgres -p 54330:5432 postgres:17-alpine
-scripts/run-sql-tests.sh postgresql://postgres:postgres@localhost:54330/postgres
+docker run -d --rm --name misra-sql -e POSTGRES_HOST_AUTH_METHOD=trust -p 54330:5432 postgres:17-alpine
+scripts/run-sql-tests.sh postgresql://postgres@localhost:54330/postgres
 docker stop misra-sql
 ```
 
@@ -201,12 +201,14 @@ policy and no grant for `anon` or `authenticated`; the two functions that change
 
 Deleting only when a report arrives would leave an old hash in place on a quiet day, so the privacy notice's "expires
 after 24 hours" needs a timer. Migration `20261119100000_report_site_cleanup.sql` adds `report_site_cleanup(p_day date)`: it
-deletes every row of both tables from a day before `p_day` and returns how many it deleted (a day later than tomorrow, or no
+deletes every row of both tables from a day before `p_day` and returns how many it deleted (a day later than today, or no
 day, is refused so a wrong date cannot wipe today's rows; only the service role may run it). `sync_supabase.py` calls it through
 PostgREST (`POST /rest/v1/rpc/report_site_cleanup`, `{"p_day": "<today, UTC>"}`) right after a good sync, in the daily
-workflow's sync step that already holds the service-role key, and logs the count. The workflow runs at 04:30 UTC, so a day's
-rows are deleted 4.5 hours after the day ends at the latest, and a hash lives at most about 28.5 hours (24 hours of its day plus
-the wait for the next run); the hash is useless from the moment the day changes anyway, because its key changes.
+workflow's sync step that already holds the service-role key, and logs the count. The workflow is scheduled for 04:30 UTC, so
+on a normal day a day's rows are deleted about 4.5 hours after the day ends and a hash lives at most about 28.5 hours (24 hours of
+its day plus the wait for the next run). GitHub may start the run late, and on a day the crawl step fails the sync step is skipped,
+so the cleanup waits for the next good run (the failure alert fires). The hash itself is useless from the moment the day changes,
+because its key changes; "expires after 24 hours" in the notice means that, and a lawyer should confirm that reading.
 
 A failed cleanup, including "function not found" when the migration has not been applied, exits the sync step non-zero, so
 the failure alert fires and the subscriber digests of that run are skipped (the jobs were already synced, and the build and

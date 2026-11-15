@@ -768,7 +768,7 @@ def test_the_daily_cleanup_deletes_only_earlier_days_of_the_two_counters_and_ref
     body = cleanup["body"]
     assert "delete from public.report_ip_limits where day < p_day;" in body
     assert "delete from public.report_daily_cap where day < p_day;" in body
-    assert "p_day is null or p_day > current_date + 1" in body  # a wrong date can never wipe today's counters
+    assert "p_day is null or p_day > current_date" in body  # a wrong date can never wipe today's counters
     assert body.count("delete from") == len(REPORT_TABLES)  # one delete per counter table, nothing else
 
 
