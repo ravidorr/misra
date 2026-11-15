@@ -85,14 +85,58 @@ a {
 }
 
 .top-name {
+  flex: 1;
+  min-width: 0;
   margin: 0;
   font-size: var(--text-xl);
   font-weight: 800;
   letter-spacing: -0.04em;
 }
 
-.theme-toggle {
-  margin-inline-start: auto;
+/* Optional sign-in: hidden until auth.js has what it needs, so the page is unchanged without it. The `hidden`
+   attribute loses to the display of .btn, hence the rule. */
+.account,
+.account-user {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.account[hidden],
+.account [hidden] {
+  display: none;
+}
+
+.account .btn {
+  white-space: nowrap;
+}
+
+.account-email {
+  min-width: 0;
+  max-width: 14rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--muted);
+  font-size: 0.875rem;
+}
+
+.auth-message .notice {
+  margin: 0 0 var(--space-4);
+}
+
+/* Narrow screens: the signed-in account (a long email) gets its own row under the logo and the theme button. */
+@media (width < 561px) {
+  .top {
+    flex-wrap: wrap;
+  }
+
+  .account.is-signed-in {
+    order: 1;
+    flex: 1 0 100%;
+    justify-content: flex-end;
+  }
 }
 
 .hero {

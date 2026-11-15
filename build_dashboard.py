@@ -5,6 +5,7 @@ import csv
 import hashlib
 import json
 import re
+import shutil
 import sqlite3
 import time
 from pathlib import Path
@@ -17,14 +18,17 @@ from digest import DB
 # Stylesheets bundled into docs/dashboard.css, in order. Raw colors live only in tokens.css.
 CSS_SOURCES = ("design-system/tokens.css", "design-system/components/*.css", "templates/dashboard.css")
 # Files copied to docs/ as they are.
-STATIC_FILES = ("templates/dashboard.html", "templates/dashboard.js", "templates/theme.js")
+STATIC_FILES = ("templates/dashboard.html", "templates/dashboard.js", "templates/auth.js", "templates/theme.js")
 OUTPUT_NAMES = {"templates/dashboard.html": "index.html"}
+# Third-party scripts copied byte for byte to docs/ (vendor/README.md says where each one comes from). The page loads
+# them from its own origin, so the Content-Security-Policy needs no CDN.
+VENDORED_FILES = ("vendor/supabase.js",)
 # Placeholders in the page for the integrity hash of the file with that name in docs/.
 INTEGRITY = re.compile(r"__SRI_([A-Z]+)_([A-Z]+)__")
 
 # The backend the page reads the jobs from: the one place for the project URL and the PUBLIC anon key. Row-level
 # security lets the anon key read open jobs only, so the key may live in docs/. The build puts both values into the
-# page script and the URL into the page's connect-src; later steps (sign-in, stars) read them from there too.
+# page scripts (dashboard.js and auth.js) and the URL into the page's connect-src; later steps (stars) read them too.
 # Never put the service-role key here.
 SUPABASE_URL = "https://dncodqeqpoqwcxdctzco.supabase.co"
 SUPABASE_ANON_KEY = "sb_publishable_9gvh4YdsfErlFsgJfmNexQ_yHF-XwnA"
@@ -227,6 +231,8 @@ def main() -> None:
         text = text.replace("__SUPABASE_URL__", SUPABASE_URL).replace("__SUPABASE_ANON_KEY__", SUPABASE_ANON_KEY)
         text = text.replace("__PAGE_DATA__", page_data)
         (out / OUTPUT_NAMES.get(source, Path(source).name)).write_text(text, encoding="utf-8")
+    for source in VENDORED_FILES:
+        shutil.copyfile(source, out / Path(source).name)
     page = out / "index.html"
     # __SRI_DASHBOARD_CSS__ becomes the integrity hash of docs/dashboard.css; one pass over the page
     page.write_text(

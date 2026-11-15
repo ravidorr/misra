@@ -2,6 +2,22 @@
 
 All notable changes are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses [Semantic Versioning](https://semver.org/).
 
+## [0.17.0] - 2026-11-15
+
+### Added
+
+- Optional Google sign-in and sign-out in the page header (PLAN.md step 4.1, FR-1). A visitor who does not sign in sees the dashboard exactly as before: the sign-in control is hidden until `templates/auth.js` has what it needs, and a blocked or failing sign-in can never stop the roles from loading. There is no password anywhere: "Sign in" sends the browser to Google through Supabase (`/auth/v1/authorize?provider=google`, one-time code flow) and back to the page; the header then shows the email and "Sign out". A cancelled or failed sign-in shows a clear message, never the words from the address bar. The control is small, uses the existing button tokens, keeps 44px targets, and puts the signed-in email on its own row on a phone.
+- `supabase-js` 2.118.0, vendored unmodified in `vendor/supabase.js` (provenance, hash and update steps in `vendor/README.md`) and served from the page's own origin with a Subresource Integrity hash computed by the build, so the Content-Security-Policy gains no CDN and no new `connect-src`. `build_dashboard.py` copies it and the new `auth.js` to `docs/`; the daily workflow commits both.
+- The page never shows what Google sends besides the email (name, photo), and the session it saves has the provider metadata and identities stripped from the user, and Google's own access and refresh tokens dropped, every time it is written (also when the token renews). The signed access token is saved as issued: Supabase puts the name and photo in it as the `user_metadata` claim, which the page cannot edit, so the migration adds `public.custom_access_token_hook` (empties that claim, runnable only by Supabase Auth). It has no effect until it is switched on in the Supabase dashboard (Authentication, Auth Hooks).
+- Migration `20261115120000_accounts_prefs_and_job_choices.sql`: `profiles` (user id and email only, filled by a `security definer` trigger on `auth.users` that reads `new.email` and nothing else, so no name, photo or provider id reaches `public`), the access token hook, `user_prefs` (filters and email settings as size-limited JSON objects, for steps 4.3 and 6.2) and `user_jobs` (one row per user and job with a single `state` of `star` or `discard`, so a job cannot be both, and the title, location and link kept on the row for steps 4.2). Row-level security on all three with own-rows-only policies (`(select auth.uid()) = user_id`) for select, insert, update and delete, nothing for `anon`, minimal grants, and `on delete cascade` from `auth.users` so deleting an account removes everything in one step.
+- `supabase/tests/accounts_rls.sql`: policy tests to run against a test project or a local database (a second account cannot read, change or delete the first one's rows; nothing for `anon`; the profile holds only the email; the hook empties `user_metadata`; cascade delete). `supabase/README.md` says how to run them and what stays in `auth`.
+
+### Changed
+
+- `tests/test_migrations.py` learns functions, triggers and the own-row policies and stays strict: row-level security and a full revoke on every table, nothing for `anon` but the open jobs, only the listed privileges for `authenticated`, every user policy tests the own row, every function pins its search path and is closed to the public roles, only the profile copy may run on `auth.users`, no function reads provider metadata and no column holds personal data other than the email. New browser tests in `tests/test_sign_in.py` cover FR-1 AC 1, 2 and 6.
+- The daily workflow also commits `docs/auth.js` and `docs/supabase.js`. ESLint and lint-staged skip `vendor/`; `.gitattributes` marks `vendor/supabase.js` as vendored and hides it from diffs.
+- `PRIVACY.md` gets an interim paragraph about the optional sign-in; step 4.4 rewrites it in full. It says plainly that Google's name and photo still reach Supabase's own sign-in service (`auth.users`, `auth.identities`), which this migration does not rewrite; they stay out of `public`, out of the page and, once the hook is on, out of the access token.
+
 ## [0.16.0] - 2026-11-15
 
 ### Changed

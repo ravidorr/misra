@@ -94,11 +94,16 @@ Decisions made in planning (they change the PRD's wording, so update the PRD in 
 
 ## FR-1 and FR-2 (accounts, stars, discards, filters)
 
-- [ ] 4.1 Auth: Google sign-in and sign-out with supabase-js (pinned version, SRI, vendored or CDN allowed by the CSP),
+- [x] ~~4.1 Auth: Google sign-in and sign-out with supabase-js (pinned version, SRI, vendored or CDN allowed by the CSP),
   optional, signed-out dashboard unchanged. Trigger or DB rule that keeps only the email and discards name and photo
   from the provider metadata. Tables `user_prefs` (filters, email settings) and `user_jobs` (star or discard, job
   keys), RLS with `auth.uid() = user_id`, tests for the policies (pgTAP or a script against a test project).
-  Done when: FR-1 AC 1 to 3 and 6 hold and a second account cannot read the first one's rows.
+  Done when: FR-1 AC 1 to 3 and 6 hold and a second account cannot read the first one's rows.~~
+  Remaining check, live only: apply the migration (`supabase/README.md`), enable the Google provider (live
+  `/auth/v1/settings` said `google: false` on 2026-11-15) and switch the Email provider off, switch on the access token
+  hook, set the Auth redirect URLs, complete one real sign-in, confirm `public.profiles` holds only your email and the
+  access token's `user_metadata` is `{}`, and run `supabase/tests/accounts_rls.sql` against a test project. These need the maintainer's Google login and the Supabase
+  dashboard.
 - [ ] 4.2 Stars and discards sync: star button and starred list on the card, star and discard mutually exclusive, local
   queue when offline or the backend fails (no loss), merge on sign-in. Closed-job rules: starred job kept with a
   "no longer listed" mark (needs title, company, location and link kept on the star row), discard removed when its
