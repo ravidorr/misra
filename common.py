@@ -8,7 +8,7 @@ from urllib.parse import unquote, urlsplit
 
 import requests
 
-VERSION = "0.25.1"  # equal to the version in package.json and pyproject.toml (a test checks it)
+VERSION = "0.26.0"  # equal to the version in package.json and pyproject.toml (a test checks it)
 SITE_URL = "https://ravidorr.github.io/misra/"
 CONTACT = "raanan@avidor.org"
 ROBOTS_TOKEN = "Misra"  # the product token that robots.txt groups name
@@ -26,18 +26,20 @@ DROP_BELIEVED = f"drop believed after {DROP_HOLD_DAYS} held days"  # note prefix
 # robots.txt (the lawyer's answer, PLAN.md step 6.6). One switch: False logs what would be skipped and skips nothing.
 ROBOTS_ENFORCED = True
 ROBOTS_NOTE = "robots.txt does not allow it"  # crawl log note prefix of a company skipped because of robots.txt
+ROBOTS_CLOSE_DAYS = 7  # a company skipped by robots.txt on every run for this many days gets its open jobs closed
 ROBOTS_TIMEOUT = 10
 ROBOTS_MAX_BYTES = 500 * 1024  # RFC 9309: a parser reads at least the first 500 KiB
 HTTP_OK = 200
 HTTP_SERVER_ERROR = 500
 # Hosts and paths a service publishes for programmatic use (an ATS's public job-board API). A blanket `Disallow: /`
 # written for crawlers of pages does not cover them; a rule that names the API path does.
-# THE ONE EXCEPTION we knowingly make: api.smartrecruiters.com answers `User-agent: *` with `Disallow: /` and allows
-# only LinkedInBot under /v1/companies/. We still call it, because its Posting API is documented by SmartRecruiters as
-# the public interface for career sites and programs, not a page to crawl. Five companies depend on it (Armis, Kaltura,
-# Atera, Nexar, ServiceNow). Removing the host from this set skips those five. See CONTRIBUTING.md, "How the crawler
-# behaves". Nothing else may be added here without the same written reason.
-ROBOTS_API_EXCEPTION_HOSTS = frozenset({"api.smartrecruiters.com"})
+# The mechanism for a host that has WRITTEN permission to be called despite a blanket `Disallow: /`. It is empty on
+# purpose. api.smartrecruiters.com was the only entry: it answers `User-agent: *` with `Disallow: /` and allows only
+# LinkedInBot under /v1/companies/, its documentation says nothing about aggregators, and the maintainer has asked
+# SmartRecruiters for permission. Until that is given the host goes through the robots gate like any other, and its five
+# companies (Armis, Kaltura, Atera, Nexar, ServiceNow) are skipped. A written permission from the host's owner is the
+# only reason to add a host back here. See CONTRIBUTING.md, "How the crawler behaves".
+ROBOTS_API_EXCEPTION_HOSTS: frozenset[str] = frozenset()
 API_HOSTS = frozenset({"boards-api.greenhouse.io", "api.lever.co", "api.eu.lever.co", "api.ashbyhq.com"}) | (
     ROBOTS_API_EXCEPTION_HOSTS
 )

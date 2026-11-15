@@ -258,12 +258,13 @@ def test_the_robots_parser(robots: str, url: str, expected: bool) -> None:
     ("robots", "url", "expected"),
     [
         # a blanket Disallow is written for pages: the published API is still fetched
-        ("User-agent: *\nDisallow: /\n", "https://api.smartrecruiters.com/v1/companies/x/postings", True),
         ("User-agent: *\nDisallow: /*\n", "https://boards-api.greenhouse.io/v1/boards/x/jobs", True),
         ("User-agent: *\nDisallow: /\n", "https://x.wd5.myworkdayjobs.com/wday/cxs/x/y/jobs", True),
         ("User-agent: *\nDisallow: /\n", "https://apply.workable.com/api/v1/widget/accounts/x", True),
         ("User-agent: *\nDisallow: /\n", "https://x.fa.oraclecloud.com/hcmRestApi/resources/latest/r", True),
         ("User-agent: *\nDisallow: /\n", "https://careers.cisco.com/widgets", True),
+        # a host that is not in API_HOSTS has no exemption: SmartRecruiters' blanket Disallow stops it
+        ("User-agent: *\nDisallow: /\n", "https://api.smartrecruiters.com/v1/companies/x/postings", False),
         # but a rule that names the API path is honoured
         ("User-agent: *\nDisallow: /v1/\n", "https://api.smartrecruiters.com/v1/companies/x/postings", False),
         ("User-agent: *\nDisallow: /wday/\n", "https://x.wd5.myworkdayjobs.com/wday/cxs/x/y/jobs", False),
@@ -931,10 +932,308 @@ def test_a_robots_skip_between_crawls_does_not_turn_one_failure_into_a_streak(db
     assert [g["company"] for g in digest.coverage_gaps(db)] == ["T"]
 
 
-def test_the_smartrecruiters_api_is_the_only_host_crawled_despite_a_blanket_disallow() -> None:
-    # the one knowingly made exception (see the comment in common.py and CONTRIBUTING.md): adding a host is a decision
-    assert {"api.smartrecruiters.com"} == set(common.ROBOTS_API_EXCEPTION_HOSTS)
-    assert common.ROBOTS_API_EXCEPTION_HOSTS <= common.API_HOSTS
+def test_no_host_is_exempt_from_a_blanket_disallow_until_one_has_written_permission() -> None:
+    # the mechanism stays, the set is empty (see common.py and CONTRIBUTING.md): adding a host is a decision
+    assert set(common.ROBOTS_API_EXCEPTION_HOSTS) == set()
+    assert "api.smartrecruiters.com" not in common.API_HOSTS
+    assert {"boards-api.greenhouse.io", "api.lever.co", "api.eu.lever.co", "api.ashbyhq.com"} == set(common.API_HOSTS)
+
+
+SMARTRECRUITERS_ROBOTS = "User-agent: LinkedInBot\nAllow: /v1/companies/\nUser-agent: *\nDisallow: /\n"
+
+
+def test_a_company_on_smartrecruiters_is_skipped_for_robots_txt_not_failed(
+    workdir: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    session = RobotsSession({"https://api.smartrecruiters.com": FakeHttpResponse(text=SMARTRECRUITERS_ROBOTS)})
+    monkeypatch.setattr(common, "_s", session)
+    monkeypatch.setattr(common, "_load_robots", REAL_LOAD_ROBOTS)
+    slept: list[float] = []
+    monkeypatch.setattr(run.time, "sleep", slept.append)
+    conn = run.init()
+    add_job(conn, "Armis", "old", "Old job")
+    conn.close()
+    write_json(workdir / "data" / "companies.json", [co("Armis", ats="smartrecruiters", slug="armis")])
+    run.main()
+    out = capsys.readouterr().out
+    assert "failed 0 []" in out
+    assert "skipped by robots.txt 1 ['Armis']" in out
+    assert slept == []  # no retry
+    assert not [u for u in session.urls if "/v1/companies/" in u]  # the postings were never requested
+    check = sqlite3.connect(run.DB)
+    ((ok, note),) = check.execute("SELECT ok, note FROM crawl_log").fetchall()
+    assert ok == 0
+    assert note == f"{ROBOTS_NOTE} (api.smartrecruiters.com)"
+    assert check.execute("SELECT status FROM jobs WHERE company='Armis'").fetchone() == ("open",)  # not before 7 days
+    assert check.execute("SELECT company, since FROM robots_skips").fetchall() == [("Armis", time.strftime("%Y-%m-%d"))]
+    check.close()
+    assert digest.coverage_gaps(run.init()) == []  # no alert for the maintainer
+
+
+# --- the 7-day rule: a company skipped for robots.txt on every run for a week gets its open jobs closed ---------------
+
+
+def rows(sql: str, *args: Any) -> list[tuple[Any, ...]]:
+    check = sqlite3.connect(run.DB)
+    try:
+        return check.execute(sql, args).fetchall()
+    finally:
+        check.close()
+
+
+def run_on(day: str, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(run.time, "strftime", lambda _fmt: f"{day}T06:00:00")
+    run.main()
+
+
+def seed_walled(*names: str) -> None:
+    conn = run.init()
+    for name in names:
+        add_job(conn, name, "old", "Old job")
+    conn.close()
+
+
+def start_streak(name: str, since: str) -> None:
+    conn = run.init()
+    conn.execute("INSERT INTO robots_skips(company, since) VALUES(?,?)", (name, since))
+    conn.commit()
+    conn.close()
+
+
+def test_the_schema_change_is_backwards_compatible(workdir: Path) -> None:
+    old = sqlite3.connect(run.DB)  # a database written before the table existed
+    old.executescript(
+        "CREATE TABLE jobs(company TEXT, job_id TEXT, title TEXT, team TEXT, location TEXT, url TEXT, posted TEXT,"
+        " first_seen TEXT, last_seen TEXT, status TEXT DEFAULT 'open', reported INTEGER DEFAULT 0,"
+        " PRIMARY KEY(company, job_id));"
+        "INSERT INTO jobs(company, job_id, title) VALUES('Old', '1', 'Kept');"
+    )
+    old.commit()
+    old.close()
+    run.init().close()
+    run.init().close()
+    assert rows("SELECT company, title FROM jobs") == [("Old", "Kept")]
+    assert rows("SELECT COUNT(*) FROM robots_skips") == [(0,)]
+
+
+def test_open_jobs_close_seven_days_after_the_first_skip_and_not_before(
+    workdir: Path, blocked_adapter: list[str], monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    seed_walled("Walled")
+    write_json(workdir / "data" / "companies.json", [co("Walled")])
+    common._robots["https://walled.test"] = [(False, "/")]
+    for day in range(1, 8):  # the first skip is on the 1st
+        run_on(f"2026-11-{day:02d}", monkeypatch)
+        assert rows("SELECT status FROM jobs WHERE company='Walled'") == [("open",)]
+    assert rows("SELECT since FROM robots_skips") == [("2026-11-01",)]
+    capsys.readouterr()
+    run_on("2026-11-08", monkeypatch)  # seven days after the first skipped run
+    out = capsys.readouterr().out
+    assert rows("SELECT status FROM jobs WHERE company='Walled'") == [("closed",)]
+    assert "robots.txt: closed 1 jobs of 1 companies skipped for 7 days" in out
+    assert rows("SELECT company FROM robots_skips") == [("Walled",)]
+    run_on("2026-11-09", monkeypatch)  # still skipped: nothing left to close, and the log says so
+    assert "robots.txt: closed 0 jobs of 0 companies" in capsys.readouterr().out
+
+
+def test_a_company_skipped_for_six_days_is_not_closed(
+    workdir: Path, blocked_adapter: list[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    seed_walled("Walled")
+    write_json(workdir / "data" / "companies.json", [co("Walled")])
+    common._robots["https://walled.test"] = [(False, "/")]
+    run_on("2026-11-01", monkeypatch)
+    run_on("2026-11-07", monkeypatch)  # six days after the first
+    assert rows("SELECT status FROM jobs") == [("open",)]
+
+
+def test_runs_within_a_day_do_not_move_the_start_of_the_streak(
+    workdir: Path, blocked_adapter: list[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    seed_walled("Walled")
+    write_json(workdir / "data" / "companies.json", [co("Walled")])
+    common._robots["https://walled.test"] = [(False, "/")]
+    run_on("2026-11-01", monkeypatch)
+    run_on("2026-11-01", monkeypatch)
+    run_on("2026-11-02", monkeypatch)
+    assert rows("SELECT since FROM robots_skips") == [("2026-11-01",)]
+    assert rows("SELECT status FROM jobs") == [("open",)]
+
+
+def test_one_run_that_is_not_a_skip_starts_the_week_again(
+    workdir: Path, blocked_adapter: list[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    seed_walled("Walled")
+    write_json(workdir / "data" / "companies.json", [co("Walled")])
+    common._robots["https://walled.test"] = [(False, "/")]
+    run_on("2026-11-02", monkeypatch)
+    assert rows("SELECT since FROM robots_skips") == [("2026-11-02",)]
+    common._robots["https://walled.test"] = None  # a temporary glitch ends: the host allows us again
+    run_on("2026-11-06", monkeypatch)
+    assert rows("SELECT COUNT(*) FROM robots_skips") == [(0,)]
+    common._robots["https://walled.test"] = [(False, "/")]
+    run_on("2026-11-12", monkeypatch)  # skipped again, but the streak began on the 12th, not the 2nd
+    assert rows("SELECT since FROM robots_skips") == [("2026-11-12",)]
+    assert rows("SELECT job_id, status FROM jobs ORDER BY job_id") == [("1", "open"), ("old", "closed")]
+
+
+def test_a_failure_is_not_closed_by_the_rule_and_clears_the_streak(
+    workdir: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(run.time, "sleep", lambda _s: None)
+    monkeypatch.setitem(run.ADAPTERS, "fake", lambda _slug: None)  # fails: no robots involved
+    seed_walled("Down")
+    start_streak("Down", "2026-10-01")
+    write_json(workdir / "data" / "companies.json", [co("Down")])
+    run_on("2026-11-20", monkeypatch)
+    assert rows("SELECT status FROM jobs") == [("open",)]
+    assert rows("SELECT COUNT(*) FROM robots_skips") == [(0,)]
+
+
+def test_a_company_crawled_this_run_is_not_a_skipped_one_even_when_a_namesake_board_is_skipped(
+    workdir: Path, blocked_adapter: list[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    seed_walled("Twin")
+    start_streak("Twin", "2026-10-01")
+    write_json(workdir / "data" / "companies.json", [co("Twin", slug="walled"), co("Twin", slug="fine")])
+    common._robots["https://walled.test"] = [(False, "/")]
+    run_on("2026-11-20", monkeypatch)
+    assert rows("SELECT job_id, status FROM jobs ORDER BY job_id") == [("1", "open"), ("old", "closed")]
+    assert rows("SELECT COUNT(*) FROM robots_skips") == [(0,)]  # the streak is gone
+
+
+def test_the_rule_closes_only_the_due_company_and_a_later_crawl_reopens_its_jobs(
+    workdir: Path, blocked_adapter: list[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    seed_walled("Walled", "Other")
+    start_streak("Walled", "2026-11-01")
+    write_json(workdir / "data" / "companies.json", [co("Walled"), co("Other")])
+    common._robots["https://walled.test"] = [(False, "/")]
+    common._robots["https://other.test"] = [(False, "/")]  # skipped today, but only since today: not due
+    run_on("2026-11-08", monkeypatch)
+    assert rows("SELECT company, status FROM jobs ORDER BY company") == [("Other", "open"), ("Walled", "closed")]
+    common._robots["https://walled.test"] = None  # the host allows us again: both companies are really fetched
+    common._robots["https://other.test"] = None
+    monkeypatch.setitem(
+        run.ADAPTERS, "fake", lambda slug: [job("old")] if common.get(f"https://{slug}.test/x") else None
+    )
+    run_on("2026-11-09", monkeypatch)
+    assert rows("SELECT company, status FROM jobs ORDER BY company") == [("Other", "open"), ("Walled", "open")]
+    assert rows("SELECT COUNT(*) FROM robots_skips") == [(0,)]
+
+
+def test_a_garbled_start_day_never_closes_anything(workdir: Path) -> None:
+    seed_walled("Walled")
+    start_streak("Walled", "not a date")
+    conn = run.init()
+    assert run.track_robots_skips(conn, {"Walled"}, set(), "2026-11-20") == (0, 0)
+    assert conn.execute("SELECT status FROM jobs").fetchall() == [("open",)]
+
+
+def test_track_robots_skips_counts_and_takes_the_day_as_an_argument(workdir: Path) -> None:
+    seed_walled("A", "B")
+    conn = run.init()
+    assert run.track_robots_skips(conn, {"A", "B"}, set(), "2026-11-01") == (0, 0)
+    assert run.track_robots_skips(conn, {"A", "B"}, set(), "2026-11-07") == (0, 0)
+    assert run.track_robots_skips(conn, {"A", "B"}, {"B"}, "2026-11-08") == (1, 1)  # B was crawled: not skipped
+    assert conn.execute("SELECT company, status FROM jobs ORDER BY company").fetchall() == [
+        ("A", "closed"),
+        ("B", "open"),
+    ]
+    assert conn.execute("SELECT company FROM robots_skips").fetchall() == [("A",)]
+
+
+def test_an_excluded_company_loses_its_skip_row(workdir: Path) -> None:
+    conn = run.init()
+    conn.execute("INSERT INTO robots_skips(company, since) VALUES('Acme', '2026-11-01')")
+    conn.execute("INSERT INTO robots_skips(company, since) VALUES('Keep', '2026-11-01')")
+    run.purge_excluded(conn, ["Acme"])
+    assert conn.execute("SELECT company FROM robots_skips").fetchall() == [("Keep",)]
+
+
+def test_a_name_with_one_board_skipped_and_another_failing_is_not_closed_by_the_rule(
+    workdir: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(common, "_s", RobotsSession({}))
+    monkeypatch.setattr(run.time, "sleep", lambda _s: None)
+    common._robots["https://walled.test"] = [(False, "/")]
+    monkeypatch.setitem(run.ADAPTERS, "fake", lambda slug: common.get(f"https://{slug}.test/x") and None)
+    seed_walled("Twin")
+    start_streak("Twin", "2026-10-01")
+    write_json(workdir / "data" / "companies.json", [co("Twin", slug="walled"), co("Twin", slug="down")])
+    run_on("2026-11-20", monkeypatch)
+    assert rows("SELECT status FROM jobs") == [("open",)]
+    assert rows("SELECT COUNT(*) FROM robots_skips") == [(0,)]
+
+
+def test_a_browser_company_skipped_for_robots_closes_after_seven_days(
+    workdir: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    url = "https://br.test/careers"
+    seed_walled("Br")
+    start_streak("Br", "2026-11-01")
+    write_json(workdir / "data" / "companies.json", [co("Br", ats="browser", slug=url)])
+    monkeypatch.setattr(
+        run,
+        "crawl_many",
+        lambda urls: browser_crawl.WHY.update(dict.fromkeys(urls, ROBOTS_NOTE)) or dict.fromkeys(urls),
+    )
+    run_on("2026-11-08", monkeypatch)
+    assert rows("SELECT status FROM jobs") == [("closed",)]
+
+
+def test_switching_enforcement_off_clears_the_streaks_and_closes_nothing(
+    workdir: Path, blocked_adapter: list[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    seed_walled("Walled")
+    start_streak("Walled", "2026-10-01")
+    write_json(workdir / "data" / "companies.json", [co("Walled")])
+    monkeypatch.setattr(common, "ROBOTS_ENFORCED", False)
+    common._robots["https://walled.test"] = [(False, "/")]
+    run_on("2026-11-20", monkeypatch)
+    assert rows("SELECT job_id, status FROM jobs ORDER BY job_id") == [
+        ("1", "open"),
+        ("old", "closed"),
+    ]  # a normal crawl
+    assert rows("SELECT COUNT(*) FROM robots_skips") == [(0,)]
+
+
+def test_a_company_that_left_the_list_loses_its_streak_and_keeps_its_jobs(
+    workdir: Path, blocked_adapter: list[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    seed_walled("Gone", "Here")
+    start_streak("Gone", "2026-10-01")
+    write_json(workdir / "data" / "companies.json", [co("Gone", status="blocked"), co("Here")])
+    common._robots["https://here.test"] = [(False, "/")]
+    run_on("2026-11-20", monkeypatch)
+    assert rows("SELECT company FROM robots_skips") == [("Here",)]
+    assert rows("SELECT status FROM jobs WHERE company='Gone'") == [("open",)]
+
+
+def test_a_held_crawl_clears_the_streak(workdir: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    url = "https://br.test/careers"
+    conn = run.init()
+    for i in range(run.DROP_MIN_OPEN):
+        add_job(conn, "Br", f"j{i}", "T")
+    conn.close()
+    start_streak("Br", "2026-10-01")
+    write_json(workdir / "data" / "companies.json", [co("Br", ats="browser", slug=url)])
+    monkeypatch.setattr(run, "crawl_many", lambda urls: {key: [] for key in urls})
+    run_on("2026-11-20", monkeypatch)
+    assert rows("SELECT COUNT(*) FROM jobs WHERE status='open'") == [(run.DROP_MIN_OPEN,)]
+    assert rows("SELECT COUNT(*) FROM robots_skips") == [(0,)]
+
+
+def test_days_without_a_run_do_not_break_the_streak(
+    workdir: Path, blocked_adapter: list[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # decided: the rule counts days since the first skip, and only a run that is not a skip starts it again
+    seed_walled("Walled")
+    write_json(workdir / "data" / "companies.json", [co("Walled")])
+    common._robots["https://walled.test"] = [(False, "/")]
+    run_on("2026-11-01", monkeypatch)
+    run_on("2026-11-09", monkeypatch)
+    assert rows("SELECT status FROM jobs") == [("closed",)]
 
 
 def test_the_query_parameters_are_part_of_the_address_robots_txt_is_asked_about(
