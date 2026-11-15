@@ -300,6 +300,18 @@ Decisions made in planning (they change the PRD's wording, so update the PRD in 
   restore path) before `data/jobs.db` stops being committed. Update `AGENTS.md`, the workflow, the deploy flow and the
   `protect-main` ruleset note together. Done when: a daily run works without `data/jobs.db`, a restore from the export
   is rehearsed, and the Notes for the plan in `PRD.md` are all met.
+  Backups/export before the first subscriber (part of the restore path), built in v0.30.0: the account tables (`profiles`, `user_prefs`, `user_jobs`,
+  `subscriptions`, `emailed`; not `jobs`, which the crawl rebuilds) go every day to the PRIVATE repository `ravidorr/misra-backups`, not into this public one.
+  `export_accounts.py` (JSON per table, sorted, counts only in the log), `publish_backup.py` (commit if changed; replaces the history with one commit when it
+  is 28 days old, so a deleted account leaves the backups within 30 days) and `restore_accounts.py` (one idempotent SQL script, foreign-key order, never deletes).
+  The workflow step `backup` runs last, after the deploy push, with `BACKUP_DEPLOY_KEY` and the service-role key on that step only, and a failure triggers
+  the maintainer alert. The restore was rehearsed on 2026-11-15 against a local Postgres (`CONTRIBUTING.md`, "Backups of the account tables").
+  Send to lawyer: `PRIVACY.md` now says that a daily backup copy of the account data is kept in a private GitHub repository (United States, access only
+  the maintainer) for up to 30 days, that a deleted account leaves the backups within that time, and that GitHub may keep replaced copies briefly;
+  `SECURITY.md` changed with it. The lawyer should see the wording ("What we store", "Providers", "How long we keep it", "How to delete your data") before the first real subscriber.
+  Still to do: live checks (set up is done; confirm the first daily run commits to `ravidorr/misra-backups`, and rehearse a restore into a scratch Supabase project, which also
+  tests `--create-auth-users` against the real `auth.users`); the other half of 9.1 (move the crawl's writes into Supabase and stop committing `data/jobs.db`, with the
+  `AGENTS.md`, deploy-flow and `protect-main` updates) is not started; the export of `jobs` and `crawl_log` into the repository is only needed then.
 
 ## Checks that close the plan
 

@@ -14,6 +14,14 @@ import run
 
 
 @pytest.fixture(autouse=True)
+def no_inherited_git_repository(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The pre-push hook exports GIT_DIR, GIT_WORK_TREE and GIT_INDEX_FILE. A test that runs git must never see them:
+    with them set, `git init` or `git config` in a temporary directory would act on the real checkout."""
+    for name in ("GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "GIT_OBJECT_DIRECTORY", "GIT_PREFIX", "GIT_COMMON_DIR"):
+        monkeypatch.delenv(name, raising=False)
+
+
+@pytest.fixture(autouse=True)
 def close_connections(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     """The pipeline's main() functions never close their sqlite connections; close them at teardown."""
     opened: list[sqlite3.Connection] = []

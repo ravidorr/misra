@@ -136,6 +136,36 @@ jobs:
           name: jobs-db
           path: data/jobs.db
           retention-days: 7
+      - name: Back up the account tables to the private backup repository
+        id: backup
+        # After the data commit, so a slow or failed backup never delays or blocks the deploy; and independent of the
+        # crawl, so the accounts are backed up on a day the crawl failed. A failure here fails the run and triggers the
+        # alert below. Everything is written outside the checkout (RUNNER_TEMP): the account data is personal and this
+        # repository and its logs are public, so the log holds counts only and nothing is uploaded as an artifact.
+        if: ${{ always() && steps.checkout.outcome == 'success' }}
+        timeout-minutes: 10
+        env:
+          # Exposed to this step only (the sync and digest steps hold the first two as well). The backup key can write
+          # the backup repository and nothing else.
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          BACKUP_DEPLOY_KEY: ${{ secrets.BACKUP_DEPLOY_KEY }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          [ "$GITHUB_REF" = "refs/heads/main" ] || { echo "refusing to back up from $GITHUB_REF" >&2; exit 1; }
+          if [ -z "$BACKUP_DEPLOY_KEY" ]; then
+            echo "BACKUP_DEPLOY_KEY secret is missing: the account tables cannot be backed up." >&2
+            exit 1
+          fi
+          BACKUP_WORK="$(mktemp -d "$RUNNER_TEMP/backup.XXXXXX")"
+          export BACKUP_WORK
+          trap 'rm -rf "$BACKUP_WORK"' EXIT
+          # The key is written to disk only in this step, after the export has read the data; scripts/backup-key.sh
+          # then takes over the trap and removes the key, the host keys and the work directory on exit.
+          python export_accounts.py "$BACKUP_WORK/export"
+          . scripts/backup-key.sh
+          python publish_backup.py "$BACKUP_WORK/export" "git@github.com:ravidorr/misra-backups.git" "$BACKUP_WORK/clone"
       - name: Email an alert if the run failed
         if: ${{ (failure() || cancelled()) && steps.checkout.outcome == 'success' }}
         env:
@@ -143,5 +173,5 @@ jobs:
           GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
           DIGEST_TO: ${{ secrets.DIGEST_TO }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-          STEPS: verify=${{ steps.verify.outcome }} crawl=${{ steps.crawl.outcome }} digest=${{ steps.digest.outcome }} sync=${{ steps.sync.outcome }} digests=${{ steps.digests.outcome }} commit=${{ steps.commit.outcome }}
+          STEPS: verify=${{ steps.verify.outcome }} crawl=${{ steps.crawl.outcome }} digest=${{ steps.digest.outcome }} sync=${{ steps.sync.outcome }} digests=${{ steps.digests.outcome }} commit=${{ steps.commit.outcome }} backup=${{ steps.backup.outcome }}
         run: python3 send_alert.py "$RUN_URL"

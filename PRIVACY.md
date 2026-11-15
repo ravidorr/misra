@@ -10,6 +10,7 @@ This is a plain statement of what the Misra dashboard does with data. It describ
 - If you sign in with Google, we keep your email address, the jobs you star or mark "Not for me", and your saved filters. Nothing else.
 - We never store a CV. The dashboard has no place to upload one.
 - Only you, and the maintainer who runs the database, can see what your account holds.
+- A daily backup copy of your account data is kept in a private repository for up to 30 days. If you delete your account, it leaves the backups within that time.
 - You can see, correct and delete your data (see "Your rights"). You can delete your account yourself, at any time, with **Delete my account** on the dashboard. It is immediate and permanent.
 - There are no cookies, no analytics and no advertising or tracking scripts.
 
@@ -32,6 +33,8 @@ If you sign in with Google, these are stored in our Supabase database (EU, Irela
 - Your **filters** (regions, places, levels, role types, search words, company, sort order and the show or hide options), so they follow you to your other devices. The first time you sign in on a browser, the page offers to copy that browser's own discards, stars and filters into your account.
 - **Email settings** (the personalised digest, with its own consent log). The settings are built into the dashboard (a "Daily email" button for signed-in users) but switched off and hidden, and no digest is sent yet, so no real subscription exists. When it is switched on, turning the email on stores the address it goes to (your Google email, or another one you type), the filters you copied for it, daily or weekly, the time you turned it on, the time you confirmed the address from the link we email you, and the time you unsubscribed, plus the jobs already emailed to you. Turning it on sends one confirmation email to that address, and nothing else is sent until you confirm. Only the SHA-256 hash of the confirmation link is stored, never the link. The unsubscribe link is not stored at all: it is made again for each email from your account ID and a secret key that only the project holds (a keyed signature), so nobody can make one for another person. The link contains your account ID in plain text, so anyone who sees the link (for example if you forward the email) can see that ID, and use the link to unsubscribe you. The email starts only after you confirm. Unsubscribing, with the link in every email and no sign-in, stops it at once, deletes your filters and the list of emailed jobs and resets daily or weekly, and keeps the address and those three times as a record of your consent. Deleting your account removes all of it, including that record. The unsubscribe link carries its token in the address, so Supabase's request log holds it for a short time (it holds the account ID and can only unsubscribe).
 
+**Backups.** Every day a copy of the account data above (all of the tables that hold your email address, stars, "Not for me" choices, filters and email settings, including the hashes of the confirmation and unsubscribe links) is saved to a private repository at GitHub (United States). Only the maintainer has access to it. The repository keeps its history for up to 30 days: older history is replaced by a single new copy, so what you deleted does not stay in it. Nothing from it is sent to anyone, and the daily job's public log shows only how many rows each table held.
+
 The sign-in service also keeps its own record of your account. Google sends your name and photo to Supabase's sign-in service, and Supabase keeps them in its own internal account record (in its `auth` tables, as a fixed part of how its Google sign-in works) until the account is deleted. Our own tables never copy them, the dashboard never shows them, and the page does not save them in the sign-in it keeps in your browser. The signed token your browser holds would also carry them; a database function, switched on in the Supabase dashboard, empties that part of the token.
 
 Technical records, none of them personal to an account:
@@ -50,13 +53,13 @@ Technical records, none of them personal to an account:
 
 ## Who can see it
 
-Only you (signed in, through rules in the database that give each account its own rows only), and the maintainer, who has access to the database. The providers below process data as described, to run the service.
+Only you (signed in, through rules in the database that give each account its own rows only), and the maintainer, who has access to the database and to the private backup repository. The providers below process data as described, to run the service.
 
 ## Providers and where they are
 
 - **Supabase** (EU, Ireland): the database, the sign-in service and the Edge Functions. Holds everything in "What we store".
 - **Google** (United States): the sign-in. Google knows that you signed in to this dashboard, as with any "Sign in with Google".
-- **GitHub** (United States): hosts the repository and the dashboard (GitHub Pages) and runs the daily crawl (GitHub Actions). The crawl reads public career pages and does not handle your account data.
+- **GitHub** (United States): hosts the repository and the dashboard (GitHub Pages) and runs the daily crawl (GitHub Actions). The crawl reads public career pages and does not handle your account data. GitHub also hosts a separate private repository that holds the daily backup copy of the account tables (see "What we store"); only the maintainer has access to it.
 - **Resend** (Ireland): sends the site-report email to the maintainer. When the daily email is switched on it also sends the confirmation email, and later the digest, to the address you give it; until then no account data is sent to Resend today.
 - **Gmail (Google SMTP)**: the maintainer's own daily digest of public new roles, and failure alerts, go to the maintainer's own address. They hold public job data only, no account data.
 
@@ -74,11 +77,11 @@ The page sets no cookies and has no analytics or tracking. It uses your browser'
 
 ## How long we keep it
 
-Account data is kept until you delete your account. There is no automatic expiry. The consent record of an unsubscribed email also stays until you delete your account. The daily spam-guard counters are removed as described above. Provider logs are kept by the providers for the periods they set. Supabase may keep database backups for a period it sets, and a deleted account can remain in a backup until that backup expires.
+Account data is kept until you delete your account. There is no automatic expiry. The consent record of an unsubscribed email also stays until you delete your account. The daily spam-guard counters are removed as described above. Provider logs are kept by the providers for the periods they set. Supabase may keep database backups for a period it sets, and a deleted account can remain in a backup until that backup expires. Our own daily backup copy of the account tables, in the private GitHub repository, is kept for up to 30 days: its history is replaced by a single new copy when it is 28 days old, so a deleted account leaves our backups within 30 days. GitHub may keep the replaced copies for a short time before it erases them; that is GitHub's own handling and we do not control it.
 
 ## How to delete your data
 
-Sign in, choose **Delete my account**, read the notice and confirm. The service checks that it is you, deletes your account at Supabase and, with it, every row that belongs to it: your email, stars, discards, filters and settings. It happens at once and cannot be undone. The page then signs you out and clears what it kept for the account in your browser. Choices saved in your browser while you were signed out are not part of the account and stay until you clear your browser's data. If you sign in again later you get a new, empty account. Google keeps your Google account: only Google can close it, and you can remove this dashboard's access in your Google account settings.
+Sign in, choose **Delete my account**, read the notice and confirm. The service checks that it is you, deletes your account at Supabase and, with it, every row that belongs to it: your email, stars, discards, filters and settings. It happens at once and cannot be undone. A copy remains in the daily backup until the backup is replaced, within 30 days; it is never put back into the live service for you. The page then signs you out and clears what it kept for the account in your browser. Choices saved in your browser while you were signed out are not part of the account and stay until you clear your browser's data. If you sign in again later you get a new, empty account. Google keeps your Google account: only Google can close it, and you can remove this dashboard's access in your Google account settings.
 
 If the button does not work for you, write to <raanan@avidor.org> and the maintainer will delete the account by hand.
 

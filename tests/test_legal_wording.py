@@ -5,10 +5,12 @@ import re
 from pathlib import Path
 
 import build_dashboard
+import publish_backup
 
 REPO = Path(__file__).resolve().parents[1]
 CONTACT = "raanan@avidor.org"
 MAX_TERMS_BULLETS = 6
+PROMISED_DAYS = 30
 FOOTERS = 2  # the confirmation email and the digest
 DIGEST_FOOTER = (
     "You are receiving this {{schedule}} digest because you confirmed job alerts on Misra "
@@ -196,3 +198,37 @@ def test_the_email_footers_link_to_the_pages_on_the_site() -> None:
         assert "blob/main/PRIVACY.md" not in read(name), name
         assert "blob/main/TERMS.md" not in read(name), name
     assert "https://ravidorr.github.io/misra/privacy.html" in read("PRD.md")
+
+
+def test_the_privacy_notice_describes_the_backup_as_it_is_built() -> None:
+    """The daily export (PLAN.md step 9.1): a private GitHub repository, only the maintainer, up to 30 days. The
+    numbers are the ones publish_backup.py enforces, so the promise cannot drift from the code."""
+    text = read("PRIVACY.md")
+    parts = sections(text)
+    assert "**Backups.**" in parts["What we store"]
+    assert "private repository at GitHub (United States)" in parts["What we store"]
+    assert "Only the maintainer has access to it" in parts["What we store"]
+    assert "only how many rows each table held" in parts["What we store"]
+    assert "a private repository for up to 30 days" in parts["The short version"]
+    assert "private backup repository" in parts["Who can see it"]
+    assert "separate private repository that holds the daily backup copy" in parts["Providers and where they are"]
+    keep = parts["How long we keep it"]
+    assert f"replaced by a single new copy when it is {publish_backup.MAX_AGE_DAYS} days old" in keep
+    assert "a deleted account leaves our backups within 30 days" in keep
+    assert "GitHub may keep the replaced copies for a short time" in keep
+    assert publish_backup.MAX_AGE_DAYS + 1 < PROMISED_DAYS
+    assert (
+        "A copy remains in the daily backup until the backup is replaced, within 30 days"
+        in parts["How to delete your data"]
+    )
+
+
+def test_the_security_note_names_the_backup_its_secret_and_its_review() -> None:
+    text = " ".join(read("SECURITY.md").split())  # the file is wrapped by hand
+    assert "upgrade to a plan with backups or build the export" not in text  # the old gap: the export exists now
+    assert "BACKUP_DEPLOY_KEY" in text
+    assert "ravidorr/misra-backups" in text
+    assert "restore was rehearsed on 2026-11-15" in text
+    review = text.split("### Yearly review", 1)[1].split("### If there is a breach", 1)[0]
+    assert "rehearse a restore again" in review
+    assert "misra-backups" in review and "BACKUP_DEPLOY_KEY" in review

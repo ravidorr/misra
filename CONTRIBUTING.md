@@ -126,7 +126,7 @@ before relying on them, and re-run this note when a plan changes. "Not confirmed
 | Supabase egress | 5 GB, plus 5 GB cached | [pricing](https://supabase.com/pricing) |
 | Supabase Edge Functions | 500,000 invocations a month | [pricing](https://supabase.com/pricing) |
 | Supabase pausing | Paused after low activity over 7 days; restorable for up to 1 year | [pausing](https://supabase.com/docs/guides/platform/free-project-pausing) |
-| Supabase backups | Not included on Free (they start with Pro, kept 7 days) | [pricing](https://supabase.com/pricing) |
+| Supabase backups | Not included on Free (they start with Pro, kept 7 days); the daily export below is the backup | [pricing](https://supabase.com/pricing) |
 | Resend sending | 100 emails a day (UTC day) and 3,000 a month; every To, CC or BCC recipient counts | [pricing](https://resend.com/pricing), [quotas](https://resend.com/docs/knowledge-base/account-quotas-and-limits) |
 | Resend domains | 3 custom domains | [pricing](https://resend.com/pricing) |
 | GitHub Actions | Standard runners are free in a public repository | [billing](https://docs.github.com/en/billing/managing-billing-for-your-products/managing-billing-for-github-actions/about-billing-for-github-actions) |
@@ -190,9 +190,9 @@ Notes on the table:
   the roles." and a notice "The roles could not be loaded" with a "Try again" button (`showLoadError` in
   `templates/dashboard.js`). There is no offline copy of the jobs by design (PRD constraint), so nothing else is shown.
   Signing in, stars and the site report fail the same way until the project is restored.
-- Backups: the free plan has none, so the repository is the only copy of the history (`data/jobs.db`), and user data
-  (stars, discards, filters) has no copy anywhere but Supabase. Step 9.1 plans the export of all tables into the
-  repository; until then a deleted project loses user data for good.
+- Backups: the free plan has none, so the repository is the only copy of the history (`data/jobs.db`), and the daily
+  export (below, "Backups of the account tables") is the only copy of the user data (stars, discards, filters, email
+  settings): a private repository, at most 28 days of history, restorable with `restore_accounts.py`.
 
 ### Upgrade triggers
 
@@ -204,8 +204,8 @@ Move to a paid plan, or trim, when any of these is true:
 - Resend sends pass 80 of 100 in a day, or 2,400 of 3,000 in a month (this includes `easy-theory` and received mail). In
   subscribers that is about 60 once reports are counted, since the monthly cap binds first. Step 6.5 records the
   subscriber count against this before the digest opens.
-- A pause happens, or the "about to pause" warning arrives twice. Backups matter as soon as there are real users: upgrade
-  to a plan with backups before the first digest subscriber, or ship the step 9.1 export first.
+- A pause happens, or the "about to pause" warning arrives twice. The account tables are backed up daily (below); move
+  to a plan with backups if that export ever stops being enough (a restore that is too slow, or a need for point-in-time recovery).
 - The repository passes 800 MB (80% of the recommended 1 GB), or `data/jobs.db` passes 50 MB (GitHub's warning size).
 
 ## The daily digest
@@ -274,6 +274,38 @@ where status = 'open';
 ```
 
 Accepted sites are not in Supabase: a report is only an email, and accepting it adds a row to `data/seed_companies.csv` (see "Reported sites"). Count the additions of the month from git, for example `git log --since=2026-11-01 --until=2026-12-01 -p --format= -- data/seed_companies.csv | grep -c '^+[^+]'`, and compare with the number of report emails received.
+
+## Backups of the account tables
+
+Supabase Free has no backups, so the daily workflow (`.github/workflows/daily.yml`, step `backup`, PLAN.md step 9.1) copies the account tables to a PRIVATE repository, `ravidorr/misra-backups` (branch `main`). This repository is public: no account data may be committed to it, logged, uploaded as an artifact or left in the checkout.
+
+- **What.** `export_accounts.py` reads every row of `profiles`, `user_prefs`, `user_jobs`, `subscriptions` and `emailed`, all columns (the confirmation and unsubscribe token hashes too), with the service-role key, and writes one `<table>.json` per table: one row per line, keys sorted, rows sorted by primary key, so a day's diff is only what changed. Not exported: `jobs` and `crawl_log` (the crawl rebuilds them), the abuse counters (`report_*`, `confirm_*`, short-lived) and Supabase's own `auth` tables. A test fails when a column or an account table in the migrations is missing from the export (`tests/test_export_accounts.py`).
+- **Where it runs.** After the deploy push, so it never delays the data. It runs on every run, even when the crawl failed. It writes into a temporary directory under `RUNNER_TEMP`, outside the checkout (the module refuses a directory inside the repository), and then `publish_backup.py` clones the backup repository, replaces the five files, commits only when something changed ("backup 2026-11-16: profiles 3, user_prefs 3, ... (n rows)", counts only) and pushes to `main`. The Actions log shows counts only.
+- **Secrets.** `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` (also on the sync and digest steps) and `BACKUP_DEPLOY_KEY` are set on the backup step only. `BACKUP_DEPLOY_KEY` is the private half of a read-write deploy key of `ravidorr/misra-backups`; it is written to disk only in that step, by `scripts/backup-key.sh`, in a file with a unique name, used through `GIT_SSH_COMMAND` with `IdentitiesOnly=yes` and no agent, and removed with the work directory when the step ends. No checkout gets `ssh-key:`. `tests/test_backup_workflow.py` pins all of it. Rotate the key at the yearly review: make a new key pair, replace the deploy key of `ravidorr/misra-backups` and the Actions secret.
+- **Guards.** The export fails when a table has columns that are not in `TABLES` (the day a migration adds one) or when `profiles` is empty beside non-empty tables (a wrong key sees nothing). `publish_backup.py` refuses to commit, and never replaces the history, when a table that held 5 or more rows now holds under half of them; if that is real, run it by hand with `--allow-shrink`.
+- **Failure.** The step fails (non-zero) when a secret is empty, a table cannot be read, a table keeps changing under the read (three tries), git cannot clone or push. The run goes red and the maintainer alert (`send_alert.py`) lists `backup=failure`. Nothing is written for a table that failed: every table is read before any file is written.
+- **Retention.** The repository keeps history, so a deleted account would stay in old commits. When the first commit of `main` is more than 28 days old, `publish_backup.py` pushes one new commit with no parent that holds the current files, over `main`, with `--force-with-lease` (it replaces only the history it read). A deleted account therefore leaves the backups within 28 days plus one daily run, under the 30 days `PRIVACY.md` promises. GitHub may keep the replaced commits reachable by their ids for a while; if someone must be erased at once, delete and recreate `ravidorr/misra-backups` (and the deploy key), then run the workflow. The force push goes only to the remote named in the workflow, which is the backup repository.
+- **If the backup stops.** The alert says so. If it fails for more than a few days, fix it before the history gets older than 30 days; a missed day only delays the replacement, so the 30 days in `PRIVACY.md` hold only while the daily job runs.
+
+### Restore
+
+1. Clone the backup repository to a directory OUTSIDE this checkout: `git clone git@github.com:ravidorr/misra-backups.git ~/misra-backup` (the latest commit only: an older one would bring back accounts deleted since).
+2. `python restore_accounts.py ~/misra-backup ~/restore.sql` (add `--exclude-user-ids=<file>`, one id per line, for the people who deleted their account after the backup: they are left out of every table; `--create-auth-users` refuses to run without it, an empty file meaning nobody left; add `--pause-subscriptions` to mark every still-active subscription unsubscribed so that nobody who opted out after the backup is emailed; and for a new Supabase project use `--create-auth-users` that has no `auth.users` rows: it creates a bare row, id and email from `profiles`, for each one that is missing, and each person then signs in with Google as before). The script is written readable by you only and holds everyone's data: delete it after use.
+3. Read it, then run it in the SQL editor of the project (or `psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -1 -f ~/restore.sql`). It is one transaction, inserts in foreign-key order, uses `on conflict do nothing` (running it twice, or into a project that already has some of the rows, changes nothing that exists, and it deletes nothing), and switches the five tables' own triggers off while it runs and on again at the end, so the restored rows keep their timestamps and the consent record.
+4. Check the counts against the log line of the backup commit, and run the daily workflow once (the sync restores the `jobs` table).
+5. Undo what the backup cannot know. Anyone who deleted their account or unsubscribed after the time of the backup commit comes back from it: before the next digest run, delete those accounts again and mark those subscriptions unsubscribed (find them in Supabase's auth logs and the `unsubscribe` and `delete-account` function logs for that window, or from any request the maintainer received by email). A restored `subscriptions` row of a person who had unsubscribed that day is a person who would be emailed against their wish. If the window cannot be checked, do not send digests until it can.
+
+### Rehearsal, 2026-11-15
+
+What was run, against a local Postgres 17 (`postgres:17-alpine` in Docker, database `misra_rehearsal`) built from `supabase/migrations/*.sql` plus a stub of Supabase's roles and the `auth` schema (`auth.users` with the columns the `--create-auth-users` step names). Fixture: 3 users (one with an apostrophe in the address, one with an accent), 2 prefs rows including filter text with `$restore$`, a backslash and quotes, 2,601 `user_jobs` (two users over the 1,000-row page size, plus a discard), 2 subscriptions (one confirmed, one unsubscribed, token hashes set) and 1 emailed row. The real `export_accounts.Source` read it through a stand-in for PostgREST that pages with `limit` and `offset` and answers `Content-Range`.
+
+1. Export: 3 profiles, 2 prefs, 2,601 user_jobs, 2 subscriptions, 1 emailed, files written mode 0600.
+2. Emptied everything by deleting every `auth.users` row (the foreign keys cascade). Restored with `--create-auth-users`: all five tables back to the same counts, and a second export was byte-identical to the first (every column, timestamps and token hashes included).
+3. Ran the same script a second time: counts unchanged, export byte-identical (idempotent).
+4. Truncated the five tables, kept the users, restored without the flag: export byte-identical.
+5. Changed one restored row, ran the script again: the changed row stayed as it was (nothing is overwritten, nothing deleted). Afterwards no trigger was left disabled.
+
+Not covered, and said plainly: the real PostgREST endpoint and a real Supabase project were not used (no key was used or printed), so the read path with a real response shape, and `--create-auth-users` against Supabase's real `auth.users` and its sign-in linking, are unproven; the force-push retention step was tested against local bare repositories, not GitHub. First live checks: after the first daily run with `BACKUP_DEPLOY_KEY` set, look at `ravidorr/misra-backups` (one commit per day with changes, files `*.json`), and rehearse a restore into a scratch Supabase project.
 
 ## Reported sites
 
