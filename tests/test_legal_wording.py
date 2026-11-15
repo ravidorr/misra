@@ -10,12 +10,14 @@ MAX_TERMS_BULLETS = 6
 DIGEST_FOOTER = (
     "You are receiving this {{schedule}} digest because you confirmed job alerts on Misra "
     "(https://ravidorr.github.io/misra/). Misra is a free, non-commercial project run by Raanan Avidor "
-    "(raanan@avidor.org). Job listings are collected automatically from public career pages and are provided "
-    "as-is without guarantee that they are complete or still open."
+    "(raanan@avidor.org), Ditsa 8, Herzliya 4627825, Israel. Job listings are collected automatically "
+    "from public career pages and are provided as-is without guarantee that they are complete or "
+    "still open."
 )
 CONFIRM_FOOTER = (
     "Misra (https://ravidorr.github.io/misra/) is a free, non-commercial project run by Raanan Avidor "
-    "(raanan@avidor.org). If you did not ask for this email, ignore it, and nothing will be sent to you."
+    "(raanan@avidor.org), Ditsa 8, Herzliya 4627825, Israel. If you did not ask for this email, "
+    "ignore it, and nothing will be sent to you."
 )
 UNSUBSCRIBE_HEADERS = (
     "List-Unsubscribe-Post: List-Unsubscribe=One-Click",
