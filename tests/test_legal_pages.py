@@ -465,7 +465,8 @@ def test_the_publish_workflow_writes_the_key_only_in_the_push_step_and_skips_whe
     text = workflow("publish-docs.yml")
     steps = text.split("      - ")
     keyed = [step for step in steps if "scripts/deploy-key.sh" in step]
-    assert len(keyed) == 2  # noqa: PLR2004  (the early check of the key, and the push)
+    assert len(keyed) == 1  # the key is written in the push step only, never in an early check
+    assert "ssh-keygen" not in text
     build = next(step for step in steps if "build_dashboard.py" in step and "run:" in step)
     assert "DEPLOY_KEY" not in build  # the build never has the key
     push = next(step for step in steps if "git push" in step)

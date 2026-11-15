@@ -39,10 +39,10 @@ jobs:
         with:
           ref: main
           persist-credentials: false
-      - name: Verify the deploy key before building
+      # Only checks that the secret exists: the key itself is written to disk in the final push step and nowhere else.
+      - name: Check the branch and that the deploy key secret is set
         env:
           DEPLOY_KEY: ${{ secrets.DEPLOY_KEY }}
-          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           if [ "$GITHUB_REF" != "refs/heads/main" ]; then
@@ -53,9 +53,6 @@ jobs:
             echo "DEPLOY_KEY secret is missing: the push to main would be rejected by the protect-main ruleset." >&2
             exit 1
           fi
-          . scripts/deploy-key.sh
-          ssh-keygen -y -f "$key" > /dev/null
-          git ls-remote "git@github.com:${GITHUB_REPOSITORY}.git" HEAD > /dev/null
       - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
