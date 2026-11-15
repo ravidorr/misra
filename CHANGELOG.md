@@ -17,6 +17,23 @@ All notable changes are documented here. Format follows [Keep a Changelog](https
 - `PRIVACY.md` names the database controller (Raanan Avidor, a private individual) and the contact `raanan@avidor.org`, says why the data is collected and that giving it is voluntary, names the providers and where they are (Supabase and Resend in Ireland, Google and GitHub in the United States), gives the rights to inspect, correct and delete (Sections 13 and 14 of the Israeli Privacy Protection Law) with an answer within 30 days, and states that Supabase's and Resend's standard data processing agreements apply. The digest is still described as planned, not live.
 - `PLAN.md` step 6.3 and the PRD (FR-8) carry the lawyer's exact footer text for every digest email and the Reply-To requirement.
 
+## [0.23.0] - 2026-11-18
+
+### Added
+
+- Crawler politeness, from the lawyer's answers (PLAN.md step 6.6). One honest User-Agent, `Misra/<version> (+https://ravidorr.github.io/misra/; raanan@avidor.org)`, from the single constant `USER_AGENT` in `common.py`, used by the adapters, the browser crawl, `discover.py` and the survey tools (a test fails when another string appears, and when `VERSION` differs from `package.json` and `pyproject.toml`). Nothing relied on the old `IL-JobWatch/0.1 (personal job search; low-volume)`.
+- The browser crawl now waits for its turn on a host like the adapters do (one request a second, from the same `reserve_slot` in `common.py`), before each page load and each pagination click, with the same cap of 3 pages at once.
+- A `robots.txt` check. Each host's `robots.txt` is fetched once per run (10 s timeout; a failed fetch, a 404 or any other 4xx, and a 5xx all mean allowed, and a failure or a 5xx is logged), read with a small RFC 9309 parser (our `Misra` group, else `*`; longest rule wins, Allow wins a tie; `*` and `$`), and a disallowed address is not fetched. An ATS's public API (Greenhouse, Lever, SmartRecruiters, Workable, Workday, Oracle, Phenom) is not treated as a page: a blanket `Disallow: /` does not stop it, a rule that names its path does. The switch is `ROBOTS_ENFORCED` in `common.py`; it ships on, and each run logs whether it is. A read-only audit of every crawl host found nothing blocked (see CONTRIBUTING.md).
+- A company skipped because of `robots.txt` is not a failure: no retry, not in the failure count, no maintainer alert. Its crawl log note is "robots.txt does not allow it", it stays out of the failure e-mail, and the coverage gap card lists it at once under the reason "robots.txt does not allow it".
+- The exclusion list `data/excluded_companies.csv` (`company`, `reason`, `date_added`; no personal data), read by `load_excluded` in `common.py`. A company on it is never crawled (`run.py`, `discover.py`), never listed on the coverage card or in the exports, and its rows are deleted: `run.py` deletes its jobs, crawl log and gap alerts from `data/jobs.db`, and `sync_supabase.py` deletes its rows in Supabase `jobs`, and the stars and discards (`user_jobs`, which keep a title and a link) and emailed keys (`emailed`) of users, by exact company name. Deleting a company's stars is deliberate: the removal must be complete. No migration: the service role already may delete from those tables. Guards: an empty list does nothing and sends no request; a missing or malformed list (blank or very short name, repeated name, missing reason, bad date, more than 200 rows) stops the run; more than 3 companies with data at once are refused before anything is deleted (add them in separate runs); counts are logged, never rows.
+- A list that spells a company differently from `companies.json` or the database (case only) stops the run, so skipping and deleting never disagree; the database is vacuumed after a deletion; the sync step fails when the list is not empty and the Supabase secrets are empty; a byte order mark in the list is accepted and an unreadable list is a clear error; a robots skip counts neither as a failure nor as a success in the two-failures rule of the coverage gap card and the failure email.
+- `CONTRIBUTING.md`: how to remove a company in minutes and the exact test of success, and the crawler's manners.
+- `tests/test_politeness.py`.
+
+### Changed
+
+- The Supabase sync step deletes before it uploads, and never uploads a row of an excluded company.
+
 ## [0.22.0] - 2026-11-17
 
 ### Added

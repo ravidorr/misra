@@ -28,6 +28,7 @@ def session(monkeypatch: pytest.MonkeyPatch) -> FakeSession:
     s = FakeSession()
     monkeypatch.setattr(common, "_s", s)
     monkeypatch.setattr(common, "_last", {})
+    monkeypatch.setattr(common, "DELAY", 1.0)  # the conftest turns the delay off
     return s
 
 

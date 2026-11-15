@@ -10,7 +10,7 @@ from typing import Any, cast
 
 from playwright.async_api import async_playwright
 
-from common import ISRAEL
+from common import ISRAEL, ROBOTS_NOTE, USER_AGENT, host_of, reserve_slot, robots_gate
 
 JOBLINK = re.compile(
     r"/(jobs?|positions?|careers?|openings?|vacanc\w+|job-?post\w*)/[^/?#]{4,}|[?&]job_id=[^&#]+", re.I
@@ -62,7 +62,6 @@ BLOCKED = re.compile(  # titles of bot-protection pages, some of which answer HT
 EXE = os.environ.get("PW_CHROMIUM") or (
     "/opt/pw-browsers/chromium" if os.path.exists("/opt/pw-browsers/chromium") else None
 )
-UA = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124 Safari/537.36"
 
 
 HTTP_OK = 200
@@ -274,6 +273,7 @@ async def _eightfold_pages(page: Any, ef_jobs: list[dict[str, Any]]) -> list[dic
         el = nxt.first
         if await el.is_disabled() or await el.get_attribute("aria-disabled") == "true":
             break
+        await _polite(page.url)
         await el.dispatch_event("click")
         batch = []
         for _poll in range(SETTLE_POLLS):
@@ -286,8 +286,19 @@ async def _eightfold_pages(page: Any, ef_jobs: list[dict[str, Any]]) -> list[dic
     return out
 
 
-async def crawl_one(ctx: Any, url: str, sem: asyncio.Semaphore) -> list[dict[str, Any]] | None:  # noqa: PLR0912, PLR0915
+async def _polite(url: str) -> None:
+    """Wait for this host's turn before a page load or a click that fetches from it: the same one-request-a-DELAY
+    schedule as the adapters' requests (common.reserve_slot)."""
+    wait = reserve_slot(host_of(url))
+    if wait > 0:
+        await asyncio.sleep(wait)
+
+
+async def crawl_one(ctx: Any, url: str, sem: asyncio.Semaphore) -> list[dict[str, Any]] | None:  # noqa: PLR0911, PLR0912, PLR0915
     async with sem:
+        if not await asyncio.to_thread(robots_gate, url):  # the fetch of robots.txt blocks, so it runs off the loop
+            WHY[url] = ROBOTS_NOTE
+            return None
         page = await ctx.new_page()
         captured: list[dict[str, Any]] = []
         ef_jobs: list[dict[str, Any]] = []
@@ -323,6 +334,7 @@ async def crawl_one(ctx: Any, url: str, sem: asyncio.Semaphore) -> list[dict[str
         page.on("response", lambda r: asyncio.ensure_future(on_resp(r)))
         page.on("response", lambda r: asyncio.ensure_future(on_search(r)))
         try:
+            await _polite(url)
             r = await page.goto(url, timeout=45000, wait_until="domcontentloaded")
             with contextlib.suppress(Exception):
                 await page.wait_for_load_state("networkidle", timeout=15000)
@@ -347,6 +359,7 @@ async def crawl_one(ctx: Any, url: str, sem: asyncio.Semaphore) -> list[dict[str
                 with contextlib.suppress(Exception):
                     btn = page.get_by_role("button", name=MORE).first
                     if await btn.is_visible(timeout=300):
+                        await _polite(page.url)
                         await btn.click(timeout=2000)
                         await page.wait_for_timeout(900)
                 n = await page.eval_on_selector_all("a[href]", "e=>e.length")
@@ -424,6 +437,7 @@ async def crawl_one(ctx: Any, url: str, sem: asyncio.Semaphore) -> list[dict[str
                     )
                     if re.search(r"disabled|true", cls, re.I) or await nxt.is_disabled():
                         break
+                    await _polite(page.url)
                     await nxt.click(timeout=3000)
                 except Exception:
                     break
@@ -453,7 +467,7 @@ async def _run(urls: list[str]) -> dict[str, list[dict[str, Any]] | None]:
             if EXE
             else await p.chromium.launch(args=["--no-sandbox"])
         )
-        ctx = await b.new_context(user_agent=UA, locale="en-US")
+        ctx = await b.new_context(user_agent=USER_AGENT, locale="en-US")
         res = await asyncio.gather(*[crawl_one(ctx, u, sem) for u in urls])
         await b.close()
     return dict(zip(urls, res, strict=True))

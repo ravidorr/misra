@@ -292,3 +292,17 @@ def test_running_the_module_is_main(monkeypatch: pytest.MonkeyPatch, capsys: pyt
     monkeypatch.delitem(sys.modules, "sync_supabase", raising=False)
     runpy.run_module("sync_supabase", run_name="__main__")
     assert sync_supabase.SKIP_MESSAGE in capsys.readouterr().out
+
+
+def test_main_fails_when_the_list_has_companies_but_the_secrets_are_empty(
+    monkeypatch: pytest.MonkeyPatch, workdir: Any
+) -> None:
+    for name in ("SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY"):
+        monkeypatch.delenv(name, raising=False)
+    path = workdir / "data" / "excluded_companies.csv"
+    path.write_text("company,reason,date_added\nAcme,asked,2026-11-20\n", encoding="utf-8")
+    with pytest.raises(SystemExit, match="secrets are empty"):
+        sync_supabase.main()
+    path.write_text("company,reason\n", encoding="utf-8")
+    with pytest.raises(SystemExit, match="header"):
+        sync_supabase.main()
