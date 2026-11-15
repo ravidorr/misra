@@ -8,7 +8,7 @@ All notable changes are documented here. Format follows [Keep a Changelog](https
 
 - `TERMS.md`: a short as-is disclaimer (free, non-commercial hobby project, no warranties, listings collected automatically from public pages and not guaranteed, trademarks belong to their employers, signing in accepts the privacy notice including processing in the EU and the US, employers write to `raanan@avidor.org` to have their links removed). Linked from the page footer, the sign-in notice, `PRIVACY.md`, `README.md` and `llms.txt`.
 - The dashboard footer links to the privacy notice, the terms and the contact address (44px targets, new-tab links say so).
-- The notice next to the sign-in button (PLAN.md step 6.6, FR-1 AC 7): signing in is voluntary, the email is used only to save choices and send alerts the user turns on, with links to the privacy notice and the terms. It shows only while signed out and the button names it with `aria-describedby`.
+- The notice next to the sign-in button (PLAN.md step 6.6, FR-1 AC 7): signing in is optional and what is stored is stated, with links to the terms and the privacy notice. It shows only while signed out and the button names it with `aria-describedby`.
 - `tests/test_legal_wording.py` and tests of the notice and the footer links in `tests/test_sign_in.py`.
 
 ### Changed

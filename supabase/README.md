@@ -284,7 +284,7 @@ function refuses everything that Auth does not accept.
 
 `templates/auth.js` shows "Delete my account" next to "Sign out" for a signed-in user. It opens a native `dialog` (focus
 trap, Esc and screen-reader support from the browser) that says what is removed and that it cannot be undone, with
-"Keep my account" focused first. While the request runs the buttons are busy and Esc is ignored. If it fails, the
+"Cancel" focused first. While the request runs the buttons are busy and Esc is ignored. If it fails, the
 account stays, the dialog says what happened and the button reads "Try again". On success the page clears this user's
 queued changes, unsent filters and first-sign-in answer from the browser (`misra-pending-choices-v1`,
 `misra-pending-filters-v1`, `misra-imported-v1`, this user's entries only), signs out locally, and shows a short
