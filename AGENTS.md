@@ -31,7 +31,7 @@ Daily batch pipeline that crawls career pages, keeps history in SQLite, and emai
 
 ## Layout
 
-- Python modules at the root (`run.py`, `adapters.py`, `browser_crawl.py`, `digest.py`, `classify.py`, `regions.py`, `send_email.py`, `sync_supabase.py`, `build_dashboard.py`, `discover.py`, `common.py`, dev tools `survey*.py`), `tests/` for pytest
+- Python modules at the root (`run.py`, `adapters.py`, `browser_crawl.py`, `digest.py`, `classify.py`, `regions.py`, `send_email.py`, `send_digests.py`, `sync_supabase.py`, `build_dashboard.py`, `discover.py`, `common.py`, dev tools `survey*.py`), `tests/` for pytest
 - `data/` - seed lists and the SQLite history; `templates/` - dashboard page, script and styles; `docs/` - generated dashboard (GitHub Pages)
 - `design-system/` - tokens, components, showcase page (`index.html`), logo brief; `templates/dashboard.css` - dashboard layout
 - `supabase/` - migrations, policy tests and Edge Functions (`functions/`, TypeScript for Deno; logic in plain modules tested by vitest in `test/`, type-checked by `test/typecheck-functions.test.mjs`); `vendor/` - unmodified third-party scripts (supabase-js)

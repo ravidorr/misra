@@ -24,7 +24,7 @@ CONFIRM_FOOTER = (
 )
 UNSUBSCRIBE_HEADERS = (
     "List-Unsubscribe-Post: List-Unsubscribe=One-Click",
-    "functions/v1/unsubscribe?token={{raw_token}}",
+    "functions/v1/unsubscribe?t={{token}}>",
 )
 PROVIDERS = [
     ("Supabase", "EU, Ireland"),

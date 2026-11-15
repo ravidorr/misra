@@ -192,14 +192,35 @@ Decisions made in planning (they change the PRD's wording, so update the PRD in 
   are 401 from the gateway, the preflight answers 204 with `authorization` allowed (if the gateway refuses it, set
   `verify_jwt = false`), turning on is 403 `signup_closed` while the secret is unset, and turning off with no row is a 200. Once signups open (step 6.6),
   with the maintainer's own account: turn it on, read the confirmation email (plain text, `Reply-To` `raanan@avidor.org`, the
-  link opens `email.html`), confirm it, and see the dialog say "on". Open for step 6.3: the raw unsubscribe token made here
-  is not kept (only its hash is stored), so 6.3 has to decide how digests get a working unsubscribe link.
-- [ ] 6.3 `send_digests.py` replaces the per-recipient logic of `send_email.py`: match each confirmed subscriber's
+  link opens `email.html`), confirm it, and see the dialog say "on". Settled in step 6.3: the unsubscribe link is a stateless
+  HMAC token, so this function no longer makes an unsubscribe token (the `NOT NULL` hash column gets a random value that nothing reads).
+- [x] ~~6.3 `send_digests.py` replaces the per-recipient logic of `send_email.py`: match each confirmed subscriber's
   filters against jobs first seen after their confirmation, never emailed before, via the new `level`/`role_types`
   columns (this removes the Product-plus-Intern/Junior bug); no email when nothing new; weekly summary; per-user
-  try block; project From address via Resend; unsubscribe link and List-Unsubscribe headers; the confirmation email, the digest footer and the headers are exactly the texts in `supabase/email-texts.md` (copy them line for line, line breaks included); set Reply-To to `raanan@avidor.org`, because the lawyer said people can reply "Remove" and the sending address `digest@send.avidor.org` cannot receive mail; and send these headers in the Resend payload of EVERY digest email (RFC 8058 one-click, as Gmail and Yahoo require): `List-Unsubscribe: <https://dncodqeqpoqwcxdctzco.supabase.co/functions/v1/unsubscribe?token={{raw_token}}>` and `List-Unsubscribe-Post: List-Unsubscribe=One-Click`. The `unsubscribe` function already accepts both GET (a person clicks the footer link) and POST (the mail client's own button), verified live. DESIGN NOTE FOR THIS STEP: step 6.1 stores only the SHA-256 hash of the unsubscribe token, so the sender cannot rebuild the raw link for each email. Solve it before sending: make the unsubscribe token stateless and recomputable, for example `<subscription id>.<HMAC-SHA256(secret, id)>` verified by recomputing the MAC (the same `UNSUBSCRIBE_SECRET` as an Edge Function secret and an Actions secret), and change the `unsubscribe` function and its tests to accept it (no real subscription exists yet, so nothing needs migrating). Coverage-gap content
+  try block; project From address via Resend; unsubscribe link and List-Unsubscribe headers; the confirmation email, the digest footer and the headers are exactly the texts in `supabase/email-texts.md` (copy them line for line, line breaks included); set Reply-To to `raanan@avidor.org`, because the lawyer said people can reply "Remove" and the sending address `digest@send.avidor.org` cannot receive mail; and send these headers in the Resend payload of EVERY digest email (RFC 8058 one-click, as Gmail and Yahoo require): `List-Unsubscribe: <https://dncodqeqpoqwcxdctzco.supabase.co/functions/v1/unsubscribe?t={{token}}>` and `List-Unsubscribe-Post: List-Unsubscribe=One-Click` (the function reads the token from `?t=`). The `unsubscribe` function accepts both GET (a person clicks the footer link) and POST (the mail client's own button), and HEAD never changes anything. Coverage-gap content
   never appears in it. Remove `digest.py` selection logic that FR-9 replaces; keep the maintainer failure email on
-  `send_alert.py`. The old single-recipient digest keeps running until this path has delivered to the maintainer. Done when: FR-8 AC 4 to 9 and AC 12 (footer) hold in tests, FR-9 AC 9 holds.
+  `send_alert.py`. The old single-recipient digest keeps running until this path has delivered to the maintainer. Done when: FR-8 AC 4 to 9 and AC 12 (footer) hold in tests, FR-9 AC 9 holds.~~
+  Built (v0.27.0), not wired into the workflow and not enabled (the signup switches stay off). Decisions:
+  - Unsubscribe token (the open point): stateless, `<subscription id>.<HMAC-SHA256(UNSUBSCRIBE_SECRET, id)>` (64 hex characters; the id is
+    `subscriptions.user_id`). `send_digests.py` makes it for every email; the `unsubscribe` function recomputes the MAC (constant-time
+    compare) and only then calls the existing SQL function `unsubscribe_user`, so no migration is needed. The `unsubscribe_token_hash`
+    column is now a random placeholder that nothing reads (dropping it is a later clean-up). `UNSUBSCRIBE_SECRET` is a function secret
+    and an Actions secret (at least 32 characters, for example `openssl rand -hex 32`; both sides must hold the same value).
+  - Jobs and subscribers are read from Supabase with the service-role key (jobs after the sync), so the digest and the dashboard
+    see the same rows. A job counts as "new for this user" when it is open, in Israel (a region or a place of its own), first seen after
+    `consent_confirmed_at` and not in `emailed`. The silent baseline of `run.py` is kept: the jobs a company had when first seen are
+    never sent (limit: an Israel-only company with no Israeli job on its first crawl has its first one treated as baseline).
+  - Weekly is sent on Sundays (`WEEKLY_DAY`), the first working day in Israel, and holds what is still open, new and not yet emailed.
+    A failed Sunday is not lost: the jobs stay un-emailed and go out the next Sunday.
+  - Sends go out one by one, 0.6 s apart (Resend's default limit is 2 a second), with one retry after a 429 and an `Idempotency-Key`
+    so a re-run within a day after a failed record does not send the same email again (a record failure left to the next day can still repeat jobs). Jobs are recorded in `emailed` only after Resend accepted the email. The log
+    is public, so it holds counts only. Exit code 1 after every user was handled when any failed (the workflow's alert fires in 6.4).
+  - The digest subject and the list of roles are the project's own wording (the lawyer gave the footer and the headers); they are in
+    `supabase/email-texts.md` and pinned. `digest.py` and `send_email.py` are untouched: they keep running as the maintainer's digest
+    until 6.4 makes the maintainer an ordinary subscriber, and that step also removes the selection logic they hold (`select`, `ROLE`, `EXCLUDE` in `digest.py`), which the FR-9 rule replaces.
+  Remaining checks, live only: set `UNSUBSCRIBE_SECRET` (function secret and Actions secret, same value), deploy `unsubscribe`
+  (`supabase functions deploy unsubscribe --project-ref dncodqeqpoqwcxdctzco`), run the curl checks of `supabase/README.md`
+  ("Subscribers: confirm and unsubscribe") with a throwaway row, and run `send_digests.py --dry-run` once with the real secrets.
 - [ ] 6.4 Daily workflow: add the digest step after the sync with the service-role key and Resend key in that step
   only, keep the failure alert, and make the maintainer an ordinary subscriber. Done when: FR-8 AC 10 holds, and a manual run with a test
   subscriber delivers one email and a second run delivers none.

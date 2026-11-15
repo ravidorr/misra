@@ -1,5 +1,5 @@
 // The logic of the `email-settings` Edge Function (PLAN.md step 6.2; PRD FR-8 AC 1 to 3): a signed-in user turns the
-// personalised email on, or off. Turning it on stores the address, frequency and filters snapshot, makes the two tokens,
+// personalised email on, or off. Turning it on stores the address, frequency and filters snapshot, makes the confirmation token,
 // and sends ONE plain-text confirmation email with the link `email.html#token=<token>`; nothing else is ever sent from
 // here, and nothing is sent to the user's digest until they confirm (step 6.1's `confirm-email`). Turning it off does
 // exactly what the unsubscribe link does (the SQL function `unsubscribe_subscription`, reached through
@@ -25,8 +25,8 @@
 // (a 4xx); a timeout or a 5xx may have sent it, so the place stays used. If the database cannot be reached nothing is
 // sent (fail closed).
 //
-// Secrets and logs. The token exists only in the emailed link and in the one request to Resend; the database holds its
-// SHA-256. No log line and no answer holds a token, a hash, an address or a user id: only function names and statuses.
+// Secrets and logs. The confirmation token exists only in the emailed link and in the one request to Resend; the database
+// holds its SHA-256. (The unsubscribe link of the digest is not made here: it is a stateless HMAC token, see step 6.3.) No log line and no answer holds a token, a hash, an address or a user id: only function names and statuses.
 
 import { bearerToken, identify } from '../_shared/identity.ts';
 import { ALLOWED_ORIGIN, MAX_BODY_BYTES, PAGE_URL, callDatabase, describe, fail as failShared, loadConfig as loadBase, newToken, readLimited, reply as replyShared } from '../_shared/subscription.ts';
@@ -273,7 +273,9 @@ async function turnOn(origin: string | null, deps: Deps, config: Config, who: Wh
   let confirm: { token: string; hash: string };
   try {
     confirm = await newToken();
-    const unsubscribe = await newToken();
+    // The unsubscribe link is stateless (an HMAC of the user id, made by the digest sender), so no unsubscribe token is
+    // kept. The column is NOT NULL UNIQUE, so it still gets a random value that nothing reads: no link can be built from it.
+    const placeholder = await newToken();
     started = await callDatabase(
       deps,
       config,
@@ -285,7 +287,7 @@ async function turnOn(origin: string | null, deps: Deps, config: Config, who: Wh
         p_filters: request.filters,
         p_confirm_hash: confirm.hash,
         p_confirm_expires: new Date(now.getTime() + CONFIRM_TTL_DAYS * 24 * 60 * 60 * 1000).toISOString(),
-        p_unsubscribe_hash: unsubscribe.hash,
+        p_unsubscribe_hash: placeholder.hash,
         p_now: now.toISOString(),
       },
       STARTS,

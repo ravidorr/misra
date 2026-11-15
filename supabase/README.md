@@ -347,8 +347,23 @@ Files: `supabase/migrations/20261117100000_subscriptions_and_emailed.sql`, `supa
 ### The rule for sending
 
 A digest may be sent to a subscription when `consent_confirmed_at is not null and unsubscribed_at is null`, and only then
-(step 6.3 must select on exactly that). The row keeps the latest consent cycle: turning the email on again replaces the
+(`send_digests.py`, step 6.3, selects on exactly that). The row keeps the latest consent cycle: turning the email on again replaces the
 timestamps, the tokens and the address of the cycle before.
+
+### The digest sender (`send_digests.py`, step 6.3)
+
+Not wired into the daily workflow yet (step 6.4) and nothing sends while no subscription is confirmed. It reads the confirmed,
+not unsubscribed subscriptions and every job with the service-role key, and for each subscriber whose digest is due (daily: every
+day; weekly: Sundays) selects the open jobs in Israel that were first seen after `consent_confirmed_at`, are not in `emailed`,
+are not the baseline of a company seen for the first time, and fit the saved filters by the dashboard's rules (regions, levels,
+role types, keywords; the separate `level` and `role_types` columns, so Product with Intern and Junior gives only the entry-level
+Product roles). With nothing left there is no email. Otherwise one plain-text email goes out through Resend from
+`Misra <digest@send.avidor.org>` with `Reply-To: raanan@avidor.org`, the `List-Unsubscribe` and `List-Unsubscribe-Post` headers and
+the footer of `supabase/email-texts.md`, and only after Resend accepts it are the jobs written to `emailed`. Every user is its own
+try block; the run exits 1 after all were handled when any failed. It needs `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`,
+`RESEND_API_KEY` and `UNSUBSCRIBE_SECRET` (all empty: skipped, exit 0; some empty: exit 1 naming them). `--dry-run` prints counts and
+changes nothing. The log holds counts only, because the Actions log is public. `tests/test_send_digests.py` runs it against fakes
+of Supabase and Resend.
 
 ### The tables and who can write what
 
@@ -377,17 +392,30 @@ timestamps, the tokens and the address of the cycle before.
 
 ### Tokens
 
-One random 256-bit token (32 bytes, base64url, 43 characters) per purpose, so a confirmation link cannot unsubscribe and the
-reverse. Only its SHA-256 (64 hex characters, made in the function with Web Crypto; the table refuses anything else) is stored,
-so a database leak can neither confirm nor unsubscribe anyone, and the raw token exists only in the emailed link.
-`newToken()` in `_shared/subscription.ts` makes a token and its hash: the `email-settings` function (step 6.2) uses it for both and keeps no copy.
+Two kinds of token, so a confirmation link cannot unsubscribe and the reverse.
 
-The functions look a token up by its hash inside the database function. An attacker cannot choose a hash, so an index lookup
-leaks nothing through timing, which is why there is no byte-by-byte comparison to make constant-time. Guessing a token is a
-1 in 2^256 chance, so there is no rate limit or lock-out (a flood only costs reads). Unknown, malformed and wrong-purpose
-tokens get the same answer, so the functions cannot be used to find out who is subscribed. The confirmation token expires
-(`confirm_token_expires_at`, set by step 6.2, suggested 7 days); the unsubscribe token never does, and stays on the row
-after an unsubscribe so a second press says "already unsubscribed". A new subscription replaces both.
+The confirmation token is one random 256-bit token (32 bytes, base64url, 43 characters). Only its SHA-256 (64 hex characters, made
+in the function with Web Crypto; the table refuses anything else) is stored, so a database leak confirms nobody, and the raw token
+exists only in the emailed link. `newToken()` in `_shared/subscription.ts` makes a token and its hash: the `email-settings`
+function (step 6.2) uses it for the confirmation token and keeps no copy.
+
+The unsubscribe token is stateless (step 6.3): `<subscription id>.<HMAC-SHA256(UNSUBSCRIBE_SECRET, id)>`, where the id is
+`subscriptions.user_id` (36 characters) and the MAC is 64 lower-case hex characters. The digest sender (`send_digests.py`) makes it
+for every email, because step 6.1 stored only a hash and a hash cannot be turned back into a link. The `unsubscribe` function
+recomputes the MAC and compares it in constant time (`crypto.subtle.verify`); only a token that passes reaches the database, which
+is then asked to unsubscribe that id (`unsubscribe_user`). Nothing about the token is stored, nobody without the secret can make a
+link for another subscriber, and a leaked database unsubscribes nobody. The token is the same for the life of the subscription (an
+old email's link still works after the user turned the email on again, which is the safe direction). The column
+`unsubscribe_token_hash` is `NOT NULL UNIQUE` from step 6.1, so `email-settings` still fills it with a random value that nothing
+reads; dropping it is a later clean-up migration. The secret is `UNSUBSCRIBE_SECRET` (at least 32 characters, for example
+`openssl rand -hex 32`), set twice with the same value: as a function secret for `unsubscribe` and as an Actions secret for the
+digest step. Rotating it breaks the links of emails already sent, so do not.
+
+`confirm-email` looks the confirmation token up by its hash inside the database function. An attacker cannot choose a hash, so an
+index lookup leaks nothing through timing. Guessing either token is a 1 in 2^256 chance, so there is no rate limit or lock-out (a
+flood only costs reads). Unknown, malformed and wrong-purpose tokens get the same answer, so the functions cannot be used to find
+out who is subscribed. The confirmation token expires (`confirm_token_expires_at`, set by step 6.2, suggested 7 days); the
+unsubscribe token never does, so a second press says "already unsubscribed". A new subscription replaces the confirmation token.
 
 ### confirm-email
 
@@ -423,8 +451,10 @@ at once, shows a Confirm button, and only the click POSTs the token here, in the
 ### unsubscribe
 
 The unsubscribe link of every digest email, and the `List-Unsubscribe` header, is the same URL:
-`https://dncodqeqpoqwcxdctzco.supabase.co/functions/v1/unsubscribe?t=<unsubscribe token>`. Step 6.3 adds the headers
-`List-Unsubscribe: <that URL>` and `List-Unsubscribe-Post: List-Unsubscribe=One-Click`.
+`https://dncodqeqpoqwcxdctzco.supabase.co/functions/v1/unsubscribe?t=<unsubscribe token>` (the function reads `?t=`, not `?token=`).
+`send_digests.py` (step 6.3) sends the headers `List-Unsubscribe: <that URL>` and `List-Unsubscribe-Post: List-Unsubscribe=One-Click`
+with every digest email (`supabase/email-texts.md` has the exact texts). The function needs the secret `UNSUBSCRIBE_SECRET` besides
+the two Supabase supplies; without it the function logs the name and answers "try again" (GET) or 500 (POST).
 
 | Method | `unsubscribe` | Database |
 | --- | --- | --- |
@@ -432,6 +462,9 @@ The unsubscribe link of every digest email, and the `List-Unsubscribe` header, i
 | POST | RFC 8058 one-click (Gmail, Apple Mail; body `List-Unsubscribe=One-Click`, no sign-in, usually no Origin): 200 `text/plain` with the body `Unsubscribed.` (also when already unsubscribed); 404 JSON `link_not_valid`; 500 JSON `server_error` (the provider may retry) | yes |
 | HEAD | 200, no body: a scanner sees a healthy link and nothing changes | never |
 | OPTIONS and others | 405 | never |
+
+A token with a wrong MAC or shape (the confirmation token, a made-up id, a token made under another secret) is answered as
+`link_not_valid` without a database call, and so is a right MAC for an id that has no subscription (a deleted account).
 
 A function cannot render a page (Supabase serves its HTML as plain text), so the GET redirects to the static page, which shows
 the result; the token is not in the Location. On the POST the body is ignored, the token in the URL is the credential, a foreign
@@ -457,14 +490,15 @@ that failed the first time). A second press is not an error and keeps the first 
 Only function names and status codes (`confirm-email: failed confirm_subscription answered 500`): never a token, a hash, an
 address or a user id, and nothing from a request or a database error body. The platform's own request log is Supabase's, not
 ours: it holds the request URL, so the unsubscribe URL (which has the token in `?t=`, needed for RFC 8058) appears there for the
-log's retention. That token can only unsubscribe, and only that one subscription. The confirmation token never appears in a URL
-a server sees.
+log's retention. That token holds the subscription's id and can only unsubscribe that one subscription. The confirmation token
+never appears in a URL a server sees.
 
 ### How the subscriber functions are tested
 
 `test/confirm-email.test.ts` and `test/unsubscribe.test.ts` (vitest, part of `npm run test` and CI) run the handlers with a fake
 of the database (`test/support/fake-subscriptions.ts`, which mirrors the two SQL functions): the exact HTTP answers above, that
-the database only ever receives hashes, replays, expiry, unsubscribed-then-confirm, scanner methods (HEAD answers 200 with no body and the fake database is never called; a GET to `confirm-email` stays 405), the schedule in the confirm answer and its fallbacks, CORS, malformed tokens, and
+the database only ever receives a confirmation hash or a verified id (never a raw token), the unsubscribe token (made, verified,
+and every wrong shape, MAC, id and secret refused before the database; the same vector is pinned in `tests/test_send_digests.py`), replays, expiry, unsubscribed-then-confirm, scanner methods (HEAD answers 200 with no body and the fake database is never called; a GET to `confirm-email` stays 405), the schedule in the confirm answer and its fallbacks, CORS, malformed tokens, and
 that no log or answer contains a token, hash, address or key. They are type-checked and linted like the other functions.
 `tests/test_email_page.py` runs the page in a real browser against a fake function (the button, no request before the click,
 the fragment removed, every answer, retry, keyboard, light and dark, phone width, axe).
@@ -477,7 +511,11 @@ the fragment removed, every answer, retry, keyboard, light and dark, phone width
    so `db push` does not run it again: `supabase migration repair 20261117100000 --status applied --remote` (it targets the
    linked project and asks for the database password, or pass `--password`). No secret is needed: both functions use the
    `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` that Supabase supplies.
-2. Deploy: `supabase functions deploy confirm-email --project-ref dncodqeqpoqwcxdctzco` and
+2. Step 6.3 makes `unsubscribe` call `unsubscribe_user`, which comes from the migration
+   `20261118100000_digest_signup_and_limits.sql` (step 6.2): apply that migration first. Then step 6.3 adds a secret for `unsubscribe`: `supabase secrets set UNSUBSCRIBE_SECRET=<a long random value> --project-ref dncodqeqpoqwcxdctzco`
+   (for example the output of `openssl rand -hex 32`), and the same value as the Actions secret `UNSUBSCRIBE_SECRET`. Set it before
+   redeploying `unsubscribe` (no real subscription exists yet, so no earlier link breaks).
+   Deploy: `supabase functions deploy confirm-email --project-ref dncodqeqpoqwcxdctzco` and
    `supabase functions deploy unsubscribe --project-ref dncodqeqpoqwcxdctzco` (`config.toml` sets `verify_jwt = false`).
    Logs: [confirm-email](https://supabase.com/dashboard/project/dncodqeqpoqwcxdctzco/functions/confirm-email/logs),
    [unsubscribe](https://supabase.com/dashboard/project/dncodqeqpoqwcxdctzco/functions/unsubscribe/logs).
@@ -487,9 +525,13 @@ the fragment removed, every answer, retry, keyboard, light and dark, phone width
 ### Check the subscriber functions live
 
 Make test rows in the [SQL editor](https://supabase.com/dashboard/project/dncodqeqpoqwcxdctzco/sql/new) for a throwaway user
-(any real `auth.users` id), with tokens you generate and hash yourself:
-`T=$(openssl rand -base64 32 | tr '+/' '-_' | tr -d '=\n'); printf %s "$T" | shasum -a 256` gives the hash to insert. Make one
-pair for confirm, one for unsubscribe and a second unsubscribe token, with `confirm_token_expires_at` in the future. Then:
+(any real `auth.users` id; two ids, one for the POST checks and one for the GET check). The confirmation token you make and hash
+yourself: `CONFIRM=$(openssl rand -base64 32 | tr '+/' '-_' | tr -d '=\n'); printf %s "$CONFIRM" | shasum -a 256` gives the hash to
+insert, with `confirm_token_expires_at` in the future. `unsubscribe_token_hash` is `NOT NULL`, so insert any 64 hex characters
+(nothing reads it). The unsubscribe token is made from the id and the secret `UNSUBSCRIBE_SECRET` (type the secret into your shell,
+never into chat or a file):
+`UNSUB="$ID.$(printf %s "$ID" | openssl dgst -sha256 -hmac "$UNSUBSCRIBE_SECRET" -hex | awk '{print $NF}')"`, and the same with the
+second id (`ID2`) for `UNSUB2`. Then:
 
 ```sh
 BASE=https://dncodqeqpoqwcxdctzco.supabase.co/functions/v1
@@ -504,6 +546,8 @@ curl -s -i -X POST "$BASE/unsubscribe?t=$UNSUB" -d 'List-Unsubscribe=One-Click' 
 curl -s -i -X POST "$BASE/unsubscribe?t=$UNSUB" -d 'List-Unsubscribe=One-Click'   # 200 Unsubscribed. again
 curl -s -i -I "$BASE/unsubscribe?t=$UNSUB"                                        # HEAD: 200, no body, never acts
 curl -s -i -I "$BASE/confirm-email"                                               # HEAD: 200, no body, never acts
+# a changed MAC is a link that is not valid: POST 404 link_not_valid, and nothing changes
+curl -s -i -X POST "$BASE/unsubscribe?t=$ID2.$(printf '%064d' 0)" -d 'List-Unsubscribe=One-Click'
 # a GET redirects to the page (use the second unsubscribe token): 303, Location .../email.html#unsubscribed
 curl -s -i "$BASE/unsubscribe?t=$UNSUB2"
 ```
@@ -573,11 +617,11 @@ reads the user's own `subscriptions` row again (row-level security gives them th
 
 What turn on writes (`subscribe_start`, one statement under a row lock): `address`, `frequency`, `filters`, `consent_given_at = now`,
 `consent_confirmed_at = null`, `unsubscribed_at = null`, the SHA-256 of a fresh confirmation token (valid 7 days:
-`CONFIRM_TTL_DAYS`) and of a fresh unsubscribe token. A new address is a new consent: nothing is sent until the new link is
+`CONFIRM_TTL_DAYS`) and a random placeholder for the unsubscribe hash column (the unsubscribe link is the stateless token of
+step 6.3). A new address is a new consent: nothing is sent until the new link is
 confirmed. Asking again while waiting issues a new link (the old one stops working); asking for the running address leaves the
-row alone. The `emailed` list is not touched. The raw unsubscribe token is not kept anywhere and is not in the confirmation email,
-so a digest cannot rebuild an unsubscribe link from what is stored: step 6.3 has to decide how the digests get a working link
-(step 6.1 documents the unsubscribe token as stable for the life of the row, and replacing it would break the links of earlier emails).
+row alone. The `emailed` list is not touched. The confirmation email has no unsubscribe link: its reader may be someone who did not ask for it. The digests get theirs from
+the stateless unsubscribe token (see "Tokens").
 
 The confirmation email is plain text from `Misra <digest@send.avidor.org>` with `Reply-To: raanan@avidor.org` (the sending address
 cannot receive mail), subject "Confirm your Misra job alerts". The body is the lawyer's wording, verbatim: "Someone (hopefully
@@ -611,7 +655,7 @@ per-address limit for each; the daily cap bounds the total.
 
 ### Turning it off
 
-`unsubscribe_user` reads the row's unsubscribe hash (the raw token is never stored) and calls the step 6.1 function
+`unsubscribe_user` reads the row's unsubscribe hash and calls the step 6.1 function
 `unsubscribe_subscription`, so the clean-up is the very same code as the unsubscribe link's: it keeps the address and the consent
 timestamps, sets `unsubscribed_at`, and clears `filters`, `frequency`, the confirmation token and the `emailed` rows. A repeat is
 not an error. A user with no row gets `not_subscribed`. `supabase/tests/digest_signup.sql` runs both ways on identical rows and

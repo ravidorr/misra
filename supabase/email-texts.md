@@ -25,6 +25,24 @@ If you did not ask for this email, ignore it, and nothing will be sent to you.
 Privacy: https://ravidorr.github.io/misra/privacy.html | Terms: https://ravidorr.github.io/misra/terms.html
 ```
 
+## Digest subject and list
+
+The lawyer's texts cover the footer and the headers; the subject and the list of roles are the project's own plain wording, set by
+step 6.3 and pinned by `tests/test_send_digests.py`. `{{roles}}` is `role` for one and `roles` for more. The subject of a weekly
+digest starts with `Misra weekly:`. A role with no place leaves out the brackets and the place, and one with no link leaves out the link line.
+The list is followed by a blank line and the footer. It holds job listings only, never anything about crawl problems.
+
+Subject (daily): `Misra: {{count}} new matching {{roles}}`
+
+Subject (weekly): `Misra weekly: {{count}} new matching {{roles}}`
+
+```text
+{{count}} new {{roles}} matching your filters:
+
+{{company}} - {{title}} ({{location}})
+{{url}}
+```
+
 ## Digest footer
 
 This footer ends every digest email, after the list of roles.
@@ -44,9 +62,11 @@ Privacy: https://ravidorr.github.io/misra/privacy.html | Terms: https://ravidorr
 ## Headers of every digest email
 
 Passed in the `headers` field of the Resend payload, so that Gmail and Yahoo show their own Unsubscribe button (RFC 8058).
-`{{raw_token}}` is the subscriber's unsubscribe token (see the design note in `PLAN.md` step 6.3).
+`{{token}}` is the subscriber's stateless unsubscribe token, `<subscription id>.<HMAC-SHA256(UNSUBSCRIBE_SECRET, id)>`, which
+`send_digests.py` makes for every email and the `unsubscribe` Edge Function verifies by recomputing the MAC (`supabase/README.md`). The function
+reads the token from `?t=`; the same URL is the `{{unsubscribe_url}}` of the footer.
 
 ```text
-List-Unsubscribe: <https://dncodqeqpoqwcxdctzco.supabase.co/functions/v1/unsubscribe?token={{raw_token}}>
+List-Unsubscribe: <https://dncodqeqpoqwcxdctzco.supabase.co/functions/v1/unsubscribe?t={{token}}>
 List-Unsubscribe-Post: List-Unsubscribe=One-Click
 ```

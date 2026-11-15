@@ -3,13 +3,20 @@
 // (`fetch`, `Request`, `Response`, Web Crypto); the secrets, `fetch` and the clock come in through `Deps`, so the vitest
 // suite runs this file as it is. The `index.ts` of each function is the only code that knows Deno.
 //
-// Tokens. A token is 32 random bytes, base64url (43 characters), one for each purpose (confirm, unsubscribe). The
-// database stores only its SHA-256 (64 hex characters), so a leaked database confirms and unsubscribes nobody; the raw
-// token appears only in the emailed link. The functions look a token up by that hash inside the database function
-// (`confirm_subscription`, `unsubscribe_subscription`): an attacker cannot choose a hash, so the index lookup leaks
-// nothing through timing, and guessing a token is a 1 in 2^256 chance. Because of that there is no lock-out or rate
+// Confirmation tokens. A token is 32 random bytes, base64url (43 characters). The database stores only its SHA-256
+// (64 hex characters), so a leaked database confirms nobody; the raw token appears only in the emailed link. The
+// function looks a token up by that hash inside the database function (`confirm_subscription`): an attacker cannot
+// choose a hash, so the index lookup leaks nothing through timing, and guessing a token is a 1 in 2^256 chance. Because of that there is no lock-out or rate
 // limit here, and unknown, malformed and wrong tokens all get the same answer, so the functions cannot be used to find
 // out who is subscribed.
+//
+// The unsubscribe link is the exception to "a random token, stored as a hash": it is stateless (PLAN.md step 6.3). The
+// digest sender must put a working link in every email, and the database holds no raw token, so the token is
+// `<subscription id>.<HMAC-SHA256(UNSUBSCRIBE_SECRET, id)>` (the id is `subscriptions.user_id`; the MAC is 64 hex
+// characters), rebuilt by the sender (send_digests.py) and verified here by recomputing the MAC. Nothing about it is
+// stored, an attacker who does not hold the secret cannot make a link for anyone else, and the MAC is compared in
+// constant time (`crypto.subtle.verify`). One token per subscription for its whole life: an old email's link still
+// unsubscribes the current subscription, which is the safe direction.
 //
 // Nothing is ever logged but status codes and function names: no token, hash, address or user id.
 
@@ -59,8 +66,9 @@ export async function hashToken(token: string): Promise<string> {
 }
 
 /**
- * A fresh token and its hash. Step 6.2's function that turns the email on uses this for both the confirmation and the
- * unsubscribe token: it stores `hash`, puts `token` in the email, and keeps no other copy.
+ * A fresh token and its hash. Step 6.2's function that turns the email on uses this for the confirmation token: it
+ * stores `hash`, puts `token` in the email, and keeps no other copy. (It also makes one for the `NOT NULL` unsubscribe
+ * hash column, whose value nothing reads any more: the unsubscribe link is the stateless token below.)
  */
 export async function newToken(
   random: (bytes: Uint8Array<ArrayBuffer>) => Uint8Array<ArrayBuffer> = (bytes) => crypto.getRandomValues(bytes),
@@ -71,6 +79,37 @@ export async function newToken(
     .replace(/\//gu, '_')
     .replace(/=+$/u, '');
   return { token, hash: await hashToken(token) };
+}
+
+// ---- The stateless unsubscribe token -------------------------------------------------------------------------------
+
+const UNSUBSCRIBE_TOKEN = /^([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\.([0-9a-f]{64})$/u;
+/** The shortest `UNSUBSCRIBE_SECRET` accepted (`openssl rand -hex 32` gives 64 characters). */
+export const UNSUBSCRIBE_SECRET_MIN_LENGTH = 32;
+
+async function macKey(secret: string, usage: 'sign' | 'verify'): Promise<CryptoKey> {
+  return crypto.subtle.importKey('raw', new TextEncoder().encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, [usage]);
+}
+
+const toHex = (bytes: Uint8Array): string => Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('');
+
+/** The unsubscribe token of a subscription: `<id>.<hex HMAC-SHA256 of the id under the secret>`. */
+export async function makeUnsubscribeToken(secret: string, id: string): Promise<string> {
+  const mac = new Uint8Array(await crypto.subtle.sign('HMAC', await macKey(secret, 'sign'), new TextEncoder().encode(id)));
+  return `${id}.${toHex(mac)}`;
+}
+
+/**
+ * The subscription id a token names, when the MAC is right; undefined for anything else (wrong shape, wrong MAC, a
+ * confirmation token, a token made under another secret). `crypto.subtle.verify` compares in constant time.
+ */
+export async function verifyUnsubscribeToken(secret: string, token: unknown): Promise<string | undefined> {
+  const match = typeof token === 'string' ? UNSUBSCRIBE_TOKEN.exec(token) : null;
+  if (!match) return undefined;
+  const [, id = '', mac = ''] = match;
+  const bytes = Uint8Array.from(mac.match(/../gu) ?? [], (pair) => Number.parseInt(pair, 16));
+  const valid = await crypto.subtle.verify('HMAC', await macKey(secret, 'verify'), bytes, new TextEncoder().encode(id));
+  return valid ? id : undefined;
 }
 
 // ---- The database --------------------------------------------------------------------------------------------------
