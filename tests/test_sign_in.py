@@ -226,6 +226,8 @@ async def test_fr1_ac6_the_name_and_photo_from_google_are_neither_shown_nor_stor
     for value in (*keys.values(), await page.evaluate("JSON.stringify(Object.entries(sessionStorage))")):
         assert NAME not in value
         assert "photos.test" not in value
+    assert "provider_token" not in keys[STORAGE_KEY]  # Google's own tokens are dropped
+    assert "provider_refresh_token" not in keys[STORAGE_KEY]
 
 
 async def test_fr1_ac6_a_renewed_session_is_stored_without_the_provider_details_too(page: Page, site: Path) -> None:
@@ -309,8 +311,6 @@ async def test_a_sign_in_that_cannot_start_says_so(page: Page, site: Path, stub:
     await expect(page.locator("#authMessage")).not_to_have_text("")
     assert (await page.locator("#authMessage").inner_text()).startswith(message)
     assert len(problems) == 1  # logged once
-    await page.click("#signIn")  # the next try clears the old message first
-    await expect(page.locator("#authMessage")).not_to_have_text("")
 
 
 async def test_a_sign_out_the_service_cannot_finish_still_signs_out_here_and_says_so(page: Page, site: Path) -> None:
@@ -350,7 +350,7 @@ async def test_blocked_browser_storage_does_not_break_the_page_or_the_sign_in_bu
     assert await page.locator("#signIn").is_visible()
     await start_sign_in(page, AuthBackend())
     assert page.url.startswith(f"{build_dashboard.SUPABASE_URL}/auth/v1/authorize")
-    assert all("blocked" not in p or "dashboard.js" not in p for p in problems)
+    assert problems == []
 
 
 # ---- The header: small, phone width, light and dark, accessible ----

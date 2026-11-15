@@ -134,10 +134,10 @@ begin
     assert false, 'Bob wrote a job choice for the first account';
   exception when insufficient_privilege then null;
   end;
-  begin
-    insert into public.user_prefs (user_id) values ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa');
-    assert false, 'Bob wrote preferences for the first account';
-  exception when insufficient_privilege or unique_violation then null;
+  begin  -- the check is reached because Bob's own row is fine and the id is not his: use a fresh id, not Ann's taken one
+    insert into public.user_prefs (user_id) values ('dddddddd-dddd-4ddd-8ddd-dddddddddddd');
+    assert false, 'Bob wrote preferences for another account';
+  exception when insufficient_privilege then null;
   end;
   begin  -- handing his own row to the first account is refused by the update policy's check
     update public.user_jobs set user_id = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa' where company = 'Acme';
@@ -219,6 +219,15 @@ begin
     assert false, 'an oversized url was accepted';
   exception when check_violation then null;
   end;
+  begin
+    insert into public.user_jobs (user_id, company, job_id, state, url)
+      values ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', 'Acme', '5', 'star', 'javascript:alert(1)');
+    assert false, 'a url that is not http(s) was accepted';
+  exception when check_violation then null;
+  end;
+  insert into public.user_jobs (user_id, company, job_id, state, updated_at)
+    values ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', 'Acme', '6', 'star', '2000-01-01');
+  assert (select updated_at from public.user_jobs where job_id = '6') > '2020-01-01', 'a client back-dated updated_at on insert';
 end $$;
 reset role;
 

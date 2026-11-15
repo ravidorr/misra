@@ -294,15 +294,6 @@ def test_every_user_policy_is_for_the_signed_in_role_and_tests_the_own_row() -> 
         assert {p["using"], p["check"]} - {None} <= OWN_ROW
 
 
-def test_fr1_ac3_a_user_has_no_privilege_on_rows_that_are_not_their_own() -> None:
-    """Every table a user can reach filters on the user's own id, and the whole test is in the SQL tests too."""
-    stmts = statements()
-    for table in USER_TABLES:
-        body = next(m["body"] for s in stmts if (m := CREATE_TABLE.fullmatch(s)) and m["table"] == table)
-        assert "user_id uuid" in body
-    assert "enable row level security" in " ".join(s for s in stmts if "profiles" in s)
-
-
 def test_fr1_ac6_the_profile_keeps_only_the_email() -> None:
     stmts = statements()
     profiles = next(m for s in stmts if (m := CREATE_TABLE.fullmatch(s)) and m["table"] == "profiles")
@@ -453,8 +444,8 @@ OWN = "(select auth.uid()) = user_id"
         ("execute function public.sync_profile();", "execute function public.touch_updated_at();"),
         ("execute function public.sync_profile();", "execute function public.nothing();"),
         (
-            "create trigger touch_user_jobs before update on public.user_jobs",
-            "create trigger touch_user_jobs before update on auth.users",
+            "create trigger touch_user_jobs before insert or update on public.user_jobs",
+            "create trigger touch_user_jobs before insert or update on auth.users",
         ),
         # the access token hook: it must empty user_metadata, and only Supabase Auth may run it
         ("return jsonb_set(event, '{claims,user_metadata}', '{}'::jsonb);", "return event;"),

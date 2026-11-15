@@ -164,6 +164,8 @@ class AuthBackend:
             "expires_in": 3600,
             "expires_at": expires,
             "refresh_token": "refresh-1",
+            "provider_token": "google-access-token",
+            "provider_refresh_token": "google-refresh-token",
             "user": {
                 "id": USER_ID,
                 "aud": "authenticated",

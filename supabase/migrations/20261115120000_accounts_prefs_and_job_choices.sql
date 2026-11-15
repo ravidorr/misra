@@ -19,7 +19,7 @@ create table public.profiles (
 );
 
 -- A user's saved dashboard filters (step 4.3) and email settings (step 6.2), as JSON objects the page owns. The size
--- checks keep one account from filling the free tier.
+-- checks bound one row. There is no cap on the number of user_jobs rows per user yet.
 create table public.user_prefs (
   user_id        uuid primary key references auth.users (id) on delete cascade,
   filters        jsonb not null default '{}'
@@ -31,7 +31,8 @@ create table public.user_prefs (
 
 -- One row per user and job: the state is a single column, so a job cannot be starred and discarded at once (FR-2). The
 -- job is named by company and job_id, the key of public.jobs, but there is no foreign key: a starred job that has since
--- closed must stay (step 4.2), with the title, location and link kept here to show it as "no longer listed".
+-- closed must stay (step 4.2), with the title, location and link kept here to show it as "no longer listed". The link
+-- must be http(s), so it is safe to render as a link.
 create table public.user_jobs (
   user_id    uuid not null references auth.users (id) on delete cascade,
   company    text not null check (char_length(company) between 1 and 200),
@@ -39,7 +40,7 @@ create table public.user_jobs (
   state      text not null check (state in ('star', 'discard')),
   title      text check (char_length(title) <= 500),
   location   text check (char_length(location) <= 500),
-  url        text check (char_length(url) <= 2000),
+  url        text check (char_length(url) <= 2000 and url ~ '^https?://'),
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   primary key (user_id, company, job_id)
@@ -91,7 +92,7 @@ create policy "own job choices delete" on public.user_jobs
   for delete to authenticated
   using ((select auth.uid()) = user_id);
 
--- Keeps updated_at honest: a client cannot back-date a row.
+-- Keeps updated_at honest: a client cannot back-date or freeze it, on insert or update.
 create function public.touch_updated_at() returns trigger
 language plpgsql
 set search_path = ''
@@ -104,9 +105,9 @@ $$;
 
 revoke all on function public.touch_updated_at() from public, anon, authenticated;
 
-create trigger touch_user_prefs before update on public.user_prefs
+create trigger touch_user_prefs before insert or update on public.user_prefs
   for each row execute function public.touch_updated_at();
-create trigger touch_user_jobs before update on public.user_jobs
+create trigger touch_user_jobs before insert or update on public.user_jobs
   for each row execute function public.touch_updated_at();
 
 -- Copies the email, and only the email, of a new or changed auth user into public.profiles. It runs as its owner

@@ -58,7 +58,7 @@ Decisions made in planning (they change the PRD's wording, so update the PRD in 
   title, team, location, url, posted, first_seen, last_seen, status, plus empty `description`, `details jsonb`,
   `level`, `role_types text[]`, `regions text[]`, `locations text[]`), `crawl_log`, and RLS: public read of open jobs,
   no public write. Done when: migrations apply to a fresh project and a read with the anon key works.~~
-  Remaining check, live only: apply the migrations to the Supabase project (`supabase/README.md`) and read with the anon key.~~ Done: migration applied 2026-11-14, anon read and write refusal verified live.
+  ~~Remaining check, live only: apply the migrations to the Supabase project (`supabase/README.md`) and read with the anon key.~~ Done: migration applied 2026-11-14, anon read and write refusal verified live.
 - [x] ~~2.2 `sync_supabase.py`: after each daily run upsert every open job (all 6,026 today, as in `docs/jobs.json`, not only Israeli ones, so the signed-out dashboard stays whole) and mark missing ones closed, using the
   service-role key; new module (release lists), tests with a fake client. Add a daily-workflow step after the crawl and
   before the deploy push, with the secret exposed only to that step, and the maintainer failure alert covering it.

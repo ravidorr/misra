@@ -19,7 +19,8 @@ const MESSAGES = {
   out: 'You are signed out here, but the service could not end the session on its side. It ends by itself when it expires.',
 };
 
-/* The session as the page keeps it: the account id and the email, nothing else the provider said. */
+/* The session as the page keeps it: the user reduced to id, email and a few account fields, and without Google's own
+   access and refresh tokens (the page never uses them, and they could fetch the name and photo). */
 function scrubbed(value) {
   let session;
   try {
@@ -28,17 +29,19 @@ function scrubbed(value) {
     return value; /* not a session (the PKCE code verifier is a plain string) */
   }
   if (typeof session?.user !== 'object' || session.user === null) return value;
+  const kept = { ...session };
+  for (const name of ['provider_token', 'provider_refresh_token']) Reflect.deleteProperty(kept, name); /* Google's own */
   const { id, aud, role, email, created_at: createdAt } = session.user;
-  return JSON.stringify({ ...session, user: { id, aud, role, email, created_at: createdAt, app_metadata: {}, user_metadata: {} } });
+  return JSON.stringify({ ...kept, user: { id, aud, role, email, created_at: createdAt, app_metadata: {}, user_metadata: {} } });
 }
 
-/* localStorage, or memory for this page view when the browser blocks storage (then a sign-in cannot survive the
+/* localStorage, or memory for this page view when the browser blocks it or its quota is full (then a sign-in cannot survive the
    redirect from Google: the code that comes back has no matching start, and the page says the sign-in did not finish). */
 const memory = new Map();
 const storage = {
   getItem(key) {
     try {
-      return localStorage.getItem(key);
+      return localStorage.getItem(key) ?? memory.get(key) ?? null;
     } catch {
       return memory.get(key) ?? null;
     }
