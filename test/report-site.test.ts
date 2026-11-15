@@ -47,7 +47,7 @@ function rejectWithText(reason: string): Promise<never> {
 const anyString = expect.any(String) as string;
 const contains = (text: string): string => expect.stringContaining(text) as string;
 
-function fakeWorld(options: { resend?: number; database?: 'down' | 'garbage' | 'release-down'; void?: 200 | 204 } = {}): World {
+function fakeWorld(options: { resend?: number; database?: 'down' | 'garbage' | 'release-down'; void?: 200 | 204 | 'null' | 'garbage' } = {}): World {
   const reports = new Map<string, number>();
   const cap = { sent: 0 };
   const emails: World['emails'] = [];
@@ -83,7 +83,10 @@ function fakeWorld(options: { resend?: number; database?: 'down' | 'garbage' | '
       const key = `${String(body.p_day)}|${String(body.p_ip_hash)}`;
       reports.set(key, Math.max(0, (reports.get(key) ?? 0) - 1));
       // PostgREST answers a function that returns void with no body: 204 (v10 and later) or an empty 200 (older).
-      return Promise.resolve(new Response(options.void === 200 ? '' : null, { status: options.void ?? 204 }));
+      return Promise.resolve(new Response(
+          { 200: '', null: 'null', garbage: 'not json' }[String(options.void)] ?? null,
+          { status: options.void === undefined || options.void === 204 ? 204 : 200 },
+        ));
     }
     return Promise.resolve(new Response('unexpected', { status: 404 }));
   });
@@ -196,8 +199,8 @@ describe('the flood', () => {
     expect((await handleReport(post(GOOD, { 'cf-connecting-ip': '203.0.113.7' }), tomorrow)).status).toBe(200);
   });
 
-  it.each([204, 200] as const)(
-    'gives the place back when Resend fails, so a failure does not eat the cap (void answer %i, empty body)',
+  it.each([204, 200, 'null', 'garbage'] as const)(
+    'gives the place back when Resend fails, so a failure does not eat the cap (void answer %s, no JSON read)',
     async (voidStatus) => {
       const spy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
       const world = fakeWorld({ resend: 422, void: voidStatus });
@@ -225,6 +228,7 @@ describe('the flood', () => {
     const result = await answer(await handleReport(post(GOOD, { 'cf-connecting-ip': '203.0.113.7' }), world.deps));
     expect(result.status).toBe(502);
     expect(JSON.stringify(spy.mock.calls)).toContain('could not give the place back for 2026-11-16');
+    expect(JSON.stringify(spy.mock.calls)).toContain('report_site_release answered 500');
   });
 
   it('never releases a place for a refusal, and does not call Resend', async () => {

@@ -225,7 +225,7 @@ async function release(deps: Deps, config: Config, day: string, ipHash: string):
   try {
     // The function returns void: PostgREST answers with no body, so only the status counts and nothing is parsed.
     const response = await callDatabase(deps, config, 'report_site_release', { p_day: day, p_ip_hash: ipHash });
-    await response.body?.cancel();
+    await response.body?.cancel().catch(() => undefined);
   } catch (error) {
     // Losing a place only means the cap is reached a little earlier today.
     console.error(
