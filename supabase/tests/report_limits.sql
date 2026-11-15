@@ -22,6 +22,9 @@ begin
   end loop;
   assert results = array['ok', 'ok', 'ok', 'ip_limit', 'ip_limit'], 'the per-visitor limit is wrong: ' || results::text;
 
+  assert (select reports from public.report_ip_limits where day = date '2030-01-01' and ip_hash = 'visitor-a') = 3,
+    'a refused request was counted against the visitor';
+
   -- A visitor over the limit does not use up the daily cap: three places were taken, not five.
   assert (select sent from public.report_daily_cap where day = date '2030-01-01') = 3,
     'a refused visitor used up the daily cap';
@@ -61,6 +64,9 @@ begin
   perform public.report_site_release(date '2030-01-07', 'a');
   assert (select reports from public.report_ip_limits where day = date '2030-01-07' and ip_hash = 'a') = 0,
     'a release did not give the visitor their report back';
+
+  -- A limit of zero lets nobody through.
+  assert public.report_site_reserve(date '2030-01-08', 'none', 0, 20) = 'ip_limit', 'a limit of zero let a report through';
 
   -- A cap of zero sends nothing.
   assert public.report_site_reserve(date '2030-01-06', 'zero', 3, 0) = 'daily_cap', 'a cap of zero let a report through';

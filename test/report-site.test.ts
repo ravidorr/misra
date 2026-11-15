@@ -312,6 +312,27 @@ describe('bad requests', () => {
     expect(world.calls).toEqual([]);
   });
 
+  it('stops reading a body that has no length once it is over the limit', async () => {
+    const world = fakeWorld();
+    let pulled = 0;
+    const stream = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        pulled += 1;
+        controller.enqueue(new Uint8Array(1024).fill(97));
+        if (pulled > 1000) controller.close();
+      },
+    });
+    const request = new Request('https://project.supabase.test/', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', origin: ALLOWED_ORIGIN },
+      body: stream,
+      duplex: 'half',
+    } as RequestInit);
+    expect((await handleReport(request, world.deps)).status).toBe(413);
+    expect(pulled).toBeLessThan(20);
+    expect(world.calls).toEqual([]);
+  });
+
   it('wants application/json and POST', async () => {
     const world = fakeWorld();
     const plain = post(JSON.stringify(GOOD), { 'content-type': 'text/plain' });

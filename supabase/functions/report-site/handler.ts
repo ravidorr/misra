@@ -267,11 +267,30 @@ function secondsUntilTomorrow(now: Date): string {
   return String(Math.max(1, Math.ceil((tomorrow - now.getTime()) / 1000)));
 }
 
+/** The body as text, read chunk by chunk and abandoned as soon as it passes the limit; undefined when it is too large. */
+async function readLimited(request: Request): Promise<string | undefined> {
+  if (!request.body) return '';
+  const reader = request.body.getReader();
+  const bytes = new Uint8Array(MAX_BODY_BYTES);
+  let length = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    if (length + value.byteLength > MAX_BODY_BYTES) {
+      await reader.cancel();
+      return undefined;
+    }
+    bytes.set(value, length);
+    length += value.byteLength;
+  }
+  return new TextDecoder().decode(bytes.subarray(0, length));
+}
+
 /** The JSON object of the request, or why there is none. The size is checked before and after reading the body. */
 async function readJson(request: Request): Promise<Record<string, unknown> | 'too_large' | 'not_an_object'> {
   if (Number(request.headers.get('content-length') ?? '0') > MAX_BODY_BYTES) return 'too_large';
-  const text = await request.text();
-  if (new TextEncoder().encode(text).length > MAX_BODY_BYTES) return 'too_large';
+  const text = await readLimited(request);
+  if (text === undefined) return 'too_large';
   let parsed: unknown;
   try {
     parsed = JSON.parse(text);

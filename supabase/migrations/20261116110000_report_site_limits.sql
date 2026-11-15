@@ -45,10 +45,15 @@ begin
   delete from public.report_ip_limits where day < p_day - 1;
   delete from public.report_daily_cap where day < p_day - 1;
 
+  -- Always the visitor's row first, then the cap row (report_site_release takes them in the same order, so the two
+  -- cannot deadlock). A refused visitor keeps their count, so a refund of an earlier report restores the allowance.
+  if p_ip_limit < 1 then
+    return 'ip_limit';
+  end if;
   insert into public.report_ip_limits as l (day, ip_hash, reports) values (p_day, p_ip_hash, 1)
-    on conflict (day, ip_hash) do update set reports = l.reports + 1
+    on conflict (day, ip_hash) do update set reports = l.reports + 1 where l.reports < p_ip_limit
     returning l.reports into used;
-  if used > p_ip_limit then
+  if used is null then
     return 'ip_limit';
   end if;
 
@@ -73,8 +78,8 @@ language plpgsql
 set search_path = ''
 as $$
 begin
-  update public.report_daily_cap set sent = greatest(sent - 1, 0) where day = p_day;
   update public.report_ip_limits set reports = greatest(reports - 1, 0) where day = p_day and ip_hash = p_ip_hash;
+  update public.report_daily_cap set sent = greatest(sent - 1, 0) where day = p_day;
 end;
 $$;
 
