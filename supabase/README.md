@@ -175,7 +175,7 @@ The function is TypeScript for Deno, which the repository's tools do not run. Th
 that use only web standards (`fetch`, `Request`, `Response`, Web Crypto), with the secrets, `fetch` and the clock passed
 in. `test/report-site.test.ts` runs them with vitest (part of `npm run test` and CI) against a fake Resend and a fake of
 the two database functions, including a flood that must send at most the cap. `test/typecheck-functions.test.mjs`
-type-checks the function and its tests with the compiler (`tsconfig.json`, strict), and ESLint (strict, type-aware)
+type-checks the function and its tests with the compiler (`supabase/functions/tsconfig.json` and `test/tsconfig.json`, strict; there is no `tsconfig.json` at the root because the release gate treats that file as a release trigger), and ESLint (strict, type-aware)
 lints them with the rest. Only the few lines of `index.ts` run untested until the function is deployed.
 
 ### Deploy (the maintainer; nothing here is done by the pull request)

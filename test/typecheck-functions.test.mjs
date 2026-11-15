@@ -1,5 +1,5 @@
 // The Edge Function is TypeScript for Deno, and `npm run typecheck` only runs mypy. This test type-checks the function
-// and its tests with the compiler against tsconfig.json (strict), so a type error fails `npm run test` and CI.
+// and its tests with the compiler against test/tsconfig.json, which extends supabase/functions/tsconfig.json (strict), so a type error fails `npm run test` and CI.
 import { fileURLToPath } from 'node:url';
 
 import ts from 'typescript';
@@ -7,9 +7,9 @@ import { describe, expect, it } from 'vitest';
 
 describe('TypeScript of the Edge Functions and their tests', () => {
   it('compiles without a diagnostic', () => {
-    const root = fileURLToPath(new URL('..', import.meta.url));
+    const root = fileURLToPath(new URL('.', import.meta.url));
     const configPath = ts.findConfigFile(root, ts.sys.fileExists, 'tsconfig.json');
-    expect(configPath).toBeDefined();
+    expect(configPath).toBe(`${root}tsconfig.json`);
     const read = ts.readConfigFile(configPath, ts.sys.readFile);
     const parsed = ts.parseJsonConfigFileContent(read.config, ts.sys, root);
     expect(parsed.errors.map((d) => ts.flattenDiagnosticMessageText(d.messageText, '\n'))).toEqual([]);
