@@ -32,6 +32,8 @@ export type Validation = { ok: true; request: TurnOn | { action: 'turn_off' } } 
 
 // Control characters (C0 and C1), the line and paragraph separators and the bidirectional controls.
 const UNSAFE = /[\p{Cc}\p{Zl}\p{Zp}\p{Bidi_Control}]/gu;
+// The same set without the `g` flag, for `test`: a global regex keeps its position between calls.
+const HAS_UNSAFE = /[\p{Cc}\p{Zl}\p{Zp}\p{Bidi_Control}]/u;
 // The same shape the table accepts (supabase/migrations/20261117100000_subscriptions_and_emailed.sql).
 const ADDRESS = /^[^\s<>@,;"]+@[^\s<>@,;"]+\.[^\s<>@,;"]+$/u;
 const FILTER_KEYS = ['regions', 'levels', 'role_types', 'keywords'] as const;
@@ -45,7 +47,7 @@ export function checkAddress(raw: unknown): { address: string | undefined } | { 
   const text = raw.trim();
   if (text === '') return { address: undefined };
   if (text.length > LIMITS.address) return { error: `The address can be at most ${String(LIMITS.address)} characters.` };
-  if (UNSAFE.test(text) || !ADDRESS.test(text)) return { error: 'Enter one email address, like name@example.com.' };
+  if (HAS_UNSAFE.test(text) || !ADDRESS.test(text)) return { error: 'Enter one email address, like name@example.com.' };
   return { address: text };
 }
 

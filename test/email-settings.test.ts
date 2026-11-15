@@ -539,6 +539,16 @@ describe('the pieces', () => {
     }
   });
 
+  it('judges every address on its own, however many came before in the same process', () => {
+    const late = `${'a'.repeat(30)}\u202e@example.test`;
+    const early = 'a\u202eb@example.test';
+    for (let i = 0; i < 3; i += 1) {
+      expect(checkAddress(late)).toHaveProperty('error');
+      expect(checkAddress(early)).toHaveProperty('error');
+    }
+    expect(checkAddress('a b@example.test')).toHaveProperty('error');
+  });
+
   it('validates a request', () => {
     expect(validateRequest({ action: 'turn_off', frequency: 'bad' })).toEqual({ ok: true, request: { action: 'turn_off' } });
     expect(validateRequest({ action: 'nope' })).toBe('unknown_action');

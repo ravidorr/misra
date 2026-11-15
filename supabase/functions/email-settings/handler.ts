@@ -269,10 +269,11 @@ async function turnOn(origin: string | null, deps: Deps, config: Config, who: Wh
     }
   };
 
-  const confirm = await newToken();
-  const unsubscribe = await newToken();
   let started: (typeof STARTS)[number];
+  let confirm: { token: string; hash: string };
   try {
+    confirm = await newToken();
+    const unsubscribe = await newToken();
     started = await callDatabase(
       deps,
       config,

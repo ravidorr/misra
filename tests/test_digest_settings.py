@@ -642,16 +642,36 @@ async def test_an_answer_that_is_not_the_functions_is_never_called_a_success(
     assert await state_of(page) == "off"
 
 
-async def test_a_function_that_cannot_be_reached_says_nothing_was_changed(page: Page, digest_site: Path) -> None:
+async def test_a_function_that_cannot_be_reached_says_it_cannot_be_sure_and_reads_the_account_again(
+    page: Page, digest_site: Path
+) -> None:
     world = World()
     world.function_mode = "down"
     await signed_in(page, digest_site, world)
     await open_dialog(page)
     reads = len(world.table_requests)
     await page.click("#digestSend")
-    await expect(page.locator("#digestError")).to_contain_text("could not reach the service, so nothing was changed")
-    assert len(world.table_requests) == reads  # it never got there: nothing to read again
+    await expect(page.locator("#digestError")).to_contain_text("could not get an answer from the service")
+    assert len(world.table_requests) > reads  # a reset connection can come after the work: the account is read again
+    assert await page.locator("#digestNote").is_hidden()
     assert await state_of(page) == "off"
+
+
+async def test_a_frequency_changed_while_a_request_runs_goes_back_to_what_the_account_holds(
+    page: Page, digest_site: Path
+) -> None:
+    world = World()
+    await signed_in(page, digest_site, world)
+    await open_dialog(page)
+    world.gate = asyncio.Event()
+    await page.click("#digestSend")
+    await expect(page.locator("#digestSend")).to_have_attribute("aria-busy", "true")
+    await page.click("input[name=digestFrequency][value=weekly]", force=True)
+    assert await page.locator("input[name=digestFrequency][value=daily]").is_checked()
+    world.gate.set()
+    await expect(page.locator("#digestNote")).to_contain_text("We sent a confirmation email")
+    assert world.calls[0]["frequency"] == "daily"
+    assert world.table_requests[-1].method == "GET"  # nothing was saved for the weekly choice
 
 
 async def test_a_slow_function_says_it_cannot_tell_and_shows_what_the_account_holds(

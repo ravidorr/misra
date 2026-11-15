@@ -29,7 +29,7 @@ const FILTER_LABELS = [
 ];
 
 const MESSAGES = {
-  unreachable: 'We could not reach the service, so nothing was changed. Check your connection and try again.',
+  unreachable: 'We could not get an answer from the service, so we cannot be sure what happened. Check your connection and try again. The settings above are read again from your account.',
   slow: 'The service took too long to answer, so we cannot tell whether it went through. The settings above are read again from your account.',
   invalid: 'Some details were not accepted, so nothing was changed. Check the fields below and try again.',
   request: 'The request could not be read, so nothing was changed. Reload the page and try again.',
@@ -40,7 +40,7 @@ const MESSAGES = {
   addressLimited: 'That address has already been sent as many confirmation emails as are allowed today, so nothing was sent. Please try again tomorrow, or use another address.',
   paused: 'We have sent as many confirmation emails as we can today, so nothing was sent. Please try again tomorrow.',
   closed: 'The email is not open yet, so nothing was turned on.',
-  sendFailed: 'The confirmation email could not be sent, so nothing is waiting for you in your inbox. Press "Send the confirmation again" later.',
+  sendFailed: 'The confirmation email could not be sent, so nothing is waiting for you in your inbox, and the email stays paused until you confirm. Press "Send the confirmation again" later.',
   sendUnclear: 'We could not confirm that the email was sent. Wait a few minutes and check your inbox, and your spam folder, before asking again: each request uses one of the confirmation emails allowed today.',
   server: 'Something went wrong on our side. Check the settings above and try again.',
   unclear: 'We could not confirm what happened. The settings above are read again from your account; check them and try again.',
@@ -211,13 +211,13 @@ if (open && dialog) {
     try {
       const { data, error } = await a.client.from('subscriptions').select(COLUMNS).eq('user_id', a.userId).retry(false);
       if (error) throw error;
-      if (account() !== a) return false; /* signed out or another account meanwhile */
+      if (account()?.userId !== a.userId) return false; /* signed out or another account meanwhile (a renewed token is the same user) */
       view.row = data.length > 0 ? data[0] : null;
       view.phase = 'ready';
       return true;
     } catch (error) {
       console.error(error);
-      if (account() === a) view.phase = 'failed';
+      if (account()?.userId === a.userId) view.phase = 'failed';
       return false;
     }
   }
@@ -236,7 +236,8 @@ if (open && dialog) {
   /* Asks the function. Resolves with { ok: true, body }, or with the words to show (`message`) and the fields it faulted. */
   async function request(body) {
     const a = account();
-    const { data } = a ? await a.client.auth.getSession() : { data: {} }; /* renews an expired token first */
+    const { data, error: tokenError } = a ? await a.client.auth.getSession() : { data: {}, error: null }; /* renews an expired token first */
+    if (tokenError) return { message: MESSAGES.unreachable, reread: false }; /* the token could not be renewed: nothing was sent */
     const token = data.session?.access_token;
     if (!token) return { message: MESSAGES.signedOut, reread: false };
     let response;
@@ -248,9 +249,9 @@ if (open && dialog) {
         signal: AbortSignal.timeout(TIMEOUT_MS),
       });
     } catch (error) {
-      /* A timeout may have gone through; a refused connection did not reach the service, so there is nothing to read again. */
-      const slow = error?.name === 'TimeoutError';
-      return { message: slow ? MESSAGES.slow : MESSAGES.unreachable, reread: slow };
+      /* A timeout, a reset connection or a gateway error without CORS headers may all come after the function did its work,
+         so the account is read again whatever the reason. */
+      return { message: error?.name === 'TimeoutError' ? MESSAGES.slow : MESSAGES.unreachable };
     }
     const answer = await response.json().catch(() => null);
     if (response.ok && answer?.ok === true) return { ok: true, body: answer };
@@ -307,6 +308,8 @@ if (open && dialog) {
     const state = stateOf(view.row);
     const typed = address.value.trim();
     const own = account()?.email ?? '';
+    const isOwn = typed === '' || typed.toLowerCase() === own.toLowerCase();
+    const sentTo = isOwn ? own || 'your address' : typed;
     return act(
       {
         action: 'turn_on',
@@ -318,7 +321,7 @@ if (open && dialog) {
         success: (answer) =>
           answer.state === 'on'
             ? 'The email was already on for this address, so nothing was changed and nothing was sent.'
-            : `We sent a confirmation email to ${view.row?.address ?? 'your address'}. Open the link in it and press Confirm. Until you do, nothing is sent.${state === 'on' ? ' The email stays paused until then.' : ''}`,
+            : `We sent a confirmation email to ${sentTo}. Open the link in it and press Confirm. Until you do, nothing is sent.${state === 'on' ? ' The email stays paused until then.' : ''}`,
       },
     );
   }
@@ -418,7 +421,10 @@ if (open && dialog) {
   });
   for (const radio of frequencies) {
     radio.addEventListener('change', () => {
-      if (!radio.checked || view.busy) return;
+      if (!radio.checked || view.busy) {
+        render({ keepAddress: true }); /* a change made while a request runs is not saved: show what the account holds */
+        return;
+      }
       if (running()) saveRow({ frequency: radio.value });
       else view.draft.frequency = radio.value;
     });
