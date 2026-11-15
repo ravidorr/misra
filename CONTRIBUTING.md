@@ -216,6 +216,17 @@ Visitors report a missing company with "Report a site" on the dashboard's covera
 
 Rows in `data/seed_companies.csv` and `data/unresolved_candidates.csv` are public, so never copy anything from a report beyond the company and its public site.
 
+## The legal pages
+
+The privacy notice, the terms and the security note are on the site as `privacy.html`, `terms.html` and `security.html`. They are generated, never written by hand: `build_dashboard.py` converts `PRIVACY.md`, `TERMS.md` and `SECURITY.md` into `templates/legal.html`.
+
+- **Edit the Markdown, never the HTML.** The Markdown file is the source of truth. A change to `docs/privacy.html` (or to the body of `templates/legal.html`) is overwritten at the next build. Raw HTML in the Markdown is shown as text, not run.
+- **Links.** Write a link to another legal document as `[terms](./TERMS.md)`: it becomes a link to `terms.html` on the site and still works on GitHub. A link to any other file of the repository (`./CONTRIBUTING.md`) becomes a link to it on GitHub. Keep an unambiguous heading: its anchor is the text lowercased with dashes, as on GitHub. No images.
+- **Look at it locally.** `.venv/bin/python build_dashboard.py` writes the pages to `docs/`; open `docs/privacy.html` in a browser. Do not commit the generated files in a PR: the daily run and the `publish-docs` workflow do.
+- **Tests.** `tests/test_legal_pages.py` checks that every heading, link, paragraph and the date line of each document reach its page, so a Markdown file that the build cannot show whole fails the tests. Keep the "Last updated" line (or, in `SECURITY.md`, the "Written ... Next full review due ..." sentence) in its usual form, or update the test with it.
+- **Publishing.** When a Markdown file, `templates/`, `design-system/`, `vendor/` or `build_dashboard.py` changes on `main`, `.github/workflows/publish-docs.yml` rebuilds `docs/` and pushes it with the deploy key, so the site follows within minutes. It waits for the daily run (same concurrency group) and never runs the crawl.
+- **Pages that link to them.** Link to `https://ravidorr.github.io/misra/privacy.html` and `.../terms.html`, not to the Markdown files on GitHub (the repository `README.md` may keep relative links, as people read it on GitHub).
+
 ## Release policy
 
 When a PR or push to `main` changes `package.json`, `pyproject.toml`, or a Python module listed in `RELEASE_TRIGGER_PATHS` (`ci.yml`, `.husky/pre-push`), CI runs the release gate: the package version must increase (SemVer) and `CHANGELOG.md` must have a non-empty section for that version. PRs that only touch docs, tests, or workflows do not need a bump. Tagged releases (`vX.Y.Z`) must match `package.json` and have non-empty notes extracted from the changelog.

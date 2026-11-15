@@ -1,0 +1,89 @@
+name: publish-docs
+
+# Rebuilds docs/ (the dashboard and the privacy, terms and security pages) when a source of those pages changes on
+# main, so a merged edit to PRIVACY.md is on the site in minutes and not at the next daily run. It runs only
+# build_dashboard.py: no crawl, no email, no Supabase, and no secret other than the deploy key.
+on:
+  push:
+    branches: [main]
+    # docs/ is not listed: this workflow's own commit changes docs/ only, so it can never start itself again.
+    paths:
+      - PRIVACY.md
+      - TERMS.md
+      - SECURITY.md
+      - templates/**
+      - design-system/**
+      - vendor/**
+      - build_dashboard.py
+  workflow_dispatch: {}
+
+# The same group as the daily run (daily-job-digest in daily.yml), so the two never push at the same time. Runs wait
+# in line and never cancel a run that has started. GitHub keeps one waiting run per group: a newer waiting run
+# replaces an older one, which is harmless here because every run builds the latest main.
+concurrency:
+  group: daily-job-digest
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: main
+          persist-credentials: false
+      - name: Verify the deploy key before building
+        env:
+          DEPLOY_KEY: ${{ secrets.DEPLOY_KEY }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if [ "$GITHUB_REF" != "refs/heads/main" ]; then
+            echo "refusing to publish from $GITHUB_REF; run it from main" >&2
+            exit 1
+          fi
+          if [ -z "$DEPLOY_KEY" ]; then
+            echo "DEPLOY_KEY secret is missing: the push to main would be rejected by the protect-main ruleset." >&2
+            exit 1
+          fi
+          . scripts/deploy-key.sh
+          ssh-keygen -y -f "$key" > /dev/null
+          git ls-remote "git@github.com:${GITHUB_REPOSITORY}.git" HEAD > /dev/null
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      # The same pin as pyproject.toml and daily.yml (a test keeps the three equal).
+      - run: pip install requests markdown-it-py==4.0.0
+      - name: Build the dashboard and the legal pages
+        run: python build_dashboard.py
+      - name: Commit and push docs
+        env:
+          DEPLOY_KEY: ${{ secrets.DEPLOY_KEY }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          [ "$GITHUB_REF" = "refs/heads/main" ] || { echo "refusing to push from $GITHUB_REF" >&2; exit 1; }
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add --all -- docs
+          if git diff --cached --quiet; then
+            echo "docs/ is already up to date"
+            exit 0
+          fi
+          git commit -m "publish docs $(date -u +%F) from $(git rev-parse --short HEAD)"
+          # The key is written to disk only in this step, after the build, and removed on exit.
+          . scripts/deploy-key.sh
+          git remote set-url origin "git@github.com:${GITHUB_REPOSITORY}.git"
+          for attempt in 1 2 3; do
+            if git pull --rebase origin main && git push origin HEAD:main; then
+              exit 0
+            fi
+            git rebase --abort 2>/dev/null || true
+            sleep $((attempt * 5))
+          done
+          echo "push to main failed after 3 attempts" >&2
+          exit 1

@@ -153,6 +153,8 @@ Observations about live sites below come from checks made on 2026-11-14 and may 
     - Playwright is pinned twice, `playwright==1.65.0` in `pyproject.toml` and in the `pip install` line of `daily.yml`,
       and the two must change together: Dependabot can bump `pyproject.toml` but not the workflow line, and `daily.yml`
       also installs `requests` unpinned. Check that the pinned version supports a new Python before moving it.
+      `markdown-it-py` is pinned the same way, in `pyproject.toml`, `daily.yml` and `publish-docs.yml` (a test keeps
+      the three equal).
   - Steps:
     1. Check the dates at the Node release schedule and the Python release page; take the newest LTS (Node) or the
        newest release that Playwright and the dev tools support (Python).

@@ -61,6 +61,9 @@ def write_static(workdir: Path) -> None:
     (workdir / "templates" / "auth.js").write_text("const auth = '__SUPABASE_URL__';\n", encoding="utf-8")
     (workdir / "templates" / "email.html").write_text("<!doctype html><title>e</title>", encoding="utf-8")
     (workdir / "templates" / "email.js").write_text("const email = '__SUPABASE_URL__';\n", encoding="utf-8")
+    (workdir / "templates" / "legal.html").write_text("<title>__TITLE__</title><main>__BODY__</main>", encoding="utf-8")
+    for legal in build_dashboard.LEGAL_PAGES:
+        (workdir / legal.source).write_text(f"# {legal.source}\n", encoding="utf-8")
     (workdir / "templates" / "report.js").write_text("const report = '__SUPABASE_URL__/report';\n", encoding="utf-8")
     (workdir / "vendor").mkdir(exist_ok=True)
     (workdir / "vendor" / "supabase.js").write_bytes(b"var supabase = '__SUPABASE_URL__'; \xc3\xa9\r\n")
@@ -231,8 +234,11 @@ def test_site_files_are_written_next_to_the_page(db: sqlite3.Connection, workdir
         "index.html",
         "jobs.json",
         "jobs.jsonld",
+        "privacy.html",
         "report.js",
+        "security.html",
         "supabase.js",
+        "terms.html",
         "theme.js",
     ]
     assert (docs / "index.html").read_text(encoding="utf-8") == "<!doctype html><title>x</title>"
