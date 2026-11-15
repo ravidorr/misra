@@ -41,7 +41,8 @@ The mark is a violet badge with an ink pulse line and a lime sparkle: a daily "s
 
 The dashboard registers tools on `navigator.modelContext` when the browser supports WebMCP, and does nothing otherwise:
 
-- `search_jobs(query, category, company, newOnly, includeDiscarded, allLocations, sort, limit)`
+- `search_jobs(query, levels, roleTypes, regions, locations, includeRemoteNotSaid, company, newOnly, includeDiscarded, allLocations, sort, limit)`
+- `list_filters()` (the values of the level, role type, region and place filters, with counts)
 - `list_new_jobs(limit)`
 - `get_job(id)`
 - `discard_job(id)` and `restore_job(id)`

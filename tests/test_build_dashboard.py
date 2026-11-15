@@ -99,14 +99,19 @@ def test_main_builds_dashboard(db: sqlite3.Connection, workdir: Path, capsys: py
     ]
     jobs = {j["i"]: j for j in payload["jobs"]}
     assert sorted(jobs) == ["1", "2", "3", "4", "6", "7", "8", "9"]
-    assert jobs["1"]["k"] == "pm"
-    assert jobs["2"]["k"] == "pm"
-    assert jobs["3"]["k"] == "intern"
-    assert jobs["6"]["k"] == "junior"
-    assert jobs["7"]["k"] == "intern"
-    assert jobs["8"]["k"] == "junior"
-    assert jobs["9"]["k"] == "pm"
-    assert jobs["4"]["k"] == "other"
+    # level and role type are separate, from classify.py: Product no longer swallows the level
+    assert [(jobs[i]["lv"], jobs[i]["rt"]) for i in ("1", "2", "3", "4", "6", "7", "8", "9")] == [
+        ("Not specified", ["Product"]),
+        ("Intern", ["Product"]),
+        ("Intern", ["Other"]),
+        ("Not specified", ["Finance"]),
+        ("Junior", ["R&D"]),
+        ("Intern", ["Other"]),
+        ("Junior", ["Other"]),
+        ("Junior", ["Product"]),
+    ]
+    assert jobs["1"]["rg"] == ["Tel Aviv area"]
+    assert jobs["1"]["lo"] == []
     assert jobs["1"]["il"] is True
     assert jobs["3"]["il"] is False
     assert jobs["3"]["f"] == ""
@@ -141,20 +146,63 @@ def test_read_css_bundles_sources_in_order(workdir: Path) -> None:
     assert build_dashboard.read_css() == ":root{--a:1}\n.a{}\n.b{}\nbody{}"
 
 
+JOB = {
+    "c": "Acme",
+    "t": "PM",
+    "u": "https://x.test/1",
+    "l": "Tel Aviv",
+    "f": "2024-01-02",
+    "il": True,
+    "lv": "Not specified",
+    "rt": ["Product"],
+    "rg": ["Tel Aviv area"],
+    "lo": [],
+}
+
+
 def test_job_posting() -> None:
-    job = {"c": "Acme", "t": "PM", "u": "https://x.test/1", "l": "Tel Aviv", "f": "2024-01-02", "il": True}
+    job = JOB
     posting = build_dashboard.job_posting(job)
     assert posting["title"] == "PM"
     assert posting["hiringOrganization"]["name"] == "Acme"
     assert posting["datePosted"] == "2024-01-02"
-    assert posting["jobLocation"]["address"] == {
-        "@type": "PostalAddress",
-        "addressLocality": "Tel Aviv",
-        "addressCountry": "IL",
-    }
-    abroad = build_dashboard.job_posting({**job, "f": "", "il": False})
+    assert posting["jobLocation"] == [
+        {
+            "@type": "Place",
+            "address": {"@type": "PostalAddress", "addressRegion": "Tel Aviv area", "addressCountry": "IL"},
+        }
+    ]
+    abroad = build_dashboard.job_posting({**job, "f": "", "il": False, "rg": [], "l": "London"})
     assert "datePosted" not in abroad
-    assert "addressCountry" not in abroad["jobLocation"]["address"]
+    assert abroad["jobLocation"]["address"] == {"@type": "PostalAddress", "addressLocality": "London"}
+
+
+def test_job_posting_says_the_level_the_role_type_and_every_region() -> None:
+    """FR-9 AC 1 and FR-3 AC 10 for crawlers and assistants reading jobs.jsonld without running the page."""
+    posting = build_dashboard.job_posting(
+        {**JOB, "lv": "Intern", "rt": ["Product", "Design"], "rg": ["Tel Aviv area", "Sharon", "Remote"]}
+    )
+    assert posting["experienceRequirements"] == "Intern"
+    assert posting["employmentType"] == "INTERN"
+    assert posting["occupationalCategory"] == ["Product", "Design"]
+    assert [p["address"]["addressRegion"] for p in posting["jobLocation"]] == ["Tel Aviv area", "Sharon"]
+    assert posting["jobLocationType"] == "TELECOMMUTE"
+    junior = build_dashboard.job_posting({**JOB, "lv": "Junior", "rt": ["Other"]})
+    assert "employmentType" not in junior
+    assert junior["experienceRequirements"] == "Junior"
+    assert junior["occupationalCategory"] == ["Other"]
+    # a place with no region keeps its own string as the region; a remote role alone keeps the location it was given
+    ungrouped = build_dashboard.job_posting({**JOB, "rg": [], "lo": ["Kfar Foo, Israel"]})
+    assert ungrouped["jobLocation"][0]["address"]["addressLocality"] == "Kfar Foo, Israel"
+    both = build_dashboard.job_posting({**JOB, "rg": ["Sharon"], "lo": ["Kfar Foo, Israel", "Israel, city not given"]})
+    assert [(p["address"].get("addressRegion"), p["address"].get("addressLocality")) for p in both["jobLocation"]] == [
+        ("Sharon", None),
+        (None, "Kfar Foo, Israel"),
+    ]
+    remote = build_dashboard.job_posting({**JOB, "rg": ["Remote"], "l": "Remote, Israel"})
+    assert remote["jobLocation"]["address"]["addressLocality"] == "Remote, Israel"
+    assert remote["jobLocationType"] == "TELECOMMUTE"
+    assert remote["applicantLocationRequirements"] == {"@type": "Country", "name": "IL"}
 
 
 def test_site_files_are_written_next_to_the_page(db: sqlite3.Connection, workdir: Path) -> None:

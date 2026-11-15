@@ -91,7 +91,7 @@
 
   <section aria-labelledby="card-h">
     <h2 id="card-h">Role card</h2>
-    <article class="card" data-job-id="Acme|1" data-company="Acme" data-category="product" data-new="true" data-stale="false" data-discarded="false">
+    <article class="card" data-job-id="Acme|1" data-company="Acme" data-level="Not specified" data-role-types="Product" data-regions="Tel Aviv area" data-new="true" data-stale="false" data-discarded="false">
       <span class="sticker card-flag">NEW</span>
       <p class="card-company">Acme Robotics</p>
       <h3 class="card-title"><a href="#card-h">Associate Product Manager</a></h3>
@@ -102,9 +102,9 @@
 
   <section aria-labelledby="agents">
     <h2 id="agents">Built for agents too</h2>
-    <p>The page a person scans is one an agent can read and drive. Cards are <code>article</code> elements with <code>data-job-id</code>, <code>data-company</code>, <code>data-category</code>, <code>data-new</code>, <code>data-stale</code> and <code>data-discarded</code>. Every open role is in a schema.org JobPosting JSON-LD block. The dashboard registers these WebMCP tools on <code>navigator.modelContext</code> when the browser offers it:</p>
+    <p>The page a person scans is one an agent can read and drive. Cards are <code>article</code> elements with <code>data-job-id</code>, <code>data-company</code>, <code>data-level</code>, <code>data-role-types</code>, <code>data-regions</code>, <code>data-new</code>, <code>data-stale</code> and <code>data-discarded</code>. Every open role is in a schema.org JobPosting JSON-LD block. The dashboard registers these WebMCP tools on <code>navigator.modelContext</code> when the browser offers it:</p>
     <ul class="tool-list">
-      <li>search_jobs(query, category, company, newOnly, includeDiscarded, allLocations, sort, limit)</li>
+      <li>search_jobs(query, levels, roleTypes, regions, locations, includeRemoteNotSaid, company, newOnly, includeDiscarded, allLocations, sort, limit)</li>
       <li>list_new_jobs(limit)</li>
       <li>get_job(id)</li>
       <li>discard_job(id), restore_job(id)</li>

@@ -43,11 +43,9 @@
   </section>
 
   <div class="controls">
-    <div class="chip-group" role="group" aria-label="Role type">
-      <button type="button" class="chip" data-cat="all" aria-pressed="true">Everything</button>
-      <button type="button" class="chip" data-cat="pm" aria-pressed="false">Product</button>
-      <button type="button" class="chip" data-cat="intern" aria-pressed="false">Intern</button>
-      <button type="button" class="chip" data-cat="junior" aria-pressed="false">Junior</button>
+    <div class="filter-group">
+      <h2 class="label" id="levels-h">Level</h2>
+      <div class="chip-group" id="levels" role="group" aria-labelledby="levels-h"></div>
     </div>
     <button type="button" class="chip chip-new" id="onlyNew" aria-pressed="false">New only</button>
   </div>
@@ -55,10 +53,24 @@
   <details class="more" open>
     <summary>More filters</summary>
     <div class="more-body">
+      <div class="filter-group">
+        <h2 class="label" id="types-h">Role type</h2>
+        <div class="chip-group" id="types" role="group" aria-labelledby="types-h"></div>
+      </div>
+      <div class="filter-group">
+        <h2 class="label" id="regions-h">Region</h2>
+        <div class="chip-group" id="regions" role="group" aria-labelledby="regions-h"></div>
+        <button type="button" class="chip chip-new" id="remote" aria-pressed="false">Include remote roles that do not say where</button>
+      </div>
+      <details class="filter-group places">
+        <summary id="places-title">Places</summary>
+        <p class="places-hint" id="places-hint">Every place in Israel as written in the roles. The same city can appear under more than one spelling.</p>
+        <label class="places-search">Find a place <input class="field" type="search" id="placeSearch" aria-describedby="places-hint"></label>
+        <ul class="places-list" id="places"></ul>
+      </details>
       <label>Company <select class="field" id="company"><option value="">All companies</option></select></label>
       <label>Location <select class="field" id="loc"><option value="il">Israel only</option><option value="all">All locations</option></select></label>
       <label>Sort <select class="field" id="sort"><option value="new">Newest first</option><option value="co">Company A-Z</option><option value="title">Title A-Z</option></select></label>
-      <label><input type="checkbox" id="other"> Other roles only</label>
       <label><input type="checkbox" id="hideStale"> Hide possibly old</label>
       <label><input type="checkbox" id="showGone"> <span>Show discarded (<span id="goneN">0</span>)</span></label>
       <button type="button" class="btn btn-link" id="reset">Reset filters</button>
