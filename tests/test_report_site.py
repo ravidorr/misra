@@ -153,13 +153,12 @@ async def test_the_form_says_where_the_report_goes_and_what_the_spam_guard_keeps
     assert text == (
         "Reports are emailed directly to the maintainer. To prevent spam, we keep a daily, non-reversible hash of your "
         "network address. It matches nothing after that day, and old ones are deleted when later reports are handled. "
-        "Privacy Notice (opens in a new tab)"
+        "Privacy Notice"
     )
     assert "24 hours" not in text  # accuracy fix: the code keeps today's and yesterday's rows
-    link = note.get_by_role("link", name="Privacy Notice (opens in a new tab)")
-    assert await link.get_attribute("href") == "https://github.com/ravidorr/misra/blob/main/PRIVACY.md"
-    assert await link.get_attribute("target") == "_blank"
-    assert await link.get_attribute("rel") == "noopener noreferrer"
+    link = note.get_by_role("link", name="Privacy Notice")
+    assert await link.get_attribute("href") == "privacy.html"
+    assert await link.get_attribute("target") is None
     # a real element, not a placeholder, and the Send button names it so a screen reader reads it with the button
     assert await page.locator("#reportSend").get_attribute("aria-describedby") == "reportPrivacy"
     assert await page.evaluate(

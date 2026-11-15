@@ -55,6 +55,8 @@ def site(db: sqlite3.Connection, workdir: Path) -> Path:
     shutil.copytree(REPO / "templates", workdir / "templates", dirs_exist_ok=True)
     shutil.copytree(REPO / "design-system", workdir / "design-system")
     shutil.copytree(REPO / "vendor", workdir / "vendor")
+    for legal in build_dashboard.LEGAL_PAGES:
+        shutil.copy(REPO / legal.source, workdir / legal.source)
     write_json(
         workdir / "data" / "companies.json", [{"name": "Acme", "status": "ok"}, {"name": "Nowhere", "status": "x"}]
     )

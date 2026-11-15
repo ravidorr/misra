@@ -17,6 +17,21 @@ All notable changes are documented here. Format follows [Keep a Changelog](https
 - `PRIVACY.md` names the database controller (Raanan Avidor, a private individual) and the contact `raanan@avidor.org`, says why the data is collected and that giving it is voluntary, names the providers and where they are (Supabase and Resend in Ireland, Google and GitHub in the United States), gives the rights to inspect, correct and delete (Sections 13 and 14 of the Israeli Privacy Protection Law) with an answer within 30 days, and states that Supabase's and Resend's standard data processing agreements apply. The digest is still described as planned, not live.
 - `PLAN.md` step 6.3 and the PRD (FR-8) carry the lawyer's exact footer text for every digest email and the Reply-To requirement.
 
+## [0.24.0] - 2026-11-15
+
+### Added
+
+- The privacy notice, the terms and the security note are pages of the site: `docs/privacy.html`, `docs/terms.html` and `docs/security.html`, built by `build_dashboard.py` from `PRIVACY.md`, `TERMS.md` and `SECURITY.md` with `templates/legal.html` (markdown-it-py, pinned `==4.0.0`, a normal dependency). The Markdown stays the source of truth: raw HTML in it is escaped, a heading gets the id GitHub gives it, a relative link to another legal document becomes a link to its page, a link to any other file becomes a link to it on GitHub, and an image or a link out of the repository stops the build. Each page says it is built from the file and links to the file and its history on GitHub. Prose styles in `templates/dashboard.css`.
+- Sync tests (`tests/test_legal_pages.py`): every heading, link target, paragraph and the date line of each document must be on its page, read back with a parser of its own; plus tests of the converter, the template (same Content-Security-Policy as the email page, no inline script or style), the workflows, and axe in light and dark at phone and desktop width.
+- `.github/workflows/publish-docs.yml`: rebuilds `docs/` and pushes it with the deploy key when `PRIVACY.md`, `TERMS.md`, `SECURITY.md`, `templates/`, `design-system/`, `vendor/` or `build_dashboard.py` change on `main`, so an edit to a legal document is on the site in minutes and not at the next daily run. It runs only `build_dashboard.py`, shares the daily workflow's concurrency group, and cannot start itself (its commit changes `docs/` only).
+- `CONTRIBUTING.md`: how the legal pages are built.
+
+### Changed
+
+- The sign-in notice, the footer, the report-form line and the delete dialog link to `privacy.html` and `terms.html` on the site (same tab), not to the Markdown files on GitHub. The email footers in `supabase/email-texts.md`, `PRD.md` and `PLAN.md`, and `llms.txt`, use the site URLs.
+- The daily workflow stages the three new pages and installs the pinned `markdown-it-py`.
+- "Data updated" on the dashboard is the time of the latest crawl (it was the time of the build), so a rebuild over the same data writes the same files.
+
 ## [0.23.0] - 2026-11-18
 
 ### Added

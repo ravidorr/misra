@@ -9,9 +9,9 @@
 
 ## Policies and support
 
-- [Security](/SECURITY.md): Vulnerability reporting and supported versions.
-- [Privacy](/PRIVACY.md): Data-handling policy.
-- [Terms](/TERMS.md): The as-is terms of use.
+- [Security](https://ravidorr.github.io/misra/security.html): Vulnerability reporting and supported versions.
+- [Privacy](https://ravidorr.github.io/misra/privacy.html): Data-handling policy.
+- [Terms](https://ravidorr.github.io/misra/terms.html): The as-is terms of use.
 - [Support](/SUPPORT.md): Support and troubleshooting information.
 
 ## Miscellaneous
