@@ -1,6 +1,9 @@
 // The logic of the `unsubscribe` Edge Function (PLAN.md step 6.1; PRD FR-8 AC 7): one click, no sign-in, token-based.
 // The unsubscribe link of every digest email is `<function url>?t=<token>`, and the same URL is the `List-Unsubscribe`
-// header of the email (step 6.3), so a person's click and the mail client's own button both work.
+// header of the email (step 6.3), so a person's click and the mail client's own button both work. The token is
+// stateless: `<subscription id>.<HMAC-SHA256(UNSUBSCRIBE_SECRET, id)>` (see _shared/subscription.ts). The function
+// recomputes the MAC, and only then asks the database to unsubscribe that id (`unsubscribe_user`, the same clean-up the
+// dashboard's "turn off" uses), so a made-up id or a token made under another secret never reaches the database.
 //
 // What each method does (a table, kept in step with supabase/README.md):
 //
@@ -28,11 +31,38 @@
 // The token is in the URL, so the platform's request log holds it (README: "What is logged"). It can only unsubscribe.
 // Nothing here logs a token, a hash, an address or a user id: only status codes.
 
-import { callDatabase, describe, emptyOk, fail, hashToken, isToken, plainText, redirectToPage } from '../_shared/subscription.ts';
-import type { Deps } from '../_shared/subscription.ts';
+import {
+  UNSUBSCRIBE_SECRET_MIN_LENGTH,
+  callDatabase,
+  describe,
+  emptyOk,
+  fail,
+  loadConfig as loadBase,
+  plainText,
+  redirectToPage,
+  verifyUnsubscribeToken,
+} from '../_shared/subscription.ts';
+import type { Config as BaseConfig, Deps as BaseDeps } from '../_shared/subscription.ts';
 
-export { loadConfig } from '../_shared/subscription.ts';
-export type { Config, Deps, Fetch } from '../_shared/subscription.ts';
+export type { Fetch } from '../_shared/subscription.ts';
+
+export interface Config extends BaseConfig {
+  /** `UNSUBSCRIBE_SECRET`: the key of the MAC in every unsubscribe token. */
+  unsubscribeSecret: string;
+}
+
+export interface Deps extends BaseDeps {
+  config: Config | undefined;
+}
+
+/** The secrets. Returns what is missing or malformed by name, never by value. */
+export function loadConfig(get: (name: string) => string | undefined): { config: Config } | { missing: string[] } {
+  const base = loadBase(get);
+  const unsubscribeSecret = (get('UNSUBSCRIBE_SECRET') ?? '').trim();
+  const secretOk = unsubscribeSecret.length >= UNSUBSCRIBE_SECRET_MIN_LENGTH;
+  if ('missing' in base) return { missing: secretOk ? base.missing : [...base.missing, 'UNSUBSCRIBE_SECRET'] };
+  return secretOk ? { config: { ...base.config, unsubscribeSecret } } : { missing: ['UNSUBSCRIBE_SECRET'] };
+}
 
 const ANSWERS = ['unsubscribed', 'already_unsubscribed', 'unknown'] as const;
 
@@ -52,16 +82,11 @@ export async function handleUnsubscribe(request: Request, deps: Deps): Promise<R
 
   try {
     const token = new URL(request.url).searchParams.get('t');
-    if (!isToken(token)) {
+    const id = await verifyUnsubscribeToken(config.unsubscribeSecret, token);
+    if (id === undefined) {
       return isGet ? redirectToPage('link-not-valid') : fail(null, 404, 'link_not_valid', NOT_VALID);
     }
-    const answer = await callDatabase(
-      deps,
-      config,
-      'unsubscribe_subscription',
-      { p_hash: await hashToken(token), p_now: deps.now().toISOString() },
-      ANSWERS,
-    );
+    const answer = await callDatabase(deps, config, 'unsubscribe_user', { p_user_id: id, p_now: deps.now().toISOString() }, ANSWERS);
     if (isGet) {
       return redirectToPage(
         { unsubscribed: 'unsubscribed', already_unsubscribed: 'already-unsubscribed', unknown: 'link-not-valid' }[

@@ -1,10 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { MockInstance } from 'vitest';
 
-import { handleUnsubscribe } from '../supabase/functions/unsubscribe/handler.ts';
-import { PAGE_URL, newToken } from '../supabase/functions/_shared/subscription.ts';
+import { handleUnsubscribe, loadConfig } from '../supabase/functions/unsubscribe/handler.ts';
+import { PAGE_URL, makeUnsubscribeToken, newToken, verifyUnsubscribeToken } from '../supabase/functions/_shared/subscription.ts';
 import type { Fetch } from '../supabase/functions/_shared/subscription.ts';
-import { CONFIG, NOW, hashOf, logged, subscriber, world } from './support/fake-subscriptions.ts';
+import { CONFIG, NOW, UNSUBSCRIBE_SECRET, hashOf, logged, subscriber, world } from './support/fake-subscriptions.ts';
 import type { Fault } from './support/fake-subscriptions.ts';
 
 const FUNCTION_URL = 'https://project.supabase.test/functions/v1/unsubscribe';
@@ -56,9 +56,9 @@ describe('a click on the link in the email (GET)', () => {
     expect(ann.row.emailed).toBe(0);
     expect(ann.row.confirmedAt).toBe('2030-01-01T10:00:00.000Z'); // the audit record stays
     const [request] = w.requests;
-    expect(request?.url).toBe(`${CONFIG.supabaseUrl}/rest/v1/rpc/unsubscribe_subscription`);
-    expect(JSON.parse(request?.body ?? '{}')).toEqual({ p_hash: await hashOf(ann.unsubscribeToken), p_now: NOW.toISOString() });
-    expect(JSON.stringify(request)).not.toContain(ann.unsubscribeToken);
+    expect(request?.url).toBe(`${CONFIG.supabaseUrl}/rest/v1/rpc/unsubscribe_user`);
+    expect(JSON.parse(request?.body ?? '{}')).toEqual({ p_user_id: ann.row.id, p_now: NOW.toISOString() });
+    expect(JSON.stringify(request)).not.toContain(ann.unsubscribeToken); // only the verified id goes to the database
   });
 
   it('works for a subscription that was never confirmed', async () => {
@@ -164,6 +164,91 @@ describe('RFC 8058 one-click (POST to the header URL)', () => {
     const noSecrets = await handleUnsubscribe(oneClick(ann.unsubscribeToken), { config: undefined, fetch: vi.fn<Fetch>(), now: () => NOW });
     expect(noSecrets.status).toBe(500);
     expect(ann.row.unsubscribedAt).toBeNull();
+  });
+});
+
+describe('the stateless token (<subscription id>.<HMAC-SHA256(UNSUBSCRIBE_SECRET, id)>)', () => {
+  const ID = '11111111-1111-4111-8111-111111111111';
+  // The same vector is pinned in tests/test_send_digests.py: the Python sender and this function must agree.
+  const VECTOR = `${ID}.3ee0be7f8d9d03d8e80efd19d45c303cf23278727854c5d5a88f1694bcbc0f88`;
+
+  it('is made and checked the same way the Python sender makes it', async () => {
+    expect(await makeUnsubscribeToken(UNSUBSCRIBE_SECRET, ID)).toBe(VECTOR);
+    expect(await verifyUnsubscribeToken(UNSUBSCRIBE_SECRET, VECTOR)).toBe(ID);
+  });
+
+  it('is refused when the MAC, the id, the secret or the shape is wrong, before the database is asked', async () => {
+    const ann = await subscriber();
+    const [id = '', mac = ''] = ann.unsubscribeToken.split('.');
+    const flipped = `${mac.startsWith('0') ? '1' : '0'}${mac.slice(1)}`;
+    const other = await subscriber();
+    const bad = [
+      `${id}.${flipped}`, // one character of the MAC changed
+      `${other.row.id}.${mac}`, // somebody else's id with this MAC
+      await makeUnsubscribeToken('another-secret-0123456789abcdefghij', id), // made under another secret
+      ann.unsubscribeToken.toUpperCase(),
+      `${id}.${mac.slice(1)}`,
+      `${id}.${mac}0`,
+      `${id}.`,
+      `.${mac}`,
+      id,
+      mac,
+      `${id}:${mac}`,
+      ann.confirmToken,
+    ];
+    for (const token of bad) {
+      expect(await verifyUnsubscribeToken(UNSUBSCRIBE_SECRET, token), token).toBeUndefined();
+    }
+    expect(await verifyUnsubscribeToken(UNSUBSCRIBE_SECRET, undefined)).toBeUndefined();
+    const w = world([ann]);
+    for (const token of bad) {
+      expect((await handleUnsubscribe(get(token), w.deps)).headers.get('location'), token).toBe(`${PAGE_URL}#link-not-valid`);
+      expect((await handleUnsubscribe(oneClick(token), w.deps)).status, token).toBe(404);
+    }
+    expect(w.fakeFetch).not.toHaveBeenCalled();
+    expect(ann.row.unsubscribedAt).toBeNull();
+  });
+
+  it('with a right MAC for an id that has no subscription (a deleted account) is answered as a link that is not valid', async () => {
+    const ann = await subscriber();
+    const ghost = await makeUnsubscribeToken(UNSUBSCRIBE_SECRET, crypto.randomUUID());
+    const w = world([ann]);
+    expect((await handleUnsubscribe(get(ghost), w.deps)).headers.get('location')).toBe(`${PAGE_URL}#link-not-valid`);
+    expect((await handleUnsubscribe(oneClick(ghost), w.deps)).status).toBe(404);
+    expect(w.fakeFetch).toHaveBeenCalledTimes(2);
+    expect(ann.row.unsubscribedAt).toBeNull();
+  });
+
+  it('keeps working for the same subscription after it was unsubscribed and started again', async () => {
+    const ann = await subscriber();
+    await handleUnsubscribe(get(ann.unsubscribeToken), world([ann]).deps);
+    ann.row.unsubscribedAt = null; // a new consent (subscribe_start) keeps the same id
+    const again = await handleUnsubscribe(get(ann.unsubscribeToken), world([ann]).deps);
+    expect(again.headers.get('location')).toBe(`${PAGE_URL}#unsubscribed`);
+  });
+});
+
+describe('loadConfig', () => {
+  const ENV: Record<string, string> = {
+    SUPABASE_URL: 'https://p.test/',
+    SUPABASE_SERVICE_ROLE_KEY: 'k',
+    UNSUBSCRIBE_SECRET: UNSUBSCRIBE_SECRET,
+  };
+
+  it('reads the secret and keeps the other two as before', () => {
+    expect(loadConfig((name) => ENV[name])).toEqual({
+      config: { supabaseUrl: 'https://p.test', serviceRoleKey: 'k', unsubscribeSecret: UNSUBSCRIBE_SECRET },
+    });
+    expect(loadConfig((name) => ({ ...ENV, UNSUBSCRIBE_SECRET: ` ${UNSUBSCRIBE_SECRET} ` })[name])).toMatchObject({
+      config: { unsubscribeSecret: UNSUBSCRIBE_SECRET },
+    });
+  });
+
+  it('names a missing or too short secret, by name only', () => {
+    expect(loadConfig((name) => ({ ...ENV, UNSUBSCRIBE_SECRET: undefined })[name])).toEqual({ missing: ['UNSUBSCRIBE_SECRET'] });
+    expect(loadConfig((name) => ({ ...ENV, UNSUBSCRIBE_SECRET: 'short' })[name])).toEqual({ missing: ['UNSUBSCRIBE_SECRET'] });
+    expect(loadConfig(() => undefined)).toEqual({ missing: ['SUPABASE_URL', 'SUPABASE_SERVICE_ROLE_KEY', 'UNSUBSCRIBE_SECRET'] });
+    expect(loadConfig((name) => ({ ...ENV, SUPABASE_URL: undefined })[name])).toEqual({ missing: ['SUPABASE_URL'] });
   });
 });
 

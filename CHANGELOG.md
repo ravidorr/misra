@@ -17,6 +17,18 @@ All notable changes are documented here. Format follows [Keep a Changelog](https
 - `PRIVACY.md` names the database controller (Raanan Avidor, a private individual) and the contact `raanan@avidor.org`, says why the data is collected and that giving it is voluntary, names the providers and where they are (Supabase and Resend in Ireland, Google and GitHub in the United States), gives the rights to inspect, correct and delete (Sections 13 and 14 of the Israeli Privacy Protection Law) with an answer within 30 days, and states that Supabase's and Resend's standard data processing agreements apply. The digest is still described as planned, not live.
 - `PLAN.md` step 6.3 and the PRD (FR-8) carry the lawyer's exact footer text for every digest email and the Reply-To requirement.
 
+## [0.27.0] - 2026-11-15
+
+### Added
+
+- `send_digests.py` (PLAN.md step 6.3, PRD FR-8 AC 4 to 9 and 12, FR-9 AC 9): the personalised digest for every confirmed, not unsubscribed subscriber. It reads subscribers and jobs from Supabase with the service-role key and, for each subscriber whose digest is due (daily every day, weekly on Sundays), takes the open jobs in Israel first seen after they confirmed, never emailed to them before and not the silent baseline of a newly added company, that fit their saved regions, levels, role types and keywords by the dashboard's rules. The levels and role types are the separate `level` and `role_types` columns, so Product with Intern and Junior gives only the entry-level Product roles. No email when nothing is new. One plain-text email through Resend from `Misra <digest@send.avidor.org>`, `Reply-To: raanan@avidor.org`, the RFC 8058 `List-Unsubscribe` and `List-Unsubscribe-Post` headers, and the lawyer's footer; jobs are recorded in `emailed` only after Resend accepts the email. Each user is its own try block (the run exits 1 after all were handled when any failed), sends are spaced for Resend's rate limit and carry an `Idempotency-Key` (a same-day re-run after a failed record does not repeat an email), and the log holds counts only. It is not in the daily workflow yet (step 6.4) and nothing sends while the signup switches are off. `--dry-run` sends and records nothing.
+- `supabase/email-texts.md` gained the digest subject and the list of roles, and `tests/test_send_digests.py` pins the footer, the headers, the sender and the list against it.
+
+### Changed
+
+- The unsubscribe token is now stateless: `<subscription id>.<HMAC-SHA256(UNSUBSCRIBE_SECRET, id)>`. The `unsubscribe` function recomputes the MAC (constant-time compare) and asks the database to unsubscribe that id with the existing `unsubscribe_user`, so no migration is needed. It needs the new function secret `UNSUBSCRIBE_SECRET` (and the same value as an Actions secret for the digest step). `email-settings` no longer makes an unsubscribe token; the `NOT NULL` hash column gets a random value nothing reads. HEAD still never changes anything, and GET and POST unsubscribe at once. The link and the `List-Unsubscribe` header read `?t=`.
+- `PRIVACY.md` says only the hash of the confirmation link is stored and that the unsubscribe link is made again for each email from the account number and a secret key.
+
 ## [0.26.0] - 2026-11-15
 
 ### Changed
