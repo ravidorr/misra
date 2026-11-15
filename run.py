@@ -79,17 +79,19 @@ def close_unseen(c: sqlite3.Connection, name: str, seen: set[str]) -> None:
             c.execute("UPDATE jobs SET status='closed' WHERE company=? AND job_id=?", (name, jid))
 
 
-def track_robots_skips(c: sqlite3.Connection, skipped: set[str], crawled: set[str], today: str) -> tuple[int, int]:
+def track_robots_skips(c: sqlite3.Connection, skipped: set[str], attempted: set[str], today: str) -> tuple[int, int]:
     """Close the open jobs of a company that robots.txt has kept us away from for ROBOTS_CLOSE_DAYS days in a row.
-    Returns (companies closed, jobs closed).
+    Returns (companies that had open jobs closed, jobs closed).
 
-    `skipped` is the companies skipped by robots.txt in this run and `crawled` the ones crawled successfully in this run
-    (two boards can share one company name; a crawled name is never closed and never counts as skipped). The table
-    robots_skips holds the first day of the current streak per company. A company that is not skipped in this run (it
-    crawled, it failed another way, it left the list or the exclusion list took it) loses its row, so the count starts
-    again: one run that is not a skip means the block is not steady. A closing uses the same close_unseen as every
-    other close, so the Supabase sync marks the jobs closed and a later crawl reopens them."""
-    skipped = skipped - crawled
+    `skipped` is the companies skipped by robots.txt in this run and `attempted` the ones with any other result in this
+    run (crawled, held or failed). Two boards can share a company name: such a name is never closed by this rule and
+    never counts as skipped. The table robots_skips holds the first day of the current streak per company.
+    A company that is not skipped in this run (it crawled, it failed another way, it left the list or the exclusion
+    list took it) loses its row, so the count starts again: one run that is not a skip means the block is not
+    steady.
+    A closing uses the same close_unseen as every other close, so the Supabase sync marks the jobs closed and a later
+    crawl reopens them."""
+    skipped = skipped - attempted
     since = dict(c.execute("SELECT company, since FROM robots_skips").fetchall())
     for name in since.keys() - skipped:
         c.execute("DELETE FROM robots_skips WHERE company=?", (name,))
@@ -103,11 +105,13 @@ def track_robots_skips(c: sqlite3.Connection, skipped: set[str], crawled: set[st
             (today, ROBOTS_CLOSE_DAYS, name),
         ).fetchone()[0]
     ]
-    closed = 0
+    companies = jobs = 0
     for name in due:
-        closed += c.execute("SELECT COUNT(*) FROM jobs WHERE company=? AND status='open'", (name,)).fetchone()[0]
+        n = c.execute("SELECT COUNT(*) FROM jobs WHERE company=? AND status='open'", (name,)).fetchone()[0]
+        companies += bool(n)  # a company closed on an earlier run has nothing left to close
+        jobs += n
         close_unseen(c, name, set())
-    return len(due), closed
+    return companies, jobs
 
 
 def is_known(c: sqlite3.Connection, co: dict[str, Any], now: str) -> bool:
@@ -214,7 +218,7 @@ def main() -> None:  # noqa: PLR0912, PLR0915
         results.extend((co, got.get(co["slug"])) for co in br)
     failed: list[str] = []
     skipped: list[str] = []
-    crawled: set[str] = set()
+    attempted: set[str] = set()  # companies with any result that is not a robots skip: crawled, held or failed
     for co, fetched in results:
         name = co["name"]
         jobs = fetched
@@ -225,6 +229,7 @@ def main() -> None:  # noqa: PLR0912, PLR0915
                 (now, name, co["ats"], False, 0, WHY[co["slug"]]),
             )
             continue
+        attempted.add(name)
         if fetched is not None and co.get("israel_only"):  # large multinational boards: keep Israel jobs only
             jobs = [j for j in fetched if ISRAEL.search(j["location"] or "")]
         drop, held = (
@@ -247,7 +252,6 @@ def main() -> None:  # noqa: PLR0912, PLR0915
         if jobs is None:
             failed.append(name)  # never close jobs when the crawl failed
             continue
-        crawled.add(name)
         if held:
             failed.append(name)  # a crawl that probably lost most of the list: record what it saw, close nothing
         seen: set[str] = set()
@@ -282,7 +286,7 @@ def main() -> None:  # noqa: PLR0912, PLR0915
                 )
         if not held:
             close_unseen(c, name, seen)
-    closed_companies, closed_jobs = track_robots_skips(c, set(skipped), crawled, now[:10])
+    closed_companies, closed_jobs = track_robots_skips(c, set(skipped), attempted, now[:10])
     c.commit()
     n_open = c.execute("SELECT COUNT(*) FROM jobs WHERE status='open'").fetchone()[0]
     print(f"crawled {len(companies)} companies, failed {len(failed)} {failed}, open jobs {n_open}")
