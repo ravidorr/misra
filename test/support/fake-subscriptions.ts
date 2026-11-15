@@ -83,8 +83,8 @@ export function world(subscribers: Subscriber[], fault?: Fault, now: Date = NOW)
 }
 
 /** The PostgREST read of `frequency` by confirmation token hash (what `readSchedule` sends). */
-function schedule(rows: Row[], url: string, fault: Fault): Response {
-  if (fault === 'schedule-down') throw new Error('connection refused');
+function schedule(rows: Row[], url: string, fault: Fault): Response | Promise<Response> {
+  if (fault === 'schedule-down') return Promise.reject(new Error('connection refused'));
   if (fault === 'schedule-500') return new Response('{"message":"secret detail"}', { status: 500 });
   if (fault === 'schedule-garbage') return new Response('<html>', { status: 200 });
   if (fault === 'schedule-odd') return Response.json([{ frequency: 'hourly' }]);

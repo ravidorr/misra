@@ -42,7 +42,7 @@ export async function handleUnsubscribe(request: Request, deps: Deps): Promise<R
   if (request.method === 'HEAD') return emptyOk(); // nothing is read or changed: no secrets, URL or database
   const isGet = request.method === 'GET';
   if (!isGet && request.method !== 'POST') {
-    return fail(null, 405, 'method_not_allowed', 'Use the link in the email.', { allow: 'GET, POST' });
+    return fail(null, 405, 'method_not_allowed', 'Use the link in the email.', { allow: 'GET, HEAD, POST' });
   }
   const { config } = deps;
   if (!config) {

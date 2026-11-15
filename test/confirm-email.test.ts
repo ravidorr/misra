@@ -226,7 +226,7 @@ describe('confirming', () => {
       });
       const response = await handleConfirm(request, w.deps);
       expect(response.status, method).toBe(405);
-      expect(response.headers.get('allow')).toBe('POST, OPTIONS');
+      expect(response.headers.get('allow')).toBe('POST, HEAD, OPTIONS');
       expect((await answer(response)).error?.code).toBe('method_not_allowed');
     }
     expect(w.fakeFetch).not.toHaveBeenCalled();

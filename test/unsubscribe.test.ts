@@ -191,7 +191,7 @@ describe('what never unsubscribes anyone', () => {
     for (const method of ['OPTIONS', 'PUT', 'DELETE', 'PATCH']) {
       const response = await handleUnsubscribe(new Request(`${FUNCTION_URL}?t=${ann.unsubscribeToken}`, { method }), w.deps);
       expect(response.status, method).toBe(405);
-      expect(response.headers.get('allow')).toBe('GET, POST');
+      expect(response.headers.get('allow')).toBe('GET, HEAD, POST');
       expect(response.headers.get('access-control-allow-origin')).toBeNull();
     }
     expect(w.fakeFetch).not.toHaveBeenCalled();
