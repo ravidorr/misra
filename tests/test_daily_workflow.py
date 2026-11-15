@@ -51,9 +51,9 @@ def test_the_digest_step_is_the_only_step_with_the_resend_and_unsubscribe_secret
             assert used == set(DIGEST_SECRETS)
         else:
             assert not used & {"RESEND_API_KEY", "UNSUBSCRIBE_SECRET"}, name
-    # the service-role key is shared with the sync step and nothing else
+    # the service-role key is shared with the sync step and the backup step (test_backup_workflow.py), nothing else
     holders = {name for name, step in steps().items() if "SUPABASE_SERVICE_ROLE_KEY" in step}
-    assert holders == {"sync", "digests"}
+    assert holders == {"sync", "digests", "backup"}
 
 
 def test_no_secret_is_set_at_the_workflow_or_job_level_and_the_crawl_has_no_env() -> None:
