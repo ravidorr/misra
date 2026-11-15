@@ -218,6 +218,23 @@ async def test_a_retry_after_a_lost_answer_finishes_the_deletion(page: Page, sit
     assert await page.locator("#signIn").is_visible()
 
 
+async def test_the_cleanup_does_not_depend_on_the_roles_having_loaded(page: Page, site: Path) -> None:
+    """If the jobs request fails, dashboard.js never gets past loading them; the account is still cleaned up."""
+    await signed_in(page, site)
+    await page.evaluate(
+        "([k, user]) => localStorage.setItem(k, JSON.stringify({ [user]: { 'Acme|1': {} }, other: { 'Acme|2': {} } }))",
+        [PENDING, USER_ID],
+    )
+    await page.route(f"{build_dashboard.SUPABASE_URL}/rest/v1/jobs**", lambda route: route.abort())
+    await page.reload()  # the saved session signs the user in again; the roles cannot load
+    await page.wait_for_selector("#accountUser:not([hidden])")
+    assert await page.locator("#list > li").count() == 0
+    await open_dialog(page)
+    await page.click("#deleteConfirm")
+    await expect(page.locator("#authMessage")).to_contain_text("were deleted")
+    assert json.loads((await stored(page))[PENDING]) == {"other": {"Acme|2": {}}}
+
+
 async def test_the_dialog_is_busy_while_it_waits_and_cannot_be_dismissed(page: Page, site: Path) -> None:
     _, deleter = await signed_in(page, site)
     deleter.gate = asyncio.Event()

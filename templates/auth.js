@@ -41,6 +41,23 @@ function scrubbed(value) {
   return JSON.stringify({ ...kept, user: { id, aud, role, email, created_at: createdAt, app_metadata: {}, user_metadata: {} } });
 }
 
+/* The per-user notes dashboard.js keeps in this browser (queued changes, unsent filters, the first-sign-in answer), by user id.
+   Deleting an account clears this user's entries here too, so it does not depend on dashboard.js having loaded its data. */
+function forgetUser(userId) {
+  if (typeof userId !== 'string') return;
+  for (const name of ['misra-pending-choices-v1', 'misra-pending-filters-v1', 'misra-imported-v1']) {
+    try {
+      const all = JSON.parse(localStorage.getItem(name) ?? '{}');
+      if (typeof all === 'object' && all !== null && userId in all) {
+        Reflect.deleteProperty(all, userId);
+        localStorage.setItem(name, JSON.stringify(all));
+      }
+    } catch {
+      /* Storage is blocked or the note is not JSON: nothing of this user's can be read back from it. */
+    }
+  }
+}
+
 /* localStorage, or memory for this page view when the browser blocks it or its quota is full (then a sign-in cannot survive the
    redirect from Google: the code that comes back has no matching start, and the page says the sign-in did not finish). */
 const memory = new Map();
@@ -207,6 +224,7 @@ if (typeof globalThis.supabase?.createClient === 'function') {
      handled synchronously), then the session is cleared without asking the service (it no longer knows the user). */
   async function finishDeletion() {
     globalThis.misraAccount = null; /* so no auth event in between can attach the deleted account again */
+    forgetUser(deletingUser);
     document.dispatchEvent(new CustomEvent('misra:account-deleted', { detail: { userId: deletingUser } }));
     try {
       await client.auth.signOut({ scope: 'local' });
