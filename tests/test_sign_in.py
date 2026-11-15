@@ -8,7 +8,7 @@ import asyncio
 import base64
 import hashlib
 import json
-import re
+from html.parser import HTMLParser
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
@@ -123,14 +123,32 @@ async def test_fr1_ac1_a_changed_sign_in_script_is_refused_by_the_browser(page: 
     assert await page.locator("#list > li").count() == PAGE_SIZE
 
 
+class ScriptTags(HTMLParser):
+    """The attributes of every script tag of a page."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.scripts: list[dict[str, str | None]] = []
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        if tag == "script":
+            self.scripts.append(dict(attrs))
+
+
 async def test_the_page_loads_the_sign_in_scripts_from_its_own_origin_with_integrity_hashes(site: Path) -> None:
     html = (site / "index.html").read_text(encoding="utf-8")
+    parser = ScriptTags()
+    parser.feed(html)
+    by_src = {tag["src"]: tag for tag in parser.scripts if tag.get("src")}
     for name in ("supabase.js", "auth.js"):
         digest = "sha384-" + base64.b64encode(hashlib.sha384((site / name).read_bytes()).digest()).decode()
-        assert re.search(rf'<script [^>]*src="{re.escape(name)}"[^>]*integrity="{re.escape(digest)}"', html), name
+        assert by_src[name]["integrity"] == digest, name
     assert "default-src 'none'; script-src 'self'; style-src 'self'" in html  # no CDN, no inline script or style
     assert "unsafe-" not in html
-    assert not re.findall(r"<script(?![^>]*\bsrc=)(?![^>]*type=\"application/(?:ld\+)?json\")[^>]*>", html)
+    # every script is a file of the page's own origin or a JSON data block: nothing inline runs
+    assert all(
+        tag.get("src") or tag.get("type") in {"application/json", "application/ld+json"} for tag in parser.scripts
+    )
 
 
 # ---- AC 2: sign in with Google and sign out; there is no password anywhere ----
