@@ -90,6 +90,13 @@ function returnedError() {
   return code === 'access_denied' ? MESSAGES.cancelled : MESSAGES.finish;
 }
 
+/* Tells dashboard.js who is signed in, to save stars and discards in the account: the user's id and the client (which
+   renews the token). The page script may not have started yet, so the account is also kept on `globalThis`. */
+function publish(client, session) {
+  globalThis.misraAccount = session?.user?.id ? { client, userId: session.user.id } : null;
+  document.dispatchEvent(new CustomEvent('misra:account'));
+}
+
 function show(session) {
   const email = session?.user?.email;
   $('account').classList.toggle('is-signed-in', Boolean(session));
@@ -106,6 +113,7 @@ if (typeof globalThis.supabase?.createClient === 'function') {
   /* Fires once with the saved session (after a code from Google is exchanged), then on every sign-in and sign-out. */
   client.auth.onAuthStateChange((_event, session) => {
     show(session);
+    publish(client, session);
   });
   $('account').hidden = false;
   say(failure);
@@ -135,6 +143,7 @@ if (typeof globalThis.supabase?.createClient === 'function') {
          down): clear it here, so the page never says "signed out" while the saved session could sign the browser in. */
       storage.removeItem(STORAGE_KEY);
       show(null);
+      publish(client, null);
       say(MESSAGES.out);
     }
   });
