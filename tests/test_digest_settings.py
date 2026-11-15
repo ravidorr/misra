@@ -878,6 +878,40 @@ async def test_the_dialog_reads_well_on_a_phone_and_every_control_is_big_enough(
     assert await page.evaluate("document.getElementById('digestOpen').getBoundingClientRect().width") > 0
 
 
+async def test_the_agreement_line_sits_by_the_turn_on_button_with_big_links(page: Page, digest_site: Path) -> None:
+    """The lawyer's wording: agreeing to the Terms and the Privacy notice is stated where the email is turned on."""
+    world = World()
+    await page.set_viewport_size(PHONE)
+    await signed_in(page, digest_site, world)
+    await open_dialog(page)
+    line = page.locator("#digestConsent")
+    await expect(line).to_be_visible()
+    text = await line.inner_text()
+    assert text.startswith("By turning this on you agree to the Terms")
+    assert "and the Privacy notice" in text
+    blob = "https://github.com/ravidorr/misra/blob/main"
+    terms = line.get_by_role("link", name="Terms (opens in a new tab)")
+    privacy = line.get_by_role("link", name="Privacy notice (opens in a new tab)")
+    assert await terms.get_attribute("href") == f"{blob}/TERMS.md"
+    assert await privacy.get_attribute("href") == f"{blob}/PRIVACY.md"
+    for link in await line.locator("a").all():
+        assert await link.get_attribute("target") == "_blank"
+        assert await link.get_attribute("rel") == "noopener noreferrer"
+        size = await link.bounding_box()
+        assert size is not None
+        assert size["height"] >= TAP
+        assert size["width"] >= TAP
+    # it comes right before the buttons, in the form that holds "Turn the email on"
+    assert await page.evaluate(
+        "document.getElementById('digestConsent').nextElementSibling.contains(document.getElementById('digestSend'))"
+    )
+
+
+async def test_with_the_switch_off_the_page_has_no_agreement_line(page: Page, request: pytest.FixtureRequest) -> None:
+    await serve(page, request.getfixturevalue("site"))
+    assert await page.locator("#digestConsent").count() == 0
+
+
 async def test_the_dialog_works_from_the_keyboard_and_gives_the_focus_back(page: Page, digest_site: Path) -> None:
     world = World()
     await signed_in(page, digest_site, world)
@@ -886,10 +920,21 @@ async def test_the_dialog_works_from_the_keyboard_and_gives_the_focus_back(page:
     await expect(page.locator(DIALOG)).to_be_visible()
     await page.wait_for_selector("#digestDialog[data-state=off]")
     seen = []
-    for _ in range(5):
+    for _ in range(7):
         await page.keyboard.press("Tab")
-        seen.append(await page.evaluate("document.activeElement.id || document.activeElement.name"))
-    assert seen == ["digestAddress", "digestFrequency", "digestUseFilters", "digestClose", "digestSend"]
+        seen.append(
+            await page.evaluate("const e = document.activeElement; e.id || e.name || e.textContent.slice(0, 5)")
+        )
+    # the two agreement links (Terms, Privacy notice) sit right before the buttons
+    assert seen == [
+        "digestAddress",
+        "digestFrequency",
+        "digestUseFilters",
+        "Terms",
+        "Priva",
+        "digestClose",
+        "digestSend",
+    ]
     await page.keyboard.press("Escape")
     await expect(page.locator(DIALOG)).to_be_hidden()
     assert await page.evaluate("document.activeElement.id") == "digestOpen"

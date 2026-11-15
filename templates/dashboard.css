@@ -135,6 +135,17 @@ a {
   padding: 14px 4px;
 }
 
+/* The agreement line beside "Turn the email on": same 44px link targets as the sign-in notice. */
+.digest-consent {
+  margin: 0 0 var(--space-3);
+  color: var(--muted);
+  font-size: 0.875rem;
+}
+
+.digest-consent a {
+  padding: 14px 4px;
+}
+
 .sign-in-note[hidden] {
   display: none;
 }
