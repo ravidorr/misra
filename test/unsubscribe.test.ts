@@ -115,7 +115,8 @@ describe('RFC 8058 one-click (POST to the header URL)', () => {
     const ann = await subscriber();
     const response = await handleUnsubscribe(oneClick(ann.unsubscribeToken), world([ann]).deps);
     expect(response.status).toBe(200);
-    expect((await response.json()) as Answer).toEqual({ ok: true, status: 'unsubscribed' });
+    expect(response.headers.get('content-type')).toBe('text/plain; charset=utf-8');
+    expect(await response.text()).toBe('Unsubscribed.');
     expect(response.headers.get('access-control-allow-origin')).toBeNull();
     expect(ann.row.unsubscribedAt).toBe(NOW.toISOString());
     expect(ann.row.filters).toEqual({});
@@ -138,12 +139,13 @@ describe('RFC 8058 one-click (POST to the header URL)', () => {
     expect((await handleUnsubscribe(bare, world([noBody]).deps)).status).toBe(200);
   });
 
-  it('answers a repeat with 200 "already unsubscribed"', async () => {
+  it('answers a repeat with 200 and the same plain text', async () => {
     const ann = await subscriber();
     await handleUnsubscribe(oneClick(ann.unsubscribeToken), world([ann]).deps);
     const replay = await handleUnsubscribe(oneClick(ann.unsubscribeToken), world([ann]).deps);
     expect(replay.status).toBe(200);
-    expect((await replay.json()) as Answer).toEqual({ ok: true, status: 'already_unsubscribed' });
+    expect(replay.headers.get('content-type')).toBe('text/plain; charset=utf-8');
+    expect(await replay.text()).toBe('Unsubscribed.');
   });
 
   it('answers 404 for an unknown or missing token and 500 when the service fails (so the provider may retry)', async () => {
@@ -166,13 +168,30 @@ describe('RFC 8058 one-click (POST to the header URL)', () => {
 });
 
 describe('what never unsubscribes anyone', () => {
-  it('a HEAD, an OPTIONS or another method, which link scanners send', async () => {
+  it('a HEAD answers 200 with no body and never touches the database (what a link scanner sends)', async () => {
     const ann = await subscriber();
     const w = world([ann]);
-    for (const method of ['HEAD', 'OPTIONS', 'PUT', 'DELETE', 'PATCH']) {
+    const request = new Request(`${FUNCTION_URL}?t=${ann.unsubscribeToken}`, { method: 'HEAD' });
+    const response = await handleUnsubscribe(request, w.deps);
+    expect(response.status).toBe(200);
+    expect(await response.text()).toBe('');
+    expect(response.headers.get('cache-control')).toBe('no-store');
+    expect(response.headers.get('access-control-allow-origin')).toBeNull();
+    const noSecrets = await handleUnsubscribe(request, { config: undefined, fetch: w.fakeFetch, now: () => NOW });
+    expect(noSecrets.status).toBe(200);
+    const noToken = await handleUnsubscribe(new Request(FUNCTION_URL, { method: 'HEAD' }), w.deps);
+    expect(noToken.status).toBe(200);
+    expect(w.fakeFetch).not.toHaveBeenCalled();
+    expect(ann.row.unsubscribedAt).toBeNull();
+  });
+
+  it('an OPTIONS or another method, which link scanners send', async () => {
+    const ann = await subscriber();
+    const w = world([ann]);
+    for (const method of ['OPTIONS', 'PUT', 'DELETE', 'PATCH']) {
       const response = await handleUnsubscribe(new Request(`${FUNCTION_URL}?t=${ann.unsubscribeToken}`, { method }), w.deps);
       expect(response.status, method).toBe(405);
-      expect(response.headers.get('allow')).toBe('GET, POST');
+      expect(response.headers.get('allow')).toBe('GET, HEAD, POST');
       expect(response.headers.get('access-control-allow-origin')).toBeNull();
     }
     expect(w.fakeFetch).not.toHaveBeenCalled();

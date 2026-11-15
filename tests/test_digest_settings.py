@@ -719,6 +719,36 @@ async def test_settings_that_cannot_be_read_say_so_and_can_be_tried_again(
     assert await page.locator("#digestRetryRow").is_hidden()
 
 
+async def test_when_the_settings_cannot_be_read_the_dialog_can_still_be_closed_and_tried_again(
+    page: Page, digest_site: Path
+) -> None:
+    """The form is hidden then, so Close must not live in it: on a touchscreen it is the only way out."""
+    world = World(stored("on"))
+    world.table_mode = "read_down"
+    await page.set_viewport_size(PHONE)
+    await signed_in(page, digest_site, world, wait=False)
+    await page.click("#digestOpen")
+    await expect(page.locator("#digestError")).to_be_visible()
+    assert await page.locator("#digestForm").is_hidden()
+    close = page.locator("#digestClose")
+    await expect(close).to_be_visible()
+    size = await close.bounding_box()
+    assert size is not None
+    assert size["height"] >= TAP
+    assert size["width"] >= TAP
+    await close.click()
+    await expect(page.locator(DIALOG)).to_be_hidden()
+    assert await page.evaluate("document.activeElement.id") == "digestOpen"  # the focus goes back
+    # opened again it can be tried again, and then Close still works
+    await page.click("#digestOpen")
+    await expect(page.locator("#digestRetry")).to_be_visible()
+    world.table_mode = "ok"
+    await page.click("#digestRetry")
+    await page.wait_for_selector("#digestDialog[data-state=on]")
+    await page.click("#digestClose")
+    await expect(page.locator(DIALOG)).to_be_hidden()
+
+
 async def test_the_dialog_is_busy_while_it_waits_and_one_click_sends_one_request(page: Page, digest_site: Path) -> None:
     world = World()
     await signed_in(page, digest_site, world)
@@ -951,8 +981,8 @@ async def test_the_dialog_works_from_the_keyboard_and_gives_the_focus_back(page:
         "Priva",
         "digestFrequency",
         "digestUseFilters",
-        "digestClose",
         "digestSend",
+        "digestClose",
     ]
     await page.keyboard.press("Escape")
     await expect(page.locator(DIALOG)).to_be_hidden()

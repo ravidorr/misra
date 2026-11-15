@@ -9,7 +9,7 @@ import time
 from typing import Any
 
 from classify import INTERN, JUNIOR, PM_CORE
-from common import DROP_BELIEVED, DROP_NOTE, ISRAEL
+from common import DROP_BELIEVED, DROP_NOTE, ISRAEL, ROBOTS_NOTE
 
 DB = "data/jobs.db"
 # PM_CORE, INTERN and JUNIOR live in classify.py. Intern wins over Junior in render().
@@ -75,7 +75,9 @@ def coverage_gaps(c: sqlite3.Connection) -> list[dict[str, Any]]:
     kind is "failing" (the last two crawls failed, as in the dashboard's coverage gaps), "held" (the last crawl was
     held back as a sharp drop: nothing closed) or "closed" (a crawl believed a sharp drop and closed the jobs it no
     longer saw; this is an event, listed until an email has carried it). `since` identifies the gap: the start of the
-    outage, or the believed crawl. `new` is True until an email that listed the gap was sent (see mark_alerted), so
+    outage, or the believed crawl. A company whose last crawl was skipped because of robots.txt is none of these: it
+    is on the dashboard's coverage card, and nobody has to act. `new` is True until an email that listed the gap was
+    sent (see mark_alerted), so
     one outage alerts once however its kind changes, and an alert whose email failed is tried again. Companies not
     crawled in the last GAP_STALE_DAYS days are skipped. A database without a crawl log, a note column or an alert
     table has nothing to report or nothing alerted yet."""
@@ -102,13 +104,17 @@ def coverage_gaps(c: sqlite3.Connection) -> list[dict[str, Any]]:
     for company, seq in sorted(history.items()):
         if seq[-1][2][:10] < cutoff:
             continue
+        if seq[-1][1].startswith(ROBOTS_NOTE):
+            continue  # skipped on purpose because robots.txt does not allow it: a decision, not a failure to report
         believed = next(((n, ts) for _ok, n, ts in reversed(seq) if n.startswith(DROP_BELIEVED)), None)
         if believed and (company, believed[1]) not in alerted:
             add(company, "closed", believed[0], believed[1])
         ok, note, _ts = seq[-1]
         if not ok and note.startswith(DROP_NOTE):
             add(company, "held", note, _outage_start(seq))
-        elif not any(o for o, _n, _t in seq[-FAILING_RUNS:]):
+        elif not any(
+            o for o, n, _t in [x for x in seq if not x[1].startswith(ROBOTS_NOTE)][-FAILING_RUNS:]
+        ):  # a skip is neither failure nor success
             add(company, "failing", note, _outage_start(seq))
     return gaps
 

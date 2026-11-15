@@ -7,14 +7,36 @@
 // in the email opens a static page (templates/email.html) that holds a button, and the button makes this POST. The
 // token travels in the URL fragment (never sent to any server) and then in the JSON body, so it is in no request log.
 //
+// What each method does (a table, kept in step with supabase/README.md):
+//
+//   method   | does                                                   | touches the database
+//   ---------|--------------------------------------------------------|---------------------
+//   POST     | confirms (the page's button; token in the JSON body)   | yes
+//   HEAD     | 200, no body: a scanner sees a healthy endpoint        | never
+//   OPTIONS  | 204, the CORS preflight                                | never
+//   GET, ... | 405 `method_not_allowed`: a GET can never confirm      | never
+//
 // Answers are JSON (Supabase serves a function's HTML as plain text, so a function cannot render a page):
-//   200 {ok, status: 'confirmed' | 'already_confirmed'}  a replay is not an error
+//   200 {ok, status: 'confirmed' | 'already_confirmed', schedule?: 'daily' | 'weekly'}  a replay is not an error;
+//       `schedule` is the subscription's frequency, read after the confirm (best effort: absent when it cannot be read)
 //   404 link_not_valid   unknown, malformed, or the link of an unsubscribed subscription (its confirmation token is gone)
 //   409 unsubscribed     the user unsubscribed; this link will never turn sending back on
 //   410 link_expired     the link is older than its expiry; the user turns the email on again for a new one
 // CORS answers the dashboard's origin only. Only status codes are logged.
 
-import { ALLOWED_ORIGIN, MAX_BODY_BYTES, callDatabase, describe, fail, hashToken, isToken, readLimited, reply } from '../_shared/subscription.ts';
+import {
+  ALLOWED_ORIGIN,
+  MAX_BODY_BYTES,
+  callDatabase,
+  describe,
+  emptyOk,
+  fail,
+  hashToken,
+  isToken,
+  readLimited,
+  readSchedule,
+  reply,
+} from '../_shared/subscription.ts';
 import type { Deps } from '../_shared/subscription.ts';
 
 export { ALLOWED_ORIGIN, loadConfig } from '../_shared/subscription.ts';
@@ -45,9 +67,10 @@ export async function handleConfirm(request: Request, deps: Deps): Promise<Respo
     return fail(null, 403, 'origin_not_allowed', 'This address may not call this function.');
   }
   if (request.method === 'OPTIONS') return reply(origin, 204, null);
+  if (request.method === 'HEAD') return emptyOk(); // nothing is read or changed: no secrets, body or database
   if (request.method !== 'POST') {
     return fail(origin, 405, 'method_not_allowed', 'Open the link from your email and press Confirm.', {
-      allow: 'POST, OPTIONS',
+      allow: 'POST, HEAD, OPTIONS',
     });
   }
   if (!(request.headers.get('content-type') ?? '').toLowerCase().startsWith('application/json')) {
@@ -67,17 +90,13 @@ export async function handleConfirm(request: Request, deps: Deps): Promise<Respo
     if (body === 'not_an_object') return fail(origin, 400, 'invalid_request', 'Send a JSON object with a token.');
     if (!isToken(body.token)) return fail(origin, 404, 'link_not_valid', NOT_VALID);
 
-    const answer = await callDatabase(
-      deps,
-      config,
-      'confirm_subscription',
-      { p_hash: await hashToken(body.token), p_now: deps.now().toISOString() },
-      ANSWERS,
-    );
+    const hash = await hashToken(body.token);
+    const answer = await callDatabase(deps, config, 'confirm_subscription', { p_hash: hash, p_now: deps.now().toISOString() }, ANSWERS);
     switch (answer) {
       case 'confirmed':
       case 'already_confirmed':
-        return reply(origin, 200, { ok: true, status: answer });
+        // A read after the confirm: it changes nothing, and a failure only drops `schedule`.
+        return reply(origin, 200, { ok: true, status: answer, schedule: await readSchedule(deps, config, hash) });
       case 'unsubscribed':
         return fail(origin, 409, 'unsubscribed', 'You have unsubscribed. Turn the email on again to get a new link.');
       case 'expired':

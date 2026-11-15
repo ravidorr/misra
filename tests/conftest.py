@@ -9,6 +9,7 @@ import pytest
 from playwright.async_api import Page, async_playwright
 
 import browser_crawl
+import common
 import run
 
 
@@ -29,12 +30,34 @@ def close_connections(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
         conn.close()
 
 
+class NoNetwork:
+    """The requests session of the tests: any request that reaches it is a bug in the test."""
+
+    def get(self, url: str, **_kw: Any) -> None:
+        raise AssertionError(f"a test reached the network: GET {url}")
+
+    post = get
+
+
+@pytest.fixture(autouse=True)
+def offline_and_polite(monkeypatch: pytest.MonkeyPatch) -> None:
+    """No test touches the network or waits for the host delay; no host has a robots.txt unless a test says so."""
+    monkeypatch.setattr(common, "_s", NoNetwork())
+    monkeypatch.setattr(common, "DELAY", 0.0)
+    monkeypatch.setattr(common, "_last", {})
+    monkeypatch.setattr(common, "_load_robots", lambda _origin: None)
+    monkeypatch.setattr(common, "_robots", {})
+    monkeypatch.setattr(common, "_robots_locks", {})
+    monkeypatch.setattr(common, "ROBOTS_WOULD_BLOCK", {})
+
+
 @pytest.fixture
 def workdir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     """Empty project layout in tmp_path; cwd moved there so relative data/ paths never touch the real repo."""
     (tmp_path / "data").mkdir()
     (tmp_path / "docs").mkdir()
     (tmp_path / "templates").mkdir()
+    (tmp_path / "data" / "excluded_companies.csv").write_text("company,reason,date_added\n", encoding="utf-8")
     monkeypatch.chdir(tmp_path)
     return tmp_path
 

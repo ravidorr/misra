@@ -125,13 +125,21 @@ a {
 
 /* The notice under the header, shown while signed out, that the sign-in button points to with aria-describedby. */
 .sign-in-note {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
   margin: calc(-1 * var(--space-2)) 0 var(--space-4);
   color: var(--muted);
   font-size: 0.875rem;
 }
 
+.sign-in-line {
+  margin: 0;
+}
+
 /* Inline links keep the line height and still get a 44px hit area: padding on an inline box grows the target, not the line. */
-.sign-in-note a {
+.sign-in-note a,
+.report-privacy a {
   padding: 14px 4px;
 }
 
@@ -144,6 +152,11 @@ a {
 
 .digest-consent a {
   padding: 14px 4px;
+}
+
+/* The signed-in address in the delete dialog is one unbroken word: let a long one wrap on a phone. */
+.delete-email {
+  overflow-wrap: anywhere;
 }
 
 .sign-in-note[hidden] {

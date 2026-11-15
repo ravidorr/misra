@@ -145,6 +145,29 @@ async def test_fr7_ac1_the_gap_card_has_a_report_a_site_action_that_opens_the_fo
     assert await dialog.get_attribute("data-state") == "idle"
 
 
+async def test_the_form_says_where_the_report_goes_and_what_the_spam_guard_keeps(page: Page, site: Path) -> None:
+    await ready(page, site)
+    await open_form(page)
+    note = page.locator("#reportForm #reportPrivacy")
+    text = " ".join((await note.text_content() or "").split())
+    assert text == (
+        "Reports are emailed directly to the maintainer. To prevent spam, we keep a daily, non-reversible hash of your "
+        "network address. It matches nothing after that day, and old ones are deleted when later reports are handled. "
+        "Privacy Notice (opens in a new tab)"
+    )
+    assert "24 hours" not in text  # accuracy fix: the code keeps today's and yesterday's rows
+    link = note.get_by_role("link", name="Privacy Notice (opens in a new tab)")
+    assert await link.get_attribute("href") == "https://github.com/ravidorr/misra/blob/main/PRIVACY.md"
+    assert await link.get_attribute("target") == "_blank"
+    assert await link.get_attribute("rel") == "noopener noreferrer"
+    # a real element, not a placeholder, and the Send button names it so a screen reader reads it with the button
+    assert await page.locator("#reportSend").get_attribute("aria-describedby") == "reportPrivacy"
+    assert await page.evaluate(
+        "document.getElementById('reportPrivacy').compareDocumentPosition(document.getElementById('reportSend'))"
+        " & Node.DOCUMENT_POSITION_FOLLOWING"
+    )
+
+
 async def test_fr7_ac2_the_form_asks_for_company_link_and_reason_and_needs_no_account(page: Page, site: Path) -> None:
     backend = await ready(page, site)
     assert await page.locator("#account").is_hidden() or await page.locator("#signOut").is_hidden()  # signed out
@@ -494,6 +517,8 @@ async def test_the_keyboard_alone_opens_fills_sends_and_closes(page: Page, site:
     await page.keyboard.press("Tab")
     await page.keyboard.type(GOOD["why"])
     await page.keyboard.press("Tab")
+    assert await page.evaluate("document.activeElement.closest('#reportPrivacy') !== null")  # the Privacy Notice link
+    await page.keyboard.press("Tab")
     assert await page.evaluate("document.activeElement.id") == "reportCancel"
     await page.keyboard.press("Tab")
     assert await page.evaluate("document.activeElement.id") == "reportSend"
@@ -596,6 +621,10 @@ async def test_the_form_reads_well_on_a_phone(page: Page, site: Path) -> None:
         assert size is not None
         assert round(size["height"]) >= TAP  # subpixel layout can give 43.9999
         assert round(size["width"]) >= TAP
+    target = await page.locator("#reportPrivacy a").bounding_box()  # the privacy link is a 44px target too
+    assert target is not None
+    assert round(target["height"]) >= TAP
+    assert round(target["width"]) >= TAP
     await page.evaluate(AXE.read_text(encoding="utf-8"))
     assert await page.evaluate(AXE_RUN) == []
 

@@ -99,7 +99,7 @@ describe('turning the email on', () => {
         'No emails will be sent unless you click the link above. Once confirmed, your first digest will include only roles that appear after confirmation.',
         '',
         '---',
-        'Misra (https://ravidorr.github.io/misra/) is a free, non-commercial project run by Raanan Avidor (raanan@avidor.org).',
+        'Misra (https://ravidorr.github.io/misra/) is a free, non-commercial project run by Raanan Avidor (raanan@avidor.org), Ditsa 8, Herzliya 4627825, Israel.',
         'If you did not ask for this email, ignore it, and nothing will be sent to you.',
         'Privacy: https://github.com/ravidorr/misra/blob/main/PRIVACY.md | Terms: https://github.com/ravidorr/misra/blob/main/TERMS.md',
         '',

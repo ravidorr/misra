@@ -2,7 +2,22 @@
 
 All notable changes are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses [Semantic Versioning](https://semver.org/).
 
-## [0.23.0] - 2026-11-18
+## [Unreleased]
+
+### Added
+
+- `TERMS.md`: a short as-is disclaimer (free, non-commercial hobby project, no warranties, listings collected automatically from public pages and not guaranteed, trademarks belong to their employers, signing in accepts the privacy notice including processing in the EU and the US, employers write to `raanan@avidor.org` to have their links removed). Linked from the page footer, the sign-in notice, `PRIVACY.md`, `README.md` and `llms.txt`.
+- The dashboard footer links to the privacy notice, the terms and the contact address (44px targets, new-tab links say so).
+- The notice next to the sign-in button (PLAN.md step 6.6, FR-1 AC 7): signing in is optional and what is stored is stated, with links to the terms and the privacy notice. It shows only while signed out and the button names it with `aria-describedby`.
+- `tests/test_legal_wording.py` and tests of the notice and the footer links in `tests/test_sign_in.py`.
+
+### Changed
+
+- The lawyer's microcopy on three live touchpoints: the sign-in notice (two short paragraphs: sync across devices, signing in is optional, only the Google email address and job preferences are stored in the EU database, never a CV, password or tracking cookies, with links to the Terms and the Privacy Notice, plus one clause that Supabase's own sign-in record also holds the Google name and photo until the account is deleted, as `PRIVACY.md` says); the "Delete my account" confirmation dialog ("Delete your Misra account?", names the signed-in email address, shown as text, with "Cancel" and "Delete my account permanently"); and one line above Send in the "Report a site" form (reports go to the maintainer, the spam guard keeps a daily non-reversible hash of the network address, useless after that day and deleted when later reports are handled), with a Privacy Notice link.
+- `PRIVACY.md` names the database controller (Raanan Avidor, a private individual) and the contact `raanan@avidor.org`, says why the data is collected and that giving it is voluntary, names the providers and where they are (Supabase and Resend in Ireland, Google and GitHub in the United States), gives the rights to inspect, correct and delete (Sections 13 and 14 of the Israeli Privacy Protection Law) with an answer within 30 days, and states that Supabase's and Resend's standard data processing agreements apply. The digest is still described as planned, not live.
+- `PLAN.md` step 6.3 and the PRD (FR-8) carry the lawyer's exact footer text for every digest email and the Reply-To requirement.
+
+## [0.24.0] - 2026-11-19
 
 ### Added
 
@@ -13,17 +28,29 @@ All notable changes are documented here. Format follows [Keep a Changelog](https
 - Migration `20261118100000_digest_signup_and_limits.sql`: the counter tables `confirm_limits` and `confirm_daily_cap` and the service-role-only functions `subscribe_start`, `unsubscribe_user`, `confirm_email_reserve` and `confirm_email_release`. `supabase/tests/digest_signup.sql` tests them against a database, including that both ways of unsubscribing leave identical rows. The lint of `tests/test_migrations.py` knows the new tables and functions.
 - The lawyer's wording for the control (shown only when the flag is on): the label "Email me new matching roles", "Daily" and "Weekly", the helper text "We will first send a confirmation link to <address>. Nothing is sent until you confirm, and you get an email only when there are new matches. One-click unsubscribe is in every email. By turning this on you agree to the Terms and the Privacy Notice." (links to `TERMS.md` and `PRIVACY.md`, 44px targets, new-tab links say so), and after turning on "Check <address> for a confirmation link. Your <daily or weekly> digest will start only after you click it." The confirmation email is the lawyer's text verbatim, subject "Confirm your Misra job alerts".
 - `templates/digest.js`, `supabase/functions/email-settings/`, `supabase/functions/_shared/identity.ts`, `test/email-settings.test.ts` and `tests/test_digest_settings.py` (real browser, every state and error, light and dark, phone width, axe, keyboard). The daily workflow stages `docs/digest.js` once it exists.
-- `TERMS.md`: a short as-is disclaimer (free, non-commercial hobby project, no warranties, listings collected automatically from public pages and not guaranteed, trademarks belong to their employers, signing in accepts the privacy notice including processing in the EU and the US, employers write to `raanan@avidor.org` to have their links removed). Linked from the page footer, the sign-in notice, `PRIVACY.md`, `README.md` and `llms.txt`.
-- The dashboard footer links to the privacy notice, the terms and the contact address (44px targets, new-tab links say so).
 - The notice next to the sign-in button (PLAN.md step 6.6, FR-1 AC 7): signing in is voluntary, the email is used only to save choices and send alerts the user turns on, with links to the privacy notice and the terms. It shows only while signed out and the button names it with `aria-describedby`.
-- `tests/test_legal_wording.py` and tests of the notice and the footer links in `tests/test_sign_in.py`.
 
 ### Changed
 
 - `PRIVACY.md` says the email settings are built but switched off, what turning the email on stores, that one confirmation email is sent and nothing else until it is confirmed, the confirmation-email counters, and Resend's part.
 - `auth.js` also shares the signed-in email with the page scripts, and `dashboard.js` exposes a read-only copy of the four email filters.
-- `PRIVACY.md` names the database controller (Raanan Avidor, a private individual) and the contact `raanan@avidor.org`, says why the data is collected and that giving it is voluntary, names the providers and where they are (Supabase and Resend in Ireland, Google and GitHub in the United States), gives the rights to inspect, correct and delete (Sections 13 and 14 of the Israeli Privacy Protection Law) with an answer within 30 days, and states that Supabase's and Resend's standard data processing agreements apply. The digest is still described as planned, not live.
-- `PLAN.md` step 6.3 and the PRD (FR-8) carry the lawyer's exact footer text for every digest email and the Reply-To requirement.
+
+## [0.23.0] - 2026-11-18
+
+### Added
+
+- Crawler politeness, from the lawyer's answers (PLAN.md step 6.6). One honest User-Agent, `Misra/<version> (+https://ravidorr.github.io/misra/; raanan@avidor.org)`, from the single constant `USER_AGENT` in `common.py`, used by the adapters, the browser crawl, `discover.py` and the survey tools (a test fails when another string appears, and when `VERSION` differs from `package.json` and `pyproject.toml`). Nothing relied on the old `IL-JobWatch/0.1 (personal job search; low-volume)`.
+- The browser crawl now waits for its turn on a host like the adapters do (one request a second, from the same `reserve_slot` in `common.py`), before each page load and each pagination click, with the same cap of 3 pages at once.
+- A `robots.txt` check. Each host's `robots.txt` is fetched once per run (10 s timeout; a failed fetch, a 404 or any other 4xx, and a 5xx all mean allowed, and a failure or a 5xx is logged), read with a small RFC 9309 parser (our `Misra` group, else `*`; longest rule wins, Allow wins a tie; `*` and `$`), and a disallowed address is not fetched. An ATS's public API (Greenhouse, Lever, SmartRecruiters, Workable, Workday, Oracle, Phenom) is not treated as a page: a blanket `Disallow: /` does not stop it, a rule that names its path does. The switch is `ROBOTS_ENFORCED` in `common.py`; it ships on, and each run logs whether it is. A read-only audit of every crawl host found nothing blocked (see CONTRIBUTING.md).
+- A company skipped because of `robots.txt` is not a failure: no retry, not in the failure count, no maintainer alert. Its crawl log note is "robots.txt does not allow it", it stays out of the failure e-mail, and the coverage gap card lists it at once under the reason "robots.txt does not allow it".
+- The exclusion list `data/excluded_companies.csv` (`company`, `reason`, `date_added`; no personal data), read by `load_excluded` in `common.py`. A company on it is never crawled (`run.py`, `discover.py`), never listed on the coverage card or in the exports, and its rows are deleted: `run.py` deletes its jobs, crawl log and gap alerts from `data/jobs.db`, and `sync_supabase.py` deletes its rows in Supabase `jobs`, and the stars and discards (`user_jobs`, which keep a title and a link) and emailed keys (`emailed`) of users, by exact company name. Deleting a company's stars is deliberate: the removal must be complete. No migration: the service role already may delete from those tables. Guards: an empty list does nothing and sends no request; a missing or malformed list (blank or very short name, repeated name, missing reason, bad date, more than 200 rows) stops the run; more than 3 companies with data at once are refused before anything is deleted (add them in separate runs); counts are logged, never rows.
+- A list that spells a company differently from `companies.json` or the database (case only) stops the run, so skipping and deleting never disagree; the database is vacuumed after a deletion; the sync step fails when the list is not empty and the Supabase secrets are empty; a byte order mark in the list is accepted and an unreadable list is a clear error; a robots skip counts neither as a failure nor as a success in the two-failures rule of the coverage gap card and the failure email.
+- `CONTRIBUTING.md`: how to remove a company in minutes and the exact test of success, and the crawler's manners.
+- `tests/test_politeness.py`.
+
+### Changed
+
+- The Supabase sync step deletes before it uploads, and never uploads a row of an excluded company.
 
 ## [0.22.0] - 2026-11-17
 

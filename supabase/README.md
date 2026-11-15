@@ -284,7 +284,7 @@ function refuses everything that Auth does not accept.
 
 `templates/auth.js` shows "Delete my account" next to "Sign out" for a signed-in user. It opens a native `dialog` (focus
 trap, Esc and screen-reader support from the browser) that says what is removed and that it cannot be undone, with
-"Keep my account" focused first. While the request runs the buttons are busy and Esc is ignored. If it fails, the
+"Cancel" focused first. While the request runs the buttons are busy and Esc is ignored. If it fails, the
 account stays, the dialog says what happened and the button reads "Try again". On success the page clears this user's
 queued changes, unsent filters and first-sign-in answer from the browser (`misra-pending-choices-v1`,
 `misra-pending-filters-v1`, `misra-imported-v1`, this user's entries only), signs out locally, and shows a short
@@ -394,13 +394,26 @@ after an unsubscribe so a second press says "already unsubscribed". A new subscr
 `POST <project url>/functions/v1/confirm-email`, `Content-Type: application/json`, body `{"token": "<token>"}`, no `apikey` or
 sign-in needed. Answers (JSON, `{"ok": true, "status"}` or `{"ok": false, "error": {"code", "message"}}`):
 
-- 200 `confirmed`, or 200 `already_confirmed` (a replay, which is not an error and keeps the first time).
+- 200 `confirmed`, or 200 `already_confirmed` (a replay, which is not an error and keeps the first time). Both carry
+  `"schedule": "daily" | "weekly"`, the subscription's `frequency`, which the landing page names in its text. It is read with a
+  service-role `select` by the confirmation-token hash right after the confirm (no migration; the confirm itself stays the one
+  atomic SQL function). It is best effort: if the row is gone by then (an unsubscribe in between clears the hash), or the read
+  fails or returns anything else, `schedule` is simply absent and the page says "a daily or weekly email, as you chose".
 - 404 `link_not_valid` (unknown or malformed token, or the old link of an unsubscribed subscription: an unsubscribe clears its
   confirmation token), 409 `unsubscribed`, 410 `link_expired`.
 - 400 `invalid_request`, 403 `origin_not_allowed`, 405 `method_not_allowed`, 413 `payload_too_large`, 415
   `unsupported_media_type`, 500 `server_error`.
 
-A GET (or HEAD, or any method but POST and OPTIONS) is 405 and never confirms. Mail scanners and link previews fetch every
+What each method does (the same table is in the comment of `handler.ts`):
+
+| Method | `confirm-email` | Database |
+| --- | --- | --- |
+| POST | confirms (the page's button; token in the JSON body) | yes |
+| HEAD | 200, no body: a scanner sees a healthy endpoint | never |
+| OPTIONS | 204, the CORS preflight | never |
+| GET and others | 405 `method_not_allowed`: a GET never confirms | never |
+
+A GET (or any method but POST, HEAD and OPTIONS) is 405 and never confirms. Mail scanners and link previews fetch every
 link in a message; a confirmation a GET could complete would be given by a robot and would spoil the consent log. The
 confirmation email therefore links to the static page, `https://ravidorr.github.io/misra/email.html#token=<token>`. The
 token is in the fragment (no server ever sees it, so it is in no log and no Referer), the page removes it from the address bar
@@ -413,21 +426,31 @@ The unsubscribe link of every digest email, and the `List-Unsubscribe` header, i
 `https://dncodqeqpoqwcxdctzco.supabase.co/functions/v1/unsubscribe?t=<unsubscribe token>`. Step 6.3 adds the headers
 `List-Unsubscribe: <that URL>` and `List-Unsubscribe-Post: List-Unsubscribe=One-Click`.
 
-- GET (the user's click): unsubscribes at once, then answers 303 to `email.html#unsubscribed` (or
-  `#already-unsubscribed`, `#link-not-valid`, `#try-again`): a function cannot render a page (Supabase serves its HTML as plain
-  text), so the page shows the result. The token is not in the Location.
-- POST (RFC 8058 one-click, from the mailbox provider, body `List-Unsubscribe=One-Click`, no sign-in, usually no Origin): the
-  body is ignored, the token in the URL is the credential. 200 `{"ok": true, "status": "unsubscribed"}` or
-  `already_unsubscribed`; 404 `link_not_valid`; 500 `server_error` (the provider may retry). A foreign Origin is not refused
-  and no CORS header is sent: the token is the only credential and a browser has no use for the answer.
-- HEAD, OPTIONS and other methods are 405 and never unsubscribe.
+| Method | `unsubscribe` | Database |
+| --- | --- | --- |
+| GET | the user's click: unsubscribes at once, then 303 to `email.html#unsubscribed` (or `#already-unsubscribed`, `#link-not-valid`, `#try-again`) | yes |
+| POST | RFC 8058 one-click (Gmail, Apple Mail; body `List-Unsubscribe=One-Click`, no sign-in, usually no Origin): 200 `text/plain` with the body `Unsubscribed.` (also when already unsubscribed); 404 JSON `link_not_valid`; 500 JSON `server_error` (the provider may retry) | yes |
+| HEAD | 200, no body: a scanner sees a healthy link and nothing changes | never |
+| OPTIONS and others | 405 | never |
+
+A function cannot render a page (Supabase serves its HTML as plain text), so the GET redirects to the static page, which shows
+the result; the token is not in the Location. On the POST the body is ignored, the token in the URL is the credential, a foreign
+Origin is not refused and no CORS header is sent: a browser has no use for the answer.
+
+Accepted trade-off: a link scanner (corporate or university, Outlook or Gmail previewers) that fetches the unsubscribe link with
+GET unsubscribes that person. GET and POST are one click with no second button, as the lawyer and RFC 8058 expect, so a scanner
+cannot be told from the person. HEAD never acts, so a scanner that only probes the link changes nothing. The user can turn the
+email on again; confirming, in contrast, can never happen from a GET.
+
+The page `email.html` says, for an unsubscribe: your digest stopped, your digest filters and history of emailed jobs were
+deleted, your Misra account (stars, "Not for me" choices, dashboard filters) is unchanged. That matches the SQL: the
+function clears `filters`, `frequency`, the confirmation token and the user's `emailed` rows, and touches no account table.
+The audit record (address, consent timestamps, the unsubscribe hash) is kept on purpose (the consent log).
 
 An unsubscribe stops sending, keeps the audit record (address, `consent_given_at`, `consent_confirmed_at`, the first
 `unsubscribed_at`, the unsubscribe hash) and clears the rest of the user's choices: `filters` to `{}`, `frequency` to `daily`,
 the confirmation token and expiry, and the user's `emailed` rows (a repeat press clears them again, which finishes a clean-up
-that failed the first time). A second press is not an error and keeps the first time. A link scanner that follows every link
-may fire a GET and unsubscribe someone who did not ask to: that is the safe direction and is accepted (the user turns the
-email on again); confirming, in contrast, can never happen from a GET.
+that failed the first time). A second press is not an error and keeps the first time.
 
 ### What is logged
 
@@ -441,7 +464,7 @@ a server sees.
 
 `test/confirm-email.test.ts` and `test/unsubscribe.test.ts` (vitest, part of `npm run test` and CI) run the handlers with a fake
 of the database (`test/support/fake-subscriptions.ts`, which mirrors the two SQL functions): the exact HTTP answers above, that
-the database only ever receives hashes, replays, expiry, unsubscribed-then-confirm, scanner methods, CORS, malformed tokens, and
+the database only ever receives hashes, replays, expiry, unsubscribed-then-confirm, scanner methods (HEAD answers 200 with no body and the fake database is never called; a GET to `confirm-email` stays 405), the schedule in the confirm answer and its fallbacks, CORS, malformed tokens, and
 that no log or answer contains a token, hash, address or key. They are type-checked and linted like the other functions.
 `tests/test_email_page.py` runs the page in a real browser against a fake function (the button, no request before the click,
 the fragment removed, every answer, retry, keyboard, light and dark, phone width, axe).
@@ -470,16 +493,17 @@ pair for confirm, one for unsubscribe and a second unsubscribe token, with `conf
 
 ```sh
 BASE=https://dncodqeqpoqwcxdctzco.supabase.co/functions/v1
-# confirm: a GET never confirms (405), a POST does (200 confirmed), a repeat says already_confirmed, junk is 404, a foreign origin 403
+# confirm: a GET never confirms (405), a POST does (200 confirmed, with the schedule), a repeat says already_confirmed, junk is 404, a foreign origin 403
 curl -s -i "$BASE/confirm-email?token=$CONFIRM"
 curl -s -X POST "$BASE/confirm-email" -H 'Content-Type: application/json' -H 'Origin: https://ravidorr.github.io' -d "{\"token\":\"$CONFIRM\"}"
 curl -s -X POST "$BASE/confirm-email" -H 'Content-Type: application/json' -d "{\"token\":\"$CONFIRM\"}"
 curl -s -i -X POST "$BASE/confirm-email" -H 'Content-Type: application/json' -d '{"token":"nope"}'
 curl -s -i -X POST "$BASE/confirm-email" -H 'Content-Type: application/json' -H 'Origin: https://evil.example' -d '{}'
 # unsubscribe, RFC 8058, with no apikey and no Authorization header (proves verify_jwt = false lets a mailbox provider in)
-curl -s -i -X POST "$BASE/unsubscribe?t=$UNSUB" -d 'List-Unsubscribe=One-Click'   # 200 unsubscribed
-curl -s -i -X POST "$BASE/unsubscribe?t=$UNSUB" -d 'List-Unsubscribe=One-Click'   # 200 already_unsubscribed
-curl -s -i -I "$BASE/unsubscribe?t=$UNSUB"                                        # HEAD: 405, never acts
+curl -s -i -X POST "$BASE/unsubscribe?t=$UNSUB" -d 'List-Unsubscribe=One-Click'   # 200 text/plain: Unsubscribed.
+curl -s -i -X POST "$BASE/unsubscribe?t=$UNSUB" -d 'List-Unsubscribe=One-Click'   # 200 Unsubscribed. again
+curl -s -i -I "$BASE/unsubscribe?t=$UNSUB"                                        # HEAD: 200, no body, never acts
+curl -s -i -I "$BASE/confirm-email"                                               # HEAD: 200, no body, never acts
 # a GET redirects to the page (use the second unsubscribe token): 303, Location .../email.html#unsubscribed
 curl -s -i "$BASE/unsubscribe?t=$UNSUB2"
 ```

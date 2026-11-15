@@ -9,6 +9,8 @@ from typing import Any
 
 from playwright.async_api import async_playwright
 
+from common import USER_AGENT
+
 ATS = re.compile(
     r"(myworkdayjobs\.com|comeet\.(?:com|co)|greenhouse\.io|lever\.co|ashbyhq\.com|smartrecruiters\.com|"
     r"workable\.com|icims\.com|taleo\.net|oraclecloud\.com|successfactors|jobvite\.com|teamtailor\.com|"
@@ -159,9 +161,7 @@ async def main() -> None:
     sem = asyncio.Semaphore(4)
     async with async_playwright() as p:
         b = await p.chromium.launch(executable_path="/opt/pw-browsers/chromium", args=["--no-sandbox"])
-        ctx = await b.new_context(
-            user_agent="Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/124 Safari/537.36", locale="en-US"
-        )
+        ctx = await b.new_context(user_agent=USER_AGENT, locale="en-US")
         out = await asyncio.gather(*[survey(ctx, c, sem) for c in cos])
         await b.close()
     with open("data/survey2.json", "w") as fh:

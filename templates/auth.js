@@ -122,8 +122,11 @@ function publish(client, session) {
   document.dispatchEvent(new CustomEvent('misra:account'));
 }
 
+let signedInEmail = ''; /* the address of the signed-in user, for the delete dialog; empty when there is none */
+
 function show(session) {
   const email = session?.user?.email;
+  signedInEmail = typeof email === 'string' ? email : '';
   $('account').classList.toggle('is-signed-in', Boolean(session));
   $('signIn').hidden = Boolean(session);
   $('signInNote').hidden = Boolean(session);
@@ -244,6 +247,8 @@ if (typeof globalThis.supabase?.createClient === 'function') {
   }
 
   $('deleteAccount').addEventListener('click', () => {
+    $('deleteEmail').textContent = signedInEmail; /* text, never HTML */
+    $('deleteEmailPart').hidden = !signedInEmail;
     setDeleting(false);
     confirm.textContent = CONFIRM_TEXT;
     problem.hidden = true;

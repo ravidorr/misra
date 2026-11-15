@@ -12,12 +12,14 @@ MAX_TERMS_BULLETS = 6
 DIGEST_FOOTER = (
     "You are receiving this {{schedule}} digest because you confirmed job alerts on Misra "
     "(https://ravidorr.github.io/misra/). Misra is a free, non-commercial project run by Raanan Avidor "
-    "(raanan@avidor.org). Job listings are collected automatically from public career pages and are provided "
-    "as-is without guarantee that they are complete or still open."
+    "(raanan@avidor.org), Ditsa 8, Herzliya 4627825, Israel. Job listings are collected automatically "
+    "from public career pages and are provided as-is without guarantee that they are complete or "
+    "still open."
 )
 CONFIRM_FOOTER = (
     "Misra (https://ravidorr.github.io/misra/) is a free, non-commercial project run by Raanan Avidor "
-    "(raanan@avidor.org). If you did not ask for this email, ignore it, and nothing will be sent to you."
+    "(raanan@avidor.org), Ditsa 8, Herzliya 4627825, Israel. If you did not ask for this email, "
+    "ignore it, and nothing will be sent to you."
 )
 UNSUBSCRIBE_HEADERS = (
     "List-Unsubscribe-Post: List-Unsubscribe=One-Click",
@@ -149,14 +151,20 @@ def test_the_documents_that_describe_the_project_link_to_the_terms() -> None:
     assert "(./TERMS.md)" in read("PRIVACY.md")
 
 
-def test_the_email_wording_and_headers_are_written_in_the_plan_and_the_prd_for_the_steps_that_build_the_emails() -> (
-    None
-):
-    plan = " ".join(read("PLAN.md").split())
-    prd = " ".join(read("PRD.md").split())
-    for text in (plan, prd):
-        assert DIGEST_FOOTER in text
-        assert CONFIRM_FOOTER in text
-    assert "Reply-To" in plan
+def test_the_email_texts_are_kept_exactly_in_one_file_for_the_steps_that_build_the_emails() -> None:
+    texts = read("supabase/email-texts.md")
+    flat = " ".join(texts.split())
+    assert DIGEST_FOOTER in flat
+    assert CONFIRM_FOOTER in flat
+    assert "Subject: `Confirm your Misra job alerts`" in texts
+    assert "Someone (hopefully you) turned on the {{schedule}} job digest for {{user_email}} on Misra." in texts
+    assert "Unsubscribe in one click (no sign-in needed):\n{{unsubscribe_url}}" in texts
+    assert "Reply-To: raanan@avidor.org" in texts
     for needle in UNSUBSCRIBE_HEADERS:
-        assert needle in plan
+        assert needle in texts
+    plan = " ".join(read("PLAN.md").split())
+    assert "supabase/email-texts.md" in plan
+    assert "Reply-To" in plan
+    prd = " ".join(read("PRD.md").split())
+    assert DIGEST_FOOTER in prd
+    assert CONFIRM_FOOTER in prd
