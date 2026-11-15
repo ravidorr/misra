@@ -123,9 +123,14 @@ Decisions made in planning (they change the PRD's wording, so update the PRD in 
 
 ## FR-7 (report a site)
 
-- [ ] 5.1 Edge Function `report-site`: validates input, honeypot, per-hashed-IP and daily rate limit, a daily cap on
+- [x] ~~5.1 Edge Function `report-site`: validates input, honeypot, per-hashed-IP and daily rate limit, a daily cap on
   emails to the maintainer, sends through Resend, stores nothing personal. Done when: a flood in a test run sends at
-  most the cap and returns a clear error after it.
+  most the cap and returns a clear error after it.~~
+  ~~Remaining checks, live only, in `supabase/README.md` ("Report a site"): apply the migration `20261116110000_report_site_limits.sql`,
+  set the secrets `RESEND_API_KEY` (in Supabase: the GitHub Actions secret of the same name is not visible to functions),
+  `REPORT_TO_EMAIL` and `IP_HASH_SECRET`, deploy with `supabase functions deploy report-site`, then run the curl checks:
+  a good report arrives by email, a bad input is a 400, the wrong origin a 403, and the per-visitor limit still holds when
+  `X-Forwarded-For` and `CF-Connecting-IP` are written by the caller (confirms the visitor address the platform reports).~~
 - [ ] 5.2 Dashboard: "Report a site" action on the coverage card opens a short form (company, careers link, why it
   matters), confirmation and error messages, no account needed, CSP `connect-src` already covers the host. Process note
   in `CONTRIBUTING.md` for accepting a site (moves to `data/seed_companies.csv` or the gap card with a reason).
