@@ -59,7 +59,7 @@ Only you (signed in, through rules in the database that give each account its ow
 - **Resend** (Ireland): sends the site-report email to the maintainer. No account data is sent to Resend today: the personalised digest does not exist yet.
 - **Gmail (Google SMTP)**: the maintainer's own daily digest of public new roles, and failure alerts, go to the maintainer's own address. They hold public job data only, no account data.
 
-By signing in you accept that your account data is processed by these providers, in the EU and in the United States. Supabase and Resend each include their standard data processing agreement in their terms of service, and it applies to our use of them.
+By signing in you accept that your account data is processed on these providers' infrastructure, in the EU and in the United States: your account is stored at Supabase in the EU, and Google, in the United States, handles the sign-in. Supabase and Resend each include their standard data processing agreement in their terms of service, and it applies to our use of them.
 
 The page loads no fonts, scripts or images from any other service, and its security policy only allows connections to its own files and to the Supabase project.
 

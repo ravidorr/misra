@@ -49,7 +49,8 @@ def test_the_privacy_notice_names_the_providers_and_where_they_are() -> None:
     body = sections(read("PRIVACY.md"))["Providers and where they are"]
     for provider, place in PROVIDERS:
         assert re.search(rf"\*\*{provider}\*\* \({place}\)", body), provider
-    assert "processed by these providers, in the EU and in the United States" in body
+    assert "processed on these providers' infrastructure, in the EU and in the United States" in body
+    assert "your account is stored at Supabase in the EU" in body
     assert "standard data processing agreement" in body
 
 
