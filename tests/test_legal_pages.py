@@ -153,10 +153,12 @@ def test_links_on_the_page_work_on_the_site_and_the_outside_ones_open_in_a_new_t
 
 def test_the_words_of_the_markdown_are_never_read_as_a_placeholder_of_the_template(workdir: Path) -> None:
     prepare(workdir)
-    (workdir / "PRIVACY.md").write_text("# Privacy\n\nWords: `__TITLE__` and `__SOURCE__`.\n", encoding="utf-8")
+    (workdir / "PRIVACY.md").write_text(
+        "# Privacy\n\nWords: `__TITLE__`, `__SOURCE__`, `__SRI_THEME_JS__`.\n", encoding="utf-8"
+    )
     html = build_dashboard.render_legal(build_dashboard.LEGAL_PAGES[0])
     assert "<title>Privacy notice - Misra</title>" in html
-    assert "Words: <code>__TITLE__</code> and <code>__SOURCE__</code>." in html
+    assert "<code>__SRI_THEME_JS__</code>" in html
 
 
 # ---- The build ----
@@ -181,6 +183,7 @@ def test_the_build_writes_the_three_pages_from_the_markdown_files(workdir: Path,
 
 def test_the_pages_carry_the_integrity_hash_of_the_stylesheet_they_load(workdir: Path, db: sqlite3.Connection) -> None:
     prepare(workdir)
+    (workdir / "PRIVACY.md").write_text("# Privacy\n\n`__SRI_THEME_JS__`\n", encoding="utf-8")  # a word of the Markdown
     (workdir / "templates" / "legal.html").write_text(
         '<link href="dashboard.css" integrity="__SRI_DASHBOARD_CSS__">'
         '<script src="theme.js" integrity="__SRI_THEME_JS__"></script>__BODY__',
@@ -195,7 +198,7 @@ def test_the_pages_carry_the_integrity_hash_of_the_stylesheet_they_load(workdir:
         page = (docs / output).read_text(encoding="utf-8")
         assert f'integrity="{css}"' in page
         assert f'integrity="{theme}"' in page
-        assert "__SRI_" not in page
+        assert "__SRI_" not in page.replace("<code>__SRI_THEME_JS__</code>", "")
 
 
 def test_the_build_time_shown_is_the_latest_crawl_so_a_rebuild_changes_nothing(
@@ -393,7 +396,6 @@ def test_the_page_has_the_same_security_policy_as_the_email_page_without_inline_
 def test_every_document_that_has_a_page_is_in_the_list_the_build_and_the_workflow_agree_on() -> None:
     assert [source for source, _out in DOCUMENTS] == ["PRIVACY.md", "TERMS.md", "SECURITY.md"]
     for _source, output in DOCUMENTS:
-        assert output in build_dashboard.PAGES  # the integrity hashes are filled in
         assert f"docs/{output}" in (REPO / ".github" / "workflows" / "daily.yml").read_text(encoding="utf-8")
     workflow = (REPO / ".github" / "workflows" / "publish-docs.yml").read_text(encoding="utf-8")
     for source, _out in DOCUMENTS:

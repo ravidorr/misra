@@ -37,7 +37,7 @@ STATIC_FILES = (
     "templates/email.js",
 )
 # The built pages that carry __SRI_*__ placeholders.
-PAGES = ("index.html", "email.html", "privacy.html", "terms.html", "security.html")
+PAGES = ("index.html", "email.html")
 OUTPUT_NAMES = {"templates/dashboard.html": "index.html"}
 # Third-party scripts copied byte for byte to docs/ (vendor/README.md says where each one comes from). The page loads
 # them from its own origin, so the Content-Security-Policy needs no CDN.
@@ -252,10 +252,13 @@ def markdown_to_html(text: str) -> str:
     return html
 
 
-def render_legal(page: LegalPage, root: Path = Path()) -> str:
+def render_legal(page: LegalPage, root: Path = Path(), docs: Path | None = None) -> str:
     """The page for one Markdown file. Everything but the body is the template, so the page can only say what the
-    Markdown says."""
+    Markdown says. With `docs`, the integrity hashes of the files there are filled in (the template only, never the
+    body)."""
     template = (root / LEGAL_TEMPLATE).read_text(encoding="utf-8")
+    if docs:
+        template = INTEGRITY.sub(lambda m: integrity(docs / f"{m[1]}.{m[2]}".lower()), template)
     body = markdown_to_html((root / page.source).read_text(encoding="utf-8"))
     for placeholder, value in (
         ("__TITLE__", escape(page.title)),
@@ -413,7 +416,7 @@ def main() -> None:
         text = text.replace("__PAGE_DATA__", page_data)
         (out / OUTPUT_NAMES.get(source, Path(source).name)).write_text(text, encoding="utf-8")
     for legal in LEGAL_PAGES:
-        (out / legal.output).write_text(render_legal(legal), encoding="utf-8")
+        (out / legal.output).write_text(render_legal(legal, docs=out), encoding="utf-8")
     for source in VENDORED_FILES:
         shutil.copyfile(source, out / Path(source).name)
     for name in PAGES:
