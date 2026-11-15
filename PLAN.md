@@ -44,7 +44,8 @@ Decisions made in planning (they change the PRD's wording, so update the PRD in 
   descriptions will add perhaps 5 to 20 times the text. Done when: the note states the limits, the projected size
   and the pause-prevention plan (the daily sync counts as activity, to be confirmed). Decide here whether the Supabase
   project can be paused by inactivity and what the dashboard shows when it is.
-- [ ] 0.3 Update `PRD.md` with the decisions above (docs-only). Done when: the Open questions section still says none.
+- [x] ~~0.3 Update `PRD.md` with the decisions above (docs-only). Done when: the Open questions section still says none.~~
+  Done 2026-11-15, with the decisions made since (the lawyer outcome, Resend, the account and privacy facts) and a decisions log at the end of the PRD. New acceptance criteria were added at the end of their lists, so existing numbers hold: FR-1 AC 7 (sign-in notice), FR-4 AC 12 (full-text care), FR-8 AC 11 and 12 (consent log, footer).
 
 ## FR-5 first (quick win, no backend)
 
@@ -166,7 +167,8 @@ Decisions made in planning (they change the PRD's wording, so update the PRD in 
   subscriber delivers one email and a second run delivers none.
 - [ ] 6.5 Volume check before opening: count subscribers against the Resend free limit shared with `easy-theory`, write
   the number and the upgrade trigger in `CONTRIBUTING.md`. Done when: the limit and current use are written down.
-- [ ] 6.6 GATE: the lawyer review from "Before launch" and the addendum, with written answers. Nothing sends to a real
+- [ ] 6.6 GATE: the lawyer review from "Before launch" and the addendum, with written answers (answered 2026-11-15; the
+  outcome is in the PRD's "Before launch"; the gate stays until its wording is in). Nothing sends to a real
   user, and the sign-up control stays hidden behind a flag, until the answers are in and any required wording is added
   to the emails and `PRIVACY.md`. Done when: the answers are filed and the flag is switched on.
 
@@ -204,7 +206,7 @@ Decisions made in planning (they change the PRD's wording, so update the PRD in 
 - [ ] Every AC is named in a step's "Done when". Mapping: FR-1 AC 1-3, 6: 4.1; AC 4, 5: 4.4. FR-2 AC 1-3, 7-10: 4.2;
   AC 4-6: 4.3. FR-3 AC 1-7, 11: 3.2; AC 8-10: 3.4. FR-4 AC 1-3, 9: 7.1; AC 4, 8: 7.2; AC 5, 6: 7.3; AC 7: 8.1;
   AC 10: 7.4; AC 11: policy. FR-5: 1.1. FR-6 AC 1-4, 8: 8.1; AC 5-7: 8.2. FR-7: 5.1 (spam AC), 5.2. FR-8 AC 1-3: 6.2;
-  AC 4-6, 8, 9: 6.3; AC 7: 6.1; AC 10: 6.4. FR-9 AC 3-6, 10: 3.1; AC 1, 2, 7, 8: 3.4; AC 9: 6.3. Re-check this when a
+  AC 4-6, 8, 9: 6.3; AC 7: 6.1; AC 10: 6.4; AC 11 (consent log): 6.1; AC 12 (footer): 6.3. FR-1 AC 7 (sign-in notice) and the `TERMS.md` disclaimer: 6.6. FR-4 AC 12: policy, applied in 7.1. FR-9 AC 3-6, 10: 3.1; AC 1, 2, 7, 8: 3.4; AC 9: 6.3. Re-check this when a
   step is split.
 - [ ] Success metrics are read from Supabase tables and Resend reports monthly; add the queries to `CONTRIBUTING.md`
   with step 6.4 (sign-ins, 30-day returns, subscribers, share starring, region and description shares, accepted sites).

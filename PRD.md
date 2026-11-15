@@ -1,7 +1,9 @@
 # PRD: Accounts, personalisation and reach
 
-Status: draft for discussion, 2026-11-14. Nothing here is built yet. Once agreed, it is broken into a step-by-step plan
-and the steps are tracked in `PLAN.md`.
+Status: agreed. Updated 2026-11-15 with the decisions made in planning and since (see the decisions log at the end). The
+work is broken into a step-by-step plan tracked in `PLAN.md`; steps 1.1 to 5.1 are built and merged (the coverage gap card,
+jobs in Supabase, level, role type and region, sign-in, stars, discards and synced filters, account deletion, and the
+report-a-site function). The rest is not built yet.
 
 ## Background
 
@@ -34,7 +36,7 @@ it and they loved it. Their feedback points at eight gaps:
 
 ## Non-goals
 
-- Username and password accounts. Sign-in is Google only, so we never store passwords.
+- Username and password accounts. Sign-in is Google only, through Supabase, so we never store passwords.
 - Paid infrastructure.
 - Applying to jobs on a user's behalf, or storing cover letters.
 - Letting users add a site to the crawl directly (they can report one; see FR-7).
@@ -48,15 +50,23 @@ it and they loved it. Their feedback points at eight gaps:
 
 ## Constraints
 
-- Free to run. A free backend service such as Supabase, or a similar one, holds user accounts and preferences.
-- Sign-in uses Google, so account security rests on Google.
+- Free to run. Supabase (free plan, EU region, Ireland) is the chosen backend: it holds the jobs, user accounts and
+  preferences.
+- No server. The project is a daily batch run on GitHub Actions, a static dashboard, and Supabase. Anything that needs a
+  secret runs as a Supabase Edge Function (`report-site` and `delete-account` today; `confirm-email` and `unsubscribe`
+  are planned) or in the daily Actions workflow, and nowhere else. The public (anon) key is not a secret, so row-level
+  security is the whole security model for user data: each user can reach only their own rows.
+- Sign-in uses Google, through Supabase, so account security rests on Google.
 - The service keeps working for visitors who do not sign in.
-- The only personal detail we keep about a user is their email address. We discard what the sign-in provider sends (such
-  as a name or photo) and never store CVs, phone numbers or other contact details. Besides the email, we keep the
-  user's own choices (stars, "Not for me", filters, email settings) and a few technical records the service needs: when
-  the account was created and last used, and when the email was confirmed or unsubscribed. Users can delete everything.
-- Job data is served from the backend. If it cannot be reached, the dashboard shows a clear error message. There is no
-  offline copy of the jobs.
+- The only personal detail we keep about a user in our own tables is their email address. Google also sends a name and a
+  photo; they reach Supabase's own sign-in record and stay there until the account is deleted, but our tables never
+  copy them, the dashboard never shows them and the page does not keep them. We never store CVs, phone numbers or other
+  contact details. Besides the email, we keep the user's own choices (stars, "Not for me", filters, email settings) and a
+  few technical records the service needs: when the account was created and last used, and the consent log for the email
+  (when it was turned on, when it was confirmed, when the user unsubscribed). Users can delete everything.
+- Job data is served from the backend: the dashboard reads the jobs from Supabase. If it cannot be reached, the
+  dashboard shows a clear error message. There is no offline copy of the jobs (`docs/jobs.json` stays published as a
+  public open-data download, but the page never reads it).
 
 ## Requirements
 
@@ -67,11 +77,15 @@ Each requirement has acceptance criteria (AC). It is done when all of them hold.
 - AC: A visitor who is not signed in sees the whole dashboard as today. Signing in is optional.
 - AC: A user can sign in with their Google account and sign out. There is no password anywhere.
 - AC: A user can see and change only their own information.
-- AC: A user can delete their account and all of their data in one step.
+- AC: A user can delete their account and all of their data in one step. No AI-agent (WebMCP) tool on the page can delete
+  an account: that needs a person to confirm.
 - AC: `PRIVACY.md` says what we keep (email address, stars, "Not for me" choices, preferences), why, and that we never store a CV.
-- AC: The only personal detail we keep is the email address. What the sign-in provider sends, such as a name or photo,
-  is discarded and not shown or stored. The technical records listed in the constraints above are the only other
-  account data.
+- AC: The only personal detail we keep in our own tables is the email address. What the sign-in provider sends, such as a
+  name or photo, is never copied into them, shown, or kept by the page; it remains only in Supabase's own sign-in record
+  until the account is deleted, and deleting the account removes it. The technical records listed in the constraints
+  above are the only other account data.
+- AC: Next to the sign-in button, a short notice says that signing in is voluntary, what it is for, and links to
+  `PRIVACY.md`.
 
 ### FR-2: Stars, discards and filters follow the user
 
@@ -145,6 +159,8 @@ starting with the ones that matter most to users.
 - AC: The cost of storage stays within the free budget.
 - AC: If users tell us the short description is not good enough, we revisit it, and an AI-written summary is the
   option to consider then. Until we get that feedback, we do not use AI for it.
+- AC: Other companies' postings are treated with care. Facts, links and short snippets are fine; the full text is a grey
+  area and needs care. A company's postings are removed when it asks, and each site's `robots.txt` is respected.
 
 ### FR-5: A complete coverage gap card
 
@@ -172,9 +188,11 @@ starting with the ones that matter most to users.
 - AC: The coverage gap card has a "report a site" action that opens a short form on the dashboard.
 - AC: The form asks for the company, the careers page link and why it matters. No account and no personal details are
   needed, so a visitor who is not signed in can send a report.
-- AC: Each report is sent by email to the administrator.
+- AC: Each report is sent by email to the administrator, through Resend.
 - AC: The user sees a confirmation after sending, and an error message if it could not be sent.
-- AC: A flood of reports, or automated spam, cannot fill the administrator's inbox.
+- AC: A flood of reports, or automated spam, cannot fill the administrator's inbox. The guard is a hidden honeypot field,
+  a limit of 3 reports a day per visitor (counted by a keyed hash of the network address, never the address itself), and
+  a daily cap of 20 emails to the administrator. There is no captcha, and nothing personal is stored.
 - AC: Accepted sites move onto the crawl list or the coverage gap card with a reason.
 
 ### FR-8: Personalised daily digest
@@ -189,11 +207,16 @@ starting with the ones that matter most to users.
 - AC: The first email holds only jobs that appeared after the user confirmed their email, never the existing backlog.
 - AC: A user with nothing new gets no email (a weekly subscriber gets one summary a week).
 - AC: The address is confirmed before the first email, and every email has an unsubscribe link that works in one click.
-- AC: The emails come from a project address, not a personal one. A problem sending to one user never stops the others.
+- AC: The emails come from a project address, not a personal one (Resend, from `send.avidor.org`). A problem sending to
+  one user never stops the others.
 - AC: The email carries job listings only. Crawl problems are not in it; they stay on the coverage gap card (FR-5) and
   in a separate email to the maintainer, sent only when something new breaks.
 - AC: The maintainer's own failure alerts keep working, and the maintainer receives the job digest as a normal
   subscriber, with filters chosen like anyone else's.
+- AC: A consent log is kept for each subscriber: when the email was turned on, when it was confirmed and when the user
+  unsubscribed. When a user only unsubscribes, those timestamps are kept and the filters are cleared. When the account is
+  deleted, everything is removed, including the log.
+- AC: Every email has a footer that names Misra, the site and the contact address (`raanan@avidor.org`).
 
 ### FR-9: Level and role type
 
@@ -203,8 +226,9 @@ blends it with the levels. We keep the two apart, and recognise more role types 
 
 - AC: Every job has a level and a role type, shown on the card.
 - AC: Level and role type are separate filters, on the dashboard, in the digest settings and for the assistant.
-- AC: The first role types are Product plus the common fields in the jobs we collect (for example R&D, IT and Finance).
-  The final list is agreed during planning, and a job we cannot place is listed as "Other" and is never dropped.
+- AC: The role types are Product, R&D (software, hardware, QA, DevOps, algorithms), Data & AI, Design, IT, Finance,
+  Sales & BD, Customer success & support, and Other. Marketing, HR, Legal and Operations stay in Other until they have
+  volume. A job we cannot place is listed as "Other" and is never dropped.
 - AC: A job can belong to more than one role type when its title says so.
 - AC: Adding a role type later does not need a change to how users set their filters.
 - AC: The share of jobs placed in a role type other than "Other" is reported, so we can see which fields to improve.
@@ -250,7 +274,7 @@ dashboard.
 ## Success metrics
 
 The service has no analytics or tracking (`PRIVACY.md`), so every metric below is read from data we already hold: the
-user accounts, the email sender's reports, the daily crawl and the reports inbox. We look at them monthly. There are no
+user accounts and tables in Supabase, Resend's reports, the daily crawl and the reports inbox. We look at them monthly. There are no
 numeric targets yet, because we do not know our starting point; after the first two months we set them from what we
 see.
 
@@ -263,7 +287,8 @@ see.
 - **Coverage:** the number of sites on the coverage gap card, and the number of sites reported and accepted.
 - **Assistant:** not measured. The assistant reads public data without signing in, so we cannot see who connects or
   how it is used.
-- **Cost:** monthly cost stays at zero.
+- **Cost:** monthly cost stays at zero. The free-tier limits that could break this are written down, with the
+  upgrade triggers, in `CONTRIBUTING.md` (PLAN.md steps 0.2 and 6.5).
 
 The first-minute sign-in experience is not a metric. It is checked once, by hand, as a launch test: sign in on a phone
 and see the stars and discards made on a laptop.
@@ -274,13 +299,32 @@ None at the moment.
 
 ## Before launch
 
-Check with a lawyer before we send digests to real users: the privacy notice for storing email addresses, and the
-Israeli rules on sending email people signed up for. The consent, confirmation and unsubscribe steps in FR-8 are built
-to satisfy them, and the lawyer confirms nothing is missing.
+The lawyer review that was planned here has been answered (the questions are kept in the addendum at the end). The
+outcome, in short:
 
-The questions, in plain language, are in the addendum at the end of this document.
+- The daily email is not "advertising" under the Israeli spam law, because it only lists public postings the person asked
+  for. Double opt-in (turn on, then confirm by link) and a one-click unsubscribe stay anyway.
+- Keep a consent log: when the email was turned on, when it was confirmed, when the user unsubscribed. On an unsubscribe
+  only, keep those timestamps and clear the filters. On account deletion, remove everything.
+- The footer of every email names Misra, the site and the contact.
+- A short as-is disclaimer goes in `TERMS.md`.
+- A notice next to the sign-in button says signing in is voluntary, what it is for, and links to the privacy notice.
+- The privacy notice names the database controller (Raanan Avidor, a private individual) and the rights to inspect,
+  correct and delete. The contact for the project and for privacy requests is `raanan@avidor.org`.
+- No database registration and no data protection officer is required.
+- Accept the providers' standard data processing terms: they apply automatically through their terms of service.
+- Two-factor sign-in is on for the providers (done).
+- Full-text job descriptions are a grey area. Facts, links and short snippets are fine; full text needs care; remove a
+  company on request; respect `robots.txt`.
 
-## Proposed order (to be turned into the step plan)
+The wording changes this asks for are in FR-1, FR-4 and FR-8, and `PLAN.md` step 6.6 stays the gate: nothing sends to a
+real user, and the sign-up control stays hidden, until the wording is in the emails and `PRIVACY.md`. The review is
+answered; the gate closes when that wording is in.
+
+## Proposed order (the plan in `PLAN.md` differs, and is the one followed)
+
+`PLAN.md` starts with a backend trial, moves the jobs into Supabase, then the filters that depend on the new columns, then
+accounts and stars, the report-a-site function, the digest, descriptions and the assistant.
 
 1. Sign-in, plus stars and discards that sync (FR-1, FR-2).
 2. Regions and filters (FR-3).
@@ -294,18 +338,25 @@ Technical direction agreed so far. These are inputs to the step plan, not requir
 
 - The target is for all data to live in Supabase: jobs and their descriptions as well as user data. The daily crawl then
   writes there directly.
-- Get there in steps. First copy the open jobs in Israel, with their descriptions, from SQLite into Supabase after each
-  daily run, and have the dashboard drill-down, search and assistant read from that copy. Move the crawl itself over
-  once that works.
+- Get there in steps. Today every open job (not only the Israeli ones, so the signed-out dashboard stays whole) is copied
+  from SQLite into Supabase after each daily run, and the dashboard reads them from there. Descriptions are not collected
+  yet; when they are, the drill-down, search and assistant read them from that copy. Move the crawl itself over once that
+  works.
 - Before SQLite is retired, keep a regular export of the data into the repository, so the history and a restore path
   are not lost.
 - Check the free-tier limits (database size, backups, project pausing) against the real data size before the move.
-- Confirm the backend choice (Supabase is the working choice) with a small trial before committing to it.
-- Email sending uses Resend, as in `easy-theory`. Its free tier is shared across the apps on that account (about 100
-  emails a day, to be confirmed with the account), so check the sending volume before opening the digest to many
-  subscribers, and move to a larger plan or another sender if it is outgrown.
+  PLAN.md step 0.2 writes them down in `CONTRIBUTING.md`, checked on the day from the providers' own pages.
+- The backend choice is made: Supabase, project region EU (Ireland), in use since 2026-11-14.
+- Email sending uses Resend, from the sending domain `send.avidor.org` in the Ireland region. Resend replaces Gmail SMTP
+  for the digest only; the maintainer's failure alerts (`send_alert.py`) stay on Gmail, so they still work when Resend
+  does not. The site-report function already sends through Resend. The free tier is shared across the apps on that
+  account, including `easy-theory` (the daily limit is written in `CONTRIBUTING.md`, step 0.2), so check the sending
+  volume before opening the digest to many subscribers (step 6.5), and move to a larger plan or another sender if it is
+  outgrown.
 
 ## Addendum: what to ask the lawyer
+
+The review has been answered (outcome in "Before launch"). The questions are kept as they were asked.
 
 This is written to be handed over as it is. It needs no legal knowledge. The aim is a short meeting that ends with clear
 yes or no answers, ideally confirmed by email afterwards.
@@ -319,7 +370,8 @@ ads. We are a private individual, not a company, and we expect tens of users at 
 
 ### What we keep about each user
 
-- Their email address, and nothing else about who they are. We throw away the name and photo that Google sends.
+- Their email address, and nothing else about who they are in our own tables. Google also sends a name and photo; they
+  stay in the sign-in service's own record (Supabase) until the account is deleted, and we never copy or show them.
 - A few technical records: when the account was created and last used, and when the email was confirmed or
   unsubscribed.
 - Their choices: the jobs they marked, their filters, and their email settings.
@@ -363,3 +415,33 @@ ads. We are a private individual, not a company, and we expect tens of users at 
 - A yes or no on each question above, in writing (an email is enough).
 - The exact wording the lawyer wants in the emails and in the privacy notice, if any.
 - A short list of anything we must change before launch.
+
+## Decisions log
+
+Recorded 2026-11-15, one line per decision, newest last. The first lines were made in planning (`PLAN.md`), the rest since.
+
+- 2026-11-15: Role types are Product, R&D, Data & AI, Design, IT, Finance, Sales & BD, Customer success & support and
+  Other; levels are Intern, Junior and Not specified (FR-9).
+- 2026-11-15: The plan order differs from the PRD's list: backend trial, jobs in Supabase, filters, accounts and stars,
+  report a site, the digest, descriptions, the assistant.
+- 2026-11-15: The report-a-site spam guard is a honeypot, 3 reports a day per hashed address, a daily cap of 20 emails and
+  no captcha; reports go through Resend and nothing personal is stored (FR-7).
+- 2026-11-15: No server. Secrets live only in Supabase Edge Functions and the daily Actions workflow; row-level security
+  is the whole security model for user data; the dashboard reads jobs from Supabase (Constraints).
+- 2026-11-15: Supabase (EU, Ireland) is the chosen backend, no longer a working choice (Notes for the plan).
+- 2026-11-15: Every open job is synced to Supabase, not only the Israeli ones (Notes for the plan).
+- 2026-11-15: Sign-in is Google only, through Supabase. Only the email is kept in our tables; Google's name and photo stay
+  in Supabase's own sign-in record until the account is deleted. The PRD and the lawyer addendum no longer say they are
+  thrown away (Constraints, FR-1, addendum).
+- 2026-11-15: An account is deleted in one step, and no AI-agent tool deletes accounts (FR-1).
+- 2026-11-15: Resend replaces Gmail SMTP for the digest only, from `send.avidor.org` in the Ireland region; failure alerts
+  stay on Gmail (FR-8, Notes for the plan).
+- 2026-11-15: The contact for the project and for privacy requests is `raanan@avidor.org`; the database controller named in
+  the privacy notice is Raanan Avidor, a private individual (Before launch).
+- 2026-11-15: The lawyer review is answered: the digest is not "advertising" but double opt-in and one-click
+  unsubscribe stay; keep a consent log; the footer, the `TERMS.md` disclaimer, the sign-in notice and the privacy notice
+  wording are required; no registration or data protection officer; providers' standard terms accepted; two-factor
+  sign-in done; full-text descriptions are a grey area (Before launch, FR-1, FR-4, FR-8). `PLAN.md` step 6.6 stays the
+  gate.
+- 2026-11-15: Checked, not changed: the unresolved-sites count in `TODO.md` is 93 and matches the rows of
+  `data/unresolved_candidates.csv`. The PRD names no company count, and no "94" exists in the PRD or the plan.
