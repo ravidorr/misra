@@ -18,7 +18,16 @@ from digest import DB
 # Stylesheets bundled into docs/dashboard.css, in order. Raw colors live only in tokens.css.
 CSS_SOURCES = ("design-system/tokens.css", "design-system/components/*.css", "templates/dashboard.css")
 # Files copied to docs/ as they are.
-STATIC_FILES = ("templates/dashboard.html", "templates/dashboard.js", "templates/auth.js", "templates/theme.js")
+STATIC_FILES = (
+    "templates/dashboard.html",
+    "templates/dashboard.js",
+    "templates/auth.js",
+    "templates/theme.js",
+    "templates/email.html",
+    "templates/email.js",
+)
+# The built pages that carry __SRI_*__ placeholders.
+PAGES = ("index.html", "email.html")
 OUTPUT_NAMES = {"templates/dashboard.html": "index.html"}
 # Third-party scripts copied byte for byte to docs/ (vendor/README.md says where each one comes from). The page loads
 # them from its own origin, so the Content-Security-Policy needs no CDN.
@@ -233,12 +242,13 @@ def main() -> None:
         (out / OUTPUT_NAMES.get(source, Path(source).name)).write_text(text, encoding="utf-8")
     for source in VENDORED_FILES:
         shutil.copyfile(source, out / Path(source).name)
-    page = out / "index.html"
-    # __SRI_DASHBOARD_CSS__ becomes the integrity hash of docs/dashboard.css; one pass over the page
-    page.write_text(
-        INTEGRITY.sub(lambda m: integrity(out / f"{m[1]}.{m[2]}".lower()), page.read_text(encoding="utf-8")),
-        encoding="utf-8",
-    )
+    for name in PAGES:
+        page = out / name
+        # __SRI_DASHBOARD_CSS__ becomes the integrity hash of docs/dashboard.css; one pass over each page
+        page.write_text(
+            INTEGRITY.sub(lambda m: integrity(out / f"{m[1]}.{m[2]}".lower()), page.read_text(encoding="utf-8")),
+            encoding="utf-8",
+        )
     print(f"gaps: {[g['c'] for g in gaps['blocked']]} failing, {len(untracked)} untracked, {gaps['total']} in all")
     print(
         f"dashboard: {len(jobs)} open jobs, {sum(j['il'] for j in jobs)} in Israel, jobs.json {len(payload) // 1024} KB"

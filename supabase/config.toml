@@ -1,4 +1,4 @@
-# Settings the Supabase CLI reads from this directory. Only the Edge Function needs any (see README.md, "Report a site").
+# Settings the Supabase CLI reads from this directory. Only the Edge Functions need any (see README.md).
 project_id = "misra"
 
 # The dashboard calls this function from the browser with no signed-in user, and a CORS preflight carries no token, so
@@ -12,4 +12,16 @@ verify_jwt = false
 # token anyway (it needs the id, and a gateway check would not tell it). The function refuses any request without a
 # token that Auth accepts.
 [functions.delete-account]
+verify_jwt = false
+
+# The user presses Confirm on a static page with no sign-in, and a CORS preflight carries no token, so the platform must
+# not demand a JWT. The token in the body is the credential: the function looks up the SHA-256 of it and refuses
+# everything else. It acts only on a POST, never on a GET (mail scanners fetch links).
+[functions.confirm-email]
+verify_jwt = false
+
+# The link in a digest email is clicked by someone who is not signed in, and a mailbox provider's RFC 8058 one-click POST
+# carries no token or key either. The token in the URL is the credential and can only unsubscribe. Without this line a
+# redeploy would put the gateway's JWT check back and every unsubscribe link would answer 401.
+[functions.unsubscribe]
 verify_jwt = false

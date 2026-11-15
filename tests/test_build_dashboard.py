@@ -59,6 +59,8 @@ def write_static(workdir: Path) -> None:
     (workdir / "templates" / "dashboard.js").write_text("const dashboard = 1;\n", encoding="utf-8")
     (workdir / "templates" / "theme.js").write_text("const theme = 1;\n", encoding="utf-8")
     (workdir / "templates" / "auth.js").write_text("const auth = '__SUPABASE_URL__';\n", encoding="utf-8")
+    (workdir / "templates" / "email.html").write_text("<!doctype html><title>e</title>", encoding="utf-8")
+    (workdir / "templates" / "email.js").write_text("const email = '__SUPABASE_URL__';\n", encoding="utf-8")
     (workdir / "vendor").mkdir(exist_ok=True)
     (workdir / "vendor" / "supabase.js").write_bytes(b"var supabase = '__SUPABASE_URL__'; \xc3\xa9\r\n")
 
@@ -223,6 +225,8 @@ def test_site_files_are_written_next_to_the_page(db: sqlite3.Connection, workdir
         "auth.js",
         "dashboard.css",
         "dashboard.js",
+        "email.html",
+        "email.js",
         "index.html",
         "jobs.json",
         "jobs.jsonld",
@@ -232,6 +236,8 @@ def test_site_files_are_written_next_to_the_page(db: sqlite3.Connection, workdir
     assert (docs / "index.html").read_text(encoding="utf-8") == "<!doctype html><title>x</title>"
     assert (docs / "dashboard.js").read_text(encoding="utf-8") == "const dashboard = 1;\n"
     assert (docs / "theme.js").read_text(encoding="utf-8") == "const theme = 1;\n"
+    assert (docs / "email.html").read_text(encoding="utf-8") == "<!doctype html><title>e</title>"
+    assert (docs / "email.js").read_text(encoding="utf-8") == f"const email = '{build_dashboard.SUPABASE_URL}';\n"
     assert (docs / "auth.js").read_text(encoding="utf-8") == f"const auth = '{build_dashboard.SUPABASE_URL}';\n"
     # a vendored script is copied byte for byte: nothing is injected into it and its line endings stay
     assert (docs / "supabase.js").read_bytes() == b"var supabase = '__SUPABASE_URL__'; \xc3\xa9\r\n"
@@ -267,6 +273,14 @@ def test_page_gets_integrity_hashes_of_its_files(db: sqlite3.Connection, workdir
         f'<script integrity="{expected("supabase.js")}"></script>'
     )
     assert "__SRI" not in html
+    (workdir / "templates" / "email.html").write_text(
+        '<link integrity="__SRI_DASHBOARD_CSS__"><script integrity="__SRI_EMAIL_JS__"></script>', encoding="utf-8"
+    )
+    build_dashboard.main()
+    email = (docs / "email.html").read_text(encoding="utf-8")
+    assert (
+        email == f'<link integrity="{expected("dashboard.css")}"><script integrity="{expected("email.js")}"></script>'
+    )
 
 
 COMPANIES = [
@@ -390,3 +404,19 @@ def test_the_vendored_supabase_script_is_the_pinned_release_unmodified() -> None
     assert hashlib.sha256((vendor / "supabase.js").read_bytes()).hexdigest() == row[2]
     assert build_dashboard.VENDORED_FILES == ("vendor/supabase.js",)
     assert "eval(" not in (vendor / "supabase.js").read_text(encoding="utf-8")  # the page forbids unsafe-eval
+
+
+def test_every_file_the_build_writes_to_docs_is_staged_by_the_daily_workflow(
+    db: sqlite3.Connection, workdir: Path
+) -> None:
+    """A generated file the daily workflow does not `git add` is never published."""
+    write_css(workdir)
+    write_static(workdir)
+    write_json(workdir / "data" / "companies.json", [])
+    write_unresolved(workdir)
+    db.close()
+    build_dashboard.main()
+    built = {f"docs/{p.name}" for p in (workdir / "docs").iterdir()}
+    workflow = (Path(__file__).resolve().parents[1] / ".github" / "workflows" / "daily.yml").read_text(encoding="utf-8")
+    staged = set(re.search(r"for f in (data/jobs\.db [^;]+); do", workflow)[1].split()) - {"data/jobs.db"}  # type: ignore[index]
+    assert built == staged

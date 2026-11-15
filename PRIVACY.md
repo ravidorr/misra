@@ -22,7 +22,7 @@ If you sign in with Google, these are stored in our Supabase database (EU, Irela
 - Your **email address**, as Google gives it to us. It is used to sign you in and to tell your account apart. It is not sold or shared.
 - Your **stars and "Not for me" choices**. For a star we keep the role's title, company, location and link, so you can still see it after the role closes. For "Not for me" we keep only which role it was, and the choice is removed when that role closes. An account can keep a limited number of them (2,000).
 - Your **filters** (regions, places, levels, role types, search words, company, sort order and the show or hide options), so they follow you to your other devices. The first time you sign in on a browser, the page offers to copy that browser's own discards, stars and filters into your account.
-- **Email settings** have a place in the database for a later feature (the personalised digest). That feature does not exist yet and nothing is stored there.
+- **Email settings** have a place in the database for a later feature (the personalised digest, with its own consent log). The digest is not live yet and the dashboard has no way to turn it on, so no real subscription exists. When it is live, turning the email on will store the address it goes to, the filters you copied for it, daily or weekly, the time you turned it on, the time you confirmed the address from the link we email you, and the time you unsubscribed, plus the jobs already emailed to you. Only the SHA-256 hash of the confirmation and unsubscribe links is stored, never the links. The email starts only after you confirm. Unsubscribing, with the link in every email and no sign-in, stops it at once, deletes your filters, frequency and the list of emailed jobs, and keeps the address and those three times as a record of your consent. Deleting your account removes all of it, including that record. The unsubscribe link carries its token in the address, so Supabase's request log holds it for a short time (it can only unsubscribe).
 
 The sign-in service also keeps its own record of your account. Google sends your name and photo to Supabase's sign-in service, and Supabase keeps them in its own account record (in its `auth` tables) until the account is deleted. Our own tables never copy them, the dashboard never shows them, and the page does not save them in the sign-in it keeps in your browser. The signed token your browser holds would also carry them; a database function, switched on in the Supabase dashboard, empties that part of the token.
 
@@ -59,7 +59,7 @@ The page sets no cookies and has no analytics or tracking. It uses your browser'
 
 ## How long we keep it
 
-Account data is kept until you delete your account. There is no automatic expiry. The daily spam-guard counters are removed as described above. Provider logs are kept by the providers for the periods they set. Supabase may keep database backups for a period it sets, and a deleted account can remain in a backup until that backup expires.
+Account data is kept until you delete your account. There is no automatic expiry. The consent record of an unsubscribed email also stays until you delete your account. The daily spam-guard counters are removed as described above. Provider logs are kept by the providers for the periods they set. Supabase may keep database backups for a period it sets, and a deleted account can remain in a backup until that backup expires.
 
 ## How to delete your data
 
