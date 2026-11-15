@@ -129,8 +129,8 @@ Observations about live sites below come from checks made on 2026-11-14 and may 
 
 ## Yearly security review
 
-- [ ] **Do the yearly security review by 2027-11-15, then every year.** Trigger: the date. Where: the internal
-  security note kept by the maintainer (it lists the checks: provider logs, who has access, two-factor sign-in, key
+- [ ] **Do the yearly security review by 2027-11-15, then every year.** Trigger: the date. Where: the
+  security note in `SECURITY.md` (it lists the checks: provider logs, who has access, two-factor sign-in, key
   rotation, Dependabot and CodeQL alerts, and re-reading `PRIVACY.md` and `TERMS.md` against the product).
   - Done when: the checks are done and the date and result are written in the note, and this item is moved to the
     next year.

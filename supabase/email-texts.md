@@ -3,7 +3,7 @@
 The exact texts of the two emails, from the lawyer's review of 2026-11-15. Step 6.2 (the confirmation email) and step 6.3
 (the digest) copy them line for line, line breaks included. `{{...}}` marks a value the code fills in. Both emails are
 plain text, are sent from `Misra <digest@send.avidor.org>`, and set `Reply-To: raanan@avidor.org`, because the sending
-address cannot receive mail and the lawyer said people may reply "Remove". `tests/test_legal_wording.py` pins this file.
+address cannot receive mail and the lawyer said people may reply "Remove". The postal address in the footers is the maintainer's work address, added because Resend's acceptable-use policy asks bulk email to carry a valid address and company name (the lawyer's texts had only the email address; he should approve the addition). `tests/test_legal_wording.py` pins this file.
 
 ## Confirmation email
 
@@ -20,7 +20,7 @@ Click this link to confirm and start receiving new matching roles:
 No emails will be sent unless you click the link above. Once confirmed, your first digest will include only roles that appear after confirmation.
 
 ---
-Misra (https://ravidorr.github.io/misra/) is a free, non-commercial project run by Raanan Avidor (raanan@avidor.org).
+Misra (https://ravidorr.github.io/misra/) is a free, non-commercial project run by Raanan Avidor (raanan@avidor.org), Ditsa 8, Herzliya 4627825, Israel.
 If you did not ask for this email, ignore it, and nothing will be sent to you.
 Privacy: https://github.com/ravidorr/misra/blob/main/PRIVACY.md | Terms: https://github.com/ravidorr/misra/blob/main/TERMS.md
 ```
@@ -32,7 +32,7 @@ This footer ends every digest email, after the list of roles.
 ```text
 ---
 You are receiving this {{schedule}} digest because you confirmed job alerts on Misra (https://ravidorr.github.io/misra/).
-Misra is a free, non-commercial project run by Raanan Avidor (raanan@avidor.org). Job listings are collected automatically from public career pages and are provided as-is without guarantee that they are complete or still open.
+Misra is a free, non-commercial project run by Raanan Avidor (raanan@avidor.org), Ditsa 8, Herzliya 4627825, Israel. Job listings are collected automatically from public career pages and are provided as-is without guarantee that they are complete or still open.
 
 Unsubscribe in one click (no sign-in needed):
 {{unsubscribe_url}}
