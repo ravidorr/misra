@@ -78,6 +78,7 @@ REPORT_TABLES = set(REPORT_COLUMNS)
 REPORT_FUNCTIONS = {
     "report_site_reserve": "p_day date, p_ip_hash text, p_ip_limit integer, p_daily_cap integer",
     "report_site_release": "p_day date, p_ip_hash text",
+    "report_site_cleanup": "p_day date",
 }
 # Step 6.2: the spam guard of the confirmation email (counter tables) and the functions that turn the digest on and off
 # for a signed-in user. Only the service role may touch any of it. The functions touch the subscription tables or these
@@ -129,8 +130,9 @@ HOOK_GRANTS = {
     "grant execute on function public.custom_access_token_hook(jsonb) to supabase_auth_admin",
 }
 REPORT_FUNCTION = re.compile(
-    r"create function public\.(?P<name>report_site_reserve|report_site_release)\((?P<args>[a-z_0-9 ,]*)\) "
-    r"returns (?:text|void) language plpgsql set search_path = '' as \$\$(?P<body>.*)\$\$"
+    r"create function public\.(?P<name>report_site_reserve|report_site_release|report_site_cleanup)"
+    r"\((?P<args>[a-z_0-9 ,]*)\) "
+    r"returns (?:text|void|integer) language plpgsql set search_path = '' as \$\$(?P<body>.*)\$\$"
 )
 SUBSCRIPTION_FUNCTION = re.compile(
     r"create function public\.(?P<name>confirm_subscription|unsubscribe_subscription)\((?P<args>[a-z_0-9 ,]*)\) "
@@ -142,7 +144,7 @@ SUBSCRIBE_FUNCTION = re.compile(
     r"returns text language plpgsql set search_path = '' as \$\$(?P<body>.*)\$\$"
 )
 REPORT_SIGNATURE = (
-    r"(?:jsonb|date, text|date, text, integer, integer|text, timestamptz|date, text, text"
+    r"(?:jsonb|date|date, text|date, text, integer, integer|text, timestamptz|date, text, text"
     r"|date, text, text, integer, integer, integer|uuid, timestamptz"
     r"|uuid, text, text, jsonb, text, timestamptz, text, timestamptz)?"
 )
@@ -150,8 +152,8 @@ REVOKE_FUNCTION = re.compile(
     rf"revoke (?:all|execute) on function public\.(?P<name>\w+)\({REPORT_SIGNATURE}\) from (?P<roles>[a-z, ]+)"
 )
 GRANT_REPORT_FUNCTION = re.compile(
-    r"grant execute on function public\.(?P<name>report_site_reserve|report_site_release)"
-    r"\((?:date, text, integer, integer|date, text)\) to service_role"
+    r"grant execute on function public\.(?P<name>report_site_reserve|report_site_release|report_site_cleanup)"
+    r"\((?:date, text, integer, integer|date, text|date)\) to service_role"
 )
 GRANT_SUBSCRIBE_FUNCTION = re.compile(
     r"grant execute on function public\.(?P<name>confirm_email_reserve|confirm_email_release|subscribe_start"
@@ -759,6 +761,15 @@ def test_the_report_functions_are_invoker_functions_over_the_two_counters_only()
     assert "p_daily_cap < 1" in reserve  # a cap of zero sends nothing
     assert "where c.sent < p_daily_cap" in reserve  # the upsert refuses the one past the cap, atomically
     assert "delete from public.report_ip_limits where day < p_day - 1" in reserve  # old hashes do not pile up
+
+
+def test_the_daily_cleanup_deletes_only_earlier_days_of_the_two_counters_and_refuses_a_wrong_day() -> None:
+    (cleanup,) = [m for s in statements() if (m := REPORT_FUNCTION.fullmatch(s)) and m["name"] == "report_site_cleanup"]
+    body = cleanup["body"]
+    assert "delete from public.report_ip_limits where day < p_day;" in body
+    assert "delete from public.report_daily_cap where day < p_day;" in body
+    assert "p_day is null or p_day > current_date + 1" in body  # a wrong date can never wipe today's counters
+    assert body.count("delete from") == len(REPORT_TABLES)  # one delete per counter table, nothing else
 
 
 def test_the_report_counters_keep_nothing_personal() -> None:

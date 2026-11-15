@@ -73,13 +73,35 @@ psql "$TEST_DATABASE_URL" -v ON_ERROR_STOP=1 -f supabase/tests/accounts_rls.sql
 ```
 
 It stops at the first failed check with a message that names it and ends with `all account policy checks passed`.
-Pasting it into the SQL editor of the test project works too. CI does not run it (it needs a project); the lint above
+Pasting it into the SQL editor of the test project works too. CI runs it, see "SQL tests in CI" below; the lint above
 runs everywhere.
 
 `supabase/tests/job_choices.sql` checks the two rules of step 4.2 the same way (`all job choice checks passed`): a user
 can keep at most 2,000 rows (the 2,001st is refused with error 54000, a change to a job the user already has is not, and
 another account is not affected), and a discard is deleted when its job is closed by the sync while a star stays with its
 title, location and link.
+
+## SQL tests in CI
+
+The job `sql-tests` of `.github/workflows/ci.yml` (a separate job, so the `quality` check and the required checks are
+untouched) runs on every pull request and every push to `main`. It starts a `postgres:17-alpine` service container and
+runs `scripts/run-sql-tests.sh`, which loads `supabase/ci/supabase_stub.sql`, applies every migration in file-name order and
+runs every file of `supabase/tests/`, stopping at the first error. A new migration or test file is picked up by name, with
+nothing to register.
+
+The stub stands in for the part of Supabase the SQL relies on: the roles `anon`, `authenticated`, `service_role` (bypasses
+row-level security) and `supabase_auth_admin`, the table `auth.users` with the columns the migrations and tests use, the
+function `auth.uid()` reading the same claims as Supabase's, and the default privileges that give the three roles everything
+on new objects in `public` (the migrations then revoke it, and the tests check that). Keep it to that: when a migration or test
+needs something more of Supabase (another `auth` column, an extension), add it to the stub in the same pull request.
+A stub is not a Supabase project, so it cannot see a difference in a real project's settings or privileges; the live checks
+in "Apply the migrations" and "Auth settings" still apply. To run the same thing locally against a throwaway database:
+
+```sh
+docker run -d --rm --name misra-sql -e POSTGRES_PASSWORD=postgres -p 54330:5432 postgres:17-alpine
+scripts/run-sql-tests.sh postgresql://postgres:postgres@localhost:54330/postgres
+docker stop misra-sql
+```
 
 ## Stars and discards
 
@@ -167,12 +189,30 @@ The function reads the answer of `report_site_reserve` (text, sent by PostgREST 
 ### What is stored
 
 `report_ip_limits` (day, hash, number of reports) and `report_daily_cap` (day, emails sent). Rows older than yesterday
-are deleted on every call. No address, company, link or text is stored. Both tables have row-level security on, no
+are deleted on every call, and the daily workflow deletes every row of an earlier day once a day (see "Daily cleanup of the
+counters" below), so a hash does not outlive its day by more than the hours until the next run. No address, company, link or text is stored. Both tables have row-level security on, no
 policy and no grant for `anon` or `authenticated`; the two functions that change them (`report_site_reserve`,
 `report_site_release`) can be executed by the service role only. `tests/test_migrations.py` lints that on every push, and
 `supabase/tests/report_limits.sql` tests the counting against a database, the same way as the other SQL tests
 (`psql "$TEST_DATABASE_URL" -v ON_ERROR_STOP=1 -f supabase/tests/report_limits.sql`, ending in
 `all report limit checks passed`).
+
+### Daily cleanup of the counters
+
+Deleting only when a report arrives would leave an old hash in place on a quiet day, so the privacy notice's "expires
+after 24 hours" needs a timer. Migration `20261119100000_report_site_cleanup.sql` adds `report_site_cleanup(p_day date)`: it
+deletes every row of both tables from a day before `p_day` and returns how many it deleted (a day later than tomorrow, or no
+day, is refused so a wrong date cannot wipe today's rows; only the service role may run it). `sync_supabase.py` calls it through
+PostgREST (`POST /rest/v1/rpc/report_site_cleanup`, `{"p_day": "<today, UTC>"}`) right after a good sync, in the daily
+workflow's sync step that already holds the service-role key, and logs the count. The workflow runs at 04:30 UTC, so a day's
+rows are deleted 4.5 hours after the day ends at the latest, and a hash lives at most about 28.5 hours (24 hours of its day plus
+the wait for the next run); the hash is useless from the moment the day changes anyway, because its key changes.
+
+A failed cleanup, including "function not found" when the migration has not been applied, exits the sync step non-zero, so
+the failure alert fires and the subscriber digests of that run are skipped (the jobs were already synced, and the build and
+the data commit still run). Apply the migration before the first run that includes this change. `pg_cron` was not used:
+it needs the extension switched on in the project and cannot be tested in the CI database, while the workflow already runs
+every day and already holds the key.
 
 ### How it is tested
 

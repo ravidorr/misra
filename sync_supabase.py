@@ -6,6 +6,12 @@ with a message and exit code 0, so the daily workflow keeps working until the se
 non-zero, so the workflow's failure alert fires. The service-role key bypasses row-level security: it is sent only in
 request headers, never printed, and exposed only to the sync step of the workflow.
 
+After a good sync the spam-guard counters of the `report-site` function are cleaned: `report_site_cleanup` (a
+database function only the service role may run) deletes the rows of every day before today, so the daily
+non-reversible hash of a network address is gone within a day or so of its day ending, not only when a later report
+happens to be handled. A failed cleanup exits non-zero like a failed sync, so the privacy notice's promise cannot
+silently stop being kept.
+
 A company on the exclusion list (`data/excluded_companies.csv`) is deleted before anything is sent: its rows in `jobs`,
 and the rows that keep its title and link or its job keys in `user_jobs` (a user's stars and discards) and `emailed`.
 Only by exact company name, nothing when the list is empty, nothing at all when the list is bad or names more than
@@ -20,6 +26,7 @@ import sqlite3
 import sys
 from collections.abc import Iterator, Mapping, Sequence
 from dataclasses import dataclass
+from datetime import UTC, date, datetime
 from typing import Any, Protocol, cast
 
 import requests
@@ -76,7 +83,7 @@ class Client:
         self,
         method: str,
         params: Mapping[str, str | int],
-        body: list[dict[str, Any]] | None = None,
+        body: list[dict[str, Any]] | dict[str, Any] | None = None,
         table: str = "jobs",
         prefer: str | None = None,
     ) -> Response:
@@ -191,6 +198,17 @@ def sync(conn: sqlite3.Connection, client: Client, excluded: Sequence[str] = ())
     return Result(upserted=len(rows), closed=len(stale), purged=purged)
 
 
+def cleanup(client: Client, today: date) -> int:
+    """Delete the spam-guard counters of every day before `today` (UTC, the day `report-site` counts in) through the
+    database function `report_site_cleanup`, and return how many rows went. Counts only, nothing personal is read."""
+    deleted = client.call(
+        "POST", {}, {"p_day": today.isoformat()}, table="rpc/report_site_cleanup", prefer="return=representation"
+    ).json()
+    if not isinstance(deleted, int) or isinstance(deleted, bool):
+        raise SyncError("rpc/report_site_cleanup returned something other than a count")
+    return deleted
+
+
 def quality_report(conn: sqlite3.Connection) -> str:
     """The share of Israeli jobs in a region and of jobs not in Other, for the daily log."""
     jobs = conn.execute("SELECT title, location FROM jobs WHERE status='open'").fetchall()
@@ -212,8 +230,10 @@ def main() -> None:
         return
     conn = sqlite3.connect(DB)
     try:
-        result = sync(conn, Client(cast("HttpSession", requests.Session()), url, key), load_excluded())
+        client = Client(cast("HttpSession", requests.Session()), url, key)
+        result = sync(conn, client, load_excluded())
         print(f"Supabase: {result.upserted} open jobs upserted, {result.closed} closed, {result.purged} rows purged")
+        print(f"Supabase: {cleanup(client, datetime.now(UTC).date())} spam-guard counter rows deleted")
         print(quality_report(conn))
     except (SyncError, ExclusionError) as exc:
         sys.exit(f"Supabase sync failed: {exc}")

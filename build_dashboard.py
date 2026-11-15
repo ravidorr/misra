@@ -10,6 +10,7 @@ import shutil
 import sqlite3
 import time
 from dataclasses import dataclass
+from datetime import date
 from html import escape
 from pathlib import Path
 from typing import Any
@@ -21,7 +22,7 @@ from markdown_it.token import Token
 
 import classify
 import regions
-from common import ROBOTS_NOTE, is_excluded, load_excluded
+from common import ROBOTS_CLOSE_DAYS, ROBOTS_NOTE, is_excluded, load_excluded
 from digest import DB
 
 # Stylesheets bundled into docs/dashboard.css, in order. Raw colors live only in tokens.css.
@@ -136,6 +137,25 @@ def reason(note: str | None) -> str:
     return n[:120] or "the last crawl failed"
 
 
+def robots_why(why: str, days: int, last: str) -> str:
+    """The coverage card text of a company skipped for robots.txt, true in both phases: for the first ROBOTS_CLOSE_DAYS
+    days its last roles are kept, after that they are closed (run.py track_robots_skips)."""
+    since = "first skipped today" if days == 0 else f"skipped for {days} {'day' if days == 1 else 'days'}"
+    if days < ROBOTS_CLOSE_DAYS:
+        fate = f"its roles are kept for up to {ROBOTS_CLOSE_DAYS} days and then closed"
+    else:
+        fate = f"its roles were closed after {ROBOTS_CLOSE_DAYS} days"
+    return f"{why}; {since}, {fate} (last good crawl {last})"
+
+
+def add_days_skipped(blocked: list[dict[str, Any]], since: dict[str, str], latest: dict[str, str]) -> None:
+    """Give each company skipped for robots.txt its `days`: from the first skip of its current run to its latest crawl
+    (dates, YYYY-MM-DD), as run.py counts them."""
+    for gap in blocked:
+        if gap["c"] in since:
+            gap["days"] = (date.fromisoformat(latest[gap["c"]]) - date.fromisoformat(since[gap["c"]])).days
+
+
 def read_unresolved(excluded: list[str] | None = None) -> list[dict[str, str]]:
     """The rows of the unresolved-candidates CSV, without the companies on the exclusion list; a reason that is not in
     REASONS stops the build."""
@@ -153,15 +173,13 @@ def read_unresolved(excluded: list[str] | None = None) -> list[dict[str, str]]:
 
 
 def gap_groups(
-    blocked: list[dict[str, str]], untracked: list[dict[str, str]], unresolved: list[dict[str, str]]
+    blocked: list[dict[str, Any]], untracked: list[dict[str, str]], unresolved: list[dict[str, str]]
 ) -> list[dict[str, Any]]:
     """Every site that is not crawled, grouped by why, in REASONS order. A site named twice is counted once."""
     sites: dict[str, tuple[str, str]] = {}
     for gap in blocked:
         if gap["why"].startswith(ROBOTS_NOTE):  # a decision to respect the site, not a failure
-            sites.setdefault(
-                gap["c"], ("robots_disallowed", f"{gap['why']}; its roles may be old (last good crawl {gap['last']})")
-            )
+            sites.setdefault(gap["c"], ("robots_disallowed", robots_why(gap["why"], gap["days"], gap["last"])))
             continue
         code = "bot_protection" if gap["why"] == BLOCKED_WHY else "crawl_failing"
         sites.setdefault(
@@ -336,30 +354,45 @@ def apply_digest_switch(text: str) -> str:
     return DIGEST_REGION.sub("", DIGEST_LINE.sub("", text))
 
 
-def main() -> None:
-    excluded = load_excluded()  # an excluded company is on no list and no card, whatever the data still holds
-    c = sqlite3.connect(DB)
+def failing_sites(c: sqlite3.Connection, excluded: list[str]) -> list[dict[str, Any]]:
+    """The companies on the coverage card that are failing or skipped for robots.txt, each with why and the last good
+    crawl, and the days skipped for the ones skipped for robots.txt."""
     # latest crawl per company, and the last time it worked
     latest: dict[str, tuple[Any, Any, str]] = {}
     has_note = any(r[1] == "note" for r in c.execute("PRAGMA table_info(crawl_log)"))
     note_col = "COALESCE(note, '')" if has_note else "''"
     q = "SELECT company, ts, ok, " + note_col + " FROM crawl_log ORDER BY ts"
     recent: dict[str, list[Any]] = {}
+    skipped_since: dict[str, str] = {}  # the first day of a company's current run of robots.txt skips
     for company, ts, ok, note in c.execute(q):
         if is_excluded(company, excluded):
             continue
         latest[company] = (ts, ok, note)
-        if not note.startswith(ROBOTS_NOTE):  # a skip is neither a failure nor a success for the streak
+        if note.startswith(ROBOTS_NOTE):
+            skipped_since.setdefault(company, ts[:10])
+        else:  # a skip is neither a failure nor a success for the streak; any other result ends the run of skips
+            skipped_since.pop(company, None)
             recent.setdefault(company, []).append(ok)
     last_good = dict(c.execute("SELECT company, MAX(substr(ts,1,10)) FROM crawl_log WHERE ok=1 GROUP BY company"))
     # failing = the last two crawls both failed (one-off errors do not count)
     # a company skipped for robots.txt is listed at once: it is a decision, so there is no second crawl to wait for
     failing = {co: v for co, v in latest.items() if not any(recent.get(co, [])[-2:]) or v[2].startswith(ROBOTS_NOTE)}
+    blocked: list[dict[str, Any]] = [
+        {"c": co, "why": reason(v[2]), "last": last_good.get(co, "never")} for co, v in sorted(failing.items())
+    ]
+    add_days_skipped(blocked, skipped_since, {co: v[0][:10] for co, v in latest.items()})
+    return blocked
+
+
+def main() -> None:
+    excluded = load_excluded()  # an excluded company is on no list and no card, whatever the data still holds
+    c = sqlite3.connect(DB)
+    blocked = failing_sites(c, excluded)
+    failing = {gap["c"] for gap in blocked}
     with open("data/companies.json") as fh:
         companies = [x for x in json.load(fh) if not is_excluded(x["name"], excluded)]
     unfed = [x for x in companies if x["status"] != "ok"]
     untracked = sorted(x["name"] for x in unfed)
-    blocked = [{"c": co, "why": reason(v[2]), "last": last_good.get(co, "never")} for co, v in sorted(failing.items())]
     groups = gap_groups(blocked, unfed, read_unresolved(excluded))
     gaps = {
         "blocked": blocked,

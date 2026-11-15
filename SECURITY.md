@@ -37,6 +37,9 @@ are the rules that protect the data.
   `REPORT_TO_EMAIL`, `IP_HASH_SECRET` and the GitHub deploy key. Values are typed into the providers' own pages.
 - **Accounts:** two-factor sign-in is on for Supabase, GitHub, Resend and Google. Users sign in with Google only: the
   email-and-password provider is switched off. A database hook empties the personal part of the sign-in token.
+- **Policy tests:** the SQL policy tests of `supabase/tests` run in CI on every pull request and push to `main`, against a
+  plain Postgres 17 database with a stub of Supabase's roles and `auth` schema. They are the real tests of the
+  row-level security; a stub is not a Supabase project, so the live checks in `supabase/README.md` still apply.
 - **Abuse limits:** the report form has a honeypot, a per-visitor daily limit and a daily cap; the email functions have
   per-user, per-address and daily limits.
 - **Deletion:** a person can delete their account in one step, and every row tied to it is removed at once.
@@ -47,7 +50,6 @@ are the rules that protect the data.
 
 - Supabase's free plan has no backups. Before the first daily-email subscriber, upgrade to a plan with backups or build
   the export in plan step 9.1.
-- The SQL policy tests are not run in CI.
 - Two low-risk Dependabot alerts in development tools (not shipped to users) were open on 2026-11-15.
 - One maintainer: no second person for access or recovery.
 
