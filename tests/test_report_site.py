@@ -43,10 +43,10 @@ FAILURES = [
     (415, {"code": "unsupported_media_type", "message": "x"}, "Something went wrong on our side, so nothing was sent"),
     (429, {"code": "rate_limited", "message": "x"}, "try again tomorrow"),
     (503, {"code": "daily_cap_reached", "message": "x"}, "Reports are paused until tomorrow"),
-    (502, {"code": "send_failed", "message": "x"}, "nothing was recorded"),
+    (502, {"code": "send_failed", "message": "x"}, "could not confirm that your report was passed on"),
     (500, {"code": "server_error", "message": "x"}, "Something went wrong on our side, so nothing was sent"),
     (429, {"code": "something_new", "message": "x"}, "try again tomorrow"),  # an unknown code falls back to the status
-    (504, {"code": "something_new", "message": "x"}, "Something went wrong on our side, so nothing was sent"),
+    (504, {"code": "something_new", "message": "x"}, "could not confirm that your report was sent"),
     (418, {"code": "something_new", "message": "x"}, "could not confirm that your report was sent"),
 ]
 
@@ -231,6 +231,49 @@ async def test_the_button_is_busy_while_it_waits_and_one_click_sends_one_report(
     await page.keyboard.press("Escape")
     await expect(page.locator(DIALOG)).to_be_visible()
     backend.gate.set()
+    await confirmed(page)
+    assert len(backend.requests) == 1
+
+
+async def test_opening_the_form_while_a_request_runs_neither_resets_it_nor_sends_another(
+    page: Page, site: Path
+) -> None:
+    backend = await ready(page, site)
+    backend.gate = asyncio.Event()
+    await open_form(page)
+    await send_good(page)
+    await expect(page.locator("#reportSend")).to_have_text("Sending…")
+    await page.evaluate("document.getElementById('reportDialog').close()")
+    await page.click("#reportOpen")
+    await expect(page.locator(DIALOG)).to_be_visible()
+    assert await page.locator("#reportCompany").input_value() == GOOD["company"]  # not wiped
+    assert await page.locator("#reportSend").inner_text() == "Sending…"
+    backend.gate.set()
+    await confirmed(page)
+    assert len(backend.requests) == 1
+
+
+async def test_the_send_button_says_send_again_after_a_failed_check_following_a_failed_send(
+    page: Page, site: Path
+) -> None:
+    backend = await ready(page, site)
+    backend.answer = (503, {"code": "daily_cap_reached", "message": "x"})
+    await open_form(page)
+    await send_good(page)
+    await expect(page.locator("#reportError")).to_be_visible()
+    await page.fill("#reportCompany", "")
+    await page.click("#reportSend")
+    assert await page.locator("#reportSend").inner_text() == "Send report"
+    assert len(backend.requests) == 1
+
+
+async def test_the_reason_is_counted_like_the_function_counts_it(page: Page, site: Path) -> None:
+    backend = await ready(page, site)
+    await open_form(page)
+    padded = "w" * 990 + "\n\n\n\n\n" + "w" * 9 + "   \n" + "x" * 5  # 1001 after the function cleans it
+    await send_good(page, why=padded)
+    assert await page.locator("#reportWhyError").inner_text() == "The reason can be at most 1000 characters."
+    await send_good(page, why="w" * 989 + "\n\n\n\n\n" + "w" * 9 + "   \n")  # 1000 once cleaned, 1007 raw: sent
     await confirmed(page)
     assert len(backend.requests) == 1
 
@@ -551,8 +594,8 @@ async def test_the_form_reads_well_on_a_phone(page: Page, site: Path) -> None:
     for control in await page.locator(f"{DIALOG} .btn, {DIALOG} .field").and_(page.locator(":visible")).all():
         size = await control.bounding_box()
         assert size is not None
-        assert size["height"] >= TAP
-        assert size["width"] >= TAP
+        assert round(size["height"]) >= TAP  # subpixel layout can give 43.9999
+        assert round(size["width"]) >= TAP
     await page.evaluate(AXE.read_text(encoding="utf-8"))
     assert await page.evaluate(AXE_RUN) == []
 

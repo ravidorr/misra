@@ -12,13 +12,13 @@
    read the form may send it. Agents can find the action and the form through the data-report hooks. */
 const $ = (id) => document.getElementById(id);
 const ENDPOINT = '__SUPABASE_URL__/functions/v1/report-site';
-const TIMEOUT_MS = 20000;
+const TIMEOUT_MS = 35000; /* longer than the function's own worst case: 10 s for its database plus 10 s for the email service */
 const LIMITS = { company: 100, link: 500, whyMin: 3, why: 1000 };
 const STATUS = { badRequest: 400, forbidden: 403, tooLarge: 413, limited: 429, unavailable: 503, failed: 502 };
 const FIELDS = ['company', 'link', 'why'];
 const MESSAGES = {
   unreachable: 'We could not reach the service, so nothing was sent. Check your connection and try again.',
-  slow: 'The service took too long to answer, so we cannot tell whether your report arrived. Please wait a minute and try again: a second copy does no harm.',
+  slow: 'The service took too long to answer, so we cannot tell whether your report arrived. Please wait a minute and try again; if it did arrive, the repeat reaches us twice and uses one more of the reports allowed for today.',
   unclear: 'We could not confirm that your report was sent. Please try again in a few minutes.',
   invalid: 'Some details were not accepted, so nothing was sent. Check the fields below and try again.',
   request: 'Your report could not be read, so nothing was sent. Reload the page and try again.',
@@ -26,7 +26,7 @@ const MESSAGES = {
   large: 'The report is too large, so nothing was sent. Shorten the text and try again.',
   limited: 'You have already sent as many reports as are allowed for today, so this one was not sent. Please try again tomorrow.',
   paused: 'Reports are paused until tomorrow: we have received as many as we can read today, so this one was not sent. Please try again then.',
-  refused: 'The report could not be passed on, so nothing was recorded. Please try again in a few minutes.',
+  refused: 'We could not confirm that your report was passed on to us. Please try again in a few minutes.',
   server: 'Something went wrong on our side, so nothing was sent. Please try again later.',
 };
 
@@ -52,10 +52,13 @@ const BY_STATUS = {
   [STATUS.failed]: 'refused',
 };
 
-/* The same checks as supabase/functions/report-site/validate.ts, with the same words. Each returns a message, or '' when
-   the value is fine. */
+/* The same checks as supabase/functions/report-site/validate.ts, with the same words, on the same cleaned text (control,
+   line-separator and bidirectional characters removed first). Each returns a message, or '' when the value is fine. The
+   function stays the authority. */
+const UNSAFE = /(?![\t\n])[\p{Cc}\p{Zl}\p{Zp}\p{Bidi_Control}]/gu;
+const clean = (value) => value.normalize('NFC').replace(/\r\n?/g, '\n').replace(UNSAFE, '');
 function checkCompany(value) {
-  const text = value.normalize('NFC').replace(/\s+/gu, ' ').trim();
+  const text = clean(value).replace(/\s+/gu, ' ').trim();
   if (!text) return 'Enter the company name.';
   if (text.length > LIMITS.company) return `The name can be at most ${LIMITS.company} characters.`;
   return '';
@@ -65,7 +68,7 @@ function checkLink(value) {
   const text = value.trim();
   if (!text) return 'Enter the link to the careers page.';
   if (text.length > LIMITS.link) return `The link can be at most ${LIMITS.link} characters.`;
-  if (/[\s\p{Cc}]/u.test(text)) return 'The link cannot contain spaces or line breaks.';
+  if (/[\s\p{Cc}\p{Zl}\p{Zp}\p{Bidi_Control}]/u.test(text)) return 'The link cannot contain spaces or line breaks.';
   let url;
   try {
     url = new URL(text);
@@ -79,7 +82,7 @@ function checkLink(value) {
 }
 
 function checkWhy(value) {
-  const text = value.normalize('NFC').replace(/\r\n?/g, '\n').trim();
+  const text = clean(value).replace(/[^\S\n]+\n/gu, '\n').replace(/\n{3,}/gu, '\n\n').trim();
   if (!text) return 'Tell us why this company matters.';
   if (text.length < LIMITS.whyMin) return 'Write a few words on why this company matters.';
   if (text.length > LIMITS.why) return `The reason can be at most ${LIMITS.why} characters.`;
@@ -164,7 +167,7 @@ if (open && dialog) {
     const body = await response.json().catch(() => null);
     if (response.ok && body?.ok === true) return { sent: true };
     if (response.ok) return { message: MESSAGES.unclear }; /* a 200 that is not the function's answer: never "sent" */
-    const key = BY_CODE[body?.error?.code] ?? BY_STATUS[response.status] ?? (response.status >= 500 ? 'server' : 'unclear');
+    const key = BY_CODE[body?.error?.code] ?? BY_STATUS[response.status] ?? 'unclear';
     return { message: MESSAGES[key], fields: key === 'invalid' ? body?.error?.fields : null };
   }
 
@@ -190,6 +193,10 @@ if (open && dialog) {
 
   open.hidden = false;
   open.addEventListener('click', () => {
+    if (sending) {
+      if (!dialog.open) dialog.showModal(); /* a request is still running: do not reset it or start another */
+      return;
+    }
     reset();
     dialog.showModal();
     inputs.company.focus();
@@ -218,6 +225,7 @@ if (open && dialog) {
     problem.hidden = true;
     const invalid = validate();
     if (invalid) {
+      send.textContent = SEND_TEXT;
       invalid.focus();
       return;
     }
