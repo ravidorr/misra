@@ -22,8 +22,10 @@ TWO_COMMITS, PROMISED_DAYS = 2, 30
 ANN, BOB = "ann@test.example", "bob@test.example"
 
 
-def run(directory: Path, *args: str, env: dict[str, str] | None = None) -> str:
-    done = subprocess.run(["git", *args], cwd=directory, capture_output=True, text=True, check=True, env=env)
+def run(directory: Path, *args: str) -> str:
+    done = subprocess.run(
+        ["git", *args], cwd=directory, capture_output=True, text=True, check=True, env=publish_backup.git_env()
+    )
     return done.stdout
 
 
@@ -36,6 +38,14 @@ def make_export(directory: Path, emails: tuple[str, ...] = (ANN, BOB)) -> Path:
     for name, rows in content.items():
         (directory / f"{name}.json").write_text(render(rows), encoding="utf-8")
     return directory
+
+
+@pytest.fixture(autouse=True)
+def no_inherited_repository(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A git hook (pre-push runs this suite) sets GIT_DIR and friends. They must never reach these tests' temporary
+    repositories: with them set, `git init`, `git config` and `git commit` would act on the real checkout."""
+    for name in publish_backup.LOCAL_REPO_ENV:
+        monkeypatch.delenv(name, raising=False)
 
 
 @pytest.fixture
@@ -149,9 +159,13 @@ def test_the_limit_is_under_the_thirty_days_the_privacy_notice_promises() -> Non
 
 
 def test_the_clone_is_a_separate_directory_and_the_checkout_is_not_touched(tmp_path: Path, remote: Path) -> None:
-    before = run(export_accounts.REPO_ROOT, "status", "--porcelain")
+    def listing() -> list[str]:
+        return sorted(path.name for path in export_accounts.REPO_ROOT.iterdir())
+
+    before = listing()
     publish(make_export(tmp_path / "x"), str(remote), tmp_path / "w", NOW)
-    assert run(export_accounts.REPO_ROOT, "status", "--porcelain") == before
+    assert listing() == before  # no table file, no clone, nothing new in the checkout
+    assert export_accounts.REPO_ROOT not in (tmp_path / "w").resolve().parents
     assert (tmp_path / "w" / ".git").is_dir()
 
 
@@ -211,6 +225,9 @@ def test_the_git_children_do_not_get_the_keys(monkeypatch: pytest.MonkeyPatch) -
     env = publish_backup.git_env()
     assert not set(publish_backup.SECRET_ENV) & set(env)
     assert env["GIT_SSH_COMMAND"] == "ssh -i key"  # the one thing the push needs
+    for name in publish_backup.LOCAL_REPO_ENV:  # a hook that runs the tests sets these; they must not reach the clone
+        monkeypatch.setenv(name, "/elsewhere")
+    assert not set(publish_backup.LOCAL_REPO_ENV) & set(publish_backup.git_env())
 
 
 def test_git_missing_is_an_error_not_a_traceback(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

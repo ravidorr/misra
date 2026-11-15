@@ -31,6 +31,8 @@ SECONDS_PER_DAY = 86400
 BRANCH = "main"
 IDENTITY = ("github-actions[bot]", "41898282+github-actions[bot]@users.noreply.github.com")
 SECRET_ENV = ("SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY", "BACKUP_DEPLOY_KEY")
+# Variables a git hook (or a caller) sets to point git at some other repository: the clone is the only one used.
+LOCAL_REPO_ENV = ("GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "GIT_OBJECT_DIRECTORY", "GIT_PREFIX", "GIT_COMMON_DIR")
 STDERR_SHOWN = 300
 
 
@@ -39,8 +41,9 @@ class BackupError(Exception):
 
 
 def git_env() -> dict[str, str]:
-    """This process's environment without the keys the git children never need."""
-    return {name: value for name, value in os.environ.items() if name not in SECRET_ENV}
+    """This process's environment without the keys the git children never need and without any variable that would
+    point git at another repository than the clone it is run in."""
+    return {name: value for name, value in os.environ.items() if name not in SECRET_ENV + LOCAL_REPO_ENV}
 
 
 def git(directory: Path, *args: str) -> str:
