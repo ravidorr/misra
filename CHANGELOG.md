@@ -4,6 +4,14 @@ All notable changes are documented here. Format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
+## [0.32.0] - 2026-11-15
+
+### Added
+
+- Every site on the coverage gap card is now a link, so a visitor who wants those roles has somewhere to go. Each site in the `gaps` data of `jobs.json` has a `url`: the careers page for a site that blocks automated access, is skipped for robots.txt, has no open roles, needs a reader, has no feed or is failing; the company's own site (`https://<domain>`) for a company with no careers page. A company with no careers address on record gets the public board of its ATS (Ashby, Comeet, Greenhouse, Workable, SmartRecruiters, BambooHR, JazzHR), else its own site. Only `https:` addresses are ever linked; the link opens in a new tab with `rel="noopener noreferrer"` and says so to screen readers, has a visible focus ring and a 44px target.
+- `data/unresolved_candidates.csv` has a `careers_url` column (CRLF line endings kept), filled from the discovery results; empty only for the rows with no careers page. `CONTRIBUTING.md` says so.
+- Tests: a site without an address fails (against the real data, the CSV and `companies.json`), the reason-to-link table, the address helpers, and browser tests that the links render, are reached with Tab, show the focus and open safely.
+
 ## [0.31.0] - 2026-11-15
 
 ### Changed

@@ -1511,7 +1511,14 @@ const gaps = DATA.gaps ?? { blocked: [], untracked: [], total: 0, groups: [] };
     for (const group of gaps.groups) {
       const list = h('ul', { class: 'gap-sites' });
       for (const site of group.sites) {
-        list.append(h('li', {}, [h('b', { text: site.c }), site.why ? h('span', { class: 'gap-why', text: site.why }) : null]));
+        /* The name is a link to the careers page (or the company's own site): https only, so nothing else is ever linked. */
+        const name = site.url?.startsWith('https://')
+          ? h('a', { class: 'gap-link', href: site.url, target: '_blank', rel: 'noopener noreferrer' }, [
+              site.c,
+              h('span', { class: 'sr-only', text: NEW_TAB }),
+            ])
+          : site.c;
+        list.append(h('li', {}, [h('b', {}, [name]), site.why ? h('span', { class: 'gap-why', text: site.why }) : null]));
       }
       report.before(
         h('details', { class: 'gap-group', 'data-reason': group.reason, 'data-count': String(group.count) }, [

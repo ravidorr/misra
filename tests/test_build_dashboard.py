@@ -1,4 +1,5 @@
 import base64
+import csv
 import hashlib
 import json
 import re
@@ -43,8 +44,12 @@ def write_css(workdir: Path) -> None:
 
 
 def write_unresolved(workdir: Path, *rows: tuple[str, str, str]) -> None:
-    """data/unresolved_candidates.csv with the given (name, reason, note) rows."""
-    lines = ["name,domain,segment,reason,note"] + [f'{n},{n.lower()}.test,deeptech,{r},"{note}"' for n, r, note in rows]
+    """data/unresolved_candidates.csv with the given (name, reason, note) rows; each has the careers page
+    https://<name>.test/careers, except a no_careers_url row."""
+    lines = ["name,domain,careers_url,segment,reason,note"] + [
+        f'{n},{n.lower()}.test,{"" if r == "no_careers_url" else f"https://{n.lower()}.test/careers"},deeptech,{r},"{note}"'
+        for n, r, note in rows
+    ]
     (workdir / "data" / "unresolved_candidates.csv").write_text("\r\n".join(lines) + "\r\n", encoding="utf-8")
 
 
@@ -297,9 +302,9 @@ def test_page_gets_integrity_hashes_of_its_files(db: sqlite3.Connection, workdir
 
 
 COMPANIES = [
-    {"name": "Page", "status": "careers_page_only"},
-    {"name": "Nowhere", "status": "not_found"},
-    {"name": "Odd", "status": "something_new"},
+    {"name": "Page", "status": "careers_page_only", "domain": "page.test", "careers_url": "https://page.test/jobs"},
+    {"name": "Nowhere", "status": "not_found", "domain": "nowhere.test", "careers_url": ""},
+    {"name": "Odd", "status": "something_new", "domain": "odd.test", "careers_url": "", "ats": "ashby", "slug": "odd"},
 ]
 
 
@@ -310,12 +315,17 @@ def test_gap_groups_follow_the_reasons_in_order_and_count_each_site_once() -> No
         {"c": "Page", "why": "HTTP 500", "last": "never"},  # also untracked: counted as failing only
     ]
     unresolved = [
-        {"name": "Zeta", "reason": "needs_reader", "note": "Avature board"},
-        {"name": "alef", "reason": "needs_reader", "note": ""},
+        {"name": "Zeta", "reason": "needs_reader", "note": "Avature board", "careers_url": "https://zeta.test/jobs"},
+        {"name": "alef", "reason": "needs_reader", "note": "", "domain": "alef.test"},
         {"name": "Nowhere", "reason": "bot_protection", "note": "researched: wins over the bare status"},
         {"name": "Walled", "reason": "no_openings", "note": "ignored: the crawl is failing"},
     ]
-    groups = build_dashboard.gap_groups(blocked, COMPANIES, unresolved)
+    everyone = [
+        *COMPANIES,
+        {"name": "Down", "status": "ok", "domain": "down.test", "careers_url": ""},
+        {"name": "Walled", "status": "ok", "domain": "walled.test", "careers_url": "https://walled.test/careers"},
+    ]
+    groups = build_dashboard.gap_groups(blocked, COMPANIES, unresolved, everyone)
     assert [(g["reason"], g["count"]) for g in groups] == [
         ("crawl_failing", 2),
         ("bot_protection", 2),
@@ -326,15 +336,26 @@ def test_gap_groups_follow_the_reasons_in_order_and_count_each_site_once() -> No
     by_reason = {g["reason"]: g["sites"] for g in groups}
     assert [s["c"] for s in by_reason["crawl_failing"]] == ["Down", "Page"]  # sorted by name
     assert by_reason["crawl_failing"][0]["why"] == "The last crawl failed; its roles may be old (last good crawl never)"
-    assert by_reason["bot_protection"] == [
-        {"c": "Nowhere", "why": "researched: wins over the bare status"},
-        {
-            "c": "Walled",
-            "why": f"Its {build_dashboard.BLOCKED_WHY[4:]}; its roles may be old (last good crawl 2026-01-02)",
-        },
+    assert [(s["c"], s["url"]) for s in by_reason["crawl_failing"]] == [
+        ("Down", "https://down.test"),  # no careers address known: the company's own site
+        ("Page", "https://page.test/jobs"),
     ]
-    assert by_reason["needs_reader"] == [{"c": "alef", "why": ""}, {"c": "Zeta", "why": "Avature board"}]  # any case
-    assert by_reason["no_feed_found"] == [{"c": "Odd", "why": ""}]
+    assert (
+        by_reason["bot_protection"]
+        == [
+            {"c": "Nowhere", "why": "researched: wins over the bare status", "url": ""},  # the row has no address
+            {
+                "c": "Walled",
+                "why": f"Its {build_dashboard.BLOCKED_WHY[4:]}; its roles may be old (last good crawl 2026-01-02)",
+                "url": "https://walled.test/careers",  # blocked: the careers page itself
+            },
+        ]
+    )
+    assert by_reason["needs_reader"] == [  # any case
+        {"c": "alef", "why": "", "url": "https://alef.test"},
+        {"c": "Zeta", "why": "Avature board", "url": "https://zeta.test/jobs"},
+    ]
+    assert by_reason["no_feed_found"] == [{"c": "Odd", "why": "", "url": "https://jobs.ashbyhq.com/odd"}]
 
 
 def test_gap_groups_leave_out_a_reason_with_no_site() -> None:
@@ -347,6 +368,7 @@ def test_read_unresolved_returns_the_rows(workdir: Path) -> None:
         {
             "name": "Beta",
             "domain": "beta.test",
+            "careers_url": "https://beta.test/careers",
             "segment": "deeptech",
             "reason": "no_openings",
             "note": "No open roles, none at all",
@@ -373,6 +395,14 @@ def test_read_unresolved_reads_a_short_row_as_an_empty_note(workdir: Path) -> No
         "name,domain,segment,reason,note\r\nBeta,b.test,x,no_openings\r\n", encoding="utf-8"
     )
     assert [r["note"] for r in build_dashboard.read_unresolved()] == [""]
+
+
+def test_read_unresolved_reads_a_csv_without_the_domain_and_careers_columns(workdir: Path) -> None:
+    (workdir / "data" / "unresolved_candidates.csv").write_text(
+        "name,reason,note\r\nBeta,no_openings,none\r\n", encoding="utf-8"
+    )
+    (row,) = build_dashboard.read_unresolved()
+    assert (row["domain"], row["careers_url"]) == ("", "")
 
 
 def test_the_real_unresolved_csv_has_only_known_reasons(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -529,3 +559,154 @@ def test_removing_the_daily_email_control_leaves_no_whitespace_only_line(
     html = (workdir / "docs" / "index.html").read_text(encoding="utf-8")
     assert "<div>\n  <span>a</span>\n  <span>b</span>\n</div>\n" in html
     assert not [line for line in html.splitlines() if line != line.rstrip()]
+
+
+# ---- every site on the coverage gap card links somewhere (https only) ----
+
+REPO = Path(__file__).resolve().parents[1]
+
+
+@pytest.mark.parametrize(
+    ("url", "expected"),
+    [
+        ("https://a.test/careers", "https://a.test/careers"),
+        ("  https://a.test  ", "https://a.test"),
+        ("http://a.test", ""),
+        ("javascript:alert(1)", ""),
+        ("//a.test", ""),
+        ("/careers", ""),
+        ("https://", ""),
+        ("", ""),
+        (None, ""),
+    ],
+)
+def test_https_only_keeps_nothing_but_https_addresses(url: str | None, expected: str) -> None:
+    assert build_dashboard.https_only(url) == expected
+
+
+@pytest.mark.parametrize(
+    ("domain", "expected"),
+    [
+        ("a.test", "https://a.test"),
+        (" Sub.A-b.Co.IL ", "https://sub.a-b.co.il"),
+        ("a b.test", ""),
+        ("a", ""),
+        ("", ""),
+        (None, ""),
+    ],
+)
+def test_own_site_is_the_domain_over_https(domain: str | None, expected: str) -> None:
+    assert build_dashboard.own_site(domain) == expected
+
+
+def test_careers_address_prefers_the_careers_page_then_the_ats_board_then_the_own_site() -> None:
+    careers = build_dashboard.careers_address
+    page = {"domain": "a.test", "careers_url": "https://a.test/jobs", "ats": "ashby", "slug": "a"}
+    assert careers(page) == "https://a.test/jobs"
+    assert careers({**page, "careers_url": ""}) == "https://jobs.ashbyhq.com/a"
+    assert careers({**page, "careers_url": "http://a.test/jobs"}) == "https://jobs.ashbyhq.com/a"  # not https: dropped
+    assert careers({**page, "careers_url": "", "slug": ""}) == "https://a.test"  # a board needs its slug
+    assert careers({**page, "careers_url": "", "ats": "workday"}) == "https://a.test"  # no fixed board address
+    assert careers({"domain": "a.test"}) == "https://a.test"
+    assert careers({}) == ""
+
+
+def test_every_ats_board_address_is_https_with_a_host() -> None:
+    for ats, pattern in build_dashboard.BOARD_URLS.items():
+        assert build_dashboard.https_only(pattern.format(slug="slug")), ats
+
+
+def test_each_reason_links_where_the_card_says() -> None:
+    """blocked and robots.txt: the careers page; no careers page: the own site; the rest: the careers page."""
+    everyone = [
+        {"name": "Robot", "status": "ok", "domain": "robot.test", "ats": "smartrecruiters", "slug": "robot"},
+        {"name": "Walled", "status": "ok", "domain": "walled.test", "careers_url": "https://walled.test/careers"},
+    ]
+    blocked = [
+        {"c": "Robot", "why": f"{build_dashboard.ROBOTS_NOTE} (/jobs)", "last": "2026-01-02", "days": 1},
+        {"c": "Walled", "why": build_dashboard.BLOCKED_WHY, "last": "never"},
+    ]
+    rows = [
+        {
+            "name": r,
+            "reason": r,
+            "note": "",
+            "domain": "x.test",
+            "careers_url": "" if r == "no_careers_url" else f"https://x.test/{r}",
+        }
+        for r in ("no_careers_url", "site_unusable", "no_openings", "needs_reader", "no_feed_found")
+    ]
+    groups = build_dashboard.gap_groups(blocked, [], rows, everyone)
+    urls = {g["reason"]: [s["url"] for s in g["sites"]] for g in groups}
+    assert urls == {
+        "bot_protection": ["https://walled.test/careers"],
+        "no_careers_url": ["https://x.test"],
+        "site_unusable": ["https://x.test/site_unusable"],
+        "no_openings": ["https://x.test/no_openings"],
+        "needs_reader": ["https://x.test/needs_reader"],
+        "robots_disallowed": ["https://jobs.smartrecruiters.com/robot"],
+        "no_feed_found": ["https://x.test/no_feed_found"],
+    }
+    assert set(urls) == set(build_dashboard.REASONS) - {"crawl_failing"}
+
+
+def test_a_no_careers_page_row_links_to_the_own_site_even_when_it_has_an_address() -> None:
+    row = {"name": "A", "reason": "no_careers_url", "note": "", "domain": "a.test", "careers_url": "https://a.test/x"}
+    (group,) = build_dashboard.gap_groups([], [], [row])
+    assert group["sites"][0]["url"] == "https://a.test"
+
+
+def test_every_site_on_the_real_coverage_gap_card_has_an_https_address(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The card as the daily build draws it, from the real data: a site with no address fails here, so a new row of the
+    CSV, a new failing company or a company that left companies.json cannot reach the page without a link."""
+    monkeypatch.chdir(REPO)
+    excluded = build_dashboard.load_excluded()
+    conn = sqlite3.connect(REPO / "data" / "jobs.db")
+    blocked = build_dashboard.failing_sites(conn, excluded)
+    conn.close()
+    everyone = json.loads((REPO / "data" / "companies.json").read_text(encoding="utf-8"))
+    companies = [c for c in everyone if not build_dashboard.is_excluded(c["name"], excluded)]
+    unfed = [c for c in companies if c["status"] != "ok"]
+    groups = build_dashboard.gap_groups(blocked, unfed, build_dashboard.read_unresolved(excluded), companies)
+    sites = [site for group in groups for site in group["sites"]]
+    assert sites
+    assert [s["c"] for s in sites if not build_dashboard.https_only(s["url"])] == []
+
+
+def test_every_company_in_companies_json_has_an_address_for_the_card() -> None:
+    companies = json.loads((REPO / "data" / "companies.json").read_text(encoding="utf-8"))
+    assert [c["name"] for c in companies if not build_dashboard.careers_address(c)] == []
+
+
+def test_the_real_unresolved_csv_has_an_address_for_every_row() -> None:
+    raw = (REPO / "data" / "unresolved_candidates.csv").read_bytes()
+    assert raw.count(b"\r\n") == raw.count(b"\n")  # CRLF line endings
+    with open(REPO / "data" / "unresolved_candidates.csv", newline="", encoding="utf-8") as fh:
+        reader = csv.DictReader(fh)
+        assert reader.fieldnames == ["name", "domain", "careers_url", "segment", "reason", "note"]
+        rows = list(reader)
+    for row in rows:
+        assert build_dashboard.own_site(row["domain"]), row["name"]
+        if row["reason"] == "no_careers_url":
+            assert row["careers_url"] == "", row["name"]  # it has none: the card links the own site
+        else:
+            assert build_dashboard.https_only(row["careers_url"]) == row["careers_url"] != "", row["name"]
+            assert "?" not in row["careers_url"], row["name"]  # a tracking or block-page address, not a careers page
+            assert not re.search(r"/(blocked|news|press|blog)\b", row["careers_url"]), row["name"]
+
+
+def test_a_blocked_company_that_left_companies_json_links_to_its_csv_row() -> None:
+    blocked = [{"c": "Gone", "why": build_dashboard.BLOCKED_WHY, "last": "never"}]
+    row = {"name": "Gone", "reason": "needs_reader", "note": "", "domain": "gone.test", "careers_url": ""}
+    (group,) = build_dashboard.gap_groups(blocked, [], [row], [])
+    assert [(s["c"], s["url"]) for s in group["sites"]] == [("Gone", "https://gone.test")]
+
+
+def test_main_warns_when_a_site_has_no_link(
+    db: sqlite3.Connection, workdir: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    prepare(workdir)
+    write_json(workdir / "data" / "companies.json", [{"name": "Alpha", "status": "x"}])  # no domain, no careers page
+    db.close()
+    build_dashboard.main()
+    assert "WARNING: no link for ['Alpha']" in capsys.readouterr().out
