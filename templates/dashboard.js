@@ -1,10 +1,12 @@
 /* Dashboard script. Loaded as a deferred module by docs/index.html; the roles come from Supabase. */
 const $ = (id) => document.getElementById(id);
 const LS_D = 'il-jobs-discarded-v1';
-const LS_F = 'il-jobs-filters-v2';
+const LS_F = 'il-jobs-filters-v3';
 const LS_T = 'misra-theme';
-const CATS = { pm: 'product', intern: 'intern', junior: 'junior', other: 'other' };
-const KIND = { pm: 'Product', intern: 'Intern', junior: 'Junior', other: 'Other' };
+const NOT_SPECIFIED = 'Not specified';
+const OTHER = 'Other';
+const REMOTE_REGION = 'Remote';
+const REMOTE_NOT_SAID = 'Remote, country not given';
 const MODES = ['auto', 'light', 'dark'];
 const SIZES = [10, 25, 50, 100];
 const ANNOUNCE_DELAY_MS = 600;
@@ -84,25 +86,36 @@ async function fetchJobs() {
   return rows;
 }
 
-/* A row of the jobs table as the page uses it: c company, i id, t title, m team, l location, u url, f first seen,
-   k kind, il in Israel, n not on the company's first day of listings, s company's crawl is failing. */
+/* A remote role whose location names no country or city ("Remote"): the posting does not say whether it is open to
+   people in Israel, so it is not Remote by default (FR-3). "Remote, US" names a country and never matches. */
+const REMOTE_WORDS = /remote|work from home|wfh|fully|flexible|distributed|virtual/gi;
+function remoteNotSaid(location) {
+  return /remote|work from home|wfh/i.test(location) && location.replace(REMOTE_WORDS, '').replace(/[^\p{L}]/gu, '') === '';
+}
+
+/* A row of the jobs table as the page uses it: c company, i id, t title, m team, l location as written, u url,
+   f first seen, lv level, rt role types, rg regions, lo places in Israel without a region, il in Israel, ru remote
+   with no country given, n not on the company's first day of listings, s company's crawl is failing. */
 function toJob(row, failing, firstDay) {
   const f = (row.first_seen ?? '').slice(0, 10);
-  const types = row.role_types ?? [];
-  let k = 'other';
-  if (types.includes('Product')) k = 'pm';
-  else if (row.level === 'Intern') k = 'intern';
-  else if (row.level === 'Junior') k = 'junior';
+  const l = (row.location ?? '').trim();
+  const rg = row.regions ?? [];
+  const lo = row.locations ?? [];
+  const il = rg.length + lo.length > 0;
   return {
     c: row.company,
     i: row.job_id,
     t: (row.title ?? '').trim(),
     m: (row.team ?? '').trim(),
-    l: (row.location ?? '').trim().slice(0, 80),
+    l,
     u: row.url,
     f,
-    k,
-    il: (row.regions ?? []).length + (row.locations ?? []).length > 0,
+    lv: row.level ?? NOT_SPECIFIED,
+    rt: row.role_types?.length > 0 ? row.role_types : [OTHER],
+    rg,
+    lo,
+    il,
+    ru: !il && remoteNotSaid(l),
     n: f !== '' && f > (firstDay[row.company] ?? f),
     s: failing.has(row.company),
   };
@@ -133,6 +146,7 @@ async function loadData() {
       jobs: rows.map((row) => toJob(row, failing, meta.firstDay)),
       gaps: meta.gaps,
       generated: meta.generated,
+      names: { levels: meta.levels, roleTypes: meta.roleTypes, regions: meta.regions },
     };
   } catch (error) {
     showLoadError(error);
@@ -146,18 +160,46 @@ let page = 0;
 let ready = false;
 let announceTimer;
 const gone = lsGet(LS_D, {});
+
+/* The values each filter offers. The build supplies the names in display order (classify.py and regions.py); a value
+   that only the data has (a role type added later) is appended, so a new type needs no change here. */
+const withExtras = (names, found) => [...new Set([...names, ...found])];
+const LEVELS = withExtras(DATA.names.levels, JOBS.map((j) => j.lv));
+const ROLE_TYPES = withExtras(DATA.names.roleTypes, JOBS.flatMap((j) => j.rt));
+const REGIONS = withExtras(DATA.names.regions, JOBS.flatMap((j) => j.rg));
+/* Every distinct place of a job in Israel as written in the data: its location string, and the ungrouped places
+   (including "Israel, city not given") the backend found in it. The same city can appear under several spellings. */
+const PLACES = [...new Set(JOBS.filter((j) => j.il).flatMap((j) => [j.l, ...j.lo]).filter(Boolean))].sort((a, b) =>
+  a.localeCompare(b),
+);
+const CHOICES = { levels: LEVELS, types: ROLE_TYPES, regions: REGIONS, places: PLACES };
+
 const defaults = () => ({
   q: '',
   company: '',
   loc: 'il',
   sort: 'new',
-  cats: [],
+  levels: [],
+  types: [],
+  regions: [],
+  places: [],
+  remote: false,
   onlyNew: false,
   showGone: false,
   hideStale: false,
   size: 10,
 });
-let F = { ...defaults(), ...lsGet(LS_F, {}) };
+
+/* Saved filters, minus values the data no longer has (a stale choice would hide jobs with no way to see why). */
+function savedFilters() {
+  const saved = lsGet(LS_F, {});
+  const f = { ...defaults(), ...(saved && typeof saved === 'object' ? saved : {}) };
+  for (const [name, known] of Object.entries(CHOICES)) {
+    f[name] = Array.isArray(f[name]) ? f[name].filter((v) => known.includes(v)) : [];
+  }
+  return f;
+}
+let F = savedFilters();
 
 const key = (j) => `${j.c}|${j.i}`;
 
@@ -204,13 +246,34 @@ for (const company of companies) $('company').append(h('option', { value: compan
 $('upd').textContent = DATA.generated;
 $('upd').setAttribute('datetime', DATA.generated.replace(' UTC', 'Z').replace(' ', 'T'));
 
+/* A job is in scope when it is in Israel, or the choice is all locations, or it is a remote role that does not say
+   where and the user chose to include those. */
+const inScope = (j, f) => f.loc === 'all' || j.il || (f.remote && j.ru);
+
+/* The regions a job counts under: its own, plus Remote for a remote role that does not say when the user chose to
+   include those. */
+const regionsOf = (j, f) => (f.remote && j.ru ? [...j.rg, REMOTE_REGION] : j.rg);
+
+/* Regions and places are one choice: a job matches when it is in any chosen region or at any chosen place. They apply
+   to jobs in Israel (a job abroad has neither), so choosing one narrows the list to Israel. Nothing chosen means all. */
+function placeMatches(j, f) {
+  if (f.regions.length + f.places.length === 0) return true;
+  const regions = regionsOf(j, f);
+  return f.regions.some((r) => regions.includes(r)) || f.places.some((p) => j.il && (j.l === p || j.lo.includes(p)));
+}
+
+/* Within one filter any chosen value matches; the filters combine (a job fits the levels and the role types). A filter
+   with nothing chosen means every value, and a value nobody has matches nothing. */
+const levelMatches = (j, f) => f.levels.length === 0 || f.levels.includes(j.lv);
+const typeMatches = (j, f) => f.types.length === 0 || f.types.some((t) => j.rt.includes(t));
+
 function select(f) {
   const terms = f.q.trim().toLowerCase().split(/\s+/).filter(Boolean);
   const out = JOBS.filter((j) => {
     if (gone[key(j)] && !f.showGone) return false;
-    if (f.loc === 'il' && !j.il) return false;
+    if (!inScope(j, f)) return false;
     if (f.company && j.c !== f.company) return false;
-    if (f.cats.length > 0 && !f.cats.includes(j.k)) return false;
+    if (!levelMatches(j, f) || !typeMatches(j, f) || !placeMatches(j, f)) return false;
     if (f.onlyNew && !fresh(j)) return false;
     if (f.hideStale && j.s) return false;
     if (terms.length > 0) {
@@ -234,13 +297,39 @@ function sync() {
   $('sort').value = F.sort;
   $('hideStale').checked = F.hideStale;
   $('showGone').checked = F.showGone;
-  $('other').checked = F.cats.length === 1 && F.cats[0] === 'other';
   $('onlyNew').setAttribute('aria-pressed', String(F.onlyNew));
-  for (const chip of document.querySelectorAll('.chip[data-cat]')) {
-    const cat = chip.dataset.cat;
-    chip.setAttribute('aria-pressed', String(cat === 'all' ? F.cats.length === 0 : F.cats.includes(cat)));
+  $('remote').setAttribute('aria-pressed', String(F.remote));
+  for (const chip of document.querySelectorAll('.chip[data-group]')) {
+    const chosen = F[chip.dataset.group];
+    chip.setAttribute('aria-pressed', String(chip.dataset.value === '' ? chosen.length === 0 : chosen.includes(chip.dataset.value)));
   }
+  for (const box of $('places').querySelectorAll('input')) box.checked = F.places.includes(box.value);
+  $('places-title').textContent = F.places.length > 0 ? `Places (${F.places.length} chosen)` : 'Places';
 }
+
+/* One chip per value of a filter, after an "All" chip that clears it. */
+function buildChips(group, names) {
+  $(group).replaceChildren(
+    ...['', ...names].map((value) =>
+      h('button', {
+        type: 'button',
+        class: 'chip',
+        'data-group': group,
+        'data-value': value,
+        'aria-pressed': 'false',
+        text: value === '' ? 'All' : value,
+      }),
+    ),
+  );
+}
+for (const group of ['levels', 'types', 'regions']) buildChips(group, CHOICES[group]);
+$('places').replaceChildren(
+  ...PLACES.map((place) =>
+    h('li', { 'data-place': place }, [
+      h('label', { class: 'place' }, [h('input', { type: 'checkbox', value: place }), h('span', { text: place })]),
+    ]),
+  ),
+);
 
 function renderStories() {
   const counts = {};
@@ -274,6 +363,11 @@ function renderStories() {
 }
 
 const NEW_TAB = ' (opens in a new tab)';
+const MAX_LOCATION = 80;
+
+/* A tag of a card, with a hidden name so a screen reader hears "Level: Intern", not just "Intern". */
+const tag = (name, value, cls) =>
+  h('span', { class: cls }, [h('span', { class: 'sr-only', text: `${name}: ` }), value]);
 
 function cardEl(j) {
   const k = key(j);
@@ -285,7 +379,11 @@ function cardEl(j) {
     class: 'card',
     'data-job-id': k,
     'data-company': j.c,
-    'data-category': CATS[j.k],
+    'data-level': j.lv,
+    'data-role-types': j.rt.join(','),
+    'data-regions': j.rg.join(','),
+    'data-locations': j.lo.join(','),
+    'data-remote-country-not-given': String(j.ru),
     'data-new': String(isNew),
     'data-stale': String(j.s),
     'data-discarded': String(discarded),
@@ -310,8 +408,11 @@ function cardEl(j) {
       ]),
     ]),
     h('p', { class: 'card-tags' }, [
-      j.l && h('span', { class: 'pill', text: j.l }),
-      j.k !== 'other' && h('span', { class: 'pill pill-soft', text: KIND[j.k] }),
+      j.l && h('span', { class: 'pill', text: j.l.slice(0, MAX_LOCATION) }),
+      ...[...j.rg, ...j.lo].filter((place) => place !== j.l).map((place) => tag('Region', place, 'pill')),
+      j.ru && tag('Region', REMOTE_NOT_SAID, 'pill'),
+      tag('Level', j.lv, 'pill pill-soft'),
+      ...j.rt.map((type) => tag('Role type', type, 'pill pill-soft')),
       j.m && h('span', { class: 'pill', text: j.m }),
       j.f && h('time', { class: 'card-seen', datetime: j.f, text: ago(j.f) }),
     ]),
@@ -352,13 +453,13 @@ function render(focusIdx) {
   const res = select(F);
   const goneN = goneCount();
   const israel = JOBS.filter((j) => j.il).length;
-  const inScope = F.loc === 'il' ? israel : JOBS.length;
+  const scope = JOBS.filter((j) => inScope(j, F)).length;
   $('goneN').textContent = goneN;
   $('showGone').disabled = goneN === 0;
   const newN = JOBS.filter((j) => j.il && fresh(j) && !gone[key(j)]).length;
   $('heroTop').textContent = newN ? `${newN} new` : `${israel} open`;
   $('heroBottom').textContent = newN ? 'roles this week.' : 'roles in Israel.';
-  const summary = `Showing ${res.length} of ${inScope} open roles ${F.loc === 'il' ? 'in Israel' : 'in all locations'}. ${goneN} discarded.`;
+  const summary = `Showing ${res.length} of ${scope} open roles ${F.loc === 'il' ? 'in Israel' : 'in all locations'}. ${goneN} discarded.`;
   $('summary').textContent = summary;
   announce(summary);
   renderStories();
@@ -414,23 +515,34 @@ $('showGone').addEventListener('change', (e) => {
   F.showGone = e.target.checked;
   update();
 });
-$('other').addEventListener('change', (e) => {
-  F.cats = e.target.checked ? ['other'] : [];
-  update();
-});
 $('onlyNew').addEventListener('click', () => {
   F.onlyNew = !F.onlyNew;
   update();
 });
-for (const chip of document.querySelectorAll('.chip[data-cat]')) {
+$('remote').addEventListener('click', () => {
+  F.remote = !F.remote;
+  update();
+});
+
+/* Add the value to a filter, or take it out; the "All" chip (empty value) clears the filter. */
+function toggleChoice(group, value) {
+  if (value === '') F[group] = [];
+  else if (F[group].includes(value)) F[group] = F[group].filter((v) => v !== value);
+  else F[group] = [...F[group], value];
+  update();
+}
+for (const chip of document.querySelectorAll('.chip[data-group]')) {
   chip.addEventListener('click', () => {
-    const cat = chip.dataset.cat;
-    if (cat === 'all') F.cats = [];
-    else if (F.cats.includes(cat)) F.cats = F.cats.filter((c) => c !== cat);
-    else F.cats = [...F.cats.filter((c) => c !== 'other'), cat];
-    update();
+    toggleChoice(chip.dataset.group, chip.dataset.value);
   });
 }
+$('places').addEventListener('change', (e) => {
+  toggleChoice('places', e.target.value);
+});
+$('placeSearch').addEventListener('input', (e) => {
+  const words = e.target.value.trim().toLowerCase();
+  for (const item of $('places').children) item.hidden = !item.dataset.place.toLowerCase().includes(words);
+});
 $('stories').addEventListener('click', (e) => {
   const button = e.target.closest('.story');
   if (!button) return;
@@ -537,7 +649,12 @@ function describe(j) {
     location: j.l,
     url: j.u,
     firstSeen: j.f,
-    category: CATS[j.k],
+    level: j.lv,
+    roleTypes: j.rt,
+    regions: j.rg,
+    locations: j.lo,
+    inIsrael: j.il,
+    remoteCountryNotGiven: j.ru,
     isNew: fresh(j),
     possiblyOld: j.s,
     discarded: Boolean(gone[key(j)]),
@@ -545,6 +662,9 @@ function describe(j) {
 }
 const reply = (obj, isError = false) => ({ content: [{ type: 'text', text: JSON.stringify(obj) }], isError });
 const find = (id) => JOBS.find((j) => key(j) === id);
+
+/* A tool argument that is a list of strings; one string is a list of one. */
+const asList = (value) => (Array.isArray(value) ? value : [value]).filter((v) => typeof v === 'string');
 
 function search(a) {
   const f = defaults();
@@ -554,7 +674,11 @@ function search(a) {
   f.showGone = Boolean(a.includeDiscarded);
   f.loc = a.allLocations ? 'all' : 'il';
   f.sort = { newest: 'new', company: 'co', title: 'title' }[a.sort] ?? 'new';
-  if (a.category) f.cats = Object.keys(CATS).filter((k) => CATS[k] === a.category);
+  f.levels = asList(a.levels);
+  f.types = asList(a.roleTypes);
+  f.regions = asList(a.regions);
+  f.places = asList(a.locations);
+  f.remote = Boolean(a.includeRemoteNotSaid);
   const res = select(f);
   const n = Math.max(1, Math.min(100, Math.floor(a.limit ?? 20)));
   return { total: res.length, returned: Math.min(n, res.length), jobs: res.slice(0, n).map(describe) };
@@ -575,11 +699,34 @@ const TOOLS = [
       type: 'object',
       properties: {
         query: { type: 'string', description: 'Words to match in title, company, team or location.' },
-        category: {
-          type: 'string',
-          enum: ['product', 'intern', 'junior', 'other'],
+        levels: {
+          type: 'array',
+          items: { type: 'string', enum: LEVELS },
           description:
-            'product: product titles. intern: intern, internship and student titles. junior: junior, jr, graduate, entry and trainee titles. Product wins over both, and intern over junior.',
+            'Levels to include (any of them). Intern: intern, internship and student titles. Junior: junior, jr, graduate, entry and trainee titles. Not specified: every other title. Empty or missing means every level.',
+        },
+        roleTypes: {
+          type: 'array',
+          items: { type: 'string', enum: ROLE_TYPES },
+          description:
+            'Role types (fields) to include (any of them). A title can have several. Empty or missing means every role type. A role is returned when it fits both the levels and the role types: Product with no level gives Product at any seniority; Product with Intern and Junior gives only entry-level Product roles.',
+        },
+        regions: {
+          type: 'array',
+          items: { type: 'string', enum: REGIONS },
+          description:
+            'Regions of Israel to include (any of them, together with locations). Choosing regions or locations returns roles in Israel only. Empty or missing means every region.',
+        },
+        locations: {
+          type: 'array',
+          items: { type: 'string' },
+          description:
+            'Exact places in Israel as written in the data (see list_filters), for places that are not grouped in a region. Combined with regions as "any of them".',
+        },
+        includeRemoteNotSaid: {
+          type: 'boolean',
+          description:
+            'Also include remote roles whose location names no country (for example "Remote"), counted under the Remote region. They are left out by default because they may not be open to people in Israel.',
         },
         company: { type: 'string', description: 'Exact company name.' },
         newOnly: { type: 'boolean', description: 'Only roles first seen in the last 7 days.' },
@@ -591,6 +738,24 @@ const TOOLS = [
     },
     annotations: { readOnlyHint: true },
     execute: (a) => Promise.resolve(reply(search(a ?? {}))),
+  },
+  {
+    name: 'list_filters',
+    description:
+      'List the values the search_jobs filters accept, with the number of open roles in Israel for each: levels, roleTypes, regions and locations (the distinct places in Israel as written in the data).',
+    inputSchema: { type: 'object', properties: {} },
+    annotations: { readOnlyHint: true },
+    execute: () => {
+      const counts = (names, of) => names.map((name) => ({ name, roles: JOBS.filter((j) => j.il && of(j).includes(name)).length }));
+      return Promise.resolve(
+        reply({
+          levels: counts(LEVELS, (j) => [j.lv]),
+          roleTypes: counts(ROLE_TYPES, (j) => j.rt),
+          regions: counts(REGIONS, (j) => j.rg),
+          locations: counts(PLACES, (j) => [j.l, ...j.lo]),
+        }),
+      );
+    },
   },
   {
     name: 'list_new_jobs',

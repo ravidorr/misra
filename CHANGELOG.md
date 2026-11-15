@@ -2,6 +2,16 @@
 
 All notable changes are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses [Semantic Versioning](https://semver.org/).
 
+## [0.16.0] - 2026-11-15
+
+### Changed
+
+- The dashboard's blended Product / Intern / Junior filter is replaced by separate filters: Level (Intern, Junior, Not specified) and Role type (every type of `classify.py`, from the page data so a new type needs no page change), plus a Region filter (the seven regions of `regions.py`), a "Places" list of every distinct place of the Israeli jobs as written in the data (with a find box, including "Israel, city not given"), and a chip "Include remote roles that do not say where". A job matches when it fits the levels and the role types chosen; nothing chosen means all; regions and places together mean "any of them" and apply to jobs in Israel only. The Israel only / All locations choice stays. The saved filters move to a new key, so older saved filters are ignored.
+- A remote role whose location names no country ("Remote") is not Remote by default; the new option adds those to the Israel scope under Remote, and the card says "Remote, country not given".
+- Every card shows its level, role types and region as tags (also for "Not specified" and "Other") and as `data-level`, `data-role-types`, `data-regions`, `data-locations` and `data-remote-country-not-given`; `data-category` is gone.
+- The WebMCP `search_jobs` tool takes `levels`, `roleTypes`, `regions`, `locations` and `includeRemoteNotSaid` instead of `category`, and a new `list_filters` tool lists the accepted values with counts. Roles returned by the tools carry `level`, `roleTypes`, `regions`, `locations`, `inIsrael` and `remoteCountryNotGiven`.
+- `build_dashboard.py` classifies with `classify.level` and `classify.role_types` and places with `regions.place`, the same functions the Supabase sync uses, so "in Israel" in `jobs.json` and `jobs.jsonld` now agrees with the page (a job in Givatayim or Ashdod is Israeli). `jobs.json` gets `lv`, `rt`, `rg` and `lo` in place of `k`; `jobs.jsonld` gets `occupationalCategory`, `experienceRequirements`, `employmentType` INTERN, one Place per region (`addressRegion`) and `jobLocationType` TELECOMMUTE for Remote.
+
 ## [0.15.0] - 2026-11-15
 
 ### Changed

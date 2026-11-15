@@ -244,11 +244,11 @@ async def test_every_job_of_the_table_is_loaded_across_the_row_limit(page: Page,
 
 async def test_filters_work_on_the_loaded_jobs(page: Page, site: Path) -> None:
     await serve(page, site)
-    await page.click("[data-cat=pm]")
+    await choose(page, "types", "Product")
     assert await page.locator("#summary").inner_text() == (
         f"Showing {ISRAEL_JOBS - 1} of {ISRAEL_JOBS} open roles in Israel. 0 discarded."
     )
-    await page.click("[data-cat=all]")
+    await choose(page, "types", "")
     await page.select_option("#loc", "all")
     assert "13 open roles" in await page.locator("#summary").inner_text()
     await page.select_option("#company", "Globex")
@@ -294,21 +294,21 @@ def row(company: str, job_id: str, title: str | None, first_seen: str, **kw: Any
     return {**table_rows(1)[0], "company": company, "job_id": job_id, "title": title, "first_seen": first_seen, **kw}
 
 
-async def test_cards_take_kind_and_place_from_the_table_columns(page: Page, site: Path) -> None:
+async def test_cards_take_level_role_type_and_place_from_the_table_columns(page: Page, site: Path) -> None:
     today = datetime.now(UTC).strftime("%Y-%m-%dT00:00:00")
     rows = [
         row("Acme", "1", "Product Intern", today, level="Intern", role_types=["Product"]),
         row("Acme", "2", "Student", today, level="Intern"),
-        row("Acme", "3", "Junior Dev", today, level="Junior"),
+        row("Acme", "3", "Junior Dev", today, level="Junior", role_types=["R&D"]),
         row("Acme", "4", "Engineer", today),
         row("Nowhere", "5", None, today, regions=[], locations=["Somewhere, Israel"]),
         row("Abroad", "6", "Engineer", today, regions=[], locations=[]),
     ]
     await serve(page, site, backend=Backend(rows))
     assert await page.locator("#summary").inner_text() == "Showing 5 of 5 open roles in Israel. 0 discarded."
-    for category in ("product", "intern", "junior"):  # Product wins over a level; one of each kind
-        assert await page.locator(f"article[data-category={category}]").count() == 1
-    assert await page.locator("article[data-category=other]").count() == len(["Engineer", "untitled"])
+    assert await page.locator("article[data-level=Intern]").count() == len(["Product Intern", "Student"])
+    assert await page.locator("article[data-level=Junior]").count() == 1
+    assert await page.locator("article[data-role-types=Other]").count() == len(["Student", "Engineer", "untitled"])
 
 
 async def test_a_company_whose_first_jobs_have_closed_still_shows_its_new_roles(page: Page, site: Path) -> None:
@@ -415,3 +415,445 @@ async def test_the_coverage_gap_card_reads_well_on_a_phone(page: Page, site: Pat
     note = await page.locator("[data-reason=needs_reader] .gap-why").bounding_box()
     assert note is not None
     assert note["x"] + note["width"] <= PHONE["width"]
+
+
+# ---- Filters: level, role type, region and place (PLAN 3.4; FR-3 AC 8 to 10, FR-9 AC 1, 2, 7 and 8) ----
+
+TEL_AVIV = "Tel Aviv area"
+SHARON = "Sharon"
+JERUSALEM = "Jerusalem"
+NORTH = "Haifa and the north"
+REMOTE = "Remote"
+KFAR = "Kfar Foo, Israel"
+NO_CITY = "Israel, city not given"
+MULTI = "Israel, Yokneam; Israel, Tel Aviv"
+PRODUCT = {"pm", "pmi", "pmj", "pd", "multi"}
+ABROAD = {"bare", "us", "lon"}  # not in Israel: the bare remote role does not say where, "Remote, US" does
+FEW = {"width": 375, "height": 700}
+# The tools the page registers on navigator.modelContext are kept here, so a test can call them as an assistant would.
+WEBMCP = """
+window.__tools = {};
+Object.defineProperty(navigator, 'modelContext', {
+  configurable: true,
+  value: { registerTool(tool) { window.__tools[tool.name] = tool; } },
+});
+"""
+CALL = "async ([name, args]) => JSON.parse((await window.__tools[name].execute(args)).content[0].text)"
+AXE_RUN = "axe.run().then(r => r.violations.map(v => v.id + ': ' + v.nodes.map(n => n.html).join(' | ')))"
+PLACE_NAMES = "els => els.map(e => e.dataset.place)"
+
+
+def job(job_id: str, title: str, location: str, level: str = "Not specified", **kw: Any) -> dict[str, Any]:
+    """A row of the jobs table; the columns the filters read are keyword arguments (role_types, regions, locations)."""
+    return row("Acme", job_id, title, "2026-01-02T00:00:00", location=location, level=level, **kw)
+
+
+def filter_rows() -> list[dict[str, Any]]:
+    """One job for each case of the filters: every level and several role types, regions, places and remote roles."""
+    return [
+        job("pm", "Product Manager", "Tel Aviv, Israel", role_types=["Product"], regions=[TEL_AVIV]),
+        job("pmi", "Product Intern", "Tel Aviv, Israel", "Intern", role_types=["Product"], regions=[TEL_AVIV]),
+        job("pmj", "Junior PM", "Herzliya, Israel", "Junior", role_types=["Product"], regions=[SHARON]),
+        job("dev", "Software Engineer", "Haifa, Israel", role_types=["R&D"], regions=[NORTH]),
+        job("fin", "Finance Intern", KFAR, "Intern", role_types=["Finance"], regions=[], locations=[KFAR]),
+        job("pd", "Product Designer", "Jerusalem, Israel", role_types=["Product", "Design"], regions=[JERUSALEM]),
+        job("da", "Data Analyst", "Israel", role_types=["Data & AI"], regions=[], locations=[NO_CITY]),
+        job("rem", "Account Executive", "Remote, Israel", role_types=["Sales & BD"], regions=[REMOTE]),
+        job("multi", "Product Lead", MULTI, role_types=["Product"], regions=[TEL_AVIV, NORTH]),
+        job("bare", "Developer", "Remote", role_types=["R&D"], regions=[], locations=[]),
+        job("us", "Developer", "Remote, US", role_types=["R&D"], regions=[], locations=[]),
+        job("lon", "Product Manager", "London, UK", role_types=["Product"], regions=[], locations=[]),
+    ]
+
+
+def ids_of(rows: list[dict[str, Any]]) -> set[str]:
+    return {r["job_id"] for r in rows}
+
+
+ISRAEL_IDS = ids_of(filter_rows()) - ABROAD
+
+
+async def shown(page: Page) -> set[str]:
+    """The ids of the cards on the page (the fixtures keep every answer within one page of results)."""
+    ids = await page.eval_on_selector_all("#list article", "els => els.map(e => e.dataset.jobId.split('|')[1])")
+    return set(ids)
+
+
+async def choose(page: Page, group: str, value: str) -> None:
+    """Press the chip of a filter group; the empty value is the group's All chip."""
+    await page.click(f'.chip[data-group={group}][data-value="{value}"]')
+
+
+async def serve_filters(page: Page, site: Path, *, tools: bool = False) -> None:
+    if tools:
+        await page.add_init_script(WEBMCP)
+    await serve(page, site, backend=Backend(filter_rows()))
+
+
+async def open_places(page: Page) -> None:
+    await page.locator(".places > summary").click()
+
+
+async def ask(page: Page, name: str, args: dict[str, Any] | None = None) -> Any:
+    return await page.evaluate(CALL, [name, args or {}])
+
+
+async def found(page: Page, args: dict[str, Any]) -> set[str]:
+    """The ids search_jobs gives an assistant for these arguments."""
+    return {j["id"].split("|")[1] for j in (await ask(page, "search_jobs", {"limit": 100, **args}))["jobs"]}
+
+
+async def tags(page: Page, job_id: str) -> str:
+    return await page.locator(f"article[data-job-id='Acme|{job_id}'] .card-tags").text_content() or ""
+
+
+async def test_fr9_ac1_every_card_shows_a_level_and_a_role_type(page: Page, site: Path) -> None:
+    await serve_filters(page, site)
+    await page.select_option("#loc", "all")
+    await page.select_option("#size", "100")
+    cards = await page.locator("#list article").all()
+    assert len(cards) == len(filter_rows())
+    for card in cards:
+        text = await card.locator(".card-tags").text_content() or ""
+        assert "Level: " in text
+        assert "Role type: " in text
+        assert await card.get_attribute("data-level")
+        assert await card.get_attribute("data-role-types")
+    assert "Level: Intern" in await tags(page, "fin")
+    assert "Role type: Finance" in await tags(page, "fin")
+    assert "Level: Not specified" in await tags(page, "pm")  # a level the title does not state is shown too
+    assert await page.locator("article[data-job-id='Acme|pd']").get_attribute("data-role-types") == "Product,Design"
+    assert "Role type: Product" in await tags(page, "pd")
+    assert "Role type: Design" in await tags(page, "pd")
+
+
+async def test_fr9_ac1_a_job_without_a_role_type_shows_other(page: Page, site: Path) -> None:
+    await serve(page, site, backend=Backend([job("x", "Mystery", "Haifa, Israel", role_types=[], regions=[NORTH])]))
+    assert await page.locator("article[data-job-id='Acme|x']").get_attribute("data-role-types") == "Other"
+    assert "Role type: Other" in await tags(page, "x")
+
+
+async def test_fr9_ac2_level_and_role_type_are_separate_filters(page: Page, site: Path) -> None:
+    await serve_filters(page, site)
+    for group, name in (("levels", "Level"), ("types", "Role type")):
+        label = await page.locator(f"#{group}").get_attribute("aria-labelledby")
+        assert await page.locator(f"#{label}").inner_text() == name
+    levels = await page.locator("#levels .chip").all_text_contents()
+    types = await page.locator("#types .chip").all_text_contents()
+    assert levels == ["All", "Intern", "Junior", "Not specified"]
+    assert "Product" in types
+    assert not {"Intern", "Junior"} & set(types)  # no chip blends the two any more
+    assert await page.locator(".chip[data-cat]").count() == 0
+    await choose(page, "levels", "Intern")
+    assert await shown(page) == {"pmi", "fin"}
+    await choose(page, "levels", "")
+    await choose(page, "types", "Design")
+    assert await shown(page) == {"pd"}
+
+
+async def test_fr9_ac2_the_assistant_has_the_same_separate_filters(page: Page, site: Path) -> None:
+    await serve_filters(page, site, tools=True)
+    properties = await page.evaluate("window.__tools.search_jobs.inputSchema.properties")
+    assert {"levels", "roleTypes", "regions", "locations", "includeRemoteNotSaid"} <= set(properties)
+    assert "category" not in properties
+    assert properties["levels"]["items"]["enum"] == ["Intern", "Junior", "Not specified"]
+    assert "Product" in properties["roleTypes"]["items"]["enum"]
+    assert properties["regions"]["items"]["enum"][0] == TEL_AVIV
+    assert await found(page, {"levels": ["Intern"]}) == {"pmi", "fin"}
+    assert await found(page, {"roleTypes": ["Design"]}) == {"pd"}
+
+
+async def test_fr9_ac7_no_role_type_selected_means_every_type(page: Page, site: Path) -> None:
+    await serve_filters(page, site)
+    assert await shown(page) == ISRAEL_IDS
+    assert await page.locator("#types .chip[aria-pressed=true]").all_text_contents() == ["All"]
+    await choose(page, "types", "Product")
+    assert await shown(page) == PRODUCT
+    await choose(page, "types", "Finance")  # two types: a job of either
+    assert await shown(page) == PRODUCT | {"fin"}
+    await choose(page, "types", "")  # All clears them
+    assert await shown(page) == ISRAEL_IDS
+    await choose(page, "types", "Finance")
+    await choose(page, "types", "Finance")  # pressing a chosen type again takes it out
+    assert await shown(page) == ISRAEL_IDS
+    total = len(ISRAEL_IDS)
+    assert (
+        await page.locator("#summary").inner_text() == f"Showing {total} of {total} open roles in Israel. 0 discarded."
+    )
+
+
+async def test_fr9_ac7_the_assistant_gets_every_type_when_it_names_none(page: Page, site: Path) -> None:
+    await serve_filters(page, site, tools=True)
+    for none in ({"roleTypes": []}, {"roleTypes": None}, {}):
+        assert await found(page, none) == ISRAEL_IDS
+
+
+async def test_fr9_ac8_a_job_must_fit_both_the_levels_and_the_role_types(page: Page, site: Path) -> None:
+    await serve_filters(page, site)
+    await choose(page, "types", "Product")
+    assert await shown(page) == PRODUCT
+    for level in ("Intern", "Junior", "Not specified"):  # Product with every level is Product at any seniority
+        await choose(page, "levels", level)
+    assert await shown(page) == PRODUCT
+    await choose(page, "levels", "Not specified")  # Product with Intern and Junior is only the entry-level ones
+    assert await shown(page) == {"pmi", "pmj"}
+    await choose(page, "types", "")
+    assert await shown(page) == {"pmi", "pmj", "fin"}  # the levels alone: entry-level jobs of any field
+    await choose(page, "levels", "")
+    await choose(page, "levels", "Junior")
+    await choose(page, "types", "Finance")
+    assert await shown(page) == set()  # a Junior job of the Finance type: there is none
+    assert await page.locator("#list").inner_text() == "No roles match these filters."
+    await choose(page, "levels", "Intern")
+    assert await shown(page) == {"fin"}
+
+
+async def test_fr9_ac8_the_assistant_applies_the_same_rule(page: Page, site: Path) -> None:
+    await serve_filters(page, site, tools=True)
+    every = ["Intern", "Junior", "Not specified"]
+    assert await found(page, {"roleTypes": ["Product"]}) == PRODUCT
+    assert await found(page, {"roleTypes": ["Product"], "levels": every}) == PRODUCT
+    assert await found(page, {"roleTypes": ["Product"], "levels": ["Intern", "Junior"]}) == {"pmi", "pmj"}
+    assert await found(page, {"roleTypes": "Product", "levels": "Intern"}) == {"pmi"}  # one string is a list of one
+    for unknown in ({"levels": ["Senior"]}, {"roleTypes": ["Legal"]}, {"regions": ["Narnia"]}, {"locations": ["X"]}):
+        assert await found(page, unknown) == set()  # a value nobody has matches nothing
+
+
+async def test_fr3_ac8_jobs_outside_israel_keep_the_israel_or_all_locations_choice(page: Page, site: Path) -> None:
+    await serve_filters(page, site)
+    assert "lon" not in await shown(page)
+    await page.select_option("#loc", "all")
+    await page.select_option("#size", "100")
+    total = len(filter_rows())
+    summary = await page.locator("#summary").inner_text()
+    assert summary == f"Showing {total} of {total} open roles in all locations. 0 discarded."
+    assert await shown(page) >= ABROAD
+    await choose(page, "types", "Product")  # the other filters keep working on jobs abroad
+    assert await shown(page) == PRODUCT | {"lon"}
+    await choose(page, "regions", SHARON)  # regions describe jobs in Israel: choosing one narrows the list to them
+    assert await shown(page) == {"pmj"}
+    names = await page.locator("#regions .chip").all_text_contents()
+    assert names[:2] == ["All", TEL_AVIV]
+    assert names[-1] == REMOTE  # the regions of Israel only
+
+
+async def test_fr3_ac8_the_assistant_keeps_the_choice_too(page: Page, site: Path) -> None:
+    await serve_filters(page, site, tools=True)
+    assert await found(page, {}) == ISRAEL_IDS
+    assert await found(page, {"allLocations": True}) == ids_of(filter_rows())
+    assert await found(page, {"allLocations": True, "regions": [SHARON]}) == {"pmj"}
+
+
+async def test_fr3_ac9_a_user_can_pick_one_or_more_regions_or_places(page: Page, site: Path) -> None:
+    await serve_filters(page, site)
+    await open_places(page)
+    await choose(page, "regions", SHARON)
+    assert await shown(page) == {"pmj"}
+    await choose(page, "regions", TEL_AVIV)  # more than one region: a job in either
+    assert await shown(page) == {"pm", "pmi", "pmj", "multi"}
+    await choose(page, "regions", "")
+    await page.locator(f"#places input[value='{KFAR}']").check()  # a place we did not group
+    assert await shown(page) == {"fin"}
+    assert await page.locator("#places-title").inner_text() == "Places (1 chosen)"
+    await choose(page, "regions", JERUSALEM)  # regions and places together: a job in any of them
+    assert await shown(page) == {"fin", "pd"}
+    await page.locator(f"#places input[value='{NO_CITY}']").check()
+    assert await shown(page) == {"fin", "pd", "da"}
+    await choose(page, "regions", "")
+    await page.locator("#places input:checked").first.uncheck()
+    await page.locator("#places input:checked").first.uncheck()
+    assert await shown(page) == ISRAEL_IDS
+    assert await page.locator("#places-title").inner_text() == "Places"
+
+
+async def test_fr3_ac4_a_job_with_several_cities_belongs_to_every_region_it_names(page: Page, site: Path) -> None:
+    await serve_filters(page, site)
+    await choose(page, "regions", NORTH)
+    assert await shown(page) == {"dev", "multi"}
+    await choose(page, "regions", NORTH)
+    await choose(page, "regions", TEL_AVIV)
+    assert "multi" in await shown(page)
+
+
+async def test_fr3_ac9_the_place_list_has_every_distinct_place_in_israel_as_written(page: Page, site: Path) -> None:
+    await serve_filters(page, site)
+    await open_places(page)
+    listed = await page.locator("#places li").evaluate_all(PLACE_NAMES)
+    expected = {r["location"] for r in filter_rows() if r["regions"] or r["locations"]} | {NO_CITY}
+    assert set(listed) == expected
+    assert len(listed) == len(expected)  # each distinct place once
+    assert not {"London, UK", "Remote", "Remote, US"} & set(listed)
+    await page.fill("#placeSearch", "yokneam")
+    assert await page.locator("#places li:not([hidden])").evaluate_all(PLACE_NAMES) == [MULTI]
+    await page.fill("#placeSearch", "")
+    assert await page.locator("#places li:not([hidden])").count() == len(expected)
+
+
+async def test_fr3_ac9_choices_are_remembered_in_this_browser(page: Page, site: Path) -> None:
+    await serve_filters(page, site)
+    await open_places(page)
+    await choose(page, "regions", TEL_AVIV)
+    await choose(page, "levels", "Intern")
+    await choose(page, "types", "Product")
+    await page.locator(f"#places input[value='{KFAR}']").check()
+    await page.click("#remote")
+    await page.reload()
+    await page.wait_for_selector("#list article")
+    for group, value in (("regions", TEL_AVIV), ("levels", "Intern"), ("types", "Product")):
+        assert (
+            await page.locator(f'.chip[data-group={group}][data-value="{value}"]').get_attribute("aria-pressed")
+            == "true"
+        )
+    assert await page.locator(f"#places input[value='{KFAR}']").is_checked()
+    assert await page.locator("#remote").get_attribute("aria-pressed") == "true"
+    assert await shown(page) == {
+        "pmi"
+    }  # Intern and Product, in Tel Aviv or at the chosen place (Finance is not Product)
+    await page.click("#reset")
+    assert await page.locator("#levels .chip[aria-pressed=true]").all_text_contents() == ["All"]
+    assert await page.locator("#places input:checked").count() == 0
+    assert await page.locator("#remote").get_attribute("aria-pressed") == "false"
+
+
+async def test_choices_saved_by_an_older_page_or_for_a_value_that_is_gone_do_not_hide_roles(
+    page: Page, site: Path
+) -> None:
+    stale = {"cats": ["pm"], "regions": ["Narnia"], "levels": "Intern", "types": ["Legal", "Product"], "places": 7}
+    await page.add_init_script(f"localStorage.setItem('il-jobs-filters-v3', {json.dumps(json.dumps(stale))})")
+    await page.add_init_script("localStorage.setItem('il-jobs-filters-v2', '{\"cats\":[\"intern\"]}')")
+    await serve_filters(page, site)
+    assert await page.locator("#regions .chip[aria-pressed=true]").all_text_contents() == ["All"]
+    assert await page.locator("#levels .chip[aria-pressed=true]").all_text_contents() == ["All"]
+    assert await page.locator("#types .chip[aria-pressed=true]").all_text_contents() == ["Product"]
+    assert await shown(page) == PRODUCT
+
+
+@pytest.mark.parametrize(
+    ("location", "not_said"),
+    [
+        ("Remote", True),
+        ("remote", True),
+        ("Fully Remote", True),
+        ("Remote - Flexible", True),
+        ("Remote, US", False),
+        ("US Remote", False),
+        ("Remote (Portugal)", False),
+        ("Remote - Worldwide", False),
+        ("London, UK", False),
+        ("", False),
+    ],
+)
+async def test_fr3_ac6_remote_roles_that_do_not_say_where_are_left_out_unless_asked(
+    page: Page, site: Path, location: str, not_said: bool
+) -> None:
+    rows = [
+        job("x", "Developer", location, regions=[], locations=[]),
+        job("tlv", "Dev", "Tel Aviv, Israel", regions=[TEL_AVIV]),
+    ]
+    await serve(page, site, backend=Backend(rows))
+    assert await shown(page) == {"tlv"}
+    await page.click("#remote")
+    assert await shown(page) == ({"tlv", "x"} if not_said else {"tlv"})
+
+
+async def test_fr3_ac6_the_remote_option_adds_them_under_remote_and_says_so_on_the_card(page: Page, site: Path) -> None:
+    await serve_filters(page, site)
+    await choose(page, "regions", REMOTE)
+    assert await shown(page) == {"rem"}  # Remote only when the posting is open to Israel
+    await page.click("#remote")
+    assert await shown(page) == {"rem", "bare"}  # "Remote, US" stays out
+    in_scope = len(ISRAEL_IDS | {"bare"})
+    assert await page.locator("#summary").inner_text() == f"Showing 2 of {in_scope} open roles in Israel. 0 discarded."
+    card = page.locator("article[data-job-id='Acme|bare']")
+    assert await card.get_attribute("data-remote-country-not-given") == "true"
+    assert await card.get_attribute("data-regions") == ""  # never labelled Remote
+    assert "Region: Remote, country not given" in await tags(page, "bare")
+    await choose(page, "regions", "")
+    assert await shown(page) == ISRAEL_IDS | {"bare"}
+
+
+async def test_fr3_ac10_the_region_or_place_is_on_the_card_and_in_the_data_hooks(page: Page, site: Path) -> None:
+    await serve_filters(page, site)
+    multi = page.locator("article[data-job-id='Acme|multi']")
+    assert await multi.get_attribute("data-regions") == f"{TEL_AVIV},{NORTH}"
+    assert f"Region: {TEL_AVIV}" in await tags(page, "multi")
+    assert f"Region: {NORTH}" in await tags(page, "multi")
+    assert MULTI in await tags(page, "multi")  # the location as written stays
+    fin = page.locator("article[data-job-id='Acme|fin']")
+    assert await fin.get_attribute("data-locations") == KFAR
+    assert await fin.get_attribute("data-regions") == ""
+    assert (await tags(page, "fin")).count(KFAR) == 1  # not shown twice
+    assert f"Region: {NO_CITY}" in await tags(page, "da")
+
+
+async def test_fr3_ac10_the_assistant_can_read_the_region_level_and_role_type(page: Page, site: Path) -> None:
+    await serve_filters(page, site, tools=True)
+    got = await ask(page, "get_job", {"id": "Acme|multi"})
+    assert got["regions"] == [TEL_AVIV, NORTH]
+    assert (got["level"], got["roleTypes"], got["inIsrael"]) == ("Not specified", ["Product"], True)
+    assert (await ask(page, "get_job", {"id": "Acme|fin"}))["locations"] == [KFAR]
+    bare = await ask(page, "get_job", {"id": "Acme|bare"})
+    assert (bare["regions"], bare["remoteCountryNotGiven"], bare["inIsrael"]) == ([], True, False)
+    assert await found(page, {"regions": [NORTH]}) == {"dev", "multi"}
+    assert await found(page, {"locations": [KFAR]}) == {"fin"}
+    assert await found(page, {"regions": [REMOTE], "includeRemoteNotSaid": True}) == {"rem", "bare"}
+    assert await found(page, {"regions": [REMOTE]}) == {"rem"}
+
+
+async def test_the_assistant_can_list_the_values_of_every_filter(page: Page, site: Path) -> None:
+    await serve_filters(page, site, tools=True)
+    filters = await ask(page, "list_filters")
+    levels = [(f["name"], f["roles"]) for f in filters["levels"]]
+    assert levels == [("Intern", 2), ("Junior", 1), ("Not specified", len(ISRAEL_IDS) - 3)]
+    assert {f["name"]: f["roles"] for f in filters["roleTypes"]}["Product"] == len(PRODUCT)
+    assert {f["name"]: f["roles"] for f in filters["regions"]}[NORTH] == len({"dev", "multi"})
+    assert {f["name"] for f in filters["locations"]} == set(await page.locator("#places li").evaluate_all(PLACE_NAMES))
+
+
+async def test_a_role_type_added_later_needs_no_change_to_the_filters(page: Page, site: Path) -> None:
+    rows = [*filter_rows(), job("law", "Counsel", "Haifa, Israel", role_types=["Legal"], regions=[NORTH])]
+    await page.add_init_script(WEBMCP)
+    await serve(page, site, backend=Backend(rows))
+    await choose(page, "types", "Legal")
+    assert await shown(page) == {"law"}
+    enum = await page.evaluate("window.__tools.search_jobs.inputSchema.properties.roleTypes.items.enum")
+    assert enum[-2:] == ["Other", "Legal"]
+
+
+async def test_the_page_data_carries_the_names_the_filters_are_built_from(page: Page, site: Path) -> None:
+    await serve_filters(page, site)
+    meta = json.loads(await page.locator("#page-data").text_content() or "{}")
+    assert meta["levels"] == ["Intern", "Junior", "Not specified"]
+    assert meta["roleTypes"][0] == "Product"
+    assert meta["roleTypes"][-1] == "Other"
+    assert meta["regions"] == [TEL_AVIV, SHARON, "Center", JERUSALEM, NORTH, "South", REMOTE]
+
+
+async def test_the_filters_read_well_on_a_phone(page: Page, site: Path) -> None:
+    await page.set_viewport_size(FEW)
+    await serve_filters(page, site)
+    await open_places(page)
+    assert await page.evaluate("document.documentElement.scrollWidth <= document.documentElement.clientWidth")
+    targets = page.locator(".chip, .places > summary, .place, #placeSearch, .more > summary, #company, #loc, #sort")
+    for target in await targets.all():
+        box = await target.bounding_box()
+        assert box is not None
+        assert box["height"] >= TAP
+        assert box["x"] >= 0
+        assert box["x"] + box["width"] <= FEW["width"]
+    for group in ("levels", "types", "regions"):  # the chips wrap instead of scrolling sideways
+        assert await page.locator(f"#{group}").evaluate("e => e.scrollWidth <= e.clientWidth")
+
+
+@pytest.mark.parametrize("scheme", ["light", "dark"])
+async def test_the_filters_have_no_axe_violations_when_chosen_and_open(page: Page, site: Path, scheme: str) -> None:
+    await page.emulate_media(color_scheme=scheme)  # type: ignore[arg-type]
+    await serve_filters(page, site)
+    await open_places(page)
+    await choose(page, "levels", "Intern")
+    await choose(page, "types", "Product")
+    await choose(page, "regions", TEL_AVIV)
+    await page.click("#remote")
+    await page.locator("#places input").first.check()
+    await page.evaluate(AXE.read_text(encoding="utf-8"))
+    assert await page.evaluate(AXE_RUN) == []

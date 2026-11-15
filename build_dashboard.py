@@ -10,8 +10,8 @@ import time
 from pathlib import Path
 from typing import Any
 
-from classify import INTERN, JUNIOR, PM_CORE
-from common import ISRAEL
+import classify
+import regions
 from digest import DB
 
 # Stylesheets bundled into docs/dashboard.css, in order. Raw colors live only in tokens.css.
@@ -115,6 +115,19 @@ def job_posting(job: dict[str, Any]) -> dict[str, Any]:
         posting["datePosted"] = job["f"]
     if job["il"]:
         posting["jobLocation"]["address"]["addressCountry"] = "IL"
+        # one Place per region (or ungrouped place) the job names, so "several cities" is several places
+        named = [r for r in job["rg"] if r != regions.REMOTE] or job["lo"]
+        if named:
+            posting["jobLocation"] = [
+                {"@type": "Place", "address": {"@type": "PostalAddress", "addressRegion": name, "addressCountry": "IL"}}
+                for name in named
+            ]
+        if regions.REMOTE in job["rg"]:
+            posting["jobLocationType"] = "TELECOMMUTE"
+    posting["occupationalCategory"] = job["rt"]
+    posting["experienceRequirements"] = job["lv"]
+    if job["lv"] == classify.INTERN_LEVEL:
+        posting["employmentType"] = "INTERN"
     return posting
 
 
@@ -159,14 +172,7 @@ def main() -> None:
         "SELECT company, job_id, title, team, location, url, first_seen FROM jobs WHERE status='open'"
     ):
         f = (fs or "")[:10]
-        if PM_CORE.search(title):
-            kind = "pm"
-        elif INTERN.search(title):
-            kind = "intern"
-        elif JUNIOR.search(title):
-            kind = "junior"
-        else:
-            kind = "other"
+        place = regions.place(loc)
         jobs.append(
             {
                 "c": company,
@@ -176,8 +182,11 @@ def main() -> None:
                 "l": (loc or "").strip()[:80],
                 "u": url,
                 "f": f,
-                "k": kind,
-                "il": bool(ISRAEL.search(loc or "")),
+                "lv": classify.level(title),
+                "rt": classify.role_types(title),
+                "rg": list(place.regions),
+                "lo": list(place.locations),
+                "il": place.israel,
                 "n": bool(f and f > first.get(company, f)),
                 "s": company in failing,
             }
@@ -200,7 +209,17 @@ def main() -> None:
     # first day of listings (the closed jobs that fix it are not readable with the anon key). It sits in a
     # JSON data block of index.html (not executed, so the page stays free of inline script); `<` is escaped so the
     # data can never close the block.
-    page_data = dump_json({"gaps": gaps, "generated": generated, "firstDay": first}).replace("<", "\\u003c")
+    page_data = dump_json(
+        {
+            "gaps": gaps,
+            "generated": generated,
+            "firstDay": first,
+            # The filters are built from these lists (classify.py and regions.py), in display order.
+            "levels": list(classify.LEVELS),
+            "roleTypes": list(classify.ROLE_TYPE_NAMES),
+            "regions": list(regions.REGION_NAMES),
+        }
+    ).replace("<", "\\u003c")
     for source in STATIC_FILES:
         text = Path(source).read_text(encoding="utf-8")
         text = text.replace("__SUPABASE_URL__", SUPABASE_URL).replace("__SUPABASE_ANON_KEY__", SUPABASE_ANON_KEY)
