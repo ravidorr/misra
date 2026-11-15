@@ -216,10 +216,9 @@ starting with the ones that matter most to users.
 - AC: A consent log is kept for each subscriber: when the email was turned on, when it was confirmed and when the user
   unsubscribed. When a user only unsubscribes, those timestamps are kept and the filters are cleared. When the account is
   deleted, everything is removed, including the log.
-- AC: Every email has a footer that names Misra, the site and the contact address (`raanan@avidor.org`). The wording, from the
-  lawyer: `You are receiving this email because you signed up for job alerts on Misra (https://ravidorr.github.io/misra/). Misra is a free, non-commercial project. Unsubscribe in one click | Contact: raanan@avidor.org` ("Unsubscribe in one click" is the unsubscribe link.) Replies go to a real mailbox: the
-  email sets Reply-To to `raanan@avidor.org`, because the lawyer said people may reply "Remove" and the sending address
-  (`digest@send.avidor.org`) cannot receive mail.
+- AC: Every email has a footer that names Misra, the site, the person who runs it and the contact address (`raanan@avidor.org`), with links to the privacy notice and the terms. The confirmation email footer, from the lawyer: `Misra (https://ravidorr.github.io/misra/) is a free, non-commercial project run by Raanan Avidor (raanan@avidor.org). If you did not ask for this email, ignore it, and nothing will be sent to you. Privacy: https://github.com/ravidorr/misra/blob/main/PRIVACY.md | Terms: https://github.com/ravidorr/misra/blob/main/TERMS.md` The digest footer, from the lawyer: `You are receiving this {{schedule}} digest because you confirmed job alerts on Misra (https://ravidorr.github.io/misra/). Misra is a free, non-commercial project run by Raanan Avidor (raanan@avidor.org). Job listings are collected automatically from public career pages and are provided as-is without guarantee that they are complete or still open. Then: "Unsubscribe in one click (no sign-in needed):" and the unsubscribe URL; then "To change your filters or delete your account and all stored data immediately, sign in at https://ravidorr.github.io/misra/"; then "Privacy: https://github.com/ravidorr/misra/blob/main/PRIVACY.md | Terms: https://github.com/ravidorr/misra/blob/main/TERMS.md"`
+- AC: Replies go to a real mailbox: every email sets Reply-To to `raanan@avidor.org`, because the lawyer said people may reply "Remove" and the sending address (`digest@send.avidor.org`) cannot receive mail.
+- AC: Every digest email carries the RFC 8058 one-click headers `List-Unsubscribe` (the unsubscribe link for that subscriber) and `List-Unsubscribe-Post: List-Unsubscribe=One-Click`, so Gmail and Yahoo show their own Unsubscribe button; the unsubscribe function accepts both GET and POST.
 
 ### FR-9: Level and role type
 
