@@ -1,6 +1,6 @@
 [project]
 name = "misra"
-version = "0.21.0"
+version = "0.22.0"
 description = "Daily batch pipeline: crawls career pages, keeps history in SQLite, and emails a digest."
 readme = "README.md"
 license = "MIT"
@@ -52,6 +52,7 @@ select = ["E", "F", "W", "I", "B", "UP", "SIM", "C4", "PL", "RUF"]
 "tests/test_account_sync.py" = ["F811"]
 "tests/test_delete_account.py" = ["F811"]
 "tests/test_email_page.py" = ["F811"]
+"tests/test_report_site.py" = ["F811"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

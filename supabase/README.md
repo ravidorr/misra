@@ -117,7 +117,7 @@ In the Supabase dashboard, Authentication:
 
 PLAN.md step 5.1, PRD FR-7. A visitor with no account reports a career site that is missing from the crawl; the
 maintainer gets one plain-text email through Resend. Nothing in the repository or the browser holds a secret: the
-function reads them from Supabase function secrets. The dashboard form is step 5.2.
+function reads them from Supabase function secrets. The dashboard form is step 5.2 (`templates/report.js`, the "Report a site" button on the coverage gap card).
 
 Files: `supabase/functions/report-site/` (`index.ts` starts the server and is the only file that knows Deno,
 `handler.ts` holds the logic, `validate.ts` the input checks), the migration `20261116110000_report_site_limits.sql`

@@ -1497,25 +1497,31 @@ $('file').addEventListener('change', (e) => {
 });
 
 const gaps = DATA.gaps ?? { blocked: [], untracked: [], total: 0, groups: [] };
-if (gaps.total > 0) {
+{
+  /* The card is always there: "Report a site" (report.js) lives on it, even when no company is known to be missing. */
   const el = $('gaps');
-  $('gaps-title').textContent = `Coverage gaps: ${gaps.total} companies whose roles may be missing or old`;
-  el.append(
-    h('p', { class: 'gaps-intro' }, [
-      'Each group says why we do not fully crawl these companies; open one to see them.',
-    ]),
-  );
-  for (const group of gaps.groups) {
-    const list = h('ul', { class: 'gap-sites' });
-    for (const site of group.sites) {
-      list.append(h('li', {}, [h('b', { text: site.c }), site.why ? h('span', { class: 'gap-why', text: site.why }) : null]));
-    }
-    el.append(
-      h('details', { class: 'gap-group', 'data-reason': group.reason, 'data-count': String(group.count) }, [
-        h('summary', {}, [h('span', { text: group.label }), h('span', { class: 'gap-count', text: String(group.count) })]),
-        list,
+  const report = $('gapReport');
+  if (gaps.total > 0) {
+    $('gaps-title').textContent = `Coverage gaps: ${gaps.total} companies whose roles may be missing or old`;
+    report.before(
+      h('p', { class: 'gaps-intro' }, [
+        'Each group says why we do not fully crawl these companies; open one to see them.',
       ]),
     );
+    for (const group of gaps.groups) {
+      const list = h('ul', { class: 'gap-sites' });
+      for (const site of group.sites) {
+        list.append(h('li', {}, [h('b', { text: site.c }), site.why ? h('span', { class: 'gap-why', text: site.why }) : null]));
+      }
+      report.before(
+        h('details', { class: 'gap-group', 'data-reason': group.reason, 'data-count': String(group.count) }, [
+          h('summary', {}, [h('span', { text: group.label }), h('span', { class: 'gap-count', text: String(group.count) })]),
+          list,
+        ]),
+      );
+    }
+  } else {
+    $('gaps-title').textContent = 'Is a company missing? Report a site';
   }
   el.hidden = false;
 }

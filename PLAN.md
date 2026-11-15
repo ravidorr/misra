@@ -44,7 +44,8 @@ Decisions made in planning (they change the PRD's wording, so update the PRD in 
   descriptions will add perhaps 5 to 20 times the text. Done when: the note states the limits, the projected size
   and the pause-prevention plan (the daily sync counts as activity, to be confirmed). Decide here whether the Supabase
   project can be paused by inactivity and what the dashboard shows when it is.
-- [ ] 0.3 Update `PRD.md` with the decisions above (docs-only). Done when: the Open questions section still says none.
+- [x] ~~0.3 Update `PRD.md` with the decisions above (docs-only). Done when: the Open questions section still says none.~~
+  Done 2026-11-15, with the decisions made since (the lawyer outcome, Resend, the account and privacy facts) and a decisions log at the end of the PRD. New acceptance criteria were added at the end of their lists, so existing numbers hold: FR-1 AC 7 (sign-in notice), FR-4 AC 12 (full-text care), FR-8 AC 11 and 12 (consent log, footer).
 
 ## FR-5 first (quick win, no backend)
 
@@ -141,17 +142,24 @@ Decisions made in planning (they change the PRD's wording, so update the PRD in 
   `REPORT_TO_EMAIL` and `IP_HASH_SECRET`, deploy with `supabase functions deploy report-site`, then run the curl checks:
   a good report arrives by email, a bad input is a 400, the wrong origin a 403, and the per-visitor limit still holds when
   `X-Forwarded-For` and `CF-Connecting-IP` are written by the caller (confirms the visitor address the platform reports).~~
-- [ ] 5.2 Dashboard: "Report a site" action on the coverage card opens a short form (company, careers link, why it
+- [x] ~~5.2 Dashboard: "Report a site" action on the coverage card opens a short form (company, careers link, why it
   matters), confirmation and error messages, no account needed, CSP `connect-src` already covers the host. Process note
   in `CONTRIBUTING.md` for accepting a site (moves to `data/seed_companies.csv` or the gap card with a reason).
-  Done when: FR-7 AC 1 to 6 hold.
+  Done when: FR-7 AC 1 to 6 hold.~~
+  Remaining checks, live only, once the PR is merged and the page is deployed (and step 5.1's live checks are done):
+  open the page at <https://ravidorr.github.io/misra/>, open the coverage gap card and press "Report a site"; send one real
+  report and confirm the email reaches the maintainer and the page shows "Report sent"; press Send with the fields empty
+  and with a bad link and confirm the messages appear beside the fields and nothing is sent (the browser's network tab
+  shows no request); and, if the daily limit of 3 can be spent, send a fourth report and confirm the page says to try
+  again tomorrow. Also confirm in the browser console that the request goes to the project's `report-site` function and
+  that no `Content-Security-Policy` error appears.
 
 ## FR-8 (personalised digest; the lawyer check is a gate in front of step 6.6)
 
 - [x] ~~6.1 Subscriber tables and functions: `subscriptions` (user_id, address, frequency default daily, filters
   snapshot, the consent log `consent_given_at`, `consent_confirmed_at`, `unsubscribed_at`, hashed confirm and
   unsubscribe tokens), `emailed` (user_id, job key) to avoid repeats. Edge Functions `confirm-email` and `unsubscribe`
-  (one click, no sign-in, token-based) and the static page `email.html`. Done when: FR-8 AC 7 first half holds in tests.~~
+  (one click, no sign-in, token-based) and the static page `email.html`. Done when: FR-8 AC 7 first half and AC 11 (consent log) hold in tests.~~
   Remaining checks, live only (`supabase/README.md`, "Subscribers: confirm and unsubscribe"): apply the migration
   `20261117100000_subscriptions_and_emailed.sql` and record it with `supabase migration repair 20261117100000 --status applied --remote`
   if it was pasted into the SQL editor, deploy with `supabase functions deploy confirm-email --project-ref dncodqeqpoqwcxdctzco`
@@ -168,15 +176,16 @@ Decisions made in planning (they change the PRD's wording, so update the PRD in 
   columns (this removes the Product-plus-Intern/Junior bug); no email when nothing new; weekly summary; per-user
   try block; project From address via Resend; unsubscribe link and List-Unsubscribe headers. Coverage-gap content
   never appears in it. Remove `digest.py` selection logic that FR-9 replaces; keep the maintainer failure email on
-  `send_alert.py`. The old single-recipient digest keeps running until this path has delivered to the maintainer. Done when: FR-8 AC 4 to 9 hold in tests, FR-9 AC 9 holds.
+  `send_alert.py`. The old single-recipient digest keeps running until this path has delivered to the maintainer. Done when: FR-8 AC 4 to 9 and AC 12 (footer) hold in tests, FR-9 AC 9 holds.
 - [ ] 6.4 Daily workflow: add the digest step after the sync with the service-role key and Resend key in that step
   only, keep the failure alert, and make the maintainer an ordinary subscriber. Done when: FR-8 AC 10 holds, and a manual run with a test
   subscriber delivers one email and a second run delivers none.
 - [ ] 6.5 Volume check before opening: count subscribers against the Resend free limit shared with `easy-theory`, write
   the number and the upgrade trigger in `CONTRIBUTING.md`. Done when: the limit and current use are written down.
-- [ ] 6.6 GATE: the lawyer review from "Before launch" and the addendum, with written answers. Nothing sends to a real
+- [ ] 6.6 GATE: the lawyer review from "Before launch" and the addendum, with written answers (answered 2026-11-15; the
+  outcome is in the PRD's "Before launch"; the gate stays until its wording is in). Nothing sends to a real
   user, and the sign-up control stays hidden behind a flag, until the answers are in and any required wording is added
-  to the emails and `PRIVACY.md`. Done when: the answers are filed and the flag is switched on.
+  to the emails, `PRIVACY.md`, a new `TERMS.md` (as-is disclaimer) and the notice next to the sign-in button (FR-1 AC 7). Done when: the answers are filed, those four are in, and the flag is switched on.
 
 ## FR-4 (richer job data)
 
@@ -212,7 +221,7 @@ Decisions made in planning (they change the PRD's wording, so update the PRD in 
 - [ ] Every AC is named in a step's "Done when". Mapping: FR-1 AC 1-3, 6: 4.1; AC 4, 5: 4.4. FR-2 AC 1-3, 7-10: 4.2;
   AC 4-6: 4.3. FR-3 AC 1-7, 11: 3.2; AC 8-10: 3.4. FR-4 AC 1-3, 9: 7.1; AC 4, 8: 7.2; AC 5, 6: 7.3; AC 7: 8.1;
   AC 10: 7.4; AC 11: policy. FR-5: 1.1. FR-6 AC 1-4, 8: 8.1; AC 5-7: 8.2. FR-7: 5.1 (spam AC), 5.2. FR-8 AC 1-3: 6.2;
-  AC 4-6, 8, 9: 6.3; AC 7: 6.1; AC 10: 6.4. FR-9 AC 3-6, 10: 3.1; AC 1, 2, 7, 8: 3.4; AC 9: 6.3. Re-check this when a
+  AC 4-6, 8, 9: 6.3; AC 7: 6.1; AC 10: 6.4; AC 11 (consent log): 6.1; AC 12 (footer): 6.3. FR-1 AC 7 (sign-in notice) and the `TERMS.md` disclaimer: 6.6. FR-4 AC 12: policy, applied in 7.1. FR-9 AC 3-6, 10: 3.1; AC 1, 2, 7, 8: 3.4; AC 9: 6.3. Re-check this when a
   step is split.
 - [ ] Success metrics are read from Supabase tables and Resend reports monthly; add the queries to `CONTRIBUTING.md`
   with step 6.4 (sign-ins, 30-day returns, subscribers, share starring, region and description shares, accepted sites).

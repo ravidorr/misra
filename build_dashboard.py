@@ -22,6 +22,7 @@ STATIC_FILES = (
     "templates/dashboard.html",
     "templates/dashboard.js",
     "templates/auth.js",
+    "templates/report.js",
     "templates/theme.js",
     "templates/email.html",
     "templates/email.js",
@@ -37,7 +38,8 @@ INTEGRITY = re.compile(r"__SRI_([A-Z]+)_([A-Z]+)__")
 
 # The backend the page reads the jobs from: the one place for the project URL and the PUBLIC anon key. Row-level
 # security lets the anon key read open jobs only, so the key may live in docs/. The build puts both values into the
-# page scripts (dashboard.js and auth.js) and the URL into the page's connect-src; later steps (stars) read them too.
+# page scripts (dashboard.js, auth.js and report.js) and the URL into the page's connect-src; later steps (stars) read
+# them too.
 # Never put the service-role key here.
 SUPABASE_URL = "https://dncodqeqpoqwcxdctzco.supabase.co"
 SUPABASE_ANON_KEY = "sb_publishable_9gvh4YdsfErlFsgJfmNexQ_yHF-XwnA"

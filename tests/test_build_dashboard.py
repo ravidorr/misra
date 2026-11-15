@@ -61,6 +61,7 @@ def write_static(workdir: Path) -> None:
     (workdir / "templates" / "auth.js").write_text("const auth = '__SUPABASE_URL__';\n", encoding="utf-8")
     (workdir / "templates" / "email.html").write_text("<!doctype html><title>e</title>", encoding="utf-8")
     (workdir / "templates" / "email.js").write_text("const email = '__SUPABASE_URL__';\n", encoding="utf-8")
+    (workdir / "templates" / "report.js").write_text("const report = '__SUPABASE_URL__/report';\n", encoding="utf-8")
     (workdir / "vendor").mkdir(exist_ok=True)
     (workdir / "vendor" / "supabase.js").write_bytes(b"var supabase = '__SUPABASE_URL__'; \xc3\xa9\r\n")
 
@@ -230,6 +231,7 @@ def test_site_files_are_written_next_to_the_page(db: sqlite3.Connection, workdir
         "index.html",
         "jobs.json",
         "jobs.jsonld",
+        "report.js",
         "supabase.js",
         "theme.js",
     ]
@@ -239,6 +241,9 @@ def test_site_files_are_written_next_to_the_page(db: sqlite3.Connection, workdir
     assert (docs / "email.html").read_text(encoding="utf-8") == "<!doctype html><title>e</title>"
     assert (docs / "email.js").read_text(encoding="utf-8") == f"const email = '{build_dashboard.SUPABASE_URL}';\n"
     assert (docs / "auth.js").read_text(encoding="utf-8") == f"const auth = '{build_dashboard.SUPABASE_URL}';\n"
+    assert (docs / "report.js").read_text(encoding="utf-8") == (
+        f"const report = '{build_dashboard.SUPABASE_URL}/report';\n"
+    )
     # a vendored script is copied byte for byte: nothing is injected into it and its line endings stay
     assert (docs / "supabase.js").read_bytes() == b"var supabase = '__SUPABASE_URL__'; \xc3\xa9\r\n"
     assert (docs / "dashboard.css").read_text(encoding="utf-8").endswith("body{}")
