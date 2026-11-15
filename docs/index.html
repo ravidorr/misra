@@ -19,7 +19,6 @@
 <script src="supabase.js" integrity="sha384-TcHRA3zBbn+Lexh5n+Oil4guNPOS3rjNDpGRAN46u/s/mB2IZ50ceC6TYDU2yvgK" defer></script>
 <script type="module" src="auth.js" integrity="sha384-LI7QBbeQQRmbJaALtND8kcQ5fkTdZSPldqRfT0TysP/AOZiodAFYvWp/7bzG9QlA"></script>
 <script type="module" src="report.js" integrity="sha384-sgwZrHK4LjKTE7frrNuxL2i0b23TT8vHeSN7hJabF8cjW9BnXsLacsCp+cg3e206"></script>
-
 <link rel="alternate" type="application/json" href="jobs.json" title="Open roles as JSON">
 <link rel="alternate" type="application/ld+json" href="jobs.jsonld" title="Open roles as schema.org JSON-LD">
 <script type="application/ld+json">{"@context":"https://schema.org","@type":"Dataset","name":"Misra: open entry-level, student and product roles in Israel","description":"Every open role, refreshed daily. Each role has a title, company, location and the date it was first seen.","isAccessibleForFree":true,"distribution":[{"@type":"DataDownload","encodingFormat":"application/json","contentUrl":"jobs.json"},{"@type":"DataDownload","encodingFormat":"application/ld+json","contentUrl":"jobs.jsonld"}]}</script>
@@ -34,7 +33,6 @@
     <button type="button" class="btn btn-pill" id="signIn" aria-describedby="signInNote">Sign in<span class="sr-only"> with Google</span></button>
     <div class="account-user" id="accountUser" hidden>
       <span class="account-email" id="accountEmail"></span>
-      
       <button type="button" class="btn btn-pill" id="signOut">Sign out</button>
       <button type="button" class="btn btn-pill" id="deleteAccount" aria-haspopup="dialog">Delete my account</button>
     </div>
@@ -155,7 +153,6 @@
     <button type="button" class="btn btn-pill btn-danger" id="deleteConfirm">Delete my account permanently</button>
   </p>
 </dialog>
-
 <dialog class="dialog" id="reportDialog" aria-labelledby="reportTitle" aria-describedby="reportIntro" data-report="dialog" data-state="idle">
   <h2 class="dialog-title" id="reportTitle" tabindex="-1">Report a site</h2>
   <form id="reportForm" novalidate data-report="form">
