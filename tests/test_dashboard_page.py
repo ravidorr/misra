@@ -3,6 +3,7 @@ Content-Security-Policy, passes axe in both themes, and keeps focus and announce
 
 Locally the tests skip when Chromium is missing; in CI (CI=true) a missing browser is a failure."""
 
+import asyncio
 import base64
 import json
 import mimetypes
@@ -201,13 +202,109 @@ class AuthBackend:
             await route.fulfill(status=500, headers=CORS, body="unavailable")
 
 
-async def serve(
+ROWS_CORS = {**CORS, "access-control-allow-methods": "*", "access-control-allow-headers": "*"}
+LIMIT_BODY = {"code": "54000", "message": "A user can keep at most 2000 starred and discarded jobs"}
+REFUSED_BODY = {"code": "23514", "message": "new row violates check constraint"}
+
+
+class ChoicesBackend:
+    """A stand-in for the `user_jobs` table behind PostgREST, as the signed-in user sees it (row-level security leaves
+    them their own rows only): the rows, the writes it accepted, and every request it saw. `mode` breaks it: down
+    (no answer), error (503), expired (401), limit (the database's row limit refuses a new row), limit_star (the limit
+    refuses stars only), refused (any other refusal), load_down (reads fail, writes work). `delay` holds every
+    write that long; `gate`, when set, holds every read until it is set."""
+
+    def __init__(self, rows: list[dict[str, Any]] | None = None, mode: str = "ok") -> None:
+        self.rows: dict[tuple[str, str], dict[str, Any]] = {(r["company"], r["job_id"]): r for r in rows or []}
+        self.mode = mode
+        self.delay = 0.0
+        self.gate: asyncio.Event | None = None
+        self.requests: list[Any] = []
+        self.writes: list[dict[str, Any]] = []
+
+    def state_of(self, company: str, job_id: str) -> str | None:
+        row = self.rows.get((company, job_id))
+        return row["state"] if row else None
+
+    async def handle(self, route: Route) -> None:
+        request = route.request
+        if request.method == "OPTIONS":
+            await route.fulfill(status=204, headers=ROWS_CORS)
+            return
+        self.requests.append(request)
+        reading = request.method == "GET"
+        rows = sorted(
+            self.rows.values(), key=lambda r: (r["company"], r["job_id"])
+        )  # as of the request, not the answer
+        if self.gate is not None and reading:
+            await self.gate.wait()
+        if not reading and self.delay:
+            await asyncio.sleep(self.delay)
+        failure = self.failure(reading, request)
+        if failure == "down":
+            await route.abort()
+        elif failure:
+            status, body = failure
+            await route.fulfill(
+                status=status, headers=ROWS_CORS, body=json.dumps(body), content_type="application/json"
+            )
+        elif reading:
+            first, last = self.window(request, len(rows))
+            columns = parse_qs(urlparse(request.url).query)["select"][0].split(",")
+            body = [{c: r.get(c) for c in columns} for r in rows[first : last + 1]]
+            span = f"{first}-{last}" if rows else "*"  # PostgREST says `*/0` for an empty table
+            headers = {**ROWS_CORS, "content-range": f"{span}/{len(rows)}"}
+            await route.fulfill(body=json.dumps(body), content_type="application/json", headers=headers)
+        else:
+            self.write(request)
+            await route.fulfill(status=204 if request.method == "DELETE" else 201, headers=ROWS_CORS)
+
+    def failure(self, reading: bool, request: Any) -> Any:
+        """None when the request goes through, "down", or the (status, body) of the answer."""
+        answers: dict[str, Any] = {
+            "down": "down",
+            "error": (503, {}),
+            "expired": (401, {"code": "PGRST301", "message": "JWT expired"}),
+        }
+        if self.mode == "load_down" and reading:
+            return "down"
+        if self.mode in answers:
+            return answers[self.mode]
+        if not reading and (
+            self.mode == "limit" or (self.mode == "limit_star" and '"star"' in (request.post_data or ""))
+        ):
+            return 500, LIMIT_BODY  # PostgREST answers class 54 with 500, so the code is what tells it from an outage
+        if not reading and self.mode == "refused":
+            return 400, REFUSED_BODY
+        return None
+
+    @staticmethod
+    def window(request: Any, total: int) -> tuple[int, int]:
+        """The first and last row asked for: supabase-js sends `offset` and `limit` as query parameters."""
+        query = parse_qs(urlparse(request.url).query)
+        first = int(query["offset"][0])
+        return first, min(first + int(query["limit"][0]) - 1, REST_PAGE + first - 1, total - 1)
+
+    def write(self, request: Any) -> None:
+        query = parse_qs(urlparse(request.url).query)
+        if request.method == "DELETE":
+            ids = {name: query[name][0].removeprefix("eq.") for name in ("user_id", "company", "job_id")}
+            self.writes.append({"op": "delete", **ids})
+            self.rows.pop((ids["company"], ids["job_id"]), None)
+        else:
+            body = json.loads(request.post_data or "{}")
+            self.writes.append({"op": "upsert", "on_conflict": query["on_conflict"][0], **body})
+            self.rows[(body["company"], body["job_id"])] = body
+
+
+async def serve(  # noqa: PLR0913  (each stand-in is optional, and a test names the ones it wants)
     page: Page,
     docs: Path,
     *,
     wait: bool = True,
     backend: Backend | None = None,
     auth: AuthBackend | None = None,
+    choices: ChoicesBackend | None = None,
 ) -> list[str]:
     """Serve docs/ at ORIGIN without a network, the jobs from a fake backend and the sign-in from a fake service;
     returns the console errors and page errors seen. The backend defaults to the rows of the site fixture."""
@@ -228,6 +325,7 @@ async def serve(
     await page.route(f"{build_dashboard.SUPABASE_URL}/**", backend.handle)
     # the later route wins: sign-in requests never reach the jobs backend
     await page.route(f"{build_dashboard.SUPABASE_URL}/auth/v1/**", (auth or AuthBackend()).handle)
+    await page.route(f"{build_dashboard.SUPABASE_URL}/rest/v1/user_jobs**", (choices or ChoicesBackend()).handle)
     page.on("console", lambda m: problems.append(m.text) if m.type == "error" else None)
     page.on("pageerror", lambda e: problems.append(str(e)))
     await page.goto(f"{ORIGIN}/index.html")

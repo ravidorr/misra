@@ -104,10 +104,15 @@ Decisions made in planning (they change the PRD's wording, so update the PRD in 
   hook, set the Auth redirect URLs, complete one real sign-in, confirm `public.profiles` holds only your email and the
   access token's `user_metadata` is `{}`, and run `supabase/tests/accounts_rls.sql` against a test project. These need the maintainer's Google login and the Supabase
   dashboard.
-- [ ] 4.2 Stars and discards sync: star button and starred list on the card, star and discard mutually exclusive, local
+- [x] ~~4.2 Stars and discards sync: star button and starred list on the card, star and discard mutually exclusive, local
   queue when offline or the backend fails (no loss), merge on sign-in. Closed-job rules: starred job kept with a
   "no longer listed" mark (needs title, company, location and link kept on the star row), discard removed when its
-  job closes, reopened job shows again (daily sync step or a database trigger). Done when: FR-2 AC 1 to 3, 7 to 10 hold.
+  job closes, reopened job shows again (daily sync step or a database trigger). Done when: FR-2 AC 1 to 3, 7 to 10 hold.~~
+  Remaining check, live only: apply `supabase/migrations/20261115180000_job_choices_cap_and_closed_jobs.sql` (the row
+  limit and the trigger that drops a discard when its job closes), run `supabase/tests/job_choices.sql` against a test
+  project, then star and discard on one device and see both on a second after signing in. Left to 4.3: the browser's own
+  discards and filters are not offered for import at the first sign-in (while signed in, the page shows the account's
+  choices only).
 - [ ] 4.3 First-sign-in import of browser discards and filters without duplicates, and filter sync across devices
   (regions, locations, levels, search, company, sort, show/hide options). Done when: FR-2 AC 4 to 6 hold; the launch
   test (sign in on a phone, see laptop stars) passes by hand.

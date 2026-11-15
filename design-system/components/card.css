@@ -69,6 +69,7 @@
 .card-actions {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: var(--space-3);
   margin: 0;
 }
