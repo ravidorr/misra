@@ -49,12 +49,7 @@ def select(c: sqlite3.Connection, only_unreported: bool = True) -> list[dict[str
     return out
 
 
-GAP_LABEL = {
-    "closed": "jobs closed after a sharp drop was believed",
-    "held": "crawl held, nothing closed",
-    "failing": "not crawled",
-}
-GAP_NOTE_MAX = 160
+GAP_KINDS = ("failing", "held", "closed")  # the order gap_summary lists them in
 FAILING_RUNS = 2  # a company is failing when its last two crawls failed, as in the dashboard (one-offs do not count)
 GAP_STALE_DAYS = 7  # a company not crawled for this long before the newest crawl is no longer one of ours
 
@@ -74,11 +69,10 @@ def coverage_gaps(c: sqlite3.Connection) -> list[dict[str, Any]]:
 
     kind is "failing" (the last two crawls failed, as in the dashboard's coverage gaps), "held" (the last crawl was
     held back as a sharp drop: nothing closed) or "closed" (a crawl believed a sharp drop and closed the jobs it no
-    longer saw; this is an event, listed until an email has carried it). `since` identifies the gap: the start of the
-    outage, or the believed crawl. A company whose last crawl was skipped because of robots.txt is none of these: it
-    is on the dashboard's coverage card, and nobody has to act. `new` is True until an email that listed the gap was
-    sent (see mark_alerted), so
-    one outage alerts once however its kind changes, and an alert whose email failed is tried again. Companies not
+    longer saw; this is an event, listed until the daily run has logged it). `since` identifies the gap: the start of
+    the outage, or the believed crawl. A company whose last crawl was skipped because of robots.txt is none of these:
+    it is on the dashboard's coverage card, and nobody has to act. `new` is True until the daily run logged the gap
+    (see mark_alerted), so one outage is new once however its kind changes. Companies not
     crawled in the last GAP_STALE_DAYS days are skipped. A database without a crawl log, a note column or an alert
     table has nothing to report or nothing alerted yet."""
     tables = {r[0] for r in c.execute("SELECT name FROM sqlite_master WHERE type='table'")}
@@ -129,8 +123,18 @@ def safe_coverage_gaps(c: sqlite3.Connection) -> tuple[list[dict[str, Any]], str
         return [], error
 
 
+def gap_summary(gaps: list[dict[str, Any]]) -> str:
+    """One log line: counts and company names only (the log is public, the names are public companies)."""
+    parts = []
+    for kind in GAP_KINDS:
+        names = [g["company"] for g in gaps if g["kind"] == kind]
+        if names:
+            parts.append(f"{kind} {len(names)} ({', '.join(names)})")
+    return f"coverage gaps: {len(gaps)} ({sum(1 for g in gaps if g['new'])} new): " + "; ".join(parts)
+
+
 def mark_alerted(c: sqlite3.Connection, gaps: list[dict[str, Any]]) -> None:
-    """Remember that an email carried these gaps, so they stop being new. The caller commits."""
+    """Remember that the daily run logged these gaps, so they stop being new. The caller commits."""
     c.execute("CREATE TABLE IF NOT EXISTS gap_alerts(company TEXT, since TEXT, kind TEXT, PRIMARY KEY(company, since))")
     c.executemany(
         "INSERT OR IGNORE INTO gap_alerts(company, since, kind) VALUES(?,?,?)",
@@ -138,10 +142,7 @@ def mark_alerted(c: sqlite3.Connection, gaps: list[dict[str, Any]]) -> None:
     )
 
 
-def render(
-    jobs: list[dict[str, Any]], gaps: list[dict[str, Any]] | None = None, gap_error: str = ""
-) -> tuple[str, str]:
-    gaps = gaps or []
+def render(jobs: list[dict[str, Any]], gap_error: str = "") -> tuple[str, str]:
     today = time.strftime("%Y-%m-%d")
     pm = [j for j in jobs if j["pm"]]
     interns = [j for j in jobs if not j["pm"] and INTERN.search(j["title"])]
@@ -163,29 +164,16 @@ def render(
     body += block("Junior roles (non-product titles)", juniors)
     if not jobs:
         body += "<p>No new matching jobs today.</p>"
-    if gaps:
-        body += f"<h3>Not crawled properly ({len(gaps)})</h3><ul>"
-        for g in gaps:
-            tag = " <b>new</b>" if g["new"] else ""
-            why = f": {html.escape(g['note'][:GAP_NOTE_MAX])}" if g["note"] else ""
-            body += (
-                f"<li><b>{html.escape(g['company'])}</b>{tag}: {GAP_LABEL[g['kind']]}{why} "
-                f"<i>(last good crawl {html.escape(g['last_good'])})</i></li>"
-            )
-        body += "</ul>"
     if gap_error:
         body += f"<p><b>Coverage check failed</b>: {html.escape(gap_error)}. See the workflow log.</p>"
-    new_gaps = sum(1 for g in gaps if g["new"])
-    if jobs or not new_gaps:
-        return f"New Israel jobs: {len(jobs)} ({today})", body
-    return f"Job crawl alert: {new_gaps} new ({today})", body
+    return f"New Israel jobs: {len(jobs)} ({today})", body
 
 
 def main() -> None:
     c = sqlite3.connect(DB)
     jobs = select(c)
     gaps, gap_error = safe_coverage_gaps(c)
-    subject, body = render(jobs, gaps, gap_error)
+    subject, body = render(jobs, gap_error)
     with open("data/digest.html", "w") as fh:
         fh.write(body)
     print(subject)
