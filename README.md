@@ -61,6 +61,7 @@ python3 -m venv .venv
 - [Changelog](./CHANGELOG.md)
 - [Security](./SECURITY.md)
 - [Privacy](./PRIVACY.md)
+- [Terms](./TERMS.md)
 - [Support](./SUPPORT.md)
 - [Design system](./design-system/README.md) (tokens, components, logo brief, WebMCP tools)
 
