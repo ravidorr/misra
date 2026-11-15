@@ -185,7 +185,12 @@ export async function hashVisitor(secret: string, day: string, network: string):
 
 type Reservation = 'ok' | 'ip_limit' | 'daily_cap';
 
-async function callDatabase(deps: Deps, config: Config, name: string, args: Record<string, unknown>): Promise<unknown> {
+/**
+ * Calls a Postgres function through PostgREST and returns the response once its status is a success. The caller decides
+ * whether there is a body to read: PostgREST answers a function that `returns void` with no body (204, and an empty 200
+ * in older versions), so a void function's answer is judged by its status alone.
+ */
+async function callDatabase(deps: Deps, config: Config, name: string, args: Record<string, unknown>): Promise<Response> {
   const response = await deps.fetch(`${config.supabaseUrl}/rest/v1/rpc/${name}`, {
     method: 'POST',
     headers: {
@@ -196,24 +201,31 @@ async function callDatabase(deps: Deps, config: Config, name: string, args: Reco
     body: JSON.stringify(args),
     signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
   });
-  if (!response.ok) throw new Error(`${name} answered ${String(response.status)}`);
-  return response.json();
+  if (!response.ok) {
+    await response.body?.cancel().catch(() => undefined);
+    throw new Error(`${name} answered ${String(response.status)}`);
+  }
+  return response;
 }
 
 async function reserve(deps: Deps, config: Config, day: string, ipHash: string): Promise<Reservation> {
-  const answer = await callDatabase(deps, config, 'report_site_reserve', {
+  const response = await callDatabase(deps, config, 'report_site_reserve', {
     p_day: day,
     p_ip_hash: ipHash,
     p_ip_limit: IP_DAILY_LIMIT,
     p_daily_cap: DAILY_CAP,
   });
+  // The function returns text, which PostgREST sends as a bare JSON string: "ok".
+  const answer: unknown = await response.json();
   if (answer === 'ok' || answer === 'ip_limit' || answer === 'daily_cap') return answer;
   throw new Error('report_site_reserve gave an answer this function does not know');
 }
 
 async function release(deps: Deps, config: Config, day: string, ipHash: string): Promise<void> {
   try {
-    await callDatabase(deps, config, 'report_site_release', { p_day: day, p_ip_hash: ipHash });
+    // The function returns void: PostgREST answers with no body, so only the status counts and nothing is parsed.
+    const response = await callDatabase(deps, config, 'report_site_release', { p_day: day, p_ip_hash: ipHash });
+    await response.body?.cancel();
   } catch (error) {
     // Losing a place only means the cap is reached a little earlier today.
     console.error(

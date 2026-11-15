@@ -47,7 +47,7 @@ function rejectWithText(reason: string): Promise<never> {
 const anyString = expect.any(String) as string;
 const contains = (text: string): string => expect.stringContaining(text) as string;
 
-function fakeWorld(options: { resend?: number; database?: 'down' | 'garbage' | 'release-down' } = {}): World {
+function fakeWorld(options: { resend?: number; database?: 'down' | 'garbage' | 'release-down'; void?: 200 | 204 } = {}): World {
   const reports = new Map<string, number>();
   const cap = { sent: 0 };
   const emails: World['emails'] = [];
@@ -82,7 +82,8 @@ function fakeWorld(options: { resend?: number; database?: 'down' | 'garbage' | '
       cap.sent = Math.max(0, cap.sent - 1);
       const key = `${String(body.p_day)}|${String(body.p_ip_hash)}`;
       reports.set(key, Math.max(0, (reports.get(key) ?? 0) - 1));
-      return Promise.resolve(new Response(null, { status: 204 }));
+      // PostgREST answers a function that returns void with no body: 204 (v10 and later) or an empty 200 (older).
+      return Promise.resolve(new Response(options.void === 200 ? '' : null, { status: options.void ?? 204 }));
     }
     return Promise.resolve(new Response('unexpected', { status: 404 }));
   });
@@ -195,14 +196,19 @@ describe('the flood', () => {
     expect((await handleReport(post(GOOD, { 'cf-connecting-ip': '203.0.113.7' }), tomorrow)).status).toBe(200);
   });
 
-  it('gives the place back when Resend fails, so a failure does not eat the cap', async () => {
-    silence();
-    const world = fakeWorld({ resend: 422 });
-    const result = await answer(await handleReport(post(GOOD, { 'cf-connecting-ip': '203.0.113.7' }), world.deps));
-    expect(result).toMatchObject({ status: 502, json: { ok: false, error: { code: 'send_failed' } } });
-    expect(world.cap.sent).toBe(0);
-    expect([...world.reports.values()]).toEqual([0]); // the visitor's own report is given back too
-  });
+  it.each([204, 200] as const)(
+    'gives the place back when Resend fails, so a failure does not eat the cap (void answer %i, empty body)',
+    async (voidStatus) => {
+      const spy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+      const world = fakeWorld({ resend: 422, void: voidStatus });
+      const result = await answer(await handleReport(post(GOOD, { 'cf-connecting-ip': '203.0.113.7' }), world.deps));
+      expect(result).toMatchObject({ status: 502, json: { ok: false, error: { code: 'send_failed' } } });
+      expect(world.cap.sent).toBe(0);
+      expect([...world.reports.values()]).toEqual([0]); // the visitor's own report is given back too
+      // The refund must not log a failure: an empty body is how PostgREST answers a void function.
+      expect(JSON.stringify(spy.mock.calls)).not.toContain('could not give the place back');
+    },
+  );
 
   it('keeps the place when the outcome is unknown (a 5xx or a timeout may have sent the email)', async () => {
     silence();
