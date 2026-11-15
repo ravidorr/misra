@@ -339,3 +339,19 @@ a {
     margin-bottom: var(--space-3);
   }
 }
+
+.load-error {
+  display: grid;
+  gap: var(--space-3);
+  justify-items: start;
+  margin-block: var(--space-5);
+}
+
+.load-error h2,
+.load-error p {
+  margin: 0;
+}
+
+.load-error h2 {
+  font-size: var(--text-lg);
+}

@@ -292,3 +292,29 @@ def test_read_unresolved_reads_a_short_row_as_an_empty_note(workdir: Path) -> No
 def test_the_real_unresolved_csv_has_only_known_reasons(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.chdir(Path(__file__).resolve().parents[1])
     assert build_dashboard.read_unresolved()
+
+
+def test_the_backend_settings_and_page_data_are_injected_into_the_page(db: sqlite3.Connection, workdir: Path) -> None:
+    write_css(workdir)
+    write_static(workdir)
+    write_json(workdir / "data" / "companies.json", [{"name": "A</script>", "status": "x"}])
+    write_unresolved(workdir)
+    (workdir / "templates" / "dashboard.html").write_text(
+        "connect-src __SUPABASE_URL__<script id=d>__PAGE_DATA__</script>", encoding="utf-8"
+    )
+    (workdir / "templates" / "dashboard.js").write_text(
+        "const url = '__SUPABASE_URL__'; const key = '__SUPABASE_ANON_KEY__';", encoding="utf-8"
+    )
+    db.close()
+    build_dashboard.main()
+    docs = workdir / "docs"
+    page = (docs / "index.html").read_text(encoding="utf-8")
+    assert page.startswith(f"connect-src {build_dashboard.SUPABASE_URL}<script id=d>")
+    assert (docs / "dashboard.js").read_text(encoding="utf-8") == (
+        f"const url = '{build_dashboard.SUPABASE_URL}'; const key = '{build_dashboard.SUPABASE_ANON_KEY}';"
+    )
+    block = page.split("<script id=d>")[1].split("</script>")[0]
+    assert "<" not in block  # the data cannot close its own block
+    data = json.loads(block)
+    assert data["gaps"]["untracked"] == ["A</script>"]
+    assert data["generated"].endswith(" UTC")

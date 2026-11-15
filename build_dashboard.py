@@ -22,6 +22,13 @@ OUTPUT_NAMES = {"templates/dashboard.html": "index.html"}
 # Placeholders in the page for the integrity hash of the file with that name in docs/.
 INTEGRITY = re.compile(r"__SRI_([A-Z]+)_([A-Z]+)__")
 
+# The backend the page reads the jobs from: the one place for the project URL and the PUBLIC anon key. Row-level
+# security lets the anon key read open jobs only, so the key may live in docs/. The build puts both values into the
+# page script and the URL into the page's connect-src; later steps (sign-in, stars) read them from there too.
+# Never put the service-role key here.
+SUPABASE_URL = "https://dncodqeqpoqwcxdctzco.supabase.co"
+SUPABASE_ANON_KEY = "sb_publishable_9gvh4YdsfErlFsgJfmNexQ_yHF-XwnA"
+
 
 # The researched companies with no usable job feed; each row says why in `reason` (a key of REASONS) and `note`.
 UNRESOLVED = "data/unresolved_candidates.csv"
@@ -175,7 +182,8 @@ def main() -> None:
                 "s": company in failing,
             }
         )
-    payload = dump_json({"jobs": jobs, "gaps": gaps, "generated": time.strftime("%Y-%m-%d %H:%M UTC", time.gmtime())})
+    generated = time.strftime("%Y-%m-%d %H:%M UTC", time.gmtime())
+    payload = dump_json({"jobs": jobs, "gaps": gaps, "generated": generated})
     listing = {
         "@context": "https://schema.org",
         "@type": "ItemList",
@@ -188,8 +196,15 @@ def main() -> None:
     (out / "jobs.json").write_text(payload, encoding="utf-8")
     (out / "jobs.jsonld").write_text(dump_json(listing), encoding="utf-8")
     (out / "dashboard.css").write_text(read_css(), encoding="utf-8")
+    # What the page needs besides the jobs it reads from Supabase: the coverage gaps, the build time and each company's
+    # first day of listings (the closed jobs that fix it are not readable with the anon key). It sits in a
+    # JSON data block of index.html (not executed, so the page stays free of inline script); `<` is escaped so the
+    # data can never close the block.
+    page_data = dump_json({"gaps": gaps, "generated": generated, "firstDay": first}).replace("<", "\\u003c")
     for source in STATIC_FILES:
         text = Path(source).read_text(encoding="utf-8")
+        text = text.replace("__SUPABASE_URL__", SUPABASE_URL).replace("__SUPABASE_ANON_KEY__", SUPABASE_ANON_KEY)
+        text = text.replace("__PAGE_DATA__", page_data)
         (out / OUTPUT_NAMES.get(source, Path(source).name)).write_text(text, encoding="utf-8")
     page = out / "index.html"
     # __SRI_DASHBOARD_CSS__ becomes the integrity hash of docs/dashboard.css; one pass over the page

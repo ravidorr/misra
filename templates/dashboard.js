@@ -1,4 +1,4 @@
-/* Dashboard script. Loaded as a deferred module by docs/index.html; the roles come from jobs.json. */
+/* Dashboard script. Loaded as a deferred module by docs/index.html; the roles come from Supabase. */
 const $ = (id) => document.getElementById(id);
 const LS_D = 'il-jobs-discarded-v1';
 const LS_F = 'il-jobs-filters-v2';
@@ -53,13 +53,89 @@ $('theme').addEventListener('click', () => {
   setTheme(MODES[(MODES.indexOf(currentMode()) + 1) % MODES.length]);
 });
 
+/* The backend: Supabase over PostgREST, read with the public anon key (row-level security lets it read open jobs only).
+   build_dashboard.py injects both values, the same ones it puts in the page's connect-src. */
+const SUPABASE_URL = '__SUPABASE_URL__';
+const SUPABASE_ANON_KEY = '__SUPABASE_ANON_KEY__';
+const FETCH_TIMEOUT_MS = 20000;
+const REST_PAGE = 1000; /* PostgREST answers at most 1,000 rows at a time */
+const JOB_COLUMNS = 'company,job_id,title,team,location,url,first_seen,level,role_types,regions,locations';
+
+async function fetchJson(url, headers = {}) {
+  const response = await fetch(url, { headers, signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) });
+  if (!response.ok) throw new Error(`${new URL(url, location.href).pathname}: HTTP ${response.status}`);
+  return { body: await response.json(), range: response.headers.get('Content-Range') };
+}
+
+/* All open jobs, REST_PAGE rows per request, in a stable order. The first answer carries the total in Content-Range
+   ("0-999/6773"); the rest are fetched together. A count that does not match the total is an error, never a short list. */
+async function fetchJobs() {
+  const headers = { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}` };
+  const url = (offset) =>
+    `${SUPABASE_URL}/rest/v1/jobs?select=${JOB_COLUMNS}&status=eq.open&order=company,job_id&limit=${REST_PAGE}&offset=${offset}`;
+  const first = await fetchJson(url(0), { ...headers, Prefer: 'count=exact' });
+  const total = Number(first.range?.split('/')[1]);
+  if (!Number.isInteger(total)) throw new Error('jobs: no total in Content-Range');
+  if (total === 0) throw new Error('jobs: the backend returned no open roles'); /* a policy or sync fault, not an empty market */
+  const offsets = Array.from({ length: Math.ceil(total / REST_PAGE) - 1 }, (_, n) => (n + 1) * REST_PAGE);
+  const rest = await Promise.all(offsets.map((offset) => fetchJson(url(offset), headers)));
+  const rows = [first, ...rest].flatMap((answer) => answer.body);
+  if (rows.length !== total) throw new Error(`jobs: got ${rows.length} of ${total}`);
+  return rows;
+}
+
+/* A row of the jobs table as the page uses it: c company, i id, t title, m team, l location, u url, f first seen,
+   k kind, il in Israel, n not on the company's first day of listings, s company's crawl is failing. */
+function toJob(row, failing, firstDay) {
+  const f = (row.first_seen ?? '').slice(0, 10);
+  const types = row.role_types ?? [];
+  let k = 'other';
+  if (types.includes('Product')) k = 'pm';
+  else if (row.level === 'Intern') k = 'intern';
+  else if (row.level === 'Junior') k = 'junior';
+  return {
+    c: row.company,
+    i: row.job_id,
+    t: (row.title ?? '').trim(),
+    m: (row.team ?? '').trim(),
+    l: (row.location ?? '').trim().slice(0, 80),
+    u: row.url,
+    f,
+    k,
+    il: (row.regions ?? []).length + (row.locations ?? []).length > 0,
+    n: f !== '' && f > (firstDay[row.company] ?? f),
+    s: failing.has(row.company),
+  };
+}
+
+function showLoadError(error) {
+  console.error(error);
+  $('summary').textContent = 'Could not load the roles.';
+  const retry = h('button', { type: 'button', class: 'btn btn-pill', id: 'retry', text: 'Try again' });
+  retry.addEventListener('click', () => location.reload());
+  $('summary').after(
+    h('section', { class: 'notice load-error', id: 'load-error', role: 'alert' }, [
+      h('h2', { text: 'The roles could not be loaded' }),
+      h('p', {
+        text: 'The job list is kept on a server that did not give a usable answer, so there is nothing to show yet. Check your connection and try again; if it keeps failing, the service may be down.',
+      }),
+      retry,
+    ]),
+  );
+}
+
 async function loadData() {
   try {
-    const response = await fetch('jobs.json');
-    if (!response.ok) throw new Error(`jobs.json: HTTP ${response.status}`);
-    return await response.json();
+    const meta = JSON.parse($('page-data').textContent);
+    const rows = await fetchJobs();
+    const failing = new Set(meta.gaps.blocked.map((gap) => gap.c));
+    return {
+      jobs: rows.map((row) => toJob(row, failing, meta.firstDay)),
+      gaps: meta.gaps,
+      generated: meta.generated,
+    };
   } catch (error) {
-    $('summary').textContent = 'Could not load the roles. Reload the page to try again.';
+    showLoadError(error);
     throw error;
   }
 }
