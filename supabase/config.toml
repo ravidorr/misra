@@ -1,0 +1,8 @@
+# Settings the Supabase CLI reads from this directory. Only the Edge Function needs any (see README.md, "Report a site").
+project_id = "misra"
+
+# The dashboard calls this function from the browser with no signed-in user, and a CORS preflight carries no token, so
+# the platform must not demand a JWT. The function protects itself: origin check, validation, honeypot, per-visitor
+# limit and a daily cap. Keeping this in the file means a redeploy cannot forget `--no-verify-jwt`.
+[functions.report-site]
+verify_jwt = false

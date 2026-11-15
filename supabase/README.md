@@ -112,3 +112,123 @@ In the Supabase dashboard, Authentication:
   query or a hash, `https://ravidorr.github.io/misra/`. For a local check add `http://localhost:8000/**`. Without a
   match Supabase falls back to the Site URL.
 - The Google Cloud OAuth client's authorised redirect URI is `<project url>/auth/v1/callback`.
+
+## Report a site (Edge Function `report-site`)
+
+PLAN.md step 5.1, PRD FR-7. A visitor with no account reports a career site that is missing from the crawl; the
+maintainer gets one plain-text email through Resend. Nothing in the repository or the browser holds a secret: the
+function reads them from Supabase function secrets. The dashboard form is step 5.2.
+
+Files: `supabase/functions/report-site/` (`index.ts` starts the server and is the only file that knows Deno,
+`handler.ts` holds the logic, `validate.ts` the input checks), the migration `20261116110000_report_site_limits.sql`
+and `supabase/config.toml` (`verify_jwt = false`: the page calls the function without a signed-in user).
+
+### The request and the answers
+
+`POST <project url>/functions/v1/report-site` with `Content-Type: application/json` and the body
+`{"company": "...", "link": "https://...", "why": "...", "website": ""}`. `website` is the honeypot: the page must
+render it as a text input a person never sees (off-screen, `tabindex="-1"`, `autocomplete="off"`, `aria-hidden="true"`,
+not `display: none`) and send it empty. Limits: company 1 to 100 characters, link an http or https address of at most
+500 characters with a host name and no user name or password, why 3 to 1,000 characters, the whole body 8 KB.
+
+Every answer is JSON, `{"ok": true}` or `{"ok": false, "error": {"code", "message", ...}}`:
+
+- 200 `{"ok": true}`: sent. A filled honeypot gets the same answer and nothing is sent or counted.
+- 400 `invalid_input` (with `error.fields`, a message per field) or `invalid_request` (not a JSON object).
+- 403 `origin_not_allowed`, 405 `method_not_allowed`, 413 `payload_too_large`, 415 `unsupported_media_type`.
+- 429 `rate_limited`: this visitor has used today's 3 reports. 503 `daily_cap_reached`: 20 reports have been emailed
+  today. Both carry `Retry-After` (seconds until 00:00 UTC, when the day rolls over).
+- 502 `send_failed` (Resend refused or timed out; the place is given back, so a failure does not eat the cap),
+  500 `server_error` (a missing secret or an unreachable database; nothing is sent).
+
+### What protects the inbox
+
+1. CORS: only `https://ravidorr.github.io` is answered with `Access-Control-Allow-Origin`, and a browser request from any
+   other origin gets 403. A request with no `Origin` header (curl, a script) is allowed, since the next three checks
+   hold for it too.
+2. The honeypot, then validation, before anything is counted. The email is plain text; only the company name, as one
+   line, reaches a header (the subject), so a visitor cannot inject markup or a header.
+3. At most 3 reports per visitor per day. The visitor is the `cf-connecting-ip` header (Cloudflare sets it in front of
+   Supabase and replaces what the caller sent), else the last entry of `x-forwarded-for` (a caller can only write the
+   first ones). An IPv6 address counts as its /64 network. If neither header holds an address all such requests share
+   one bucket, which is stricter, not looser. The database receives only an HMAC-SHA-256 of the day and the visitor,
+   keyed by the secret `IP_HASH_SECRET`, so the salt changes every day and a stored hash cannot be turned back into an
+   address.
+4. At most 20 emails per day in all. The place is taken in the database (one atomic call, so parallel requests cannot
+   all pass) before the email is sent. If the database is down nothing is sent.
+
+The limits are the constants `IP_DAILY_LIMIT` (3) and `DAILY_CAP` (20) in `handler.ts`; change them there.
+
+### What is stored
+
+`report_ip_limits` (day, hash, number of reports) and `report_daily_cap` (day, emails sent). Rows older than yesterday
+are deleted on every call. No address, company, link or text is stored. Both tables have row-level security on, no
+policy and no grant for `anon` or `authenticated`; the two functions that change them (`report_site_reserve`,
+`report_site_release`) can be executed by the service role only. `tests/test_migrations.py` lints that on every push, and
+`supabase/tests/report_limits.sql` tests the counting against a database, the same way as the other SQL tests
+(`psql "$TEST_DATABASE_URL" -v ON_ERROR_STOP=1 -f supabase/tests/report_limits.sql`, ending in
+`all report limit checks passed`).
+
+### How it is tested
+
+The function is TypeScript for Deno, which the repository's tools do not run. The logic therefore lives in plain modules
+that use only web standards (`fetch`, `Request`, `Response`, Web Crypto), with the secrets, `fetch` and the clock passed
+in. `test/report-site.test.ts` runs them with vitest (part of `npm run test` and CI) against a fake Resend and a fake of
+the two database functions, including a flood that must send at most the cap. `test/typecheck-functions.test.mjs`
+type-checks the function and its tests with the compiler (`tsconfig.json`, strict), and ESLint (strict, type-aware)
+lints them with the rest. Only the few lines of `index.ts` run untested until the function is deployed.
+
+### Deploy (the maintainer; nothing here is done by the pull request)
+
+1. Apply the migration (see "Apply the migrations" above): `supabase link --project-ref dncodqeqpoqwcxdctzco`, then
+   `supabase db push`, or paste `supabase/migrations/20261116110000_report_site_limits.sql` in the
+   [SQL editor](https://supabase.com/dashboard/project/dncodqeqpoqwcxdctzco/sql/new).
+2. Set the secrets in [Edge Functions, Secrets](https://supabase.com/dashboard/project/dncodqeqpoqwcxdctzco/functions/secrets)
+   or with the CLI. `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` are supplied to every function by Supabase.
+   - `RESEND_API_KEY`: a Resend API key that may send from `send.avidor.org`. The GitHub Actions secret of the same name
+     is separate and Edge Functions cannot see it, so it must be set here too.
+   - `REPORT_TO_EMAIL`: the address that receives the reports (the maintainer's).
+   - `IP_HASH_SECRET`: a random string of at least 16 characters, for example from `openssl rand -hex 32`.
+   - `REPORT_FROM_EMAIL` (optional): the sender, default `Misra reports <reports@send.avidor.org>`.
+
+   ```sh
+   supabase secrets set --project-ref dncodqeqpoqwcxdctzco \
+     RESEND_API_KEY=... REPORT_TO_EMAIL=... IP_HASH_SECRET="$(openssl rand -hex 32)"
+   ```
+
+3. Deploy: `supabase functions deploy report-site --project-ref dncodqeqpoqwcxdctzco` (`config.toml` sets
+   `verify_jwt = false`). Logs are under
+   [Edge Functions, report-site](https://supabase.com/dashboard/project/dncodqeqpoqwcxdctzco/functions/report-site/logs).
+   A function missing a secret answers 500 and logs the names of the secrets that are missing, never values.
+
+### Check it live
+
+Each successful call below sends a real email and uses one of today's 20 places.
+
+```sh
+URL=https://dncodqeqpoqwcxdctzco.supabase.co/functions/v1/report-site
+# 1. a good report: {"ok":true} and an email at REPORT_TO_EMAIL
+curl -s -X POST "$URL" -H 'Content-Type: application/json' -H 'Origin: https://ravidorr.github.io' \
+  -d '{"company":"Test Co","link":"https://example.com/careers","why":"Live check of the report function","website":""}'
+# 2. a bad input: 400 invalid_input with a message per field, no email
+curl -s -i -X POST "$URL" -H 'Content-Type: application/json' -d '{"company":"","link":"ftp://x","why":""}'
+# 3. a filled honeypot: {"ok":true} and no email
+curl -s -X POST "$URL" -H 'Content-Type: application/json' \
+  -d '{"company":"Bot","link":"https://example.com","why":"spam spam","website":"http://spam.example"}'
+# 4. the wrong origin is refused (403), and the preflight answers only the dashboard's origin
+curl -s -i -X POST "$URL" -H 'Content-Type: application/json' -H 'Origin: https://evil.example' -d '{}'
+curl -s -i -X OPTIONS "$URL" -H 'Origin: https://ravidorr.github.io' -H 'Access-Control-Request-Method: POST'
+# 5. the per-visitor limit cannot be dodged by writing the forwarding headers
+for i in 2 3 4 5; do
+  curl -s -o /dev/null -w '%{http_code}\n' -X POST "$URL" -H 'Content-Type: application/json' \
+    -H "X-Forwarded-For: 10.0.0.$i" -H "CF-Connecting-IP: 10.0.1.$i" \
+    -d '{"company":"Test Co","link":"https://example.com/careers","why":"Live limit check","website":""}'
+done
+```
+
+Expected for step 5: `200`, `200`, `429`, `429`. Step 1 was this visitor's first report, the loop makes the second and
+third and then hits the limit of 3, which holds only if the headers written by the caller are ignored, which is the
+point of the check. If the fourth call answers `200`, the platform does not set `cf-connecting-ip` the way this function
+assumes: read the real headers in the function logs and fix `visitorNetwork` in `handler.ts` before the form goes live.
+The daily cap needs no live flood: the vitest flood test and `supabase/tests/report_limits.sql` prove it. The limits
+reset at 00:00 UTC.
