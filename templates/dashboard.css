@@ -756,15 +756,6 @@ a {
   font-size: var(--text-sm);
 }
 
-.legal-source {
-  margin: 0 0 var(--space-3);
-}
-
-.legal-source a {
-  padding-block: 15px;
-  padding-inline: 0;
-}
-
 .legal-nav {
   display: flex;
   flex-wrap: wrap;

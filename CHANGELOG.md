@@ -4,6 +4,12 @@ All notable changes are documented here. Format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
+## [0.33.0] - 2026-11-15
+
+### Removed
+
+- The "This page is built from ... (source and full history on GitHub)" line at the bottom of the generated `privacy.html`, `terms.html` and `security.html`, and everything that only existed for it: the `__SOURCE__`, `__BLOB_URL__` and `__HISTORY_URL__` placeholders, the `blob_url` and `history_url` properties of `LegalPage`, and the `.legal-source` styles. The footer navigation (Privacy, Terms, Security) stays and the Markdown files stay the source of truth. A test checks the built pages carry no "built from" line and no link to the GitHub blob or commits URLs.
+
 ## [0.31.0] - 2026-11-15
 
 ### Changed

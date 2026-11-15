@@ -69,14 +69,6 @@ class LegalPage:
     title: str
     description: str
 
-    @property
-    def blob_url(self) -> str:
-        return f"{REPO_URL}/blob/main/{self.source}"
-
-    @property
-    def history_url(self) -> str:
-        return f"{REPO_URL}/commits/main/{self.source}"
-
 
 LEGAL_PAGES = (
     LegalPage(
@@ -293,9 +285,6 @@ def render_legal(page: LegalPage, root: Path = Path(), docs: Path | None = None)
         ("__TITLE__", escape(page.title)),
         ("__DESCRIPTION__", escape(page.description)),
         ("__OUTPUT__", page.output),
-        ("__SOURCE__", page.source),
-        ("__BLOB_URL__", page.blob_url),
-        ("__HISTORY_URL__", page.history_url),
     ):
         template = template.replace(placeholder, value)
     return template.replace("__BODY__", body)  # last, so a word of the Markdown is never read as a placeholder
