@@ -115,19 +115,21 @@ def job_posting(job: dict[str, Any]) -> dict[str, Any]:
         posting["datePosted"] = job["f"]
     if job["il"]:
         posting["jobLocation"]["address"]["addressCountry"] = "IL"
-        # one Place per region (or ungrouped place) the job names, so "several cities" is several places
-        named = [r for r in job["rg"] if r != regions.REMOTE] or job["lo"]
-        if named:
+        # one Place per region and one per ungrouped place the job names, so "several cities" is several places
+        places = [{"addressRegion": name} for name in job["rg"] if name != regions.REMOTE]
+        places += [{"addressLocality": name} for name in job["lo"] if name != regions.CITY_NOT_GIVEN]
+        if places:
             posting["jobLocation"] = [
-                {"@type": "Place", "address": {"@type": "PostalAddress", "addressRegion": name, "addressCountry": "IL"}}
-                for name in named
+                {"@type": "Place", "address": {"@type": "PostalAddress", **place, "addressCountry": "IL"}}
+                for place in places
             ]
         if regions.REMOTE in job["rg"]:
             posting["jobLocationType"] = "TELECOMMUTE"
-    posting["occupationalCategory"] = job["rt"]
+            posting["applicantLocationRequirements"] = {"@type": "Country", "name": "IL"}
     posting["experienceRequirements"] = job["lv"]
     if job["lv"] == classify.INTERN_LEVEL:
         posting["employmentType"] = "INTERN"
+    posting["occupationalCategory"] = job["rt"]
     return posting
 
 

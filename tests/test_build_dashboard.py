@@ -193,10 +193,16 @@ def test_job_posting_says_the_level_the_role_type_and_every_region() -> None:
     assert junior["occupationalCategory"] == ["Other"]
     # a place with no region keeps its own string as the region; a remote role alone keeps the location it was given
     ungrouped = build_dashboard.job_posting({**JOB, "rg": [], "lo": ["Kfar Foo, Israel"]})
-    assert ungrouped["jobLocation"][0]["address"]["addressRegion"] == "Kfar Foo, Israel"
+    assert ungrouped["jobLocation"][0]["address"]["addressLocality"] == "Kfar Foo, Israel"
+    both = build_dashboard.job_posting({**JOB, "rg": ["Sharon"], "lo": ["Kfar Foo, Israel", "Israel, city not given"]})
+    assert [(p["address"].get("addressRegion"), p["address"].get("addressLocality")) for p in both["jobLocation"]] == [
+        ("Sharon", None),
+        (None, "Kfar Foo, Israel"),
+    ]
     remote = build_dashboard.job_posting({**JOB, "rg": ["Remote"], "l": "Remote, Israel"})
     assert remote["jobLocation"]["address"]["addressLocality"] == "Remote, Israel"
     assert remote["jobLocationType"] == "TELECOMMUTE"
+    assert remote["applicantLocationRequirements"] == {"@type": "Country", "name": "IL"}
 
 
 def test_site_files_are_written_next_to_the_page(db: sqlite3.Connection, workdir: Path) -> None:

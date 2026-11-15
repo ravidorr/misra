@@ -522,7 +522,7 @@ async def test_fr9_ac1_every_card_shows_a_level_and_a_role_type(page: Page, site
     assert "Level: Intern" in await tags(page, "fin")
     assert "Role type: Finance" in await tags(page, "fin")
     assert "Level: Not specified" in await tags(page, "pm")  # a level the title does not state is shown too
-    assert await page.locator("article[data-job-id='Acme|pd']").get_attribute("data-role-types") == "Product,Design"
+    assert await page.locator("article[data-job-id='Acme|pd']").get_attribute("data-role-types") == "Product|Design"
     assert "Role type: Product" in await tags(page, "pd")
     assert "Role type: Design" in await tags(page, "pd")
 
@@ -775,7 +775,7 @@ async def test_fr3_ac6_the_remote_option_adds_them_under_remote_and_says_so_on_t
 async def test_fr3_ac10_the_region_or_place_is_on_the_card_and_in_the_data_hooks(page: Page, site: Path) -> None:
     await serve_filters(page, site)
     multi = page.locator("article[data-job-id='Acme|multi']")
-    assert await multi.get_attribute("data-regions") == f"{TEL_AVIV},{NORTH}"
+    assert await multi.get_attribute("data-regions") == f"{TEL_AVIV}|{NORTH}"
     assert f"Region: {TEL_AVIV}" in await tags(page, "multi")
     assert f"Region: {NORTH}" in await tags(page, "multi")
     assert MULTI in await tags(page, "multi")  # the location as written stays
@@ -783,7 +783,7 @@ async def test_fr3_ac10_the_region_or_place_is_on_the_card_and_in_the_data_hooks
     assert await fin.get_attribute("data-locations") == KFAR
     assert await fin.get_attribute("data-regions") == ""
     assert (await tags(page, "fin")).count(KFAR) == 1  # not shown twice
-    assert f"Region: {NO_CITY}" in await tags(page, "da")
+    assert f"Place: {NO_CITY}" in await tags(page, "da")
 
 
 async def test_fr3_ac10_the_assistant_can_read_the_region_level_and_role_type(page: Page, site: Path) -> None:
@@ -798,6 +798,10 @@ async def test_fr3_ac10_the_assistant_can_read_the_region_level_and_role_type(pa
     assert await found(page, {"locations": [KFAR]}) == {"fin"}
     assert await found(page, {"regions": [REMOTE], "includeRemoteNotSaid": True}) == {"rem", "bare"}
     assert await found(page, {"regions": [REMOTE]}) == {"rem"}
+    # regions describe jobs in Israel only, even when the assistant asks for all locations
+    assert await found(page, {"allLocations": True, "locations": ["London, UK"]}) == set()
+    both = {"allLocations": True, "regions": [REMOTE], "includeRemoteNotSaid": True}
+    assert await found(page, both) == {"rem", "bare"}
 
 
 async def test_the_assistant_can_list_the_values_of_every_filter(page: Page, site: Path) -> None:
@@ -857,3 +861,46 @@ async def test_the_filters_have_no_axe_violations_when_chosen_and_open(page: Pag
     await page.locator("#places input").first.check()
     await page.evaluate(AXE.read_text(encoding="utf-8"))
     assert await page.evaluate(AXE_RUN) == []
+
+
+async def test_the_assistant_is_told_about_values_that_match_nothing(page: Page, site: Path) -> None:
+    await serve_filters(page, site, tools=True)
+    answer = await ask(page, "search_jobs", {"levels": ["intern"], "category": "product", "regions": [5]})
+    assert answer["total"] == 0  # the lower-case level matches nothing, as on the page
+    assert len(answer["warnings"]) == len(["level", "category", "region"])
+    assert any("intern" in w for w in answer["warnings"])
+    assert "warnings" not in await ask(page, "search_jobs", {"levels": ["Intern"]})
+
+
+async def test_a_row_without_the_classification_columns_is_an_error_not_unclassified_roles(
+    page: Page, site: Path
+) -> None:
+    bad = {k: v for k, v in filter_rows()[0].items() if k != "regions"}
+    await serve(page, site, wait=False, backend=Backend([bad]))
+    await expect(page.locator("#load-error")).to_be_visible()
+
+
+async def test_a_saved_choice_of_the_wrong_type_or_a_company_that_is_gone_is_dropped(page: Page, site: Path) -> None:
+    saved = {"q": 7, "company": "Gone Inc", "loc": "mars", "sort": 3, "remote": "yes", "onlyNew": 1}
+    await page.add_init_script(f"localStorage.setItem('il-jobs-filters-v3', {json.dumps(json.dumps(saved))})")
+    await serve_filters(page, site)
+    assert await shown(page) == ISRAEL_IDS
+    assert await page.locator("#company").input_value() == ""
+
+
+async def test_reset_clears_the_place_search(page: Page, site: Path) -> None:
+    await serve_filters(page, site)
+    await open_places(page)
+    await page.fill("#placeSearch", "yokneam")
+    await page.click("#reset")
+    assert await page.locator("#placeSearch").input_value() == ""
+    assert await page.locator("#places li:not([hidden])").count() == len(await page.locator("#places li").all())
+
+
+async def test_the_remote_option_is_remembered_and_changes_what_is_shown(page: Page, site: Path) -> None:
+    await serve_filters(page, site)
+    await choose(page, "regions", REMOTE)
+    await page.click("#remote")
+    await page.reload()
+    await page.wait_for_selector("#list article")
+    assert await shown(page) == {"rem", "bare"}

@@ -3,7 +3,6 @@ const $ = (id) => document.getElementById(id);
 const LS_D = 'il-jobs-discarded-v1';
 const LS_F = 'il-jobs-filters-v3';
 const LS_T = 'misra-theme';
-const NOT_SPECIFIED = 'Not specified';
 const OTHER = 'Other';
 const REMOTE_REGION = 'Remote';
 const REMOTE_NOT_SAID = 'Remote, country not given';
@@ -97,10 +96,14 @@ function remoteNotSaid(location) {
    f first seen, lv level, rt role types, rg regions, lo places in Israel without a region, il in Israel, ru remote
    with no country given, n not on the company's first day of listings, s company's crawl is failing. */
 function toJob(row, failing, firstDay) {
+  /* A row without the classification columns is a backend fault (sync lag, a missing migration), not a role that is
+     "Not specified" and "Other": fail loudly instead of showing every role as unclassified. */
+  const listed = [row.role_types, row.regions, row.locations].every(Array.isArray);
+  if (!listed || typeof row.level !== 'string') throw new Error(`jobs: ${row.company}|${row.job_id} has no level, role types, regions or locations`);
   const f = (row.first_seen ?? '').slice(0, 10);
   const l = (row.location ?? '').trim();
-  const rg = row.regions ?? [];
-  const lo = row.locations ?? [];
+  const rg = row.regions;
+  const lo = row.locations;
   const il = rg.length + lo.length > 0;
   return {
     c: row.company,
@@ -110,8 +113,8 @@ function toJob(row, failing, firstDay) {
     l,
     u: row.url,
     f,
-    lv: row.level ?? NOT_SPECIFIED,
-    rt: row.role_types?.length > 0 ? row.role_types : [OTHER],
+    lv: row.level,
+    rt: row.role_types.length > 0 ? row.role_types : [OTHER],
     rg,
     lo,
     il,
@@ -141,6 +144,7 @@ async function loadData() {
   try {
     const meta = JSON.parse($('page-data').textContent);
     const rows = await fetchJobs();
+    if (![meta.levels, meta.roleTypes, meta.regions].every(Array.isArray)) throw new Error('page data: no filter names');
     const failing = new Set(meta.gaps.blocked.map((gap) => gap.c));
     return {
       jobs: rows.map((row) => toJob(row, failing, meta.firstDay)),
@@ -194,9 +198,15 @@ const defaults = () => ({
 function savedFilters() {
   const saved = lsGet(LS_F, {});
   const f = { ...defaults(), ...(saved && typeof saved === 'object' ? saved : {}) };
+  const base = defaults();
   for (const [name, known] of Object.entries(CHOICES)) {
     f[name] = Array.isArray(f[name]) ? f[name].filter((v) => known.includes(v)) : [];
   }
+  for (const name of ['q', 'company', 'loc', 'sort']) if (typeof f[name] !== 'string') f[name] = base[name];
+  for (const name of ['remote', 'onlyNew', 'showGone', 'hideStale']) f[name] = f[name] === true;
+  if (!['il', 'all'].includes(f.loc)) f.loc = base.loc;
+  if (!['new', 'co', 'title'].includes(f.sort)) f.sort = base.sort;
+  if (f.company !== '' && !JOBS.some((j) => j.c === f.company)) f.company = '';
   return f;
 }
 let F = savedFilters();
@@ -364,6 +374,8 @@ function renderStories() {
 
 const NEW_TAB = ' (opens in a new tab)';
 const MAX_LOCATION = 80;
+/* Separator of the list-valued data-* hooks; places can contain commas, never a bar. */
+const LIST_SEP = '|';
 
 /* A tag of a card, with a hidden name so a screen reader hears "Level: Intern", not just "Intern". */
 const tag = (name, value, cls) =>
@@ -380,9 +392,9 @@ function cardEl(j) {
     'data-job-id': k,
     'data-company': j.c,
     'data-level': j.lv,
-    'data-role-types': j.rt.join(','),
-    'data-regions': j.rg.join(','),
-    'data-locations': j.lo.join(','),
+    'data-role-types': j.rt.join(LIST_SEP),
+    'data-regions': j.rg.join(LIST_SEP),
+    'data-locations': j.lo.join(LIST_SEP),
     'data-remote-country-not-given': String(j.ru),
     'data-new': String(isNew),
     'data-stale': String(j.s),
@@ -409,7 +421,8 @@ function cardEl(j) {
     ]),
     h('p', { class: 'card-tags' }, [
       j.l && h('span', { class: 'pill', text: j.l.slice(0, MAX_LOCATION) }),
-      ...[...j.rg, ...j.lo].filter((place) => place !== j.l).map((place) => tag('Region', place, 'pill')),
+      ...j.rg.filter((region) => region !== j.l).map((region) => tag('Region', region, 'pill')),
+      ...j.lo.filter((place) => place !== j.l).map((place) => tag('Place', place, 'pill')),
       j.ru && tag('Region', REMOTE_NOT_SAID, 'pill'),
       tag('Level', j.lv, 'pill pill-soft'),
       ...j.rt.map((type) => tag('Role type', type, 'pill pill-soft')),
@@ -551,6 +564,8 @@ $('stories').addEventListener('click', (e) => {
 });
 $('reset').addEventListener('click', () => {
   F = defaults();
+  $('placeSearch').value = '';
+  for (const item of $('places').children) item.hidden = false;
   update();
 });
 $('size').addEventListener('change', (e) => {
@@ -666,6 +681,21 @@ const find = (id) => JOBS.find((j) => key(j) === id);
 /* A tool argument that is a list of strings; one string is a list of one. */
 const asList = (value) => (Array.isArray(value) ? value : [value]).filter((v) => typeof v === 'string');
 
+/* What an assistant got wrong, so an empty answer is never silent: a value no role has matches nothing (as it does
+   for the page), and the old category argument is gone. See list_filters for the accepted values. */
+function argumentWarnings(a) {
+  const warnings = [];
+  if ('category' in a) warnings.push('category was replaced by levels and roleTypes and is ignored');
+  for (const [arg, known] of [['levels', LEVELS], ['roleTypes', ROLE_TYPES], ['regions', REGIONS], ['locations', PLACES]]) {
+    const given = a[arg] === undefined || a[arg] === null ? [] : [a[arg]].flat();
+    for (const value of given) {
+      if (typeof value !== 'string') warnings.push(`${arg}: ${JSON.stringify(value)} is not a string and is ignored`);
+      else if (!known.includes(value)) warnings.push(`${arg}: no role has "${value}" (values are case-sensitive; see list_filters)`);
+    }
+  }
+  return warnings;
+}
+
 function search(a) {
   const f = defaults();
   f.q = a.query ?? '';
@@ -679,9 +709,11 @@ function search(a) {
   f.regions = asList(a.regions);
   f.places = asList(a.locations);
   f.remote = Boolean(a.includeRemoteNotSaid);
+  const warnings = argumentWarnings(a);
   const res = select(f);
   const n = Math.max(1, Math.min(100, Math.floor(a.limit ?? 20)));
-  return { total: res.length, returned: Math.min(n, res.length), jobs: res.slice(0, n).map(describe) };
+  const answer = { total: res.length, returned: Math.min(n, res.length), jobs: res.slice(0, n).map(describe) };
+  return warnings.length > 0 ? { ...answer, warnings } : answer;
 }
 
 const idSchema = {
