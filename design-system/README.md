@@ -25,7 +25,7 @@ Misra's readers are students and early-career people in Israel (early 20s). They
 
 The account control in the page header (`.account`) reuses `btn btn-pill`, is hidden until `auth.js` starts, and on a phone puts the signed-in email on its own row; it has no component of its own.
 
-The Star button on a card is `btn btn-pill btn-star` with `aria-pressed`: its name stays "Star: ...", and the outline star becomes a filled one and the button is tinted when pressed, so the state is never colour alone. The "Starred (n)" switch above the list is a `chip chip-new`. The line about saving stars and discards (`.sync-note`) is a status region that holds a `notice` and a "Try again" button only when something needs the user's attention.
+The Star button on a card is `btn btn-pill btn-star` with `aria-pressed`: its name stays "Star: ...", and the outline star becomes a filled one and the button is tinted when pressed, so the state is never colour alone. The "Starred (n)" switch above the list is a `chip chip-new`. The line about saving stars and discards (`.sync-note`) is a status region that holds a `notice` and a "Try again" button only when something needs the user's attention. The one-time offer to bring this browser's choices into the account (`.import-offer`) is a `notice` with two checkboxes and two `btn btn-pill` buttons (44px); its result is another `.sync-note` with a "Close" button.
 
 ## Rules
 

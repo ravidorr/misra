@@ -47,6 +47,17 @@
   <p class="sub" id="summary">Loading roles…</p>
   <p class="sr-only" id="status" role="status"></p>
   <div class="sync-note" id="syncNote" role="status"></div>
+  <div class="sync-note" id="importResult" role="status"></div>
+  <section class="notice import-offer" id="importBox" aria-labelledby="importTitle" hidden>
+    <h2 class="import-title" id="importTitle">Bring this browser's choices into your account?</h2>
+    <p class="import-intro">This browser holds choices your account does not have yet. Anything you already chose in your account stays as it is. Your choices here are copied, not moved.</p>
+    <p class="import-row" id="importChoicesRow"><label><input type="checkbox" id="importChoices" checked> <span id="importChoicesText"></span></label></p>
+    <p class="import-row" id="importFiltersRow"><label><input type="checkbox" id="importFilters" checked> <span id="importFiltersText"></span></label></p>
+    <p class="import-actions">
+      <button type="button" class="btn btn-pill btn-primary" id="importYes">Bring them over</button>
+      <button type="button" class="btn btn-pill" id="importNo">No thanks</button>
+    </p>
+  </section>
   <p class="view-switch"><button type="button" class="chip chip-new" id="starredView" aria-pressed="false">Starred (0)</button></p>
 
   <section id="hiring" aria-labelledby="hiring-h" hidden>

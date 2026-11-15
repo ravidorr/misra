@@ -113,9 +113,12 @@ Decisions made in planning (they change the PRD's wording, so update the PRD in 
   project, then star and discard on one device and see both on a second after signing in. Left to 4.3: the browser's own
   discards and filters are not offered for import at the first sign-in (while signed in, the page shows the account's
   choices only).
-- [ ] 4.3 First-sign-in import of browser discards and filters without duplicates, and filter sync across devices
+- [x] ~~4.3 First-sign-in import of browser discards and filters without duplicates, and filter sync across devices
   (regions, locations, levels, search, company, sort, show/hide options). Done when: FR-2 AC 4 to 6 hold; the launch
-  test (sign in on a phone, see laptop stars) passes by hand.
+  test (sign in on a phone, see laptop stars) passes by hand.~~
+  Remaining check, live only: the launch test against the real project: sign in on the laptop and star, discard and set
+  filters, then sign in on a phone and see them all; sign in on a browser that holds its own discards, stars and
+  filters, accept the offer and see them in the account and on a second device. No migration is needed for this step.
 - [ ] 4.4 Delete account in one step (Edge Function `delete-account`, verifies the caller's token, removes the auth
   user and cascades rows), a sign-out and delete control in the page, `PRIVACY.md` rewritten: email, stars, discards,
   preferences, technical records, never a CV, who can see it, providers abroad, how to delete. Done when: FR-1 AC 4, 5

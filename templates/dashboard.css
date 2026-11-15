@@ -139,6 +139,49 @@ a {
   margin: 0;
 }
 
+/* The offer to bring this browser's discards, stars and filters into the account, made once after the first sign-in. */
+.import-offer {
+  display: grid;
+  gap: var(--space-3);
+  margin: 0 0 var(--space-4);
+  box-shadow: var(--shadow-md);
+}
+
+.import-offer[hidden] {
+  display: none;
+}
+
+.import-offer p,
+.import-offer h2 {
+  margin: 0;
+}
+
+.import-title {
+  font-size: var(--text-lg);
+}
+
+.import-intro {
+  color: var(--muted);
+  font-weight: 400;
+}
+
+.import-offer label {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: var(--tap);
+}
+
+.import-row[hidden] {
+  display: none;
+}
+
+.import-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+
 .view-switch {
   margin: 0 0 var(--space-4);
 }
