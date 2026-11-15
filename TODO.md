@@ -19,6 +19,23 @@ Observations about live sites below come from checks made on 2026-11-14 and may 
     a phone width and in light and dark. Edit the templates, never `docs/`.
   - Done when: 15 companies show with no horizontal scrollbar at 375px and at desktop width.
 
+- [ ] **The whole page scrolls sideways on desktop.** Trigger: open the dashboard in a desktop browser (seen at about
+  1650 px wide). Besides the "Hiring now" row, the page itself has a horizontal scrollbar along the bottom of the
+  window and can be dragged sideways.
+
+  ![The page with a horizontal scrollbar along the bottom of the browser window](todo-images/page-horizontal-scroll.png)
+  - Where: measured on the live page on 2026-11-15 at 1650 px: the document is 1722 px wide for a 1635 px window
+    (87 px too wide), and nothing except the "Hiring now" row is wider than the window. The likely cause is the
+    `<span class="sr-only">` inside each story (", 2 new roles"): `.sr-only` in `design-system/components/field.css`
+    is `position: absolute`, `.stories` in `templates/dashboard.css` is not positioned, so the span is not clipped by
+    the row's `overflow-x: auto` and sits where the scrolled-out circle is (right edge 1723 px, matching the
+    document width). Confirm this before changing anything.
+  - How: the "Hiring now" row fix removes the scroll and likely this one with it. If the page still scrolls, give
+    `.stories` (or each `li`) `position: relative`, or `overflow-x: clip` on the page. Edit the templates, never
+    `docs/`. Check light and dark, and at 320, 375, 393 and 1650 px.
+  - Done when: `document.documentElement.scrollWidth <= clientWidth` at 320, 393, 768 and 1650 px, and the browser
+    test for the phone item (below) covers desktop widths too.
+
 - [ ] **The "account deleted" notice has a different border from the other cards.** Trigger: delete an account; the
   message "Your account and everything saved in it were deleted..." (`MESSAGES.deleted` in `templates/auth.js`) shows
   in a `.notice`.
@@ -95,7 +112,7 @@ Observations about live sites below come from checks made on 2026-11-14 and may 
   ![The dashboard at 393 px: the filters fill the first screens and the search is under them](todo-images/mobile-393px.png)
   - the filters (Level, Role type, Region, Places, Sort) fill the first screens, so the jobs start far down the page;
   - the search box comes after all of them (see "Search is hard to find");
-  - the "Hiring now" row scrolls sideways (see its item);
+  - the "Hiring now" row scrolls sideways, and so does the whole page (see both items);
   - the controls are small and dense (tiny chips, small checkboxes and links) and may miss the 44 px target;
   - notices and cards use different borders and shadows (see "account deleted" item).
   - Where: layout in `templates/dashboard.css`, markup in `templates/dashboard.html`, components in
@@ -109,11 +126,11 @@ Observations about live sites below come from checks made on 2026-11-14 and may 
     2. The `technical-writer` agent (`.claude/agents/technical-writer.md`): shorter labels and headings that fit a
        small screen, one word per concept.
     3. Do one pass with real devices or the iOS Simulator and Chrome device mode, and list what breaks.
-  - Fold the three related items (search, "Hiring now" scroll, notice border) into this one design so they are not
-    fixed one by one in different styles.
+  - Fold the related items (search, "Hiring now" scroll, page scroll, notice border) into this one design so they are
+    not fixed one by one in different styles.
   - Keep the design system rules (tokens only, 44 px targets, WCAG AA) and the agent hooks (`data-*` on
-    `article.card`, `jobs.jsonld`, the WebMCP tools). Add a test that fails on a horizontal scroll at 320 and 393 px
-    (Playwright, as the browser tests do).
+    `article.card`, `jobs.jsonld`, the WebMCP tools). Add a test that fails on a horizontal scroll of the page at 320, 393, 768
+    and 1650 px (Playwright, as the browser tests do).
   - Done when: the first screen at 393 px shows the search and the first jobs, no page scrolls sideways at 320 px, every
     control is at least 44 px, and the PR shows before and after screenshots.
 
