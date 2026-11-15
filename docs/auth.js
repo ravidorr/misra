@@ -126,6 +126,7 @@ function show(session) {
   const email = session?.user?.email;
   $('account').classList.toggle('is-signed-in', Boolean(session));
   $('signIn').hidden = Boolean(session);
+  $('signInNote').hidden = Boolean(session);
   $('accountUser').hidden = !session;
   $('accountEmail').textContent = session ? (email ?? 'Signed in') : '';
 }
@@ -141,6 +142,7 @@ if (typeof globalThis.supabase?.createClient === 'function') {
     publish(client, session);
   });
   $('account').hidden = false;
+  $('signInNote').hidden = false; /* the notice shows whenever the button does; show() hides both once signed in */
   say(failure);
 
   $('signIn').addEventListener('click', async () => {
