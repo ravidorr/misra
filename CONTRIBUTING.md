@@ -172,10 +172,9 @@ Notes on the table:
   Step 7.4 and step 9.1 (the export that replaces the committed database) must decide this before descriptions go into
   SQLite. The trim plan already in PLAN.md (descriptions for open jobs only, dropped some days after a job closes) helps
   both.
-- Resend: today only `report-site` sends through it; the digest still goes through Gmail (`send_email.py`) until step
-  6.3. Once the digest moves, it will send one email per subscriber a day. The monthly cap binds first: 3,000 over a
-  31-day month is about 96 emails a day, so even 100 daily subscribers would exceed it, and with site reports at their
-  cap of 20 a day only about 75 subscribers fit, before whatever `easy-theory` sends. Tens of users fit.
+- Resend: `report-site` and the confirmation email send through it, and so will the subscriber digests
+  (`send_digests.py`, PLAN.md step 6.4); the maintainer's own digest still goes through Gmail until they subscribe
+  (see "The daily digest", below). The volume arithmetic is in "Resend volume".
 
 ### Pause prevention and what the dashboard does if the backend is paused
 
@@ -208,6 +207,73 @@ Move to a paid plan, or trim, when any of these is true:
 - A pause happens, or the "about to pause" warning arrives twice. Backups matter as soon as there are real users: upgrade
   to a plan with backups before the first digest subscriber, or ship the step 9.1 export first.
 - The repository passes 800 MB (80% of the recommended 1 GB), or `data/jobs.db` passes 50 MB (GitHub's warning size).
+
+## The daily digest
+
+`.github/workflows/daily.yml` runs `send_digests.py` (PLAN.md step 6.4) right after the Supabase sync and before the build and the deploy push.
+
+- **Secrets.** `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `RESEND_API_KEY` and `UNSUBSCRIBE_SECRET` are set on that step only (the sync step also has the first two), never on the job and never during the crawl. All four empty: the step prints a message and exits 0; some empty: it fails and names them.
+- **Failure.** The step runs only after a good sync (the digests and the dashboard then read the same rows). If it fails, the run is red, the build and the data commit still run, and the failure email (`send_alert.py`) goes to the maintainer; its `STEPS` line shows `digests=failure`.
+- **Dry run.** Start the workflow by hand (Actions, "daily-job-digest", Run workflow) with `digest_dry_run` ticked: the digest step gets `--dry-run`, sends nothing and records nothing, and its log holds counts only (the Actions logs are public). Note that a manual run still crawls and, while the switch below is on, still sends the maintainer digest.
+- **The maintainer's own digest.** `send_email.py` (one recipient, Gmail) still runs, behind the workflow constant `LEGACY_MAINTAINER_DIGEST: "true"` at the top of `daily.yml`. The maintainer is meant to become an ordinary subscriber through the dashboard once signups open (PLAN.md step 6.6). Switch over in this order: subscribe and confirm, wait for one daily email from `send_digests.py` to arrive, then in one PR set the constant to `"false"` and delete `send_email.py` and the selection logic that FR-9 replaced (`select`, `ROLE` and `EXCLUDE` in `digest.py`; keep `coverage_gaps` and its helpers only if something still reads them, since the dashboard card has its own). Remove `send_email` from `py-modules` and mypy `files` in `pyproject.toml`, and from `RELEASE_TRIGGER_PATHS` in `ci.yml` and `.husky/pre-push`. Keep `send_alert.py`.
+
+### Resend volume
+
+Checked on 2026-11-15 against [Resend pricing](https://resend.com/pricing) and [account quotas and limits](https://resend.com/docs/knowledge-base/account-quotas-and-limits).
+
+- Free plan: 100 emails a day (a UTC calendar day, resets at 00:00 UTC) and 3,000 a month, 3 custom domains, an API rate limit of 10 requests a second. Each To, CC or BCC recipient counts as one email, and received mail counts too. Over the limit the API answers 429 (`daily_quota_exceeded` or `monthly_quota_exceeded`) and Resend does not queue the email. The pages do not say whether the quota is per team or per domain, so assume it is shared with the maintainer's other project, `easy-theory`, and with `report-site` and the confirmation emails (site reports are capped at 20 a day).
+- Daily subscribers: at most one email each a day, and none when nothing is new, so the count is a ceiling. 100 a day caps daily subscribers at 100 minus the other uses (20 for reports, plus whatever `easy-theory` sends and receives). 3,000 a month is about 100 daily subscribers (30 emails each), and 96 in a 31-day month, before any other use. The daily and monthly caps together make about 60 the working limit.
+- Weekly subscribers: one email a week, about 4.3 a month, so about a fourth of the cost of a daily subscriber. A weekly send is on Sundays, so those emails land in one day's 100: 60 or more weekly subscribers would take most of a Sunday on their own, so count them in the daily cap on Sundays.
+- Today (2026-11-15): zero real subscribers. Signup is off in the build and in the function, so no row can exist except the maintainer's own tests. Count them with the query below.
+- Upgrade trigger: when confirmed daily subscribers reach about 60 (or the equivalent mix), or when Resend sends pass 80 of 100 in a day or 2,400 of 3,000 in a month, either move Resend to Pro (the pricing page lists $20 a month for 50,000 emails with no daily limit) or close signups until it is done (unset the function secret `DIGEST_SIGNUP_ENABLED`, see `supabase/README.md`). Read this month's use in the Resend dashboard (Emails and Usage), which also shows `easy-theory`.
+
+```sql
+-- confirmed subscribers by frequency (run in the Supabase SQL editor; the count that the trigger above is read from)
+select frequency, count(*) as subscribers
+from public.subscriptions
+where consent_confirmed_at is not null and unsubscribed_at is null
+group by frequency;
+```
+
+### Monthly success metrics
+
+Read these on the first of each month in the Supabase SQL editor (they need the service role, so they are never run from the page), and read delivery and bounce numbers from the Resend reports. Every column below exists in `supabase/migrations/`. The PRD's targets are in `PRD.md`.
+
+```sql
+-- sign-ins: accounts created, and accounts that signed in, in the last 30 days (auth.users is Supabase's own table)
+select count(*) filter (where created_at >= now() - interval '30 days') as new_accounts,
+       count(*) filter (where last_sign_in_at >= now() - interval '30 days') as signed_in_30d,
+       count(*) as accounts
+from auth.users;
+
+-- 30-day returns: accounts older than 30 days that signed in during the last 30 days
+select count(*) as returning_accounts
+from auth.users
+where created_at < now() - interval '30 days' and last_sign_in_at >= now() - interval '30 days';
+
+-- subscribers: confirmed and active, by frequency (see "Resend volume"); and how many unsubscribed
+select count(*) filter (where consent_confirmed_at is not null and unsubscribed_at is null) as active,
+       count(*) filter (where unsubscribed_at is not null) as unsubscribed,
+       count(*) filter (where consent_confirmed_at is null and unsubscribed_at is null) as waiting_for_confirmation
+from public.subscriptions;
+
+-- share starring: accounts with at least one star, as a share of all accounts
+select count(distinct u.user_id) filter (where u.state = 'star') as accounts_with_a_star,
+       (select count(*) from public.profiles) as accounts,
+       round(100.0 * count(distinct u.user_id) filter (where u.state = 'star')
+             / nullif((select count(*) from public.profiles), 0), 1) as share_pct
+from public.user_jobs u;
+
+-- region and description shares among open jobs (a job has a region when the array is not empty)
+select count(*) as open_jobs,
+       round(100.0 * count(*) filter (where cardinality(regions) > 0) / nullif(count(*), 0), 1) as with_region_pct,
+       round(100.0 * count(*) filter (where description is not null and description <> '')
+             / nullif(count(*), 0), 1) as with_description_pct
+from public.jobs
+where status = 'open';
+```
+
+Accepted sites are not in Supabase: a report is only an email, and accepting it adds a row to `data/seed_companies.csv` (see "Reported sites"). Count the additions of the month from git, for example `git log --since=2026-11-01 --until=2026-12-01 -p --format= -- data/seed_companies.csv | grep -c '^+[^+]'`, and compare with the number of report emails received.
 
 ## Reported sites
 

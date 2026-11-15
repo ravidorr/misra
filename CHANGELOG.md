@@ -17,6 +17,19 @@ All notable changes are documented here. Format follows [Keep a Changelog](https
 - `PRIVACY.md` names the database controller (Raanan Avidor, a private individual) and the contact `raanan@avidor.org`, says why the data is collected and that giving it is voluntary, names the providers and where they are (Supabase and Resend in Ireland, Google and GitHub in the United States), gives the rights to inspect, correct and delete (Sections 13 and 14 of the Israeli Privacy Protection Law) with an answer within 30 days, and states that Supabase's and Resend's standard data processing agreements apply. The digest is still described as planned, not live.
 - `PLAN.md` step 6.3 and the PRD (FR-8) carry the lawyer's exact footer text for every digest email and the Reply-To requirement.
 
+## [0.28.0] - 2026-11-15
+
+### Added
+
+- The daily workflow sends the subscriber digests (PLAN.md step 6.4, PRD FR-8 AC 10): a step that runs `send_digests.py` after the Supabase sync and before the build and the deploy push, only when the sync succeeded. `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `RESEND_API_KEY` and `UNSUBSCRIBE_SECRET` are exposed to that step only. A failure of the step fails the run and sends the maintainer failure alert (the alert's step list now shows `digests=`), while the build and the data commit still run. The manual-run input `digest_dry_run` passes `--dry-run`.
+- `tests/test_daily_workflow.py`: step order, which step holds which secret, the dry-run input, the alert and the legacy switch.
+- `CONTRIBUTING.md`: "The daily digest" (secrets, failure, dry run, how to retire the maintainer's own digest), "Resend volume" (free limits checked against Resend's pages, the arithmetic, the upgrade trigger of about 60 daily subscribers, the subscriber count query) and "Monthly success metrics" (SQL for sign-ins, 30-day returns, subscribers, share starring, region and description shares, and how to count accepted sites). PLAN.md step 6.5 and the success-metrics check are done.
+
+### Changed
+
+- The maintainer's single-recipient digest (`send_email.py`) now sits behind the workflow constant `LEGACY_MAINTAINER_DIGEST: "true"` and keeps running. The maintainer flips it to `"false"` and deletes `send_email.py` and the old selection logic of `digest.py` after receiving a digest as a subscriber (PLAN.md step 6.4, `CONTRIBUTING.md`); nothing was removed in this version.
+- Dates of the 0.20.0 to 0.23.0 changelog entries corrected to 2026-11-15 (they were in the future).
+
 ## [0.27.0] - 2026-11-15
 
 ### Added
@@ -75,7 +88,7 @@ All notable changes are documented here. Format follows [Keep a Changelog](https
 - The daily workflow stages the three new pages and installs the pinned `markdown-it-py`.
 - "Data updated" on the dashboard is the time of the latest crawl (it was the time of the build), so a rebuild over the same data writes the same files.
 
-## [0.23.0] - 2026-11-18
+## [0.23.0] - 2026-11-15
 
 ### Added
 
@@ -92,7 +105,7 @@ All notable changes are documented here. Format follows [Keep a Changelog](https
 
 - The Supabase sync step deletes before it uploads, and never uploads a row of an excluded company.
 
-## [0.22.0] - 2026-11-17
+## [0.22.0] - 2026-11-15
 
 ### Added
 
@@ -108,7 +121,7 @@ All notable changes are documented here. Format follows [Keep a Changelog](https
 - `PRIVACY.md` describes the consent log, what an unsubscribe keeps and clears, and that deleting the account removes everything.
 - `build_dashboard.py` builds a second page and puts integrity hashes into every page.
 
-## [0.21.0] - 2026-11-16
+## [0.21.0] - 2026-11-15
 
 ### Added
 
@@ -125,7 +138,7 @@ All notable changes are documented here. Format follows [Keep a Changelog](https
 - `PRIVACY.md` says where the report form is.
 - The daily workflow stages `docs/report.js` with the other generated files, so the page it publishes can load the form.
 
-## [0.20.0] - 2026-11-16
+## [0.20.0] - 2026-11-15
 
 ### Added
 

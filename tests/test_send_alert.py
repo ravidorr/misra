@@ -169,8 +169,9 @@ def test_the_alert_step_never_sees_the_deploy_key() -> None:
 
 def test_the_steps_the_alert_reports_have_ids_and_the_slow_ones_a_timeout() -> None:
     workflow = (ROOT / ".github" / "workflows" / "daily.yml").read_text(encoding="utf-8")
-    for step_id in ("verify", "crawl", "digest", "commit"):
+    for step_id in ("verify", "crawl", "digest", "digests", "commit"):
         assert f"        id: {step_id}\n" in workflow, step_id
         assert f"steps.{step_id}.outcome" in alert_step()[0]
-    for step_id in ("crawl", "digest"):  # a step that times out fails, so it is alerted without waiting for the job
+    # a step that times out fails, so it is alerted without waiting for the job
+    for step_id in ("crawl", "digest", "digests"):
         assert re.search(rf"id: {step_id}\n +timeout-minutes: \d+\n", workflow), step_id
