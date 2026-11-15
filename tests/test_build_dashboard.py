@@ -506,3 +506,23 @@ def test_the_real_page_marks_every_part_of_the_signup_so_the_switch_cuts_all_of_
     cut = build_dashboard.DIGEST_REGION.sub("", template)
     assert not re.search(r"digest\.js|id=\"digest|data-digest|digestOpen|digestDialog", cut)  # nothing is left outside
     assert 'src="digest.js" integrity="__SRI_DIGEST_JS__"' in regions[0]
+
+
+def test_removing_the_daily_email_control_leaves_no_whitespace_only_line(
+    db: sqlite3.Connection, workdir: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The indented control sits on its own line; html-validate rejects the blank, indented line it would leave."""
+    monkeypatch.setattr(build_dashboard, "DIGEST_SIGNUP_ENABLED", False)
+    template = (
+        "<div>\n  <span>a</span>\n  <!--digest--><button>Daily email</button><!--/digest-->\n  <span>b</span>\n</div>\n"
+    )
+    write_css(workdir)
+    write_static(workdir)
+    write_json(workdir / "data" / "companies.json", [])
+    write_unresolved(workdir)
+    (workdir / "templates" / "dashboard.html").write_text(template, encoding="utf-8")
+    db.close()
+    build_dashboard.main()
+    html = (workdir / "docs" / "index.html").read_text(encoding="utf-8")
+    assert "<div>\n  <span>a</span>\n  <span>b</span>\n</div>\n" in html
+    assert not [line for line in html.splitlines() if line != line.rstrip()]
