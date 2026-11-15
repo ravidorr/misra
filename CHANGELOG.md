@@ -2,6 +2,23 @@
 
 All notable changes are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses [Semantic Versioning](https://semver.org/).
 
+## [0.21.0] - 2026-11-16
+
+### Added
+
+- Report a site (PLAN.md step 5.2, PRD FR-7). The coverage gap card has a "Report a site" button (`data-report="open"`) that opens a native `dialog` with a short form: the company, the careers page link and why it matters. No account and no personal details are needed, and the call carries no key or token (the `report-site` function is public and checks the page's origin itself). The card now always shows, with the button, even when no company is known to be missing. The form checks the same limits as the function (company 1 to 100 characters, an http(s) link of up to 500 characters with a host name and no user name or password, a reason of 3 to 1,000 characters) with the function's own words, beside each field (`aria-invalid`, `aria-describedby`, the first field to fix gets the focus); the function stays the authority and its per-field answers are shown beside the fields too.
+- A sent report shows a confirmation (the focus moves to it) and the next report starts blank; the only success is a 200 with `{ ok: true }`. Every failure says in plain words what happened and whether anything was sent: a refusal of the input, a request the function could not read, a forbidden origin, a report that is too large, a visitor over the daily limit (try again tomorrow), the daily cap (reports are paused until tomorrow), a report that could not be passed on, a server fault, a network failure (most likely nothing was sent), a timeout (it cannot be known whether it arrived) and an answer that is not the function's. The text is kept for a retry. While a request runs the button is busy and a second click, Enter, Cancel and Esc do nothing (a second Esc that closes the dialog anyway is answered by reopening it).
+- The honeypot is an input off the screen (`tabindex="-1"`, `autocomplete="off"`, its wrapper `aria-hidden`, not `display: none`) sent as `website`, empty for a person.
+- `templates/report.js` (a module with its own integrity hash, built to `docs/report.js`). No WebMCP tool sends a report, because a report is an email to the maintainer and only a person who has read the form may send it; agents find the action and the form through `data-report` hooks (`card`, `open`, `dialog`, `form`, `done`) and `data-state` on the dialog.
+- Design system: `field-group`, `field-hint`, `field-error` and `field-trap`, and a multi-line `textarea.field`, shown in the showcase.
+- `tests/test_report_site.py` runs the form in a real browser against a fake function: confirmation, every error and each field message, the honeypot, keyboard, focus, busy state, axe in both themes, phone width, and the documents.
+- `CONTRIBUTING.md` says how a reported site is accepted (`data/seed_companies.csv`, or `data/unresolved_candidates.csv` with a reason and a note) or declined.
+
+### Changed
+
+- `PRIVACY.md` says where the report form is.
+- The daily workflow stages `docs/report.js` with the other generated files, so the page it publishes can load the form.
+
 ## [0.20.0] - 2026-11-16
 
 ### Added

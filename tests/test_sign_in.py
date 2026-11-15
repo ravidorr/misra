@@ -213,7 +213,7 @@ async def test_fr1_ac2_there_is_no_password_anywhere(page: Page, site: Path) -> 
     assert await page.locator("input[type=password], [autocomplete*=password], [name*=pass i]").count() == 0
     await sign_in(page, site)
     assert await page.locator("input[type=password], [autocomplete*=password], [name*=pass i]").count() == 0
-    assert await page.locator("form").count() == 0
+    assert await page.locator("form:not(#reportForm)").count() == 0  # no sign-in form; the only form reports a site
     text = (site / "auth.js").read_text(encoding="utf-8")
     for call in ("signInWithPassword", "signUp", "resetPasswordForEmail", "updateUser", "signInWithOtp"):
         assert call not in text

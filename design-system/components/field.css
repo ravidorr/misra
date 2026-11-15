@@ -3,6 +3,15 @@
  *   <label class="sr-only" for="q">Search</label>
  *   <input class="field" id="q" type="search" placeholder="Search">
  *   <div class="notice" role="note">Heads up: ...</div>
+ * A form field with a hint and an inline error (the error is text in a tinted box, never colour alone; name it in
+ * aria-describedby and set aria-invalid="true" while it shows). A trap for bots goes in .field-trap.
+ *   <div class="field-group">
+ *     <label for="co">Company</label>
+ *     <input class="field" id="co" aria-describedby="co-hint co-error" aria-required="true">
+ *     <p class="field-hint" id="co-hint">As the company writes its name.</p>
+ *     <p class="field-error" id="co-error">Enter the company name.</p>
+ *   </div>
+ *   <div class="field-trap" aria-hidden="true"><label for="hp">Leave empty</label><input id="hp" tabindex="-1" autocomplete="off"></div>
  */
 .field {
   min-height: var(--tap);
@@ -57,4 +66,60 @@ select.field {
   background: var(--lime);
   color: var(--on-lime);
   box-decoration-break: clone;
+}
+
+/* A multi-line field: the pill radius would eat the corners of a tall box. */
+textarea.field {
+  min-height: calc(var(--tap) * 2.5);
+  border-radius: 16px;
+  resize: vertical;
+}
+
+.field-group {
+  display: grid;
+  gap: var(--space-1);
+  margin: 0 0 var(--space-4);
+  font-weight: 600;
+}
+
+.field-group .field {
+  font-weight: 400;
+}
+
+.field-hint,
+.field-error {
+  margin: 0;
+  font-size: var(--text-sm);
+  font-weight: 400;
+}
+
+.field-hint {
+  color: var(--muted);
+}
+
+.field-error {
+  padding: var(--space-2) var(--space-3);
+  border: var(--border-width) solid var(--line);
+  border-radius: 12px;
+  background: var(--warn-bg);
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.field-error[hidden] {
+  display: none;
+}
+
+.field[aria-invalid="true"] {
+  border-style: dashed;
+  border-width: 3px;
+}
+
+/* Off the screen, not display: none and not visibility: hidden: a bot that fills every field it can find still sees it. */
+.field-trap {
+  position: absolute;
+  inset-inline-start: -10000px;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
 }

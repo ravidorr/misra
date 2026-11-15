@@ -402,6 +402,15 @@ a {
   flex: 1;
 }
 
+.gap-report {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-3);
+  margin-top: var(--space-3);
+  font-weight: 400;
+}
+
 .gap-group {
   margin-top: var(--space-2);
   border-top: var(--border-width) solid var(--line);

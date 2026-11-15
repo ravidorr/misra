@@ -21,13 +21,15 @@ Misra's readers are students and early-career people in Israel (early 20s). They
 | `index.html`, `showcase.css` | The showcase page. Open it directly, no build step. |
 | `logo-brief.md` | Brief for the graphic designer creating the logo and favicon. |
 
-`build_dashboard.py` bundles `tokens.css`, `components/*.css` and `templates/dashboard.css` into `docs/dashboard.css`. The page loads it, `theme.js`, `dashboard.js`, `auth.js` and the vendored `supabase.js` as separate files (with Subresource Integrity hashes), under a Content-Security-Policy that allows only its own origin and the Supabase project host.
+`build_dashboard.py` bundles `tokens.css`, `components/*.css` and `templates/dashboard.css` into `docs/dashboard.css`. The page loads it, `theme.js`, `dashboard.js`, `auth.js`, `report.js` and the vendored `supabase.js` as separate files (with Subresource Integrity hashes), under a Content-Security-Policy that allows only its own origin and the Supabase project host.
 
 The account control in the page header (`.account`) reuses `btn btn-pill`, is hidden until `auth.js` starts, and on a phone puts the signed-in email on its own row; it has no component of its own.
 
 The "Delete my account" dialog (`components/dialog.css`, a native `<dialog>` opened with `showModal()`) is the one modal of the page: it is named with `aria-labelledby`, described with `aria-describedby`, puts the focus on the safe button ("Keep my account"), ignores Esc while a request runs, and shows errors in a `role="alert"` notice. The destructive button is `btn btn-pill btn-danger` (the `--warn-bg` fill and its words, never colour alone). The header's "Delete my account" is `btn btn-pill` beside "Sign out".
 
 The Star button on a card is `btn btn-pill btn-star` with `aria-pressed`: its name stays "Star: ...", and the outline star becomes a filled one and the button is tinted when pressed, so the state is never colour alone. The "Starred (n)" switch above the list is a `chip chip-new`. The line about saving stars and discards (`.sync-note`) is a status region that holds a `notice` and a "Try again" button only when something needs the user's attention. The one-time offer to bring this browser's choices into the account (`.import-offer`) is a `notice` with two checkboxes and two `btn btn-pill` buttons (44px); its result is another `.sync-note` with a "Close" button.
+
+The "Report a site" form (PLAN.md step 5.2) is a second native `dialog` opened from the coverage gap card (`btn btn-pill`, `aria-haspopup="dialog"`). Its fields are `field-group` blocks: a `label`, a `field` (a `textarea.field` for the reason), a `field-hint` and a `field-error` named in `aria-describedby`, with `aria-invalid="true"` while the error shows (the error is text in a tinted box with a dashed field border, never colour alone). Submitting with a problem puts the focus on the first field to fix; a failed send shows a `role="alert"` notice and keeps the text; a sent report moves the focus to the "Report sent" heading and "Close". `field-trap` is the honeypot: off the screen, not `display: none`, with `aria-hidden` and `tabindex="-1"` on its wrapper and input.
 
 ## Rules
 
@@ -54,7 +56,7 @@ The dashboard registers tools on `navigator.modelContext` when the browser suppo
 - `star_job(id)`, `unstar_job(id)` and `list_starred_jobs()`; `discard_job(id)` and `restore_job(id)`. A job is starred, discarded or neither, never both, so `star_job` takes a discard away and `discard_job` a star. Each answers with `saved`: true when the choice is kept (in the browser, or in the account when the user is signed in), false when it is only held on the device until the service answers
 - `list_coverage_gaps()`
 
-There is deliberately no tool that deletes an account: that needs a person to read the warning and confirm in the dialog.
+There is deliberately no tool that deletes an account (that needs a person to read the warning and confirm in the dialog) and none that sends a site report (a report is an email to the maintainer, so only a person who has read the form may send it). Agents find the report action through `data-report` hooks (`card`, `open`, `dialog`, `form`, `done`) and `data-state` on the dialog (`idle`, `sending`, `sent`).
 
 Without WebMCP, agents can read each role from the `data-*` attributes on `article.card` (`data-starred`, `data-discarded`, `data-pending` for a choice not saved to the account yet, and `data-listed="false"` on a starred role that has closed), `jobs.json`, or the schema.org `JobPosting` list in `jobs.jsonld`.
 
