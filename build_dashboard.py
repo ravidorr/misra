@@ -18,7 +18,13 @@ from digest import DB
 # Stylesheets bundled into docs/dashboard.css, in order. Raw colors live only in tokens.css.
 CSS_SOURCES = ("design-system/tokens.css", "design-system/components/*.css", "templates/dashboard.css")
 # Files copied to docs/ as they are.
-STATIC_FILES = ("templates/dashboard.html", "templates/dashboard.js", "templates/auth.js", "templates/theme.js")
+STATIC_FILES = (
+    "templates/dashboard.html",
+    "templates/dashboard.js",
+    "templates/auth.js",
+    "templates/report.js",
+    "templates/theme.js",
+)
 OUTPUT_NAMES = {"templates/dashboard.html": "index.html"}
 # Third-party scripts copied byte for byte to docs/ (vendor/README.md says where each one comes from). The page loads
 # them from its own origin, so the Content-Security-Policy needs no CDN.
@@ -28,7 +34,8 @@ INTEGRITY = re.compile(r"__SRI_([A-Z]+)_([A-Z]+)__")
 
 # The backend the page reads the jobs from: the one place for the project URL and the PUBLIC anon key. Row-level
 # security lets the anon key read open jobs only, so the key may live in docs/. The build puts both values into the
-# page scripts (dashboard.js and auth.js) and the URL into the page's connect-src; later steps (stars) read them too.
+# page scripts (dashboard.js, auth.js and report.js) and the URL into the page's connect-src; later steps (stars) read
+# them too.
 # Never put the service-role key here.
 SUPABASE_URL = "https://dncodqeqpoqwcxdctzco.supabase.co"
 SUPABASE_ANON_KEY = "sb_publishable_9gvh4YdsfErlFsgJfmNexQ_yHF-XwnA"

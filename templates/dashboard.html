@@ -18,6 +18,7 @@
 <script type="module" src="dashboard.js" integrity="__SRI_DASHBOARD_JS__"></script>
 <script src="supabase.js" integrity="__SRI_SUPABASE_JS__" defer></script>
 <script type="module" src="auth.js" integrity="__SRI_AUTH_JS__"></script>
+<script type="module" src="report.js" integrity="__SRI_REPORT_JS__"></script>
 <link rel="alternate" type="application/json" href="jobs.json" title="Open roles as JSON">
 <link rel="alternate" type="application/ld+json" href="jobs.jsonld" title="Open roles as schema.org JSON-LD">
 <script type="application/ld+json">{"@context":"https://schema.org","@type":"Dataset","name":"Misra: open entry-level, student and product roles in Israel","description":"Every open role, refreshed daily. Each role has a title, company, location and the date it was first seen.","isAccessibleForFree":true,"distribution":[{"@type":"DataDownload","encodingFormat":"application/json","contentUrl":"jobs.json"},{"@type":"DataDownload","encodingFormat":"application/ld+json","contentUrl":"jobs.jsonld"}]}</script>
@@ -119,7 +120,13 @@
     <label class="pager-size">Per page <select class="field" id="size"><option>10</option><option>25</option><option>50</option><option>100</option></select></label>
   </nav>
 
-  <details class="gaps notice" id="gaps" hidden><summary id="gaps-title">Coverage gaps</summary></details>
+  <details class="gaps notice" id="gaps" hidden>
+    <summary id="gaps-title">Coverage gaps</summary>
+    <div class="gap-report" id="gapReport" data-report="card">
+      <p id="gapReportText">Is a company missing from this list? Tell us where it hires.</p>
+      <button type="button" class="btn btn-pill" id="reportOpen" aria-haspopup="dialog" data-report="open" hidden>Report a site</button>
+    </div>
+  </details>
 </main>
 <footer class="foot"><span id="saveNote">Stars and discards are saved in this browser only.</span> Data updated <time id="upd"></time>.</footer>
 </div>
@@ -140,6 +147,44 @@
     <button type="button" class="btn btn-pill" id="deleteCancel">Keep my account</button>
     <button type="button" class="btn btn-pill btn-danger" id="deleteConfirm">Delete my account permanently</button>
   </p>
+</dialog>
+<dialog class="dialog" id="reportDialog" aria-labelledby="reportTitle" aria-describedby="reportIntro" data-report="dialog" data-state="idle">
+  <h2 class="dialog-title" id="reportTitle" tabindex="-1">Report a site</h2>
+  <form id="reportForm" novalidate data-report="form">
+    <p id="reportIntro">Tell us about a company whose careers page is missing from this list. You do not need an account and you do not need to give any personal details. We email the report to the person who runs this page. All three fields are required.</p>
+    <p class="notice" id="reportError" role="alert" tabindex="-1" hidden></p>
+    <div class="field-group">
+      <label for="reportCompany">Company</label>
+      <input class="field" id="reportCompany" type="text" autocomplete="off" aria-required="true" aria-describedby="reportCompanyHint reportCompanyError" data-field="company">
+      <p class="field-hint" id="reportCompanyHint">Up to 100 characters.</p>
+      <p class="field-error" id="reportCompanyError" hidden></p>
+    </div>
+    <div class="field-group">
+      <label for="reportLink">Careers page link</label>
+      <input class="field" id="reportLink" type="text" inputmode="url" autocapitalize="none" autocomplete="off" spellcheck="false" aria-required="true" aria-describedby="reportLinkHint reportLinkError" data-field="link">
+      <p class="field-hint" id="reportLinkHint">The full address, starting with https://</p>
+      <p class="field-error" id="reportLinkError" hidden></p>
+    </div>
+    <div class="field-group">
+      <label for="reportWhy">Why it matters</label>
+      <textarea class="field" id="reportWhy" rows="4" aria-required="true" aria-describedby="reportWhyHint reportWhyError" data-field="why"></textarea>
+      <p class="field-hint" id="reportWhyHint">For example: it hires interns in Tel Aviv. Between 3 and 1,000 characters.</p>
+      <p class="field-error" id="reportWhyError" hidden></p>
+    </div>
+    <div class="field-trap" aria-hidden="true">
+      <label for="reportWebsite">Leave this field empty</label>
+      <input id="reportWebsite" name="reportWebsite" type="text" tabindex="-1" autocomplete="off" data-field="website">
+    </div>
+    <p class="dialog-actions">
+      <button type="button" class="btn btn-pill" id="reportCancel">Cancel</button>
+      <button type="submit" class="btn btn-pill btn-primary" id="reportSend">Send report</button>
+    </p>
+  </form>
+  <div id="reportDone" data-report="done" hidden>
+    <h3 class="dialog-title" id="reportDoneTitle" tabindex="-1">Report sent</h3>
+    <p role="status">Thank you. Your report was emailed to the person who runs this page. Sites we accept are added to the crawl, or listed on this card with the reason we cannot read them.</p>
+    <p class="dialog-actions"><button type="button" class="btn btn-pill btn-primary" id="reportClose">Close</button></p>
+  </div>
 </dialog>
 </body>
 </html>
