@@ -501,6 +501,65 @@ def test_a_broken_job_row_is_skipped_and_counted_and_never_stops_the_digest(rig:
     assert summary.failures == ["a job was skipped: a timestamp is missing"]
 
 
+def test_consent_withdrawn_or_the_address_changed_during_the_run_is_honoured_before_the_send(rig: Rig) -> None:
+    rig.db.subscriptions = [
+        subscription(ANN, "ann@example.test"),
+        subscription(BOB, "bob@example.test"),
+        subscription(CAROL, "carol@example.test"),
+    ]
+    rig.db.jobs += [job_row("Acme", "new", "Product Manager")]
+
+    def ann_sends(_payload: dict[str, Any]) -> int:
+        bob, carol = rig.db.subscriptions[1], rig.db.subscriptions[2]
+        bob["unsubscribed_at"] = "2030-01-07T05:00:00+00:00"  # Bob unsubscribes while Ann's email goes out
+        carol["address"] = "carol-new@example.test"  # Carol changes her address (it must be confirmed again)
+        carol["consent_confirmed_at"] = None
+        return 200
+
+    rig.mail.refuse = ann_sends
+    summary = rig.go()
+    assert (summary.sent, summary.withdrawn, summary.failed) == (1, 2, 0)
+    assert [email["to"] for email in rig.mail.sent] == [["ann@example.test"]]
+    assert {row["user_id"] for row in rig.db.emailed} == {ANN}
+
+
+def test_an_address_changed_but_already_confirmed_again_is_a_different_consent_and_waits_for_the_next_run(
+    rig: Rig,
+) -> None:
+    rig.db.subscriptions = [subscription(ANN, "ann@example.test"), subscription(BOB, "bob@example.test")]
+    rig.db.jobs += [job_row("Acme", "new", "Product Manager")]
+
+    def ann_sends(_payload: dict[str, Any]) -> int:
+        rig.db.subscriptions[1]["address"] = "bob-new@example.test"
+        return 200
+
+    rig.mail.refuse = ann_sends
+    assert (rig.go().sent, rig.go().sent) == (1, 1)
+    assert [email["to"][0] for email in rig.mail.sent] == ["ann@example.test", "bob-new@example.test"]
+
+
+def test_an_unsubscribe_during_the_send_leaves_no_emailed_rows_behind(rig: Rig) -> None:
+    rig.db.subscriptions = [subscription(ANN, "ann@example.test")]
+    rig.db.jobs += [job_row("Acme", "new", "Product Manager")]
+
+    def ann_unsubscribes(_payload: dict[str, Any]) -> int:
+        rig.db.subscriptions[0]["unsubscribed_at"] = "2030-01-07T05:00:00+00:00"
+        return 200
+
+    rig.mail.refuse = ann_unsubscribes
+    summary = rig.go()
+    assert (summary.sent, summary.failed) == (1, 0)  # it was already on its way
+    assert rig.db.emailed == []
+
+
+def test_a_subscription_that_is_still_valid_is_emailed_and_recorded(rig: Rig) -> None:
+    rig.db.subscriptions = [subscription(ANN, "ann@example.test")]
+    rig.db.jobs += [job_row("Acme", "new", "Product Manager")]
+    summary = rig.go()
+    assert (summary.sent, summary.withdrawn) == (1, 0)
+    assert len(rig.db.emailed) == 1
+
+
 def test_a_429_is_retried_once_after_a_pause_and_the_sends_are_spaced(rig: Rig) -> None:
     rig.db.subscriptions = [subscription(ANN, "a@example.test"), subscription(BOB, "b@example.test")]
     rig.db.jobs += [job_row("Acme", "new", "Product Manager")]
@@ -838,7 +897,10 @@ def test_main_sends_and_prints_counts_only(env: Rig, capsys: pytest.CaptureFixtu
     env.db.jobs += [job_row("Acme", "new", "Product Manager")]
     send_digests.main()
     out = capsys.readouterr()
-    assert out.out.strip() == "digests: 1 due, 0 not due today, 0 with nothing new, sent 1 jobs in 1 emails, 0 failed"
+    assert (
+        out.out.strip()
+        == "digests: 1 due, 0 not due today, 0 with nothing new, 0 withdrawn, sent 1 jobs in 1 emails, 0 failed"
+    )
     for private in ("ann@example.test", ANN, SERVICE_KEY, RESEND_KEY, SECRET, "Product Manager"):
         assert private not in out.out + out.err
 

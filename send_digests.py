@@ -142,6 +142,7 @@ class Summary:
     sent: int = 0
     jobs_sent: int = 0
     nothing_new: int = 0
+    withdrawn: int = 0  # consent withdrawn or the address changed during the run: nothing was sent
     not_due: int = 0
     failed: int = 0
     failures: list[str] = field(default_factory=list)
@@ -401,6 +402,23 @@ class Supabase:
             )
         )
 
+    def current(self, subscriber: Subscriber) -> bool:
+        """Is this very subscription still confirmed and not unsubscribed, with the same address, schedule, filters and
+        confirmation as when the run read it? Read again from the database right before a send and before the record, so
+        consent withdrawn or an address changed during the run is honoured. Anything else is a different consent and
+        waits for the next run, which reads it fresh."""
+        rows = self.read_all(
+            "subscriptions",
+            {
+                "select": "user_id,address,frequency,filters,consent_confirmed_at",
+                "consent_confirmed_at": "not.is.null",
+                "unsubscribed_at": "is.null",
+                "user_id": f"eq.{subscriber.user_id}",
+                "order": "user_id.asc",
+            },
+        )
+        return any(parse_subscriber(row) == subscriber for row in rows)
+
     def jobs(self) -> list[dict[str, Any]]:
         """Every job, open and closed: the closed ones still say when a company was first seen."""
         return list(self.read_all("jobs", {"select": JOB_COLUMNS, "order": "company.asc,job_id.asc"}))
@@ -514,12 +532,17 @@ def run(services: Services, today: date, dry_run: bool = False) -> Summary:
                 continue
             if summary.sent:
                 services.sleep(SEND_INTERVAL)
+            if not supabase.current(subscriber):
+                summary.withdrawn += 1
+                continue
             url = unsubscribe_url(services.supabase_url, services.unsubscribe_secret, subscriber.user_id)
             services.resend.send(build_payload(subscriber, chosen, url), idempotency_key(subscriber, chosen))
             summary.sent += 1
             summary.jobs_sent += len(chosen)
             try:
-                supabase.record_emailed(subscriber.user_id, chosen)
+                # An unsubscribe that landed during the send has just deleted the emailed rows: do not make them again.
+                if supabase.current(subscriber):
+                    supabase.record_emailed(subscriber.user_id, chosen)
             except DigestError as exc:
                 raise DigestError(f"the email was sent but not recorded ({exc})") from None
         except DigestError as exc:
@@ -535,6 +558,7 @@ def report(summary: Summary, dry_run: bool) -> str:
     verb = "would send" if dry_run else "sent"
     return (
         f"digests: {summary.due} due, {summary.not_due} not due today, {summary.nothing_new} with nothing new, "
+        f"{summary.withdrawn} withdrawn, "
         f"{verb} {summary.jobs_sent} jobs{'' if dry_run else f' in {summary.sent} emails'}, {summary.failed} failed"
     )
 
