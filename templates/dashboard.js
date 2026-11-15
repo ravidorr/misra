@@ -407,6 +407,7 @@ function nextBatch(a) {
 /* Sends the pending changes oldest first (a chunk of brought-over choices at a time) until none is left or one cannot be
    sent now. */
 async function drain(a) {
+  let brought = false;
   while (a.pending.size > 0) {
     const batch = nextBatch(a);
     const { error, status } = await send(a, batch);
@@ -426,9 +427,12 @@ async function drain(a) {
       fates.set(op, error ? a.failure : 'saved');
       if (!error) {
         a.retries = 0;
-        if (op.state === null) a.server.delete(k);
-        else a.server.set(k, op);
-        a.touched.add(k);
+        if (op.keep) brought = true; /* the service may have kept a row it already had: the list is read again below */
+        else {
+          if (op.state === null) a.server.delete(k);
+          else a.server.set(k, op);
+          a.touched.add(k);
+        }
       }
       if (a.pending.get(k) === op) {
         a.pending.delete(k); /* a newer change to the same job stays */
@@ -439,6 +443,7 @@ async function drain(a) {
     if (error) render(); /* the refused choice is gone from the view too */
   }
   if (a.failure === 'later') a.failure = null;
+  if (brought) await loadServer(a);
   return true;
 }
 
@@ -677,10 +682,12 @@ function loadPendingFilters(userId) {
   return saved && typeof saved === 'object' ? cleanFilters(saved) : null;
 }
 
-function savePendingFilters(a) {
+/* Keeps the pending filters in this browser. With none pending, forgets the stored ones only if they are the very ones
+   just confirmed or dropped (`settled`): another tab of the account may have stored a newer change. */
+function savePendingFilters(a, settled) {
   const all = lsGet(LS_PF, {});
   if (a.prefs.pending) all[a.userId] = a.prefs.pending;
-  else Reflect.deleteProperty(all, a.userId);
+  else if (JSON.stringify(all[a.userId]) === JSON.stringify(settled)) Reflect.deleteProperty(all, a.userId);
   lsSet(LS_PF, all);
 }
 
@@ -743,7 +750,7 @@ async function pushLoop(a) {
     if (!fitsPrefs(sending)) {
       p.failure = 'refused';
       p.pending = null;
-      savePendingFilters(a);
+      savePendingFilters(a, sending);
       return;
     }
     const { error, status } = await sendFilters(a, sending);
@@ -759,7 +766,7 @@ async function pushLoop(a) {
       }
       p.failure = 'refused';
       if (p.pending === sending) p.pending = null;
-      savePendingFilters(a);
+      savePendingFilters(a, sending);
       continue; /* a newer change made meanwhile is still sent */
     }
     p.failure = null;
@@ -767,7 +774,7 @@ async function pushLoop(a) {
     p.remote = sending;
     p.state = 'ready';
     if (p.pending === sending) p.pending = null;
-    savePendingFilters(a);
+    savePendingFilters(a, sending);
   }
 }
 
@@ -898,7 +905,6 @@ async function bringOver(a, wanted) {
   await flush();
   const kept = ops.filter((op) => a.pending.get(key(op)) === op).length;
   const saved = ops.filter((op) => fates.get(op) === 'saved').length;
-  if (account === a && ops.length > 0 && kept === 0) await loadServer(a); /* some rows may have been there already */
   return { saved, kept, refused: ops.length - saved - kept, left: open.length - ops.length };
 }
 
