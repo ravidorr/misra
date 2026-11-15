@@ -544,8 +544,44 @@ def test_the_coverage_card_lists_a_robots_skip_at_once_with_its_reason(db: sqlit
     assert groups["robots_disallowed"]["label"] == "robots.txt does not allow it"
     (site,) = groups["robots_disallowed"]["sites"]
     assert site["c"] == "Walled"
-    assert site["why"].startswith(ROBOTS_NOTE) and "its roles may be old (last good crawl 2026-01-01)" in site["why"]
+    assert site["why"] == (
+        f"{ROBOTS_NOTE} (walled.test); first skipped today, its roles are kept for up to 7 days and then closed "
+        "(last good crawl 2026-01-01)"
+    )
     assert [s["c"] for s in groups["crawl_failing"]["sites"]] == ["Down"]  # a failure stays a failure
+
+
+@pytest.mark.parametrize(
+    ("skips", "text"),
+    [
+        (2, "skipped for 1 day, its roles are kept for up to 7 days and then closed"),
+        (7, "skipped for 6 days, its roles are kept for up to 7 days and then closed"),
+        (8, "skipped for 7 days, its roles were closed after 7 days"),
+        (12, "skipped for 11 days, its roles were closed after 7 days"),
+    ],
+)
+def test_the_robots_card_text_is_true_before_and_after_the_roles_are_closed(
+    db: sqlite3.Connection, workdir: Path, skips: int, text: str
+) -> None:
+    write_css(workdir)
+    prepare(workdir)
+    add_crawls(db, "Walled", [(1, "")] + [(0, ROBOTS_NOTE)] * skips, ats="fake")
+    db.close()
+    build_dashboard.main()
+    groups = {g["reason"]: g for g in read_payload(workdir)["gaps"]["groups"]}
+    (site,) = groups["robots_disallowed"]["sites"]
+    assert site["why"] == f"{ROBOTS_NOTE}; {text} (last good crawl 2026-01-01)"
+
+
+def test_the_days_skipped_start_again_after_a_crawl_that_was_not_a_skip(db: sqlite3.Connection, workdir: Path) -> None:
+    write_css(workdir)
+    prepare(workdir)
+    add_crawls(db, "Walled", [(0, ROBOTS_NOTE)] * 5 + [(1, "")] + [(0, ROBOTS_NOTE)] * 2, ats="fake")
+    db.close()
+    build_dashboard.main()
+    groups = {g["reason"]: g for g in read_payload(workdir)["gaps"]["groups"]}
+    (site,) = groups["robots_disallowed"]["sites"]
+    assert site["why"].startswith(f"{ROBOTS_NOTE}; skipped for 1 day, its roles are kept for up to 7 days")
 
 
 # --- the exclusion list ---------------------------------------------------------------------------------------
