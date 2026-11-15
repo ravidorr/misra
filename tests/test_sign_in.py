@@ -344,12 +344,17 @@ async def test_a_sign_out_the_service_cannot_finish_still_signs_out_here_and_say
     assert problems
 
 
-async def test_a_sign_out_error_from_the_library_is_reported(page: Page, site: Path) -> None:
+async def test_a_sign_out_error_from_the_library_is_reported_and_the_saved_session_is_cleared(
+    page: Page, site: Path
+) -> None:
+    """The library gives up before clearing when an expired token cannot be renewed: the page clears it itself."""
     await page.add_init_script(STUB + "window.__auth = { signOut: async () => ({ error: new Error('x') }) };")
+    await page.add_init_script("localStorage.setItem('misra-auth', '{\"stale\": true}');")
     await serve(page, site)
     await page.evaluate("document.getElementById('signOut').click()")
     await expect(page.locator("#authMessage")).not_to_have_text("")
     assert (await page.locator("#authMessage").inner_text()).startswith("You are signed out here")
+    assert STORAGE_KEY not in await stored(page)
 
 
 async def test_a_failed_start_up_says_the_sign_in_did_not_finish(page: Page, site: Path) -> None:

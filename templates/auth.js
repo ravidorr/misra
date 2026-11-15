@@ -131,6 +131,10 @@ if (typeof globalThis.supabase?.createClient === 'function') {
       if (error) throw error;
     } catch (error) {
       console.error(error);
+      /* The library gives up before clearing the session when the expired token cannot be renewed (offline, service
+         down): clear it here, so the page never says "signed out" while the saved session could sign the browser in. */
+      storage.removeItem(STORAGE_KEY);
+      show(null);
       say(MESSAGES.out);
     }
   });

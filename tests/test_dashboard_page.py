@@ -135,7 +135,8 @@ class Backend:
 class AuthBackend:
     """A stand-in for the project's sign-in service (/auth/v1): the Google redirect, the code exchange and the log-out.
     It records every request. The session it hands out carries what Google sends besides the email (a name and a
-    photo), so a test can check that none of it is kept or shown. `mode` breaks it: bad_code or logout_fails."""
+    photo), so a test can check that none of it is kept or shown. `mode` breaks it: bad_code, token_down (no token
+    can be issued or renewed) or logout_fails."""
 
     def __init__(self, mode: str = "ok") -> None:
         self.mode = mode
@@ -187,6 +188,8 @@ class AuthBackend:
         path = urlparse(request.url).path
         if path.endswith("/authorize"):  # the browser is sent to Google: a stand-in page
             await route.fulfill(body="<title>Google</title>", content_type="text/html")
+        elif path.endswith("/token") and self.mode == "token_down":
+            await route.fulfill(status=503, headers=CORS, body="unavailable")
         elif path.endswith("/token") and self.mode != "bad_code":
             await route.fulfill(body=json.dumps(self.session()), content_type="application/json", headers=CORS)
         elif path.endswith("/token"):
