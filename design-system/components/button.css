@@ -3,6 +3,7 @@
  *   <a class="btn btn-primary" href="...">Apply ↗</a>
  *   <button type="button" class="btn">Show more</button>
  *   <button type="button" class="btn btn-link">Not for me</button>
+ *   <button type="button" class="btn btn-pill btn-danger">Delete my account permanently</button>
  */
 .btn {
   display: inline-flex;
@@ -24,6 +25,10 @@
 .btn-primary {
   background: var(--solid);
   color: var(--on-solid);
+}
+
+.btn-danger {
+  background: var(--warn-bg);
 }
 
 .btn-link {

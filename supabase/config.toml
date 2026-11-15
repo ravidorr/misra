@@ -6,3 +6,10 @@ project_id = "misra"
 # limit and a daily cap. Keeping this in the file means a redeploy cannot forget `--no-verify-jwt`.
 [functions.report-site]
 verify_jwt = false
+
+# The page calls this with the signed-in user's token and the publishable key. The gateway's own JWT check is off for two
+# reasons: the CORS preflight carries no Authorization header, and the function has to ask Supabase Auth who owns the
+# token anyway (it needs the id, and a gateway check would not tell it). The function refuses any request without a
+# token that Auth accepts.
+[functions.delete-account]
+verify_jwt = false

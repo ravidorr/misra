@@ -135,3 +135,9 @@ pre {
   font-size: var(--text-sm);
   line-height: 1.9;
 }
+
+/* The dialog component shown in the page flow instead of over it. */
+.dialog-demo {
+  position: static;
+  margin: 0;
+}

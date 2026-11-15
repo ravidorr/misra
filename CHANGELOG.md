@@ -2,6 +2,20 @@
 
 All notable changes are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses [Semantic Versioning](https://semver.org/).
 
+## [0.20.0] - 2026-11-16
+
+### Added
+
+- Delete my account (PLAN.md step 4.4, FR-1 AC 4). A signed-in user has a "Delete my account" button next to "Sign out". It opens a native `dialog` that says exactly what is removed (the email address, the stars, the "Not for me" choices, the saved filters and settings), that anything not yet saved from this device is dropped, that it cannot be undone, that the roles list and the browser's own signed-out data are not affected, that Google keeps the Google account, and that signing in again makes a new, empty account. The focus starts on "Keep my account"; the focus stays in the dialog, Esc closes it and is ignored while the request runs; the buttons are busy while it waits; errors appear in a `role="alert"` notice and the button reads "Try again". A failure never pretends success: a refusal says the account was not deleted, a timeout or 5xx says it could not be confirmed, and a 401 says nothing was deleted by this request and to sign in again to check. On success the page clears this user's queued changes, unsent filters and first-sign-in answer from the browser (this user's entries only), signs out locally, returns to the signed-out dashboard with a short confirmation and moves the focus to "Sign in".
+- Edge Function `delete-account` (`supabase/functions/delete-account/`, plain TypeScript with the secrets and `fetch` injected, tested by vitest, type-checked and linted like `report-site`). POST only, CORS for `https://ravidorr.github.io` only, JSON answers. It asks Supabase Auth who owns the caller's access token (`GET /auth/v1/user`), takes the id from that answer only (a UUID of an `authenticated` user), and deletes that user through the Admin API (`DELETE /auth/v1/admin/users/<id>`, hard delete), so `profiles`, `user_prefs` and `user_jobs` cascade. Nothing in the request can name another user. A rejected token never reaches the admin endpoint, a replay after deletion answers 401 and an admin 404 counts as done. Only status codes are logged. `verify_jwt = false` in `supabase/config.toml` (the CORS preflight carries no token and the function has to ask Auth anyway). No migration and no new secret.
+- No WebMCP tool deletes an account: that needs a person to confirm. `design-system/components/dialog.css` and `btn-danger` are new, shown in the design-system showcase.
+- `test/delete-account.test.ts` (the handler against a fake Supabase Auth) and `tests/test_delete_account.py` (the page in a real browser: dialog, keyboard, busy, failure and retry, queue cleanup, light and dark, phone width, axe).
+
+### Changed
+
+- `PRIVACY.md` is rewritten from what the code and the setup do: what is stored (the email, stars, discards, filters, the spam-guard counters), what is not (a CV, a password, Google's name or photo in our tables, addresses in our tables), that Supabase's own sign-in record and platform logs hold more (Google's name and photo, and for requests to its services the IP address, approximate location, user agent and path, for a short period Supabase sets), who can see it, the providers (Supabase, Google, GitHub, Resend, Gmail) and where they are, cookies and local storage, how long data is kept, how to delete it and how to ask for help.
+- `supabase/README.md` has the "Delete account" section with the deploy command and a live check with a throwaway account.
+
 ## [0.19.0] - 2026-11-15
 
 ### Added
