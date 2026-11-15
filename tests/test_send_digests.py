@@ -490,6 +490,17 @@ def test_a_malformed_subscription_is_skipped_and_counted(rig: Rig) -> None:
     assert summary.failures == ["a subscription was skipped: the saved levels filter is not a list of names"]
 
 
+def test_a_broken_job_row_is_skipped_and_counted_and_never_stops_the_digest(rig: Rig) -> None:
+    rig.db.subscriptions = [subscription(ANN, "ann@example.test")]
+    rig.db.jobs += [
+        job_row("Acme", "new", "Product Manager"),
+        job_row("Acme", "bad", "Product Manager", first_seen=None),
+    ]
+    summary = rig.go()
+    assert (summary.sent, summary.failed) == (1, 1)
+    assert summary.failures == ["a job was skipped: a timestamp is missing"]
+
+
 def test_a_429_is_retried_once_after_a_pause_and_the_sends_are_spaced(rig: Rig) -> None:
     rig.db.subscriptions = [subscription(ANN, "a@example.test"), subscription(BOB, "b@example.test")]
     rig.db.jobs += [job_row("Acme", "new", "Product Manager")]
@@ -819,7 +830,7 @@ class Combined:
         self.rig = rig
 
     def request(self, method: str, url: str, **kw: Any) -> FakeHttpResponse:
-        return (self.rig.mail if url.startswith("https://api.resend.com") else self.rig.db).request(method, url, **kw)
+        return (self.rig.mail if url == send_digests.RESEND_URL else self.rig.db).request(method, url, **kw)
 
 
 def test_main_sends_and_prints_counts_only(env: Rig, capsys: pytest.CaptureFixture[str]) -> None:

@@ -531,7 +531,7 @@ insert, with `confirm_token_expires_at` in the future. `unsubscribe_token_hash` 
 (nothing reads it). The unsubscribe token is made from the id and the secret `UNSUBSCRIBE_SECRET` (type the secret into your shell,
 never into chat or a file):
 `UNSUB="$ID.$(printf %s "$ID" | openssl dgst -sha256 -hmac "$UNSUBSCRIBE_SECRET" -hex | awk '{print $NF}')"`, and the same with the
-second id for `UNSUB2`. Then:
+second id (`ID2`) for `UNSUB2`. Then:
 
 ```sh
 BASE=https://dncodqeqpoqwcxdctzco.supabase.co/functions/v1
@@ -547,7 +547,7 @@ curl -s -i -X POST "$BASE/unsubscribe?t=$UNSUB" -d 'List-Unsubscribe=One-Click' 
 curl -s -i -I "$BASE/unsubscribe?t=$UNSUB"                                        # HEAD: 200, no body, never acts
 curl -s -i -I "$BASE/confirm-email"                                               # HEAD: 200, no body, never acts
 # a changed MAC is a link that is not valid: POST 404 link_not_valid, and nothing changes
-curl -s -i -X POST "$BASE/unsubscribe?t=${UNSUB2%?}0" -d 'List-Unsubscribe=One-Click'
+curl -s -i -X POST "$BASE/unsubscribe?t=$ID2.$(printf '%064d' 0)" -d 'List-Unsubscribe=One-Click'
 # a GET redirects to the page (use the second unsubscribe token): 303, Location .../email.html#unsubscribed
 curl -s -i "$BASE/unsubscribe?t=$UNSUB2"
 ```

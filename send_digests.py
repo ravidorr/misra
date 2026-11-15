@@ -260,7 +260,9 @@ def baseline_keys(rows: Sequence[Mapping[str, Any]]) -> set[tuple[str, str]]:
     """The jobs a company had when it was first seen (all of them share one `first_seen`, the time of the run), open or
     closed. run.py baselines them silently so that adding a company never floods the digest; the same rule applies here.
     (Known limit: a company that only lists Israeli jobs and had none on its first crawl has its first Israeli job
-    treated as baseline here, where run.py would call it new.)"""
+    treated as baseline here, where run.py would call it new. Likewise a company run.py knew but that has no row in
+    Supabase, because its jobs closed before the sync began or the exclusion list purged it, has its next job treated as
+    baseline. Both lose a first email, never send a flood.)"""
     earliest: dict[str, str] = {}
     for row in rows:
         company, seen = str(row.get("company")), str(row.get("first_seen"))
@@ -459,14 +461,10 @@ class Services:
     sleep: Callable[[float], None] = time.sleep
 
 
-def run(services: Services, today: date, dry_run: bool = False) -> Summary:
-    """Handle every confirmed subscriber and return the counts. Reading the subscribers or the jobs failing stops the
-    run (nothing can be decided); after that each subscriber is its own try block."""
-    supabase = services.supabase
-    summary = Summary()
-    subscriber_rows = supabase.subscribers()
+def due_subscribers(rows: Sequence[Mapping[str, Any]], today: date, summary: Summary) -> list[Subscriber]:
+    """The subscribers whose digest is due today; a broken row is counted as a failure and skipped."""
     due: list[Subscriber] = []
-    for row in subscriber_rows:
+    for row in rows:
         try:
             subscriber = parse_subscriber(row)
         except DigestError as exc:
@@ -478,13 +476,33 @@ def run(services: Services, today: date, dry_run: bool = False) -> Summary:
         else:
             summary.not_due += 1
     summary.due = len(due)
+    return due
+
+
+def new_jobs(rows: Sequence[Mapping[str, Any]], summary: Summary) -> list[Job]:
+    """The open jobs that are not a company's baseline; a broken row is counted and skipped, never stops the digest."""
+    baseline = baseline_keys(rows)
+    jobs: list[Job] = []
+    for row in rows:
+        if row.get("status") != "open" or (str(row.get("company")), str(row.get("job_id"))) in baseline:
+            continue
+        try:
+            jobs.append(parse_job(row))
+        except DigestError as exc:
+            summary.failed += 1
+            summary.failures.append(f"a job was skipped: {exc}")
+    return jobs
+
+
+def run(services: Services, today: date, dry_run: bool = False) -> Summary:
+    """Handle every confirmed subscriber and return the counts. Reading the subscribers or the jobs failing stops the
+    run (nothing can be decided); after that each subscriber is its own try block."""
+    supabase = services.supabase
+    summary = Summary()
+    due = due_subscribers(supabase.subscribers(), today, summary)
     if not due:
         return summary
-    job_rows = supabase.jobs()
-    baseline = baseline_keys(job_rows)
-    jobs = [
-        job for job in (parse_job(row) for row in job_rows if row.get("status") == "open") if job.key not in baseline
-    ]
+    jobs = new_jobs(supabase.jobs(), summary)
     for position, subscriber in enumerate(due):
         try:
             chosen = select_jobs(subscriber, jobs, supabase.emailed(subscriber.user_id))
