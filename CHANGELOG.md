@@ -12,6 +12,21 @@ All notable changes are documented here. Format follows [Keep a Changelog](https
 - `data/unresolved_candidates.csv` has a `careers_url` column (CRLF line endings kept), filled from the discovery results; empty only for the rows with no careers page. `CONTRIBUTING.md` says so.
 - Tests: a site without an address fails (against the real data, the CSV and `companies.json`), the reason-to-link table, the address helpers, and browser tests that the links render, are reached with Tab, show the focus and open safely.
 
+## [0.31.0] - 2026-11-15
+
+### Changed
+
+- The daily-email signup is on (PLAN.md step 6.6, last part): `DIGEST_SIGNUP_ENABLED = True` in `build_dashboard.py`, so the next build of `docs/` carries the "Daily email" button, the dialog with "By turning this on you agree to the Terms and the Privacy Notice" (visible, with big links), `digest.js` (already in the staging list of `daily.yml`) and its integrity hash; the page still has no inline script or style and the same Content-Security-Policy. The function secret `DIGEST_SIGNUP_ENABLED=true` is set separately after the page is deployed. The legacy maintainer digest (`send_email.py`, `LEGACY_MAINTAINER_DIGEST`) is untouched.
+- `PRIVACY.md` now describes a live digest, in the present tense: the lawyer's sentences for "Why we collect it" and "Resend", and the "Email settings" passage (what is stored, what an unsubscribe keeps and deletes, the account id inside the unsubscribe link). The short version says the email settings are kept too. "Not live", "planned" and "when it is switched on" wording is gone.
+- The spam-guard wording is the lawyer's final form: the report form and `PRIVACY.md` say the hash of your network address "is deleted in the next daily cleanup" (no number of hours), and the confirmation-email counters are described the same way.
+- `restore_accounts.py`: without `--create-auth-users` (the live project) every insert is filtered by the database itself with `where exists (select 1 from auth.users ...)`, so an account deleted after the snapshot is skipped in every table and never brought back, with no emails involved. `--create-auth-users` is for a fresh project only. `CONTRIBUTING.md` documents it, the clone-deletion rule and a second rehearsal (a deleted user skipped, the rest restored).
+- `SECURITY.md`: `BACKUP_DEPLOY_KEY` is scoped to `ravidorr/misra-backups` only and has no expiry, so it is rotated by hand at the yearly review (first by 2027-11-15); a local clone of the private backup repository (and any restore script) is deleted right after use.
+- The tests build the page with the switch off where they use stand-in backends that know nothing of the `subscriptions` table; the page with the switch on has its own tests (`digest_site`, and a build of the repository as it is). The guard in `tests/test_legal_wording.py` now requires the present-tense wording while the switch is on.
+
+### Added
+
+- Migration `20261120100000_confirm_counters_cleanup.sql` (not applied by the PR; apply it before the first daily run that includes this change, with `20261119100000` if that one is not applied yet): `confirm_email_cleanup(p_day date)` deletes every row of a day before `p_day` of `confirm_limits` and `confirm_daily_cap`, with the rules of `report_site_cleanup`. `sync_supabase.py` calls both cleanups after a good sync and logs the sum. SQL tests in `supabase/tests/digest_signup.sql`, lint in `tests/test_migrations*.py`.
+
 ## [0.30.0] - 2026-11-15
 
 ### Added

@@ -313,14 +313,16 @@ def test_main_fails_when_the_list_has_companies_but_the_secrets_are_empty(
 # ---- the daily cleanup of the report-site spam-guard counters ----
 
 
-def test_cleanup_calls_the_database_function_with_today_and_returns_the_count() -> None:
+def test_cleanup_calls_both_database_functions_with_today_and_adds_up_the_counts() -> None:
     fake = FakeSupabase(rpc_answer=COUNT)
-    assert sync_supabase.cleanup(client(fake), date(2026, 11, 16)) == COUNT
-    (call,) = fake.calls
-    assert (call["method"], call["url"]) == ("POST", f"{URL}/rest/v1/rpc/report_site_cleanup")
-    assert call["json"] == {"p_day": "2026-11-16"}
-    assert call["headers"]["apikey"] == KEY
-    assert call["headers"]["Prefer"] == "return=representation"
+    assert sync_supabase.cleanup(client(fake), date(2026, 11, 16)) == 2 * COUNT
+    first, second = fake.calls
+    assert (first["method"], first["url"]) == ("POST", f"{URL}/rest/v1/rpc/report_site_cleanup")
+    assert (second["method"], second["url"]) == ("POST", f"{URL}/rest/v1/rpc/confirm_email_cleanup")
+    for call in (first, second):
+        assert call["json"] == {"p_day": "2026-11-16"}
+        assert call["headers"]["apikey"] == KEY
+        assert call["headers"]["Prefer"] == "return=representation"
 
 
 @pytest.mark.parametrize("answer", [None, "4", [4], True])
@@ -334,6 +336,17 @@ def test_cleanup_fails_loudly_when_the_function_is_missing_or_the_call_fails() -
         sync_supabase.cleanup(client(FakeSupabase(fail_on="POST")), date(2026, 11, 16))
 
 
+def test_a_cleanup_that_fails_on_the_second_function_is_not_hidden_by_the_first() -> None:
+    class SecondFails(FakeSupabase):
+        def request(self, method: str, url: str, **kw: Any) -> Any:
+            if url.endswith("confirm_email_cleanup"):
+                self.fail_on = "POST"
+            return super().request(method, url, **kw)
+
+    with pytest.raises(SyncError, match="rpc/confirm_email_cleanup"):
+        sync_supabase.cleanup(client(SecondFails(rpc_answer=COUNT)), date(2026, 11, 16))
+
+
 def test_main_cleans_the_counters_after_the_sync_and_logs_the_count(
     jobs: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
@@ -344,9 +357,11 @@ def test_main_cleans_the_counters_after_the_sync_and_logs_the_count(
     monkeypatch.setattr(sync_supabase.requests, "Session", lambda: fake)
     sync_supabase.main()
     rpc = [c for c in fake.calls if "/rpc/" in c["url"]]
-    assert len(rpc) == 1 and fake.calls[-1] is rpc[0]  # once, after the sync
-    assert rpc[0]["json"] == {"p_day": datetime.now(UTC).date().isoformat()}
-    assert "Supabase: 7 spam-guard counter rows deleted" in capsys.readouterr().out
+    assert (
+        len(rpc) == len(sync_supabase.CLEANUP_FUNCTIONS) and fake.calls[-len(rpc) :] == rpc
+    )  # one call per counter family, after the sync
+    assert all(call["json"] == {"p_day": datetime.now(UTC).date().isoformat()} for call in rpc)
+    assert "Supabase: 14 spam-guard counter rows deleted" in capsys.readouterr().out
 
 
 def test_main_exits_non_zero_when_the_cleanup_fails_after_a_good_sync(

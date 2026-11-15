@@ -7,7 +7,11 @@ on. The switch itself (on and off) is tested in tests/test_build_dashboard.py.
 Locally the tests skip when Chromium is missing; in CI (CI=true) a missing browser is a failure."""
 
 import asyncio
+import base64
+import hashlib
 import json
+import re
+import sqlite3
 from pathlib import Path
 from typing import Any
 from urllib.parse import parse_qs, urlparse
@@ -26,10 +30,11 @@ from tests.test_dashboard_page import (
     USER_ID,
     WEBMCP,
     AuthBackend,
+    build_site,
     serve,
     site,  # noqa: F401  (a fixture)
 )
-from tests.test_sign_in import AXE_RUN, come_back, start_sign_in
+from tests.test_sign_in import AXE_RUN, ScriptTags, come_back, start_sign_in
 
 FUNCTION = f"{build_dashboard.SUPABASE_URL}/functions/v1/email-settings"
 TABLE = f"{build_dashboard.SUPABASE_URL}/rest/v1/subscriptions**"
@@ -195,10 +200,10 @@ def stored(state: str, **extra: Any) -> dict[str, Any]:
 
 
 @pytest.fixture
-def digest_site(request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch) -> Path:
-    """The page built with the signup switch on."""
+def digest_site(db: sqlite3.Connection, workdir: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """The page built with the signup switch on (the value in the repository since PLAN.md step 6.6)."""
     monkeypatch.setattr(build_dashboard, "DIGEST_SIGNUP_ENABLED", True)
-    return request.getfixturevalue("site")  # type: ignore[no-any-return]
+    return build_site(db, workdir)
 
 
 async def signed_in(page: Page, docs: Path, world: World, *, wait: bool = True) -> list[str]:
@@ -952,6 +957,37 @@ async def test_after_turning_it_on_the_status_names_the_address_and_the_schedule
     await expect(page.locator("#digestNote")).to_have_text(
         f"Check {EMAIL} for a confirmation link. Your {word} digest will start only after you click it."
     )
+
+
+def test_the_page_built_from_the_repository_as_it_is_has_the_signup_and_keeps_the_csp_and_the_hashes(
+    db: sqlite3.Connection, workdir: Path
+) -> None:
+    """No monkeypatch: the constant in build_dashboard.py is on (PLAN.md step 6.6), so the real build carries the
+    Daily email button, the dialog with the agreement line and the script, and the page still has no inline script or
+    style and a hash for every script file."""
+    assert build_dashboard.DIGEST_SIGNUP_ENABLED is True
+    docs = build_site(db, workdir)
+    html = (docs / "index.html").read_text(encoding="utf-8")
+    assert 'id="digestOpen"' in html
+    assert 'id="digestDialog"' in html
+    assert "By turning this on you agree to the <a" in html  # the agreement line is in the dialog's markup
+    assert "<!--digest-->" not in html
+    assert "__SRI" not in html
+    assert "default-src 'none'; script-src 'self'; style-src 'self'" in html
+    assert "unsafe-" not in html
+    assert "<style" not in html
+    assert not re.search(r"\son[a-z]+=", html)  # no inline event handler either
+    parser = ScriptTags()
+    parser.feed(html)
+    by_src = {tag["src"]: tag for tag in parser.scripts if tag.get("src")}
+    assert {"supabase.js", "auth.js", "digest.js"} <= set(by_src)
+    for name, tag in by_src.items():
+        digest = "sha384-" + base64.b64encode(hashlib.sha384((docs / str(name)).read_bytes()).digest()).decode()
+        assert tag["integrity"] == digest, name
+    assert all(
+        tag.get("src") or tag.get("type") in {"application/json", "application/ld+json"} for tag in parser.scripts
+    )
+    assert "functions/v1/email-settings" in (docs / "digest.js").read_text(encoding="utf-8")
 
 
 async def test_with_the_switch_off_the_page_has_no_agreement_line(page: Page, request: pytest.FixtureRequest) -> None:

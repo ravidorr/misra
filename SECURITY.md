@@ -42,7 +42,13 @@ are the rules that protect the data.
   `ravidorr/misra-backups` (only the maintainer has access). The export runs with the service-role key in its own step,
   writes outside the checkout, never prints rows (the public log shows counts only) and uploads no artifact. The
   repository's history is replaced by one new commit when it is 28 days old, so a deleted account leaves the backups
-  within 30 days. The restore script, `restore_accounts.py`, and the rehearsal are in `CONTRIBUTING.md`.
+  within 30 days. The restore script, `restore_accounts.py`, and the rehearsal are in `CONTRIBUTING.md`. The key that
+  pushes the backup (`BACKUP_DEPLOY_KEY`) is a GitHub deploy key, which belongs to one repository: it is scoped to
+  `ravidorr/misra-backups` only and reaches no other repository. A deploy key has no expiry date, so it is rotated by hand
+  at the yearly review (see below).
+- **No stray copies of the backup:** if the private backup repository is ever cloned to a laptop, to inspect it or to test a
+  restore, the local clone (and any restore script made from it) is deleted immediately afterwards, so that plaintext email
+  addresses never sit on a disk outside the 30-day rotation.
 - **Accounts:** two-factor sign-in is on for Supabase, GitHub, Resend and Google. Users sign in with Google only: the
   email-and-password provider is switched off. A database hook empties the personal part of the sign-in token.
 - **Policy tests:** the SQL policy tests of `supabase/tests` run in CI on every pull request and push to `main`, against a
@@ -71,7 +77,10 @@ are the rules that protect the data.
    private backup repository `ravidorr/misra-backups` (collaborators and its one deploy key) and the Resend team, and
    remove anyone or anything not needed.
 3. Confirm two-factor sign-in is still on for all four providers.
-4. Rotate the service-role key, the Resend key and `BACKUP_DEPLOY_KEY`, and update the secrets.
+4. Rotate the service-role key and the Resend key, and update the secrets. Rotate `BACKUP_DEPLOY_KEY` (a deploy key has
+   no expiry date): make a new key, add it to the deploy keys of `ravidorr/misra-backups`, update the Actions secret,
+   run the workflow once, then delete the old key in that repository's deploy keys. The first rotation is due by
+   2027-11-15.
 5. Check Dependabot and CodeQL alerts and update dependencies.
 6. Re-read `PRIVACY.md` and `TERMS.md` against what the product really does.
 7. Check that the last backup is recent and rehearse a restore again (`CONTRIBUTING.md`, "Backups of the account tables").

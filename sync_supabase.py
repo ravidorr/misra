@@ -6,11 +6,11 @@ with a message and exit code 0, so the daily workflow keeps working until the se
 non-zero, so the workflow's failure alert fires. The service-role key bypasses row-level security: it is sent only in
 request headers, never printed, and exposed only to the sync step of the workflow.
 
-After a good sync (so not on a day the crawl failed) the spam-guard counters of the `report-site` function are
-cleaned: `report_site_cleanup` (a database function only the service role may run) deletes the rows of every day before
-today, so the daily non-reversible hash of a network address is gone within a day or so of its day ending, not only
-when a later report happens to be handled. A failed cleanup exits non-zero like a failed sync, so the privacy notice's
-promise cannot silently stop being kept.
+After a good sync (so not on a day the crawl failed) the spam-guard counters are cleaned: `report_site_cleanup` (the
+`report-site` function's) and `confirm_email_cleanup` (the confirmation email's), database functions only the service
+role may run, delete the rows of every day before today, so a daily non-reversible hash is gone in the next daily
+cleanup after its day ends, not only when a later request happens to be handled. A failed cleanup exits non-zero
+like a failed sync, so the privacy notice's promise cannot silently stop being kept.
 
 A company on the exclusion list (`data/excluded_companies.csv`) is deleted before anything is sent: its rows in `jobs`,
 and the rows that keep its title and link or its job keys in `user_jobs` (a user's stars and discards) and `emailed`.
@@ -198,15 +198,22 @@ def sync(conn: sqlite3.Connection, client: Client, excluded: Sequence[str] = ())
     return Result(upserted=len(rows), closed=len(stale), purged=purged)
 
 
+CLEANUP_FUNCTIONS = ("report_site_cleanup", "confirm_email_cleanup")
+
+
 def cleanup(client: Client, today: date) -> int:
-    """Delete the spam-guard counters of every day before `today` (UTC, the day `report-site` counts in) through the
-    database function `report_site_cleanup`, and return how many rows went. Counts only, nothing personal is read."""
-    deleted = client.call(
-        "POST", {}, {"p_day": today.isoformat()}, table="rpc/report_site_cleanup", prefer="return=representation"
-    ).json()
-    if not isinstance(deleted, int) or isinstance(deleted, bool):
-        raise SyncError("rpc/report_site_cleanup returned something other than a count")
-    return deleted
+    """Delete the spam-guard counters of every day before `today` (UTC, the day the functions count in) through the
+    database functions `report_site_cleanup` and `confirm_email_cleanup`, and return how many rows went in all. Counts
+    only, nothing personal is read."""
+    total = 0
+    for function in CLEANUP_FUNCTIONS:
+        deleted = client.call(
+            "POST", {}, {"p_day": today.isoformat()}, table=f"rpc/{function}", prefer="return=representation"
+        ).json()
+        if not isinstance(deleted, int) or isinstance(deleted, bool):
+            raise SyncError(f"rpc/{function} returned something other than a count")
+        total += deleted
+    return total
 
 
 def quality_report(conn: sqlite3.Connection) -> str:

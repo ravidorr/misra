@@ -190,7 +190,8 @@ The function reads the answer of `report_site_reserve` (text, sent by PostgREST 
 
 `report_ip_limits` (day, hash, number of reports) and `report_daily_cap` (day, emails sent). Rows older than yesterday
 are deleted on every call, and the daily workflow deletes every row of an earlier day once a day (see "Daily cleanup of the
-counters" below), so a hash does not outlive its day by more than the hours until the next run. No address, company, link or text is stored. Both tables have row-level security on, no
+counters" below), so a hash does not outlive its day by more than the hours until the next run. The notice says it as the
+lawyer worded it: the hash "is deleted in the next daily cleanup". No address, company, link or text is stored. Both tables have row-level security on, no
 policy and no grant for `anon` or `authenticated`; the two functions that change them (`report_site_reserve`,
 `report_site_release`) can be executed by the service role only. `tests/test_migrations.py` lints that on every push, and
 `supabase/tests/report_limits.sql` tests the counting against a database, the same way as the other SQL tests
@@ -199,8 +200,8 @@ policy and no grant for `anon` or `authenticated`; the two functions that change
 
 ### Daily cleanup of the counters
 
-Deleting only when a report arrives would leave an old hash in place on a quiet day, so the privacy notice's "expires
-after 24 hours" needs a timer. Migration `20261119100000_report_site_cleanup.sql` adds `report_site_cleanup(p_day date)`: it
+Deleting only when a report arrives would leave an old hash in place on a quiet day, so the privacy notice's "deleted in
+the next daily cleanup" needs a timer. Migration `20261119100000_report_site_cleanup.sql` adds `report_site_cleanup(p_day date)`: it
 deletes every row of both tables from a day before `p_day` and returns how many it deleted (a day later than today, or no
 day, is refused so a wrong date cannot wipe today's rows; only the service role may run it). `sync_supabase.py` calls it through
 PostgREST (`POST /rest/v1/rpc/report_site_cleanup`, `{"p_day": "<today, UTC>"}`) right after a good sync, in the daily
@@ -208,7 +209,13 @@ workflow's sync step that already holds the service-role key, and logs the count
 on a normal day a day's rows are deleted about 4.5 hours after the day ends and a hash lives at most about 28.5 hours (24 hours of
 its day plus the wait for the next run). GitHub may start the run late, and on a day the crawl step fails the sync step is skipped,
 so the cleanup waits for the next good run (the failure alert fires). The hash itself is useless from the moment the day changes,
-because its key changes; "expires after 24 hours" in the notice means that, and a lawyer should confirm that reading.
+because its key changes. The lawyer's wording (2026-11-15) is therefore "deleted in the next daily cleanup", not a number of hours.
+
+The confirmation email's counters (`confirm_limits`, `confirm_daily_cap`, PLAN.md step 6.6) are cleaned the same way by
+migration `20261120100000_confirm_counters_cleanup.sql`: `confirm_email_cleanup(p_day date)` has the same rules as
+`report_site_cleanup` (deletes every row of a day before `p_day`, returns the count, refuses no day or a day later than today,
+service role only). `sync_supabase.py` calls both functions, one after the other, and logs the sum. Apply both migrations
+before the first run that includes this change, or the sync step fails on the missing function.
 
 A failed cleanup, including "function not found" when the migration has not been applied, exits the sync step non-zero, so
 the failure alert fires and the subscriber digests of that run are skipped (the jobs were already synced, and the build and
@@ -614,10 +621,22 @@ Files: `supabase/migrations/20261118100000_digest_signup_and_limits.sql`, `supab
 `templates/digest.js` and the marked parts of `templates/dashboard.html` (the "Daily email" button and dialog),
 `build_dashboard.py` (the switch).
 
-### The two switches (both are off)
+### The two switches (the constant is on since v0.31.0; the secret is set on opening day)
 
-The signup stays hidden and closed until the maintainer opens it, because the sender of step 6.3 does not exist yet and the
-lawyer gate of PLAN.md step 6.6 is still to be closed. There are two switches, and both must be on:
+The signup was hidden and closed until PLAN.md step 6.6 (the lawyer's wording is in, the sender of step 6.3 is built). There are two
+switches, and both must be on; v0.31.0 turns the first (the build constant) on, and the second (the function secret) is set by the
+maintainer after that version is merged and its page has been published, so the function never takes a sign-up before the page shows
+the agreement line (a press in between is answered "not open yet", 403 `signup_closed`, and stores nothing).
+
+**Opening day, in this order** (nothing here is done by the pull request): (1) BEFORE merging, apply the migrations
+`20261119100000_report_site_cleanup.sql` and `20261120100000_confirm_counters_cleanup.sql` if they are not applied yet (the daily
+sync of the merged code calls both cleanups and fails on a missing function; they only add functions, so applying them early is
+safe); (2) merge the v0.31.0 pull request and wait for the `publish-docs` run to publish the page with the "Daily email" button
+and `digest.js`; (3) `supabase secrets set --project-ref dncodqeqpoqwcxdctzco
+DIGEST_SIGNUP_ENABLED=true`; (4) the signed-in live checks that waited for this day, listed under "Check it live" below: turning on
+with the secret unset is 403 `signup_closed` (do it BEFORE step 3 if you want that check), turning off with no row is a 200, and the
+maintainer's own turn-on flow (turn the email on, read the confirmation email, confirm from the link, see the dialog say "on"); then
+(5) run the daily workflow by hand with `digest_dry_run` ticked, and later with the maintainer as a subscriber twice (one email, then none).
 
 1. The function refuses to create a subscription unless its secret `DIGEST_SIGNUP_ENABLED` is exactly `true` (anything else, or
    unset, answers 403 `signup_closed` and stores nothing, sends nothing and uses no limit place). Turning the email off still
@@ -768,8 +787,9 @@ curl -s -X POST "$URL" -H "Authorization: Bearer $TOKEN" -H 'Content-Type: appli
 In the SQL editor: `select count(*) from public.subscriptions;` is 0 after these, and
 `select has_function_privilege('anon', 'public.subscribe_start(uuid,text,text,jsonb,text,timestamptz,text,timestamptz)', 'execute')`
 (and the same for `authenticated`) is `false`. The checks that open the switch and send the first real confirmation email belong to
-the day signups open (PLAN.md step 6.6): turn the secret on, build the page with the constant `True`, and with the maintainer's own
-account turn the email on, confirm from the link and read the row. If the preflight in check 2 is refused (a gateway that wants a
+the day signups open (PLAN.md step 6.6, see "Opening day" above): the constant is `True` since v0.31.0, so once the secret is on,
+with the maintainer's own account turn the email on, confirm from the link and read the row. Checks 3 to 5 above need the secret unset,
+so run them before you set it. If the preflight in check 2 is refused (a gateway that wants a
 token even for `OPTIONS`), or a real user token in check 3 gets a 401 from the gateway instead of `403 signup_closed` (a project
 whose signing keys the gateway's JWT check does not accept), set `verify_jwt = false` for this function in `config.toml` and
 redeploy: the function already asks Auth who the caller is and refuses everything without a token Auth accepts. Then update the

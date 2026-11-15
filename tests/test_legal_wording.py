@@ -59,7 +59,10 @@ def test_the_privacy_notice_says_why_the_data_is_collected_and_that_it_is_volunt
     assert "Signing in is voluntary" in body
     assert "cannot save your choices across devices" in body
     assert "cannot get the email" in body
-    assert "planned and not live" in body  # the digest does not exist yet
+    assert (
+        "If you turn on the email digest, your email address is also used to send you the job alerts you asked for, "
+        "and for nothing else."
+    ) in body  # the lawyer's sentence, true since the signup opened
 
 
 def test_the_privacy_notice_names_the_providers_and_where_they_are() -> None:
@@ -69,6 +72,10 @@ def test_the_privacy_notice_names_the_providers_and_where_they_are() -> None:
     assert "processed on these providers' infrastructure, in the EU and in the United States" in body
     assert "your account is stored at Supabase in the EU" in body
     assert "standard data processing agreement" in body
+    assert (
+        "**Resend** (Ireland): sends the site-report email to the maintainer and, if you turn on the email digest, "
+        "processes your email address and the matched job links to deliver your confirmation and digest emails."
+    ) in body
 
 
 def test_the_privacy_notice_gives_the_rights_to_inspect_correct_and_delete_with_a_time_limit() -> None:
@@ -89,7 +96,8 @@ def test_the_privacy_notice_keeps_the_accurate_points_about_the_providers_own_re
 
 
 SPAM_GUARD = (
-    "To prevent spam, we store a daily non-reversible hash of your network address that expires after 24 hours."
+    "To prevent spam, we store a daily non-reversible hash of your network address that is deleted in the next "
+    "daily cleanup."
 )
 
 
@@ -98,6 +106,9 @@ def test_the_spam_guard_sentence_is_the_lawyers_in_the_notice_and_the_form_and_a
     assert SPAM_GUARD in text
     assert "A cleanup that runs every day deletes the counters of every earlier day." in text
     assert "whenever the next report is handled" not in text  # the old promise, replaced by the daily cleanup
+    assert (
+        "24 hours" not in text.split("**Reporting a missing career site**")[1].split("\n")[0]
+    )  # the lawyer's last word
     assert f"Reports are emailed directly to the maintainer. {SPAM_GUARD} <a" in read("templates/dashboard.html")
     assert "report_site_cleanup" in read("sync_supabase.py")  # the promise is kept by this call
     assert "report_site_cleanup" in read("supabase/migrations/20261119100000_report_site_cleanup.sql")
@@ -115,23 +126,68 @@ def test_the_privacy_notice_has_no_draft_marks_and_a_date() -> None:
     assert re.search(r"^Last updated: \d{4}-\d{2}-\d{2}$", text, flags=re.MULTILINE)
 
 
-def test_the_digest_is_described_as_planned_and_not_live() -> None:
-    text = read("PRIVACY.md")
-    assert "not live" in text
-    assert "no real subscription exists" in text
+STALE_DIGEST_WORDING = (
+    "not live",
+    "no real subscription exists",
+    "planned and not live",
+    "switched off and hidden",
+    "until then no account data is sent to Resend",
+    "When it is switched on",
+    "once the daily email is switched on",
+    "When the daily email is switched on",
+)
 
 
-def test_the_signup_cannot_be_switched_on_while_the_privacy_notice_still_says_the_digest_is_not_live() -> None:
-    if not build_dashboard.DIGEST_SIGNUP_ENABLED:
-        return
+def test_the_digest_is_described_in_the_present_tense_as_it_is_built() -> None:
+    """PLAN.md step 6.6, the edits that are true only while the signup is open: the email settings, what an
+    unsubscribe keeps and deletes, and the unsubscribe link carrying the account id."""
     text = read("PRIVACY.md")
-    stale = [phrase for phrase in ("not live", "no real subscription exists") if phrase in text]
-    assert not stale, (
-        f"DIGEST_SIGNUP_ENABLED is True in build_dashboard.py but PRIVACY.md still says {stale}. "
-        "Before the signup opens, apply the present-tense PRIVACY.md edits written in PLAN.md step 6.6 "
-        '(the "Why we collect it", "Email settings" and "Resend" passages), '
-        "so the notice describes a digest that is live."
-    )
+    stale = [phrase for phrase in STALE_DIGEST_WORDING if phrase in text]
+    assert not stale, stale
+    settings = next(line for line in text.splitlines() if line.startswith("- **Email settings**"))
+    for phrase in (
+        'The "Daily email" button on the dashboard, for signed-in users, turns the digest on and off.',
+        "the address it goes to (your Google email, or another one you type)",
+        "the filters you copied for it",
+        "whether you want it daily or weekly",
+        "the time you turned it on, the time you confirmed the address",
+        "and the time you unsubscribed",
+        "plus the jobs already emailed to you",
+        "Turning it on sends one confirmation email to that address, and nothing else is sent until you confirm.",
+        "Only the SHA-256 hash of the confirmation link is stored, never the link.",
+        "The link contains your account ID in plain text",
+        "and use the link to unsubscribe you",
+        "deletes your filters and the list of emailed jobs and resets daily or weekly",
+        "keeps the address and those three times as a record of your consent",
+        "Deleting your account removes all of it, including that record.",
+    ):
+        assert phrase in settings, phrase
+    assert 'we keep its settings (see "What we store")' in sections(text)["The short version"]
+
+
+def test_the_signup_is_open_so_the_privacy_notice_must_describe_a_live_digest() -> None:
+    """The guard of PLAN.md step 6.6, turned round now that the switch is on: while DIGEST_SIGNUP_ENABLED is True the
+    notice must not say the digest is not live (the old guard), and it must carry the present-tense passages. The test
+    fails the other way too: switching the signup off again needs the notice changed in the same PR."""
+    assert build_dashboard.DIGEST_SIGNUP_ENABLED is True
+    text = read("PRIVACY.md")
+    assert not [phrase for phrase in ("not live", "no real subscription exists") if phrase in text]
+    assert "If you turn on the email digest" in text
+    assert "if you turn on the email digest, processes your email address" in text
+
+
+def test_the_agreement_line_sits_next_to_the_email_control_and_is_in_the_dialog_that_the_switch_builds() -> None:
+    """PLAN.md step 6.6: "By turning this on you agree to the Terms and the Privacy notice" must be visible. The text is
+    in the dialog markup (cut out only by the switch) and is a paragraph that no rule hides; the browser test of
+    tests/test_digest_settings.py checks that it is visible and its links are big enough."""
+    page = read("templates/dashboard.html")
+    region = "".join(build_dashboard.DIGEST_REGION.findall(page))
+    assert (
+        'By turning this on you agree to the <a href="https://ravidorr.github.io/misra/terms.html">Terms</a> and the '
+        '<a href="https://ravidorr.github.io/misra/privacy.html">Privacy Notice</a>.'
+    ) in region
+    assert 'id="digestConsent"' in region
+    assert not re.search(r'id="digestConsent"[^>]*hidden', region)
 
 
 def test_the_terms_say_what_the_lawyer_asked_and_no_more() -> None:
@@ -232,3 +288,15 @@ def test_the_security_note_names_the_backup_its_secret_and_its_review() -> None:
     review = text.split("### Yearly review", 1)[1].split("### If there is a breach", 1)[0]
     assert "rehearse a restore again" in review
     assert "misra-backups" in review and "BACKUP_DEPLOY_KEY" in review
+
+
+def test_the_security_note_scopes_and_rotates_the_backup_key_and_forbids_stray_clones() -> None:
+    text = " ".join(read("SECURITY.md").split())
+    assert "scoped to `ravidorr/misra-backups` only and reaches no other repository" in text
+    assert "A deploy key has no expiry date" in text
+    assert "then delete the old key in that repository's deploy keys" in text
+    assert "The first rotation is due by 2027-11-15." in text
+    assert "the local clone (and any restore script made from it) is deleted immediately afterwards" in text
+    assert "plaintext email addresses never sit on a disk outside the 30-day rotation" in text
+    for name in ("PRIVACY.md", "SECURITY.md"):
+        assert "encrypted" not in read(name).lower(), name  # we claim no encryption of our own

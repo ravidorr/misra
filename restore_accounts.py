@@ -15,11 +15,14 @@ The script
   clear a confirmation when an address changes) instead of being rewritten while they go in;
 - sends each table as one JSON text through `json_populate_recordset`, so Postgres converts every value itself.
 
-Every row's `user_id` must exist in `auth.users` (the tables reference it). In the project the backup came from they do.
-In a new project they do not, and `--create-auth-users` adds a first step that creates a bare `auth.users` row (id and
-email, from `profiles`) for each missing one; the person then signs in with Google as before and Supabase links the
-sign-in to that row by its confirmed email. That option writes into Supabase's own table and has not been tried against
-a real Supabase project, only against a local Postgres with the columns it names.
+Every row's `user_id` must exist in `auth.users` (the tables reference it). Without `--create-auth-users` the script
+restores only the rows of people who still have an `auth.users` row, and silently skips the rest: it asks the database
+itself (a `where exists (select 1 from auth.users ...)` on the exported user id, no email involved), so an account that
+was deleted after the backup is never brought back, and the run does not fail on it. With `--create-auth-users` (a
+new project that lost its sign-in rows) a first step creates a bare `auth.users` row (id and email, from `profiles`)
+for each missing one, and then every row is restored; the person then signs in with Google as before and Supabase
+links the sign-in to that row by its confirmed email. That option writes into Supabase's own table and has not been
+tried against a real Supabase project, only against a local Postgres with the columns it names.
 
 The script holds every person's data: it is written readable by the owner only, outside the repository, and never
 printed. Only counts are printed."""
@@ -94,11 +97,16 @@ def literal(rows: Sequence[Mapping[str, Any]]) -> str:
     return f"${tag}${body}${tag}$"
 
 
-def insert(table: Table, rows: Sequence[Mapping[str, Any]]) -> str:
+def insert(table: Table, rows: Sequence[Mapping[str, Any]], only_existing_users: bool = True) -> str:
+    """One table's insert. By default only the rows whose user still exists in `auth.users` go in (the existence check
+    is the database's own, on the exported user id), so a deleted account is not brought back."""
     columns = ", ".join(table.columns)
+    keep = "where exists (select 1 from auth.users u where u.id = r.user_id)\n" if only_existing_users else ""
+    qualified = ", ".join(f"r.{column}" for column in table.columns) if only_existing_users else columns
     return (
         f"insert into public.{table.name} ({columns})\n"
-        f"select {columns} from json_populate_recordset(null::public.{table.name}, {literal(rows)}::json)\n"
+        f"select {qualified} from json_populate_recordset(null::public.{table.name}, {literal(rows)}::json) r\n"
+        f"{keep}"
         "on conflict do nothing;\n"
     )
 
@@ -125,7 +133,7 @@ def script(data: Mapping[str, Sequence[Mapping[str, Any]]], with_auth_users: boo
     ]
     if with_auth_users:
         parts.append(auth_users(data[TABLES[0].name]))
-    parts.extend(insert(table, data[table.name]) for table in TABLES)
+    parts.extend(insert(table, data[table.name], not with_auth_users) for table in TABLES)
     parts.extend(f"alter table {name} enable trigger user;\n" for name in names)
     parts.append("commit;\n")
     return "".join(parts)
