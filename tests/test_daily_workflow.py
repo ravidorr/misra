@@ -87,7 +87,7 @@ def test_the_maintainer_digest_stays_behind_one_named_switch_that_is_on() -> Non
     assert switch, "the switch is a workflow-level env constant"
     assert switch[1] == "true", "the maintainer flips it when subscribed, not before (PLAN.md step 6.4)"
     legacy = steps()["digest"]
-    assert "env.LEGACY_MAINTAINER_DIGEST == 'true'" in legacy
+    assert "if: ${{ success() && env.LEGACY_MAINTAINER_DIGEST == 'true' }}" in legacy
     assert "run: python send_email.py" in legacy
     assert "success()" in legacy  # still skipped when the crawl failed, as before
 
