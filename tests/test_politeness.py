@@ -227,6 +227,7 @@ def allowed(robots: str, url: str, api: bool = False) -> bool:
         ("User-agent: *\nDisallow: /a*c\n", "https://a.test/abbb", True),
         ("User-agent: *\nDisallow: /a*b*c\n", "https://a.test/axbxc", False),
         ("User-agent: *\nDisallow: /a*b*c\n", "https://a.test/axb", True),
+        ("User-agent: *\nDisallow: /a*b*c\n", "https://a.test/axc", True),  # a middle piece is missing
         ("User-agent: *\nDisallow: /a*b*c\n", "https://a.test/axcxb", True),  # the pieces come in order
         ("User-agent: *\nDisallow: /a*b$\n", "https://a.test/axb", False),
         ("User-agent: *\nDisallow: /a*abc$\n", "https://a.test/abc", True),  # the end cannot reuse the start
