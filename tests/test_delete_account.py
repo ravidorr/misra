@@ -103,14 +103,43 @@ async def test_the_dialog_says_exactly_what_is_removed_and_that_it_cannot_be_und
     await signed_in(page, site)
     await open_dialog(page)
     dialog = page.locator(DIALOG)
-    text = await dialog.inner_text()
-    wanted = ("cannot be undone", "email address", "stars", '"Not for me" choices', "saved filters", "empty account")
-    for words in wanted:
-        assert words in text
+    assert await page.locator("#deleteTitle").inner_text() == "Delete your Misra account?"
+    paragraphs = await page.locator("#deleteText p").all_inner_texts()
+    assert paragraphs == [
+        "This immediately and permanently deletes your account, your email address (ann@test.example), your saved "
+        'filters, your stars, your "Not for me" choices, and any email digest settings or consent logs from our '
+        "database.",
+        "Choices saved locally in this browser while you were signed out are not affected. This action cannot be "
+        "undone.",
+    ]
+    assert await page.locator("#deleteCancel").inner_text() == "Cancel"
     assert await dialog.get_attribute("aria-labelledby") == "deleteTitle"
     assert await dialog.get_attribute("aria-describedby") == "deleteText"
     assert await page.evaluate("document.activeElement.id") == "deleteCancel"  # the safe choice has the focus
     assert await page.locator("#deleteConfirm").inner_text() == "Delete my account permanently"
+
+
+async def test_the_email_in_the_dialog_is_shown_as_text_never_as_html(
+    page: Page, site: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    hostile = "<img src=x onerror=window.pwned=1>@test.example"
+    monkeypatch.setattr("tests.test_dashboard_page.EMAIL", hostile)
+    await signed_in(page, site)
+    await open_dialog(page)
+    assert await page.locator("#deleteEmail").inner_text() == hostile
+    assert await page.locator(f"{DIALOG} img").count() == 0
+    assert await page.evaluate("window.pwned === undefined")
+
+
+async def test_without_an_address_the_dialog_does_not_show_empty_brackets(
+    page: Page, site: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr("tests.test_dashboard_page.EMAIL", "")
+    await signed_in(page, site)
+    await open_dialog(page)
+    await expect(page.locator("#deleteEmailPart")).to_be_hidden()
+    first = await page.locator("#deleteText p").first.inner_text()
+    assert first.startswith("This immediately and permanently deletes your account, your email address, your saved ")
 
 
 async def test_keeping_the_account_closes_the_dialog_and_sends_nothing(page: Page, site: Path) -> None:

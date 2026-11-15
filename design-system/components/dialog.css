@@ -2,9 +2,9 @@
  * Dialog: a native <dialog> opened with showModal(), so the browser traps focus, closes on Esc and hides the rest of the
  * page from screen readers. Name it with aria-labelledby and describe it with aria-describedby.
  *   <dialog class="dialog" aria-labelledby="t" aria-describedby="d">
- *     <h2 class="dialog-title" id="t" tabindex="-1">Delete your account?</h2>
+ *     <h2 class="dialog-title" id="t" tabindex="-1">Delete your Misra account?</h2>
  *     <div id="d"><p>What happens.</p></div>
- *     <p class="dialog-actions"><button type="button" class="btn btn-pill">Keep</button>
+ *     <p class="dialog-actions"><button type="button" class="btn btn-pill">Cancel</button>
  *     <button type="button" class="btn btn-pill btn-danger">Delete</button></p>
  *   </dialog>
  */

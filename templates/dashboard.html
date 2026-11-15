@@ -45,7 +45,10 @@
 </header>
 <div class="auth-message" id="authMessage" role="alert"></div>
 <main>
-  <p class="sign-in-note" id="signInNote" hidden>By signing in with Google you agree to the <a href="https://github.com/ravidorr/misra/blob/main/PRIVACY.md" target="_blank" rel="noopener noreferrer">Privacy Notice<span class="sr-only"> (opens in a new tab)</span></a> and the <a href="https://github.com/ravidorr/misra/blob/main/TERMS.md" target="_blank" rel="noopener noreferrer">Terms<span class="sr-only"> (opens in a new tab)</span></a>. Signing in is voluntary: your email is used only to save your choices on your devices and to send any email alerts you turn on.</p>
+  <div class="sign-in-note" id="signInNote" hidden>
+    <p class="sign-in-line">Sign in to sync your stars, "Not for me" choices, and saved filters across devices.</p>
+    <p class="sign-in-line">Signing in is optional. We store only your Google email address and job preferences in our EU database (Supabase)—never your CV, password, or tracking cookies. (Supabase's own sign-in record also holds your Google name and photo until you delete your account.) By signing in, you agree to the <a href="https://github.com/ravidorr/misra/blob/main/TERMS.md" target="_blank" rel="noopener noreferrer">Terms<span class="sr-only"> (opens in a new tab)</span></a> and <a href="https://github.com/ravidorr/misra/blob/main/PRIVACY.md" target="_blank" rel="noopener noreferrer">Privacy Notice<span class="sr-only"> (opens in a new tab)</span></a>.</p>
+  </div>
   <h1 class="hero"><span class="highlight" id="heroTop">Open roles</span> <span id="heroBottom">in Israel.</span></h1>
   <p class="sub" id="summary">Loading roles…</p>
   <p class="sr-only" id="status" role="status"></p>
@@ -139,20 +142,14 @@
 </footer>
 </div>
 <dialog class="dialog" id="deleteDialog" aria-labelledby="deleteTitle" aria-describedby="deleteText">
-  <h2 class="dialog-title" id="deleteTitle" tabindex="-1">Delete your account?</h2>
+  <h2 class="dialog-title" id="deleteTitle" tabindex="-1">Delete your Misra account?</h2>
   <div id="deleteText">
-    <p>This deletes your account right now, and it cannot be undone. These are removed for good:</p>
-    <ul>
-      <li>your email address</li>
-      <li>your stars</li>
-      <li>your "Not for me" choices</li>
-      <li>your saved filters and settings</li>
-    </ul>
-    <p>Anything still waiting to be saved from this device is dropped too. Stars, "Not for me" choices and filters kept in this browser while you were signed out stay here. The list of roles is public and does not change. Google keeps your Google account: only Google can close it. If you sign in again later, you get a new, empty account.</p>
+    <p>This immediately and permanently deletes your account, your email address<span id="deleteEmailPart" hidden> (<span class="delete-email" id="deleteEmail"></span>)</span>, your saved filters, your stars, your "Not for me" choices, and any email digest settings or consent logs from our database.</p>
+    <p>Choices saved locally in this browser while you were signed out are not affected. This action cannot be undone.</p>
   </div>
   <p class="notice" id="deleteError" role="alert" hidden></p>
   <p class="dialog-actions">
-    <button type="button" class="btn btn-pill" id="deleteCancel">Keep my account</button>
+    <button type="button" class="btn btn-pill" id="deleteCancel">Cancel</button>
     <button type="button" class="btn btn-pill btn-danger" id="deleteConfirm">Delete my account permanently</button>
   </p>
 </dialog>
@@ -183,9 +180,10 @@
       <label for="reportWebsite">Leave this field empty</label>
       <input id="reportWebsite" name="reportWebsite" type="text" tabindex="-1" autocomplete="off" data-field="website">
     </div>
+    <p class="field-hint report-privacy" id="reportPrivacy">Reports are emailed directly to the maintainer. To prevent spam, we keep a daily, non-reversible hash of your network address. It matches nothing after that day, and old ones are deleted when later reports are handled. <a href="https://github.com/ravidorr/misra/blob/main/PRIVACY.md" target="_blank" rel="noopener noreferrer">Privacy Notice<span class="sr-only"> (opens in a new tab)</span></a></p>
     <p class="dialog-actions">
       <button type="button" class="btn btn-pill" id="reportCancel">Cancel</button>
-      <button type="submit" class="btn btn-pill btn-primary" id="reportSend">Send report</button>
+      <button type="submit" class="btn btn-pill btn-primary" id="reportSend" aria-describedby="reportPrivacy">Send report</button>
     </p>
   </form>
   <div id="reportDone" data-report="done" hidden>
