@@ -480,3 +480,71 @@ def test_the_lint_rejects_a_weakened_accounts_migration(old: str, new: str) -> N
 
 def test_the_accounts_migration_passes_when_unchanged() -> None:
     assert problems(statements_of(REAL)) == []
+
+
+# ---- Stars and discards (step 4.2; FR-2 AC 10): the row limit and the discard that goes when its job closes ----
+
+
+def function_named(name: str) -> re.Match[str]:
+    return next(m for s in statements() if (m := FUNCTION.fullmatch(s)) and m["name"] == name)
+
+
+def trigger_on(table: str, function: str) -> str:
+    return next(
+        s for s in statements() if (m := TRIGGER.fullmatch(s)) and (m["table"], m["function"]) == (table, function)
+    )
+
+
+def test_a_user_can_keep_a_limited_number_of_job_choices() -> None:
+    limit = function_named("limit_user_jobs")
+    assert not limit["definer"]  # it counts the caller's own rows, which row-level security already limits to theirs
+    body = limit["body"]
+    assert "pg_advisory_xact_lock(hashtext(new.user_id::text))" in body  # two requests cannot both pass the count
+    assert ">= 2000" in body
+    assert "errcode = '54000'" in body  # the code the page tells apart from a network failure
+    assert (
+        "where user_id = new.user_id and company = new.company and job_id = new.job_id" in body
+    )  # a change is allowed
+    assert trigger_on("public.user_jobs", "limit_user_jobs").startswith(
+        "create trigger limit_user_jobs before insert on"
+    )
+
+
+def test_fr2_ac10_a_discard_goes_when_its_job_closes_and_a_star_stays() -> None:
+    drop = function_named("drop_discards_of_closed_job")
+    assert drop["definer"]  # the rows belong to other users
+    assert drop["body"] == (
+        " begin delete from public.user_jobs"
+        " where state = 'discard' and company = new.company and job_id = new.job_id; return new; end; "
+    )
+    trigger = trigger_on("public.jobs", "drop_discards_of_closed_job")
+    assert "after insert or update of status on public.jobs" in trigger
+    assert "when (new.status = 'closed')" in trigger
+
+
+@pytest.mark.parametrize(
+    ("old", "new"),
+    [
+        (
+            "revoke all on function public.limit_user_jobs() from public, anon, authenticated;",
+            "revoke all on function public.limit_user_jobs() from public, anon;",
+        ),
+        (
+            "revoke all on function public.drop_discards_of_closed_job() from public, anon, authenticated;",
+            "revoke all on function public.drop_discards_of_closed_job() from public, anon;",
+        ),
+        ("execute function public.limit_user_jobs();", "execute function public.nothing();"),
+        (
+            "language plpgsql\nset search_path = ''\nas $$\nbegin\n  -- One writer",
+            "language plpgsql\nas $$\nbegin\n  -- One writer",
+        ),
+        (
+            "language plpgsql\nsecurity definer\nset search_path = ''\nas $$\nbegin\n  delete",
+            "language plpgsql\nsecurity definer\nas $$\nbegin\n  delete",
+        ),
+    ],
+)
+def test_the_lint_rejects_a_weakened_job_choices_migration(old: str, new: str) -> None:
+    migration = "\n".join(p.read_text(encoding="utf-8") for p in sorted(MIGRATION_DIR.glob("*.sql")))
+    assert old in migration, old
+    assert problems(statements_of(migration.replace(old, new)))

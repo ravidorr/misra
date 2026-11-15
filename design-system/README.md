@@ -25,6 +25,8 @@ Misra's readers are students and early-career people in Israel (early 20s). They
 
 The account control in the page header (`.account`) reuses `btn btn-pill`, is hidden until `auth.js` starts, and on a phone puts the signed-in email on its own row; it has no component of its own.
 
+The Star button on a card is `btn btn-pill btn-star` with `aria-pressed`: its name stays "Star: ...", and the outline star becomes a filled one and the button is tinted when pressed, so the state is never colour alone. The "Starred (n)" switch above the list is a `chip chip-new`. The line about saving stars and discards (`.sync-note`) is a status region that holds a `notice` and a "Try again" button only when something needs the user's attention.
+
 ## Rules
 
 - Plain CSS. Components use tokens only: no hard-coded colors outside `tokens.css` (Stylelint enforces it).
@@ -47,10 +49,10 @@ The dashboard registers tools on `navigator.modelContext` when the browser suppo
 - `list_filters()` (the values of the level, role type, region and place filters, with counts)
 - `list_new_jobs(limit)`
 - `get_job(id)`
-- `discard_job(id)` and `restore_job(id)`
+- `star_job(id)`, `unstar_job(id)` and `list_starred_jobs()`; `discard_job(id)` and `restore_job(id)`. A job is starred, discarded or neither, never both, so `star_job` takes a discard away and `discard_job` a star. Each answers with `saved`: true when the choice is kept (in the browser, or in the account when the user is signed in), false when it is only held on the device until the service answers
 - `list_coverage_gaps()`
 
-Without WebMCP, agents can read each role from the `data-*` attributes on `article.card`, `jobs.json`, or the schema.org `JobPosting` list in `jobs.jsonld`.
+Without WebMCP, agents can read each role from the `data-*` attributes on `article.card` (`data-starred`, `data-discarded`, `data-pending` for a choice not saved to the account yet, and `data-listed="false"` on a starred role that has closed), `jobs.json`, or the schema.org `JobPosting` list in `jobs.jsonld`.
 
 ## Adding a component
 

@@ -2,6 +2,21 @@
 
 All notable changes are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses [Semantic Versioning](https://semver.org/).
 
+## [0.18.0] - 2026-11-15
+
+### Added
+
+- Stars and discards that follow the user (PLAN.md step 4.2, FR-2). Every card has a Star toggle next to "Not for me", and a "Starred (n)" switch above the list shows the starred jobs as a list of their own (the filters are put away while it shows, since a closed role has no level or region). A job is starred, discarded or neither, never both: starring a discarded job takes the discard away, and discarding a starred job takes the star away. Signed out, both stay in the browser as discards always did (`il-jobs-starred-v1` beside `il-jobs-discarded-v1`) and nothing is sent anywhere. Signed in, they are saved to the user's `user_jobs` rows with the user's own token (one row per job, a single `state`; a star keeps its title, location and an http(s)-only link so it survives the job closing, a discard keeps nothing but the job's key), and read back when the user signs in on another device.
+- A starred job that has closed is still listed, marked "NO LONGER LISTED", with its title, company, location and saved link and no Apply button; its star can be taken off. A discard of a job that is no longer open is not counted or shown.
+- No choice is lost and none is shown as saved when it is not. What the user does is shown at once and kept as a pending change, also in the browser (by user id), until the service confirms it. When the network or the service is down, the session expired or a request timed out, the change stays pending, the page says how many changes are not saved to the account yet, the card carries `data-pending="true"`, and the page tries again by itself (after 2, 5, 15 and then every 60 seconds), when the browser comes back online, and from a "Try again" button; pending changes survive a reload and are saved at the next sign-in if the user signs out first. A change the database refuses for good (the row limit, any other refusal) is undone on screen and the page says so instead of retrying for ever. If the account's list cannot be loaded the page says so and offers "Try again" rather than showing an empty account; a list that arrives late never undoes a change confirmed meanwhile. Changes are sent one at a time in the order made, and supabase-js's own retries are off so the state is told at once.
+- Migration `20261115180000_job_choices_cap_and_closed_jobs.sql`: a cap of 2,000 `user_jobs` rows per user (a trigger that refuses a new row with error 54000, takes a per-user advisory lock so two requests cannot both pass, and never refuses a change to a job the user already has a row for), and a trigger on `public.jobs` that deletes the discards of a job when it is written as closed by the daily sync (FR-2 AC 10; a job that reopens shows again because nothing hides it; stars stay). `supabase/tests/job_choices.sql` tests both rules and runs like `accounts_rls.sql`. It must be applied to the project (see `supabase/README.md`).
+- WebMCP tools `star_job`, `unstar_job` and `list_starred_jobs`; `discard_job`, `restore_job` and the new ones answer with `saved` (false when the change is only held on the device for now); `get_job` and the job objects carry `starred`. Card hooks `data-starred`, `data-pending` and, for a closed starred role, `data-listed="false"`.
+
+### Changed
+
+- `templates/auth.js` publishes the signed-in user and the client as `globalThis.misraAccount` and a `misra:account` event, which `dashboard.js` follows (in either start order); nothing else about the sign-in changes. While signed in, "Export discards" and "Import discards" (which are for this browser's discards) are hidden, and the footer says where stars and discards are saved. Importing a discards file signed out now also takes the star off those jobs. The browser's own choices are not offered for import at the first sign-in yet (step 4.3).
+- `tests/test_migrations.py` covers the new functions and triggers. `PRIVACY.md` says what is saved for signed-in users. `.card-actions` may wrap onto a second row on a narrow phone.
+
 ## [0.17.0] - 2026-11-15
 
 ### Added

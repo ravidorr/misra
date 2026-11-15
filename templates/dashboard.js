@@ -1,6 +1,8 @@
 /* Dashboard script. Loaded as a deferred module by docs/index.html; the roles come from Supabase. */
 const $ = (id) => document.getElementById(id);
 const LS_D = 'il-jobs-discarded-v1';
+const LS_S = 'il-jobs-starred-v1';
+const LS_Q = 'misra-pending-choices-v1';
 const LS_F = 'il-jobs-filters-v3';
 const LS_T = 'misra-theme';
 const OTHER = 'Other';
@@ -163,7 +165,14 @@ const JOBS = DATA.jobs;
 let page = 0;
 let ready = false;
 let announceTimer;
+let view = 'roles';
+/* Signed out, the choices live in this browser: `gone` maps a job key to the day it was discarded, `starred` maps it to
+   what the page needs to show it later (company, id, title, location, link). Signed in, they live in the account (see
+   "Stars and discards" below) and these two are left alone. */
 const gone = lsGet(LS_D, {});
+const starred = Object.fromEntries(
+  Object.entries(lsGet(LS_S, {})).filter(([, v]) => typeof v?.c === 'string' && typeof v.i === 'string'),
+);
 
 /* The values each filter offers. The build supplies the names in display order (classify.py and regions.py); a value
    that only the data has (a role type added later) is appended, so a new type needs no change here. */
@@ -211,8 +220,6 @@ function savedFilters() {
 }
 let F = savedFilters();
 
-const key = (j) => `${j.c}|${j.i}`;
-
 function h(tag, attrs = {}, kids = []) {
   const el = document.createElement(tag);
   for (const [name, value] of Object.entries(attrs)) {
@@ -233,6 +240,313 @@ function safeUrl(url) {
   } catch {
     return '#';
   }
+}
+
+/* ---- Stars and discards ----
+   A job is starred, discarded or neither: one choice, so it is never both. Signed out, the choice is saved in this
+   browser (`gone`, `starred`). Signed in (auth.js publishes the account as `globalThis.misraAccount` and fires
+   `misra:account`), it is saved in the user's `user_jobs` rows, and every other device that signs in reads it from there.
+
+   The account keeps two maps. `server` is what the service last confirmed. `pending` is what the user did that the
+   service has not confirmed yet; it is also saved in this browser (LS_Q, by user id), so closing the tab or losing the
+   network never loses a choice. What the page shows is `pending` laid over `server`. A save that fails because the
+   network or the service is down stays pending and is tried again (on a timer, when the browser comes back online, or
+   from "Try again"); a save the database refuses (the row limit) is dropped and the page says so, so the page never
+   shows a choice as saved when it is not. */
+const MAX_TEXT = 500;
+const MAX_URL = 2000;
+const LIMIT_CODE = '54000'; /* the migration's per-user row limit: program_limit_exceeded */
+const RETRY_MS = [2000, 5000, 15000, 60000];
+const HTTP_UNAUTHORIZED = 401;
+const HTTP_TIMEOUT = 408;
+const HTTP_TOO_MANY = 429;
+const HTTP_SERVER_ERROR = 500;
+const SYNC_MESSAGES = {
+  limit: 'You have reached the limit of stars and discards an account can keep, so the last choice was not saved. Take some back (Restore, or remove a star), then try again.',
+  refused: 'The service did not accept the last star or discard, so it was not saved.',
+  load: 'Your saved stars and discards could not be loaded, so only the changes made on this device show.',
+};
+const savedHere = 'Stars and discards are saved in this browser only.';
+const savedThere = 'Stars and discards are saved to your account.';
+
+const fates = new WeakMap(); /* what became of each change sent: 'saved', 'limit' or 'refused' (none yet: still pending) */
+let account = null; /* the signed-in user's choices, or null */
+let leftBehind = 0; /* changes still pending when the user signed out */
+
+const key = (j) => `${j.c}|${j.i}`;
+const JOB_BY_KEY = new Map(JOBS.map((j) => [key(j), j]));
+
+/* The link as the database accepts it: http or https, not too long, else none. */
+function storableUrl(url) {
+  const safe = safeUrl(url);
+  return safe !== '#' && safe.length <= MAX_URL ? safe : null;
+}
+
+/* What is kept of a job so a star outlives the job: company, id, title, location and link. */
+const snapshotOf = (item) => ({
+  c: item.c,
+  i: item.i,
+  t: (item.t ?? '').slice(0, MAX_TEXT),
+  l: (item.l ?? '').slice(0, MAX_TEXT),
+  u: item.u ? storableUrl(item.u) : null,
+});
+
+const entryOfRow = (row) => ({ c: row.company, i: row.job_id, state: row.state, t: row.title ?? '', l: row.location ?? '', u: row.url });
+const validEntry = (e) =>
+  typeof e?.c === 'string' && typeof e.i === 'string' && (e.state === 'star' || e.state === 'discard' || e.state === null);
+
+function choiceOf(k) {
+  if (account) return (account.pending.has(k) ? account.pending.get(k) : account.server.get(k))?.state ?? null;
+  if (gone[k]) return 'discard';
+  return starred[k] ? 'star' : null;
+}
+const isDiscarded = (k) => choiceOf(k) === 'discard';
+const isStarred = (k) => choiceOf(k) === 'star';
+
+/* Every starred job, with the open ones as jobs and the closed ones as what was kept (`closed: true`). */
+function starredItems() {
+  const entries = account
+    ? [...new Set([...account.server.keys(), ...account.pending.keys()])]
+        .filter(isStarred)
+        .map((k) => account.pending.get(k) ?? account.server.get(k))
+    : Object.entries(starred)
+        .filter(([k]) => !gone[k])
+        .map(([, entry]) => entry);
+  return entries
+    .map((entry) => JOB_BY_KEY.get(key(entry)) ?? { ...entry, t: entry.t ?? '', l: entry.l ?? '', closed: true })
+    .sort((a, b) => a.c.localeCompare(b.c) || a.t.localeCompare(b.t));
+}
+const discardedCount = () => JOBS.filter((j) => isDiscarded(key(j))).length;
+
+function loadPending(userId) {
+  const saved = lsGet(LS_Q, {})[userId];
+  const entries = Object.entries(saved && typeof saved === 'object' ? saved : {});
+  return new Map(entries.filter(([, entry]) => validEntry(entry)));
+}
+
+function savePending(a) {
+  const all = lsGet(LS_Q, {});
+  if (a.pending.size > 0) all[a.userId] = Object.fromEntries(a.pending);
+  else Reflect.deleteProperty(all, a.userId);
+  lsSet(LS_Q, all);
+}
+
+/* A failure worth trying again: no answer, a service error, an expired token (it renews), a timeout or a rate limit.
+   Anything else (the row limit, a refused row) will not change by waiting. */
+function isTransient(error, status) {
+  if (error.code === LIMIT_CODE) return false;
+  return !status || status >= HTTP_SERVER_ERROR || [HTTP_UNAUTHORIZED, HTTP_TIMEOUT, HTTP_TOO_MANY].includes(status);
+}
+
+/* One request for one pending change. Discards keep no title, location or link: only a star needs them later. The
+   library's own retries are off (here and in loadServer): the page keeps the change and tries again itself, and says so
+   at once, instead of looking stuck for several seconds. */
+async function send(a, op, k) {
+  try {
+    const table = a.client.from('user_jobs');
+    if (op.state === null) {
+      return await table.delete().eq('user_id', a.userId).eq('company', op.c).eq('job_id', op.i).retry(false);
+    }
+    const row = { user_id: a.userId, company: op.c, job_id: op.i, state: op.state, title: null, location: null, url: null };
+    if (op.state === 'star') Object.assign(row, { title: op.t || null, location: op.l || null, url: op.u });
+    return await table.upsert(row, { onConflict: 'user_id,company,job_id' }).retry(false);
+  } catch (error) {
+    console.error(k, error);
+    return { error: { code: '', message: String(error) }, status: 0 };
+  }
+}
+
+/* Sends the pending changes one at a time, oldest first, until none is left or one cannot be sent now. */
+async function drain(a) {
+  while (a.pending.size > 0) {
+    const [k, op] = a.pending.entries().next().value;
+    const { error, status } = await send(a, op, k);
+    if (account !== a) return false; /* signed out meanwhile: what is left stays saved in this browser */
+    if (error) {
+      console.error(k, error);
+      if (isTransient(error, status)) {
+        a.failure = 'later';
+        scheduleRetry(a);
+        return false;
+      }
+      a.failure = error.code === LIMIT_CODE ? 'limit' : 'refused';
+      fates.set(op, a.failure);
+    } else {
+      fates.set(op, 'saved');
+      a.failure = null;
+      a.retries = 0;
+      if (op.state === null) a.server.delete(k);
+      else a.server.set(k, op);
+      a.touched.add(k);
+    }
+    if (a.pending.get(k) === op) a.pending.delete(k); /* a newer change to the same job stays */
+    savePending(a);
+    if (error) render(); /* the refused choice is gone from the view too */
+  }
+  return true;
+}
+
+function flush() {
+  const a = account;
+  if (!a) return Promise.resolve(false);
+  clearTimeout(a.retryTimer);
+  a.flushing ??= drain(a).finally(() => {
+    a.flushing = null;
+    renderSyncNote();
+  });
+  return a.flushing;
+}
+
+function scheduleRetry(a) {
+  a.retryTimer = setTimeout(flush, RETRY_MS[Math.min(a.retries, RETRY_MS.length - 1)]);
+  a.retries += 1;
+}
+
+/* The account's rows from the service, all pages. The count must match, so a short list is an error, not "no stars". */
+async function loadServer(a) {
+  a.touched = new Set();
+  try {
+    const rows = [];
+    for (;;) {
+      const { data, count, error } = await a.client
+        .from('user_jobs')
+        .select('company,job_id,state,title,location,url', { count: 'exact' })
+        .order('company')
+        .order('job_id')
+        .range(rows.length, rows.length + REST_PAGE - 1)
+        .retry(false);
+      if (error) throw error;
+      if (!Number.isInteger(count)) throw new Error('user_jobs: no total in Content-Range');
+      rows.push(...data);
+      if (rows.length >= count) break;
+      if (data.length === 0) throw new Error(`user_jobs: got ${rows.length} of ${count}`);
+    }
+    if (account !== a) return;
+    const fresh = new Map(rows.map((row) => [`${row.company}|${row.job_id}`, entryOfRow(row)]));
+    for (const k of a.touched) {
+      /* confirmed while this list was on its way: the list may predate it */
+      if (a.server.has(k)) fresh.set(k, a.server.get(k));
+      else fresh.delete(k);
+    }
+    a.server = fresh;
+    a.loadFailed = false;
+  } catch (error) {
+    console.error(error);
+    if (account !== a) return;
+    a.loadFailed = true;
+  }
+  render();
+  renderSyncNote();
+}
+
+/* The one way a choice changes: item is a job, or what was kept of a closed starred one; state is 'star', 'discard' or
+   null (neither). Resolves with `saved` (true: kept in this browser or in the account) and, when not, `failure`:
+   'limit' or 'refused' (the database refused it, it is undone) or 'later' (still pending, tried again). */
+function setChoice(item, state) {
+  const k = key(item);
+  if (!account) {
+    Reflect.deleteProperty(gone, k);
+    Reflect.deleteProperty(starred, k);
+    if (state === 'discard') gone[k] = TODAY;
+    if (state === 'star') starred[k] = snapshotOf(item);
+    lsSet(LS_D, gone);
+    lsSet(LS_S, starred);
+    return Promise.resolve({ saved: true, failure: null });
+  }
+  const a = account;
+  if (a.failure === 'limit' || a.failure === 'refused') a.failure = null;
+  const op = { ...snapshotOf(item), state };
+  a.pending.set(k, op);
+  savePending(a);
+  return flush().then(() => {
+    const fate = fates.get(op);
+    return { saved: fate === 'saved', failure: fate === 'saved' ? null : (fate ?? 'later') };
+  });
+}
+
+function attach(next) {
+  const a = {
+    client: next.client,
+    userId: next.userId,
+    server: new Map(),
+    pending: loadPending(next.userId),
+    touched: new Set(),
+    failure: null,
+    loadFailed: false,
+    flushing: null,
+    retryTimer: 0,
+    retries: 0,
+  };
+  account = a;
+  leftBehind = 0;
+  renderAccount();
+  render();
+  loadServer(a);
+  flush();
+}
+
+function detach() {
+  clearTimeout(account.retryTimer);
+  leftBehind = account.pending.size;
+  account = null;
+  renderAccount();
+  render();
+}
+
+/* auth.js publishes the signed-in user and the client (or null) and says so; the token renews without this changing. */
+function onAccount() {
+  const next = globalThis.misraAccount ?? null;
+  if (!next) {
+    if (account) detach();
+  } else if (account?.userId === next.userId) {
+    account.client = next.client;
+  } else {
+    if (account) detach();
+    attach(next);
+  }
+}
+
+function retryNow() {
+  if (account.loadFailed) loadServer(account);
+  flush();
+}
+
+/* The line under the summary about saving: nothing when all is well. It is a status region, so it is read out. */
+function renderSyncNote() {
+  for (const card of $('list').querySelectorAll('article[data-job-id]')) {
+    card.dataset.pending = String(Boolean(account?.pending.has(card.dataset.jobId)));
+  }
+  const box = $('syncNote');
+  const pending = account?.pending.size ?? 0;
+  let text = '';
+  let retry = false;
+  if (!account && leftBehind > 0) {
+    text = `${leftBehind} ${leftBehind === 1 ? 'change' : 'changes'} made while you were signed in could not be saved to your account. They stay on this device and are saved the next time you sign in.`;
+  } else if (account?.failure === 'limit' || account?.failure === 'refused') {
+    text = SYNC_MESSAGES[account.failure];
+  } else if (pending > 0 && account.failure === 'later') {
+    text = `${pending} ${pending === 1 ? 'change is' : 'changes are'} not saved to your account yet. ${pending === 1 ? 'It is' : 'They are'} kept on this device and saved when the service answers.`;
+    retry = true;
+  } else if (account?.loadFailed) {
+    text = SYNC_MESSAGES.load;
+    retry = true;
+  }
+  const note = text === '' ? [] : [h('p', { class: 'notice', text })];
+  if (retry) {
+    const button = h('button', { type: 'button', class: 'btn btn-pill', id: 'syncRetry', text: 'Try again' });
+    button.addEventListener('click', retryNow);
+    note.push(button);
+  }
+  box.replaceChildren(...note);
+}
+
+/* What depends on who is signed in: where choices are saved, and the browser file import and export (which are for
+   this browser's discards only). */
+function renderAccount() {
+  $('saveNote').textContent = account ? savedThere : savedHere;
+  $('exp').hidden = Boolean(account);
+  $('imp').hidden = Boolean(account);
+  renderSyncNote();
 }
 
 const TODAY = DATA.generated.slice(0, 10);
@@ -280,7 +594,7 @@ const typeMatches = (j, f) => f.types.length === 0 || f.types.some((t) => j.rt.i
 function select(f) {
   const terms = f.q.trim().toLowerCase().split(/\s+/).filter(Boolean);
   const out = JOBS.filter((j) => {
-    if (gone[key(j)] && !f.showGone) return false;
+    if (isDiscarded(key(j)) && !f.showGone) return false;
     if (!inScope(j, f)) return false;
     if (f.company && j.c !== f.company) return false;
     if (!levelMatches(j, f) || !typeMatches(j, f) || !placeMatches(j, f)) return false;
@@ -344,7 +658,7 @@ $('places').replaceChildren(
 function renderStories() {
   const counts = {};
   for (const j of JOBS) {
-    if (j.il && fresh(j) && !gone[key(j)]) counts[j.c] = (counts[j.c] ?? 0) + 1;
+    if (j.il && fresh(j) && !isDiscarded(key(j))) counts[j.c] = (counts[j.c] ?? 0) + 1;
   }
   const names = Object.keys(counts)
     .sort((a, b) => counts[b] - counts[a] || a.localeCompare(b))
@@ -381,9 +695,57 @@ const LIST_SEP = '|';
 const tag = (name, value, cls) =>
   h('span', { class: cls }, [h('span', { class: 'sr-only', text: `${name}: ` }), value]);
 
+/* The star toggle: its name stays "Star: ..." (the visible word is part of it) and aria-pressed carries the state; the
+   glyph also changes from an outline to a filled star and the button is tinted, so it is never colour alone. */
+function starButton(k, what, on) {
+  return h(
+    'button',
+    {
+      type: 'button',
+      class: 'btn btn-pill btn-star',
+      'data-act': 'star',
+      'data-k': k,
+      'aria-pressed': String(on),
+      'aria-label': `Star: ${what}`,
+    },
+    [h('span', { 'aria-hidden': 'true', text: on ? '★' : '☆' }), 'Star'],
+  );
+}
+
+/* A starred job that has closed: what was kept of it (title, company, location, link), marked as no longer listed. There
+   is no Apply, since the role is gone; the saved link is the posting as it was. */
+function closedCardEl(e) {
+  const k = key(e);
+  const what = `${e.t || 'Untitled role'} at ${e.c}`;
+  const url = e.u ? safeUrl(e.u) : null;
+  const title = e.t || 'Untitled role';
+  const art = h('article', {
+    class: 'card',
+    'data-job-id': k,
+    'data-company': e.c,
+    'data-listed': 'false',
+    'data-starred': 'true',
+    'data-discarded': 'false',
+    'data-pending': String(Boolean(account?.pending.has(k))),
+  });
+  art.append(
+    h('span', { class: 'sticker sticker-warn card-flag', text: 'NO LONGER LISTED' }),
+    h('p', { class: 'card-company', text: e.c }),
+    h('h3', { class: 'card-title' }, [
+      url && url !== '#'
+        ? h('a', { href: url, target: '_blank', rel: 'noopener noreferrer' }, [title, h('span', { class: 'sr-only', text: NEW_TAB })])
+        : title,
+    ]),
+    h('p', { class: 'card-tags' }, [e.l && h('span', { class: 'pill', text: e.l.slice(0, MAX_LOCATION) })]),
+    h('p', { class: 'card-actions' }, [starButton(k, what, true)]),
+  );
+  return h('li', {}, [art]);
+}
+
 function cardEl(j) {
   const k = key(j);
-  const discarded = Boolean(gone[k]);
+  const discarded = isDiscarded(k);
+  const starredNow = isStarred(k);
   const isNew = fresh(j);
   const what = `${j.t} at ${j.c}`;
   const url = safeUrl(j.u);
@@ -399,6 +761,8 @@ function cardEl(j) {
     'data-new': String(isNew),
     'data-stale': String(j.s),
     'data-discarded': String(discarded),
+    'data-starred': String(starredNow),
+    'data-pending': String(Boolean(account?.pending.has(k))),
   });
   if (j.s) {
     art.append(
@@ -435,6 +799,7 @@ function cardEl(j) {
         h('span', { 'aria-hidden': 'true', text: '↗' }),
         h('span', { class: 'sr-only', text: ` to ${what}${NEW_TAB}` }),
       ]),
+      starButton(k, what, starredNow),
       h('button', {
         type: 'button',
         class: 'btn btn-link',
@@ -448,11 +813,6 @@ function cardEl(j) {
   return h('li', {}, [art]);
 }
 
-function goneCount() {
-  const known = new Set(JOBS.map(key));
-  return Object.keys(gone).filter((k) => known.has(k)).length;
-}
-
 /* The visible summary changes on every keystroke; screen readers hear it once typing pauses. */
 function announce(text) {
   clearTimeout(announceTimer);
@@ -462,30 +822,58 @@ function announce(text) {
   }, ANNOUNCE_DELAY_MS);
 }
 
+/* The starred list is a view of its own: the filters do not apply to it (a closed role has no level, region or role
+   type), so they are put away while it shows. */
+function showView() {
+  const roles = view === 'roles';
+  for (const id of ['controlsBar', 'moreFilters', 'searchBar']) $(id).hidden = !roles;
+  $('starredView').setAttribute('aria-pressed', String(!roles));
+  $('starredView').textContent = `Starred (${starredItems().length})`;
+}
+
+function renderStarred() {
+  const items = starredItems();
+  const closedN = items.filter((item) => item.closed).length;
+  const summary = `${items.length} starred ${items.length === 1 ? 'role' : 'roles'}${closedN > 0 ? `, ${closedN} no longer listed` : ''}. The filters do not apply to this list.`;
+  $('summary').textContent = summary;
+  announce(summary);
+  $('hiring').hidden = true;
+  return items;
+}
+
 function render(focusIdx) {
-  const res = select(F);
-  const goneN = goneCount();
+  showView();
+  const starredView = view === 'starred';
+  const res = starredView ? renderStarred() : select(F);
+  const goneN = discardedCount();
   const israel = JOBS.filter((j) => j.il).length;
   const scope = JOBS.filter((j) => inScope(j, F)).length;
   $('goneN').textContent = goneN;
   $('showGone').disabled = goneN === 0;
-  const newN = JOBS.filter((j) => j.il && fresh(j) && !gone[key(j)]).length;
+  const newN = JOBS.filter((j) => j.il && fresh(j) && !isDiscarded(key(j))).length;
   $('heroTop').textContent = newN ? `${newN} new` : `${israel} open`;
   $('heroBottom').textContent = newN ? 'roles this week.' : 'roles in Israel.';
-  const summary = `Showing ${res.length} of ${scope} open roles ${F.loc === 'il' ? 'in Israel' : 'in all locations'}. ${goneN} discarded.`;
-  $('summary').textContent = summary;
-  announce(summary);
-  renderStories();
+  if (!starredView) {
+    const summary = `Showing ${res.length} of ${scope} open roles ${F.loc === 'il' ? 'in Israel' : 'in all locations'}. ${goneN} discarded.`;
+    $('summary').textContent = summary;
+    announce(summary);
+    renderStories();
+  }
   const list = $('list');
   if (res.length === 0) {
-    list.replaceChildren(h('li', { class: 'empty', text: 'No roles match these filters.' }));
+    list.replaceChildren(
+      h('li', {
+        class: 'empty',
+        text: starredView ? 'No starred roles yet. Use Star on a role to keep it here.' : 'No roles match these filters.',
+      }),
+    );
     $('pager').hidden = true;
     return;
   }
   const size = SIZES.includes(Number(F.size)) ? Number(F.size) : 10;
   const pages = Math.ceil(res.length / size);
   page = Math.min(page, pages - 1);
-  list.replaceChildren(...res.slice(page * size, (page + 1) * size).map(cardEl));
+  list.replaceChildren(...res.slice(page * size, (page + 1) * size).map((item) => (item.closed ? closedCardEl(item) : cardEl(item))));
   $('pager').hidden = res.length <= 10;
   $('size').value = size;
   $('prev').disabled = page === 0;
@@ -588,18 +976,31 @@ $('next').addEventListener('click', () => {
   go(1);
 });
 
-function setGone(k, on) {
-  if (on) gone[k] = TODAY;
-  else Reflect.deleteProperty(gone, k);
-  lsSet(LS_D, gone);
+/* A job as the page holds it, or, for a starred job that has closed, what was kept of it. */
+const itemFor = (k) => JOB_BY_KEY.get(k) ?? starredItems().find((item) => key(item) === k);
+
+/* Changes a choice and shows it at once; resolves as setChoice does. */
+function choose(item, state) {
+  const saving = setChoice(item, state);
+  render();
+  return saving;
 }
 
 $('list').addEventListener('click', (e) => {
-  const button = e.target.closest('[data-act="toggle"]');
+  const button = e.target.closest('[data-act]');
   if (!button) return;
+  const k = button.dataset.k;
+  const item = itemFor(k);
   const index = [...$('list').querySelectorAll('[data-act]')].indexOf(button);
-  setGone(button.dataset.k, !gone[button.dataset.k]);
+  if (button.dataset.act === 'star') setChoice(item, isStarred(k) ? null : 'star');
+  else setChoice(item, isDiscarded(k) ? null : 'discard');
   render(index);
+});
+
+$('starredView').addEventListener('click', () => {
+  view = view === 'starred' ? 'roles' : 'starred';
+  page = 0;
+  render();
 });
 
 $('exp').addEventListener('click', () => {
@@ -620,7 +1021,9 @@ $('file').addEventListener('change', (e) => {
       const imported = JSON.parse(reader.result);
       if (imported && typeof imported === 'object') {
         Object.assign(gone, imported);
+        for (const k of Object.keys(imported)) Reflect.deleteProperty(starred, k); /* a job is never both */
         lsSet(LS_D, gone);
+        lsSet(LS_S, starred);
         render();
       }
     } catch {
@@ -672,11 +1075,18 @@ function describe(j) {
     remoteCountryNotGiven: j.ru,
     isNew: fresh(j),
     possiblyOld: j.s,
-    discarded: Boolean(gone[key(j)]),
+    discarded: isDiscarded(key(j)),
+    starred: isStarred(key(j)),
   };
 }
+
+/* A starred job for an assistant: an open role as describe() gives it, a closed one as what was kept of it. */
+const describeStarred = (item) =>
+  item.closed
+    ? { id: key(item), company: item.c, title: item.t, location: item.l, url: item.u, listed: false, starred: true }
+    : { ...describe(item), listed: true };
 const reply = (obj, isError = false) => ({ content: [{ type: 'text', text: JSON.stringify(obj) }], isError });
-const find = (id) => JOBS.find((j) => key(j) === id);
+const find = (id) => JOB_BY_KEY.get(id);
 
 /* A tool argument that is a list of strings; one string is a list of one. */
 const asList = (value) => (Array.isArray(value) ? value : [value]).filter((v) => typeof v === 'string');
@@ -808,26 +1218,60 @@ const TOOLS = [
   },
   {
     name: 'discard_job',
-    description: 'Mark a role as not interesting. Saved in this browser and hidden from the feed.',
+    description:
+      'Mark a role as not interesting and hide it from the feed. A starred role loses its star (a role is starred or discarded, never both). Saved in this browser, or in the account when the user is signed in; "saved" is false, with a "failure" of "later" (kept on this device, tried again) or "limit" or "refused" (not saved and undone), when it was not saved to the account.',
     inputSchema: idSchema,
-    execute: (a) => {
+    execute: async (a) => {
       const j = find((a ?? {}).id);
       if (!j) return unknownJob();
-      setGone(key(j), true);
-      render();
-      return Promise.resolve(reply(describe(j)));
+      const result = await choose(j, 'discard');
+      return reply({ ...describe(j), ...result });
     },
   },
   {
     name: 'restore_job',
-    description: 'Bring a discarded role back into the feed.',
+    description: 'Bring a discarded role back into the feed. A role that is not discarded is left as it is.',
     inputSchema: idSchema,
-    execute: (a) => {
+    execute: async (a) => {
       const j = find((a ?? {}).id);
       if (!j) return unknownJob();
-      setGone(key(j), false);
-      render();
-      return Promise.resolve(reply(describe(j)));
+      const result = isDiscarded(key(j)) ? await choose(j, null) : { saved: true, failure: null };
+      return reply({ ...describe(j), ...result });
+    },
+  },
+  {
+    name: 'star_job',
+    description:
+      'Star a role the user is interested in. A discarded role loses its discard (a role is starred or discarded, never both). Saved in this browser, or in the account when the user is signed in; "saved" is false, with a "failure" of "later" (kept on this device, tried again) or "limit" or "refused" (not saved and undone), when it was not saved to the account.',
+    inputSchema: idSchema,
+    execute: async (a) => {
+      const j = find((a ?? {}).id);
+      if (!j) return unknownJob();
+      const result = await choose(j, 'star');
+      return reply({ ...describe(j), ...result });
+    },
+  },
+  {
+    name: 'unstar_job',
+    description: 'Remove the star from a role. A role that is not starred is left as it is. Works for a closed starred role too (see list_starred_jobs).',
+    inputSchema: idSchema,
+    execute: async (a) => {
+      const id = (a ?? {}).id;
+      const item = typeof id === 'string' ? itemFor(id) : undefined;
+      if (!item) return unknownJob();
+      const result = isStarred(id) ? await choose(item, null) : { saved: true, failure: null };
+      return reply({ ...describeStarred(item), starred: isStarred(id), ...result });
+    },
+  },
+  {
+    name: 'list_starred_jobs',
+    description:
+      'List the roles the user starred, with `listed` false for a starred role that has closed (it keeps its title, company, location and link). Filters do not apply.',
+    inputSchema: { type: 'object', properties: {} },
+    annotations: { readOnlyHint: true },
+    execute: () => {
+      const items = starredItems();
+      return Promise.resolve(reply({ total: items.length, jobs: items.map(describeStarred) }));
     },
   },
   {
@@ -854,5 +1298,16 @@ if (modelContext) {
 }
 
 sync();
+renderAccount();
 render();
 ready = true;
+
+/* The account may already be known (auth.js is fast) or may come later; either way the page follows it. The handler
+   waits a tick: it runs inside the sign-in library's own callback, which must not be waited on. */
+document.addEventListener('misra:account', () => {
+  setTimeout(onAccount, 0);
+});
+globalThis.addEventListener('online', () => {
+  if (account) retryNow();
+});
+onAccount();

@@ -76,6 +76,25 @@ It stops at the first failed check with a message that names it and ends with `a
 Pasting it into the SQL editor of the test project works too. CI does not run it (it needs a project); the lint above
 runs everywhere.
 
+`supabase/tests/job_choices.sql` checks the two rules of step 4.2 the same way (`all job choice checks passed`): a user
+can keep at most 2,000 rows (the 2,001st is refused with error 54000, a change to a job the user already has is not, and
+another account is not affected), and a discard is deleted when its job is closed by the sync while a star stays with its
+title, location and link.
+
+## Stars and discards
+
+`user_jobs` holds one row per user and job with a single `state`, so a job is starred or discarded, never both. A star
+keeps its title, location and link (http or https only) so it can still be shown after the job closes; a discard keeps
+only the job's key. Two triggers (migration `20261115180000_job_choices_cap_and_closed_jobs.sql`):
+
+- `limit_user_jobs` refuses a new row for a user who already has 2,000, with error code `54000`
+  (`program_limit_exceeded`; PostgREST answers it with HTTP 500, so the page checks the code before the status). The page treats that code as a refusal to tell the user about, not
+  as a network failure to retry.
+- `drop_discards_of_closed_job` runs on `public.jobs` when a row is written with `status = 'closed'` (the daily sync
+  does this) and deletes every user's discard of that job, so discards never pile up and a job that reopens shows again.
+  Stars stay. It does not clean up discards of jobs that were already closed before it was applied; the table is new and
+  empty of such rows.
+
 ## Auth settings the page depends on
 
 In the Supabase dashboard, Authentication:

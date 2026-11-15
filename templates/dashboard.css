@@ -126,6 +126,41 @@ a {
   margin: 0 0 var(--space-4);
 }
 
+/* The line about saving stars and discards (a status region: empty when all is well), and the switch to the starred list. */
+.sync-note:not(:empty) {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+  margin: 0 0 var(--space-4);
+}
+
+.sync-note .notice {
+  margin: 0;
+}
+
+.view-switch {
+  margin: 0 0 var(--space-4);
+}
+
+/* Parts the page puts away (the filters while the starred list shows, import and export while signed in): .btn and the
+   flex rows above set a display that would beat the hidden attribute. */
+.controls[hidden],
+.more[hidden],
+.search[hidden],
+.btn[hidden] {
+  display: none;
+}
+
+/* A pressed toggle button (Star) also changes its word and its glyph, so the state is never colour alone. */
+.btn-star {
+  gap: var(--space-2);
+}
+
+.btn-star[aria-pressed="true"] {
+  background: var(--accent-bg);
+}
+
 /* Narrow screens: the signed-in account (a long email) gets its own row under the logo and the theme button. */
 @media (width < 561px) {
   .top {
