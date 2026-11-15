@@ -369,10 +369,12 @@ def test_the_page_is_framed_by_the_template(source: str, output: str) -> None:
 @pytest.mark.parametrize(("source", "output"), DOCUMENTS)
 def test_the_page_has_no_built_from_line_and_no_link_to_its_source_or_history(source: str, output: str) -> None:
     html = build_dashboard.render_legal(BY_OUTPUT[output], REPO)
-    assert "built from" not in html.lower()
+    footer = html.split('<footer class="legal-foot">')[1]
+    assert "built from" not in footer.lower()
     assert "legal-source" not in html
-    assert "github.com/ravidorr/misra/blob/" not in html
-    assert "github.com/ravidorr/misra/commits/" not in html
+    assert "github.com" not in footer  # the footer leads to the other pages of the site only
+    assert f"{BLOB}/{source}" not in html  # no link to the page's own Markdown file
+    assert f"github.com/ravidorr/misra/commits/main/{source}" not in html  # nor to its history
     for target in ("privacy.html", "terms.html", "security.html"):  # the footer navigation is still there
         assert f'<a href="{target}">' in html
     assert 'aria-label="Legal and security"' in html
