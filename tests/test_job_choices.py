@@ -791,3 +791,24 @@ async def test_changes_of_another_tab_of_the_account_are_not_erased_from_the_bro
     await until(lambda: choices.state_of("Acme", "1") == "star")
     await until(lambda: only_other_tab_left(page))
     assert list(await pending(page)) == ["Acme|2"]  # this tab's change is forgotten, the other tab's is kept
+
+
+async def test_a_newer_change_of_another_tab_to_the_same_job_is_not_erased_by_this_tabs_confirmation(
+    page: Page, site: Path
+) -> None:
+    choices = ChoicesBackend()
+    await sign_in(page, site, choices)
+    choices.mode = "down"
+    await page.click(f"{PM1} [data-act=star]")
+    await expect(page.locator("#syncNote .notice")).to_be_visible()
+    newer = {"c": "Acme", "i": "1", "t": "", "l": "", "u": None, "state": "discard", "id": "another-tab"}
+    await page.evaluate(
+        "([key, user, entry]) => { const all = JSON.parse(localStorage.getItem(key)); all[user]['Acme|1'] = entry;"
+        " localStorage.setItem(key, JSON.stringify(all)); }",
+        [PENDING, USER_ID, newer],
+    )
+    choices.mode = "ok"
+    await page.click("#syncRetry")
+    await until(lambda: choices.state_of("Acme", "1") == "star")
+    await expect(page.locator("#syncNote")).to_have_text("")
+    assert (await pending(page))["Acme|1"] == newer  # this tab's star was confirmed, the other tab's newer choice stays

@@ -325,12 +325,13 @@ function loadPending(userId) {
 }
 
 /* Saves one change (or, with op null, forgets one) in this browser. It reads what is stored first and touches only that
-   job, so another tab of the same account keeps the changes it has not sent yet. */
-function savePending(a, k, op) {
+   job, and forgets a change only if it is the very one the service confirmed (each has an id), so another tab of the
+   same account keeps the changes it has not sent yet, also newer ones to the same job. */
+function savePending(a, k, op, acknowledged) {
   const all = lsGet(LS_Q, {});
   const mine = all[a.userId] && typeof all[a.userId] === 'object' ? all[a.userId] : {};
   if (op) mine[k] = op;
-  else Reflect.deleteProperty(mine, k);
+  else if (mine[k]?.id === acknowledged?.id) Reflect.deleteProperty(mine, k); /* not a newer change of another tab */
   if (Object.keys(mine).length > 0) all[a.userId] = mine;
   else Reflect.deleteProperty(all, a.userId);
   lsSet(LS_Q, all);
@@ -386,7 +387,7 @@ async function drain(a) {
     }
     if (a.pending.get(k) === op) {
       a.pending.delete(k); /* a newer change to the same job stays */
-      savePending(a, k, null);
+      savePending(a, k, null, op);
     }
     if (error) render(); /* the refused choice is gone from the view too */
   }
@@ -463,7 +464,7 @@ function setChoice(item, state) {
   }
   const a = account;
   if (a.failure === 'limit' || a.failure === 'refused') a.failure = null;
-  const op = { ...snapshotOf(item), state };
+  const op = { ...snapshotOf(item), state, id: `${Date.now()}-${Math.random()}` };
   a.pending.set(k, op);
   savePending(a, k, op);
   return flush().then(() => {

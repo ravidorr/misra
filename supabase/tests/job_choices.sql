@@ -145,11 +145,19 @@ insert into public.user_jobs (user_id, company, job_id, state) values
 insert into public.user_jobs (user_id, company, job_id, state, title)
   values ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', 'Acme', '4', 'star', 'Gone Role')
   on conflict (user_id, company, job_id) do update set state = excluded.state;
+do $$
+begin
+  assert (select state from public.user_jobs where company = 'Acme' and job_id = '4') = 'star', 'a star of a closed job was refused';
+end $$;
+-- Replacing a star with a discard of a closed job leaves no choice, not the old star.
+insert into public.user_jobs (user_id, company, job_id, state, title)
+  values ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', 'Acme', '4', 'discard', null)
+  on conflict (user_id, company, job_id) do update set state = excluded.state, title = excluded.title;
 reset role;
 do $$
 begin
+  assert not exists (select 1 from public.user_jobs where company = 'Acme' and job_id = '4'), 'a star came back after it was replaced by a discard of a closed job';
   assert not exists (select 1 from public.user_jobs where company = 'Nowhere'), 'a discard of an unknown job was kept';
-  assert (select state from public.user_jobs where company = 'Acme' and job_id = '4') = 'star', 'a star of a closed job was refused';
   assert (select count(*) from public.user_jobs where company = 'Acme' and job_id = '1' and state = 'discard') = 1, 'the discard of an open job was refused';
 end $$;
 
