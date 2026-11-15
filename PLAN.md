@@ -141,10 +141,17 @@ Decisions made in planning (they change the PRD's wording, so update the PRD in 
   `REPORT_TO_EMAIL` and `IP_HASH_SECRET`, deploy with `supabase functions deploy report-site`, then run the curl checks:
   a good report arrives by email, a bad input is a 400, the wrong origin a 403, and the per-visitor limit still holds when
   `X-Forwarded-For` and `CF-Connecting-IP` are written by the caller (confirms the visitor address the platform reports).~~
-- [ ] 5.2 Dashboard: "Report a site" action on the coverage card opens a short form (company, careers link, why it
+- [x] ~~5.2 Dashboard: "Report a site" action on the coverage card opens a short form (company, careers link, why it
   matters), confirmation and error messages, no account needed, CSP `connect-src` already covers the host. Process note
   in `CONTRIBUTING.md` for accepting a site (moves to `data/seed_companies.csv` or the gap card with a reason).
-  Done when: FR-7 AC 1 to 6 hold.
+  Done when: FR-7 AC 1 to 6 hold.~~
+  Remaining checks, live only, once the PR is merged and the page is deployed (and step 5.1's live checks are done):
+  open the page at <https://ravidorr.github.io/misra/>, open the coverage gap card and press "Report a site"; send one real
+  report and confirm the email reaches the maintainer and the page shows "Report sent"; press Send with the fields empty
+  and with a bad link and confirm the messages appear beside the fields and nothing is sent (the browser's network tab
+  shows no request); and, if the daily limit of 3 can be spent, send a fourth report and confirm the page says to try
+  again tomorrow. Also confirm in the browser console that the request goes to the project's `report-site` function and
+  that no `Content-Security-Policy` error appears.
 
 ## FR-8 (personalised digest; the lawyer check is a gate in front of step 6.6)
 
