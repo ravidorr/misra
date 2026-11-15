@@ -439,10 +439,12 @@ async function loadServer(a) {
     }
     a.server = fresh;
     a.loadFailed = false;
+    $('list').dataset.choices = 'loaded';
   } catch (error) {
     console.error(error);
     if (account !== a) return;
     a.loadFailed = true;
+    $('list').dataset.choices = 'failed';
   }
   render();
   renderSyncNote();
@@ -488,6 +490,7 @@ function attach(next) {
   };
   account = a;
   leftBehind = 0;
+  $('list').dataset.choices = 'loading';
   renderAccount();
   render();
   loadServer(a);
@@ -498,6 +501,7 @@ function detach() {
   clearTimeout(account.retryTimer);
   leftBehind = account.pending.size;
   account = null;
+  $('list').dataset.choices = 'browser';
   renderAccount();
   render();
 }
@@ -552,6 +556,7 @@ function renderSyncNote() {
 /* What depends on who is signed in: where choices are saved, and the browser file import and export (which are for
    this browser's discards only). */
 function renderAccount() {
+  $('list').dataset.choices ||= 'browser'; /* where the choices live: browser, or the account while loading, loaded, failed */
   $('saveNote').textContent = account ? savedThere : savedHere;
   $('exp').hidden = Boolean(account);
   $('imp').hidden = Boolean(account);

@@ -87,7 +87,9 @@ async def sign_in(page: Page, site: Path, choices: ChoicesBackend, *, tools: boo
     await start_sign_in(page, auth)
     await come_back(page)
     await page.wait_for_selector("#accountUser:not([hidden])")
-    await until(lambda: any(r.method == "GET" for r in choices.requests))
+    await page.wait_for_selector(
+        "#list[data-choices=loaded], #list[data-choices=failed]"
+    )  # the account's list is applied
     return auth
 
 
