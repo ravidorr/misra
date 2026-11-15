@@ -21,7 +21,9 @@ Misra's readers are students and early-career people in Israel (early 20s). They
 | `index.html`, `showcase.css` | The showcase page. Open it directly, no build step. |
 | `logo-brief.md` | Brief for the graphic designer creating the logo and favicon. |
 
-`build_dashboard.py` bundles `tokens.css`, `components/*.css` and `templates/dashboard.css` into `docs/dashboard.css`. The page loads it, `theme.js` and `dashboard.js` as separate files (with Subresource Integrity hashes), under a Content-Security-Policy that allows only its own origin.
+`build_dashboard.py` bundles `tokens.css`, `components/*.css` and `templates/dashboard.css` into `docs/dashboard.css`. The page loads it, `theme.js`, `dashboard.js`, `auth.js` and the vendored `supabase.js` as separate files (with Subresource Integrity hashes), under a Content-Security-Policy that allows only its own origin and the Supabase project host.
+
+The account control in the page header (`.account`) reuses `btn btn-pill`, is hidden until `auth.js` starts, and on a phone puts the signed-in email on its own row; it has no component of its own.
 
 ## Rules
 

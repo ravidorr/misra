@@ -1,6 +1,7 @@
 import base64
 import hashlib
 import json
+import re
 import runpy
 import sqlite3
 from pathlib import Path
@@ -57,6 +58,9 @@ def write_static(workdir: Path) -> None:
     (workdir / "templates" / "dashboard.html").write_text("<!doctype html><title>x</title>", encoding="utf-8")
     (workdir / "templates" / "dashboard.js").write_text("const dashboard = 1;\n", encoding="utf-8")
     (workdir / "templates" / "theme.js").write_text("const theme = 1;\n", encoding="utf-8")
+    (workdir / "templates" / "auth.js").write_text("const auth = '__SUPABASE_URL__';\n", encoding="utf-8")
+    (workdir / "vendor").mkdir(exist_ok=True)
+    (workdir / "vendor" / "supabase.js").write_bytes(b"var supabase = '__SUPABASE_URL__'; \xc3\xa9\r\n")
 
 
 def read_payload(workdir: Path) -> Any:
@@ -216,16 +220,21 @@ def test_site_files_are_written_next_to_the_page(db: sqlite3.Connection, workdir
     build_dashboard.main()
     docs = workdir / "docs"
     assert sorted(p.name for p in docs.iterdir()) == [
+        "auth.js",
         "dashboard.css",
         "dashboard.js",
         "index.html",
         "jobs.json",
         "jobs.jsonld",
+        "supabase.js",
         "theme.js",
     ]
     assert (docs / "index.html").read_text(encoding="utf-8") == "<!doctype html><title>x</title>"
     assert (docs / "dashboard.js").read_text(encoding="utf-8") == "const dashboard = 1;\n"
     assert (docs / "theme.js").read_text(encoding="utf-8") == "const theme = 1;\n"
+    assert (docs / "auth.js").read_text(encoding="utf-8") == f"const auth = '{build_dashboard.SUPABASE_URL}';\n"
+    # a vendored script is copied byte for byte: nothing is injected into it and its line endings stay
+    assert (docs / "supabase.js").read_bytes() == b"var supabase = '__SUPABASE_URL__'; \xc3\xa9\r\n"
     assert (docs / "dashboard.css").read_text(encoding="utf-8").endswith("body{}")
     listing = json.loads((docs / "jobs.jsonld").read_text(encoding="utf-8"))
     assert [i["item"]["title"] for i in listing["itemListElement"]] == ["Product Manager </script> é"]
@@ -240,7 +249,8 @@ def test_page_gets_integrity_hashes_of_its_files(db: sqlite3.Connection, workdir
     write_unresolved(workdir)
     (workdir / "templates" / "dashboard.html").write_text(
         '<link integrity="__SRI_DASHBOARD_CSS__"><script integrity="__SRI_THEME_JS__"></script>'
-        '<script integrity="__SRI_DASHBOARD_JS__"></script>',
+        '<script integrity="__SRI_DASHBOARD_JS__"></script><script integrity="__SRI_AUTH_JS__"></script>'
+        '<script integrity="__SRI_SUPABASE_JS__"></script>',
         encoding="utf-8",
     )
     db.close()
@@ -253,7 +263,8 @@ def test_page_gets_integrity_hashes_of_its_files(db: sqlite3.Connection, workdir
 
     assert html == (
         f'<link integrity="{expected("dashboard.css")}"><script integrity="{expected("theme.js")}"></script>'
-        f'<script integrity="{expected("dashboard.js")}"></script>'
+        f'<script integrity="{expected("dashboard.js")}"></script><script integrity="{expected("auth.js")}"></script>'
+        f'<script integrity="{expected("supabase.js")}"></script>'
     )
     assert "__SRI" not in html
 
@@ -366,3 +377,16 @@ def test_the_backend_settings_and_page_data_are_injected_into_the_page(db: sqlit
     data = json.loads(block)
     assert data["gaps"]["untracked"] == ["A</script>"]
     assert data["generated"].endswith(" UTC")
+
+
+def test_the_vendored_supabase_script_is_the_pinned_release_unmodified() -> None:
+    """vendor/README.md names the version and the SHA-256 of the file: an edited or swapped copy fails here."""
+    vendor = Path(__file__).resolve().parents[1] / "vendor"
+    readme = (vendor / "README.md").read_text(encoding="utf-8")
+    row = re.search(
+        r"\| `supabase\.js` \| `@supabase/supabase-js` \(MIT\) \| (\d+\.\d+\.\d+) \| `([0-9a-f]{64})` \|", readme
+    )
+    assert row
+    assert hashlib.sha256((vendor / "supabase.js").read_bytes()).hexdigest() == row[2]
+    assert build_dashboard.VENDORED_FILES == ("vendor/supabase.js",)
+    assert "eval(" not in (vendor / "supabase.js").read_text(encoding="utf-8")  # the page forbids unsafe-eval

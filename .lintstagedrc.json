@@ -4,7 +4,7 @@
     ".venv/bin/python -m ruff format --check"
   ],
   "*.{ts,tsx,js,mjs,cjs}": [
-    "eslint --max-warnings=0"
+    "eslint --max-warnings=0 --no-warn-ignored"
   ],
   "*.css": [
     "stylelint --max-warnings=0"

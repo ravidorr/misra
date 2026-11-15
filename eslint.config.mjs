@@ -3,8 +3,8 @@ import globals from 'globals';
 import tseslint from 'typescript-eslint';
 
 export default tseslint.config(
-  // docs/ is generated from templates/ (linted there).
-  { ignores: ['.venv/**', 'dist/**', 'coverage/**', 'node_modules/**', '.lighthouseci/**', 'docs/**'] },
+  // docs/ is generated from templates/ (linted there); vendor/ holds unmodified third-party files.
+  { ignores: ['.venv/**', 'dist/**', 'coverage/**', 'node_modules/**', '.lighthouseci/**', 'docs/**', 'vendor/**'] },
   js.configs.recommended,
   ...tseslint.configs.strictTypeChecked,
   ...tseslint.configs.stylisticTypeChecked,

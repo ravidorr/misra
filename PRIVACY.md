@@ -8,6 +8,8 @@ No personal data is collected. The pipeline reads publicly available job posting
 
 The repository is public, so `data/jobs.db` and the generated dashboard (the files in `docs/`, published on GitHub Pages and marked `noindex`) are publicly readable. They contain only public job postings. The dashboard saves your Discard choices in your own browser (`localStorage`); nothing is sent anywhere.
 
+Signing in is optional and the dashboard works the same without it. If you sign in with Google, your email address is kept in our Supabase database (EU, Ireland), and the page keeps your sign-in in your browser. Our own tables keep the email only, and the page never shows your name or photo or saves them in the sign-in it keeps. Google also sends them to Supabase's sign-in service, which holds them with the account until it is deleted. We never store a CV. This notice is rewritten in full, with how to delete your account, when stars, "Not for me" choices and preferences are saved for signed-in users.
+
 ## How data is used
 
 No personal data is collected, so none is used or sold. Job postings are used only to produce the digest and the dashboard.

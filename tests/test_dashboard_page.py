@@ -3,6 +3,7 @@ Content-Security-Policy, passes axe in both themes, and keeps focus and announce
 
 Locally the tests skip when Chromium is missing; in CI (CI=true) a missing browser is a failure."""
 
+import base64
 import json
 import mimetypes
 import shutil
@@ -35,6 +36,10 @@ CORS = {
     "access-control-allow-headers": "*",
     "access-control-expose-headers": "Content-Range",
 }
+USER_ID = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+EMAIL = "ann@test.example"
+NAME = "Ann Example"
+PHOTO = "https://photos.test/ann.png"
 GAP_GROUPS = [
     ("Blocks automated access", 1),
     ("Site down, parked or unreachable", 1),
@@ -48,6 +53,7 @@ def site(db: sqlite3.Connection, workdir: Path) -> Path:
     """The real templates and design system built over a small database; returns docs/."""
     shutil.copytree(REPO / "templates", workdir / "templates", dirs_exist_ok=True)
     shutil.copytree(REPO / "design-system", workdir / "design-system")
+    shutil.copytree(REPO / "vendor", workdir / "vendor")
     write_json(
         workdir / "data" / "companies.json", [{"name": "Acme", "status": "ok"}, {"name": "Nowhere", "status": "x"}]
     )
@@ -126,9 +132,80 @@ class Backend:
             await route.fulfill(body=json.dumps(page), content_type="application/json", headers=headers)
 
 
-async def serve(page: Page, docs: Path, *, wait: bool = True, backend: Backend | None = None) -> list[str]:
-    """Serve docs/ at ORIGIN without a network and the jobs from a fake backend; returns the console errors and page
-    errors seen. The backend defaults to the rows of the site fixture."""
+class AuthBackend:
+    """A stand-in for the project's sign-in service (/auth/v1): the Google redirect, the code exchange and the log-out.
+    It records every request. The session it hands out carries what Google sends besides the email (a name and a
+    photo), so a test can check that none of it is kept or shown. `mode` breaks it: bad_code or logout_fails."""
+
+    def __init__(self, mode: str = "ok") -> None:
+        self.mode = mode
+        self.requests: list[Any] = []
+
+    def session(self) -> dict[str, Any]:
+        def b64(part: dict[str, Any]) -> str:
+            return base64.urlsafe_b64encode(json.dumps(part).encode()).decode().rstrip("=")
+
+        expires = int(datetime.now(UTC).timestamp()) + 3600
+        # The token as Supabase issues it once the access token hook of the migration has emptied `user_metadata`.
+        # Without the hook that claim holds the name and photo from Google, and the browser would save them with it.
+        claims = {
+            "sub": USER_ID,
+            "role": "authenticated",
+            "aal": "aal1",
+            "email": EMAIL,
+            "exp": expires,
+            "app_metadata": {"provider": "google", "providers": ["google"]},
+            "user_metadata": {},
+        }
+        google = {"full_name": NAME, "name": NAME, "avatar_url": PHOTO, "picture": PHOTO, "email": EMAIL, "sub": "1111"}
+        return {
+            "access_token": f"{b64({'alg': 'HS256', 'typ': 'JWT'})}.{b64(claims)}.signature",
+            "token_type": "bearer",
+            "expires_in": 3600,
+            "expires_at": expires,
+            "refresh_token": "refresh-1",
+            "user": {
+                "id": USER_ID,
+                "aud": "authenticated",
+                "role": "authenticated",
+                "email": EMAIL,
+                "created_at": "2026-11-15T10:00:00Z",
+                "app_metadata": {"provider": "google", "providers": ["google"]},
+                "user_metadata": google,
+                "identities": [{"provider": "google", "identity_data": google}],
+            },
+        }
+
+    async def handle(self, route: Route) -> None:
+        request = route.request
+        if request.method == "OPTIONS":
+            await route.fulfill(status=204, headers=CORS)
+            return
+        self.requests.append(request)
+        path = urlparse(request.url).path
+        if path.endswith("/authorize"):  # the browser is sent to Google: a stand-in page
+            await route.fulfill(body="<title>Google</title>", content_type="text/html")
+        elif path.endswith("/token") and self.mode != "bad_code":
+            await route.fulfill(body=json.dumps(self.session()), content_type="application/json", headers=CORS)
+        elif path.endswith("/token"):
+            body = json.dumps({"error": "invalid_grant", "error_description": "code expired"})
+            await route.fulfill(status=400, body=body, content_type="application/json", headers=CORS)
+        elif path.endswith("/logout") and self.mode != "logout_fails":
+            await route.fulfill(status=204, headers=CORS)
+        else:
+            await route.fulfill(status=500, headers=CORS, body="unavailable")
+
+
+async def serve(
+    page: Page,
+    docs: Path,
+    *,
+    wait: bool = True,
+    backend: Backend | None = None,
+    auth: AuthBackend | None = None,
+) -> list[str]:
+    """Serve docs/ at ORIGIN without a network, the jobs from a fake backend and the sign-in from a fake service;
+    returns the console errors and page errors seen. The backend defaults to the rows of the site fixture."""
     problems: list[str] = []
     rows_file = docs.parent / "rows.json"
     if backend is None:
@@ -144,6 +221,8 @@ async def serve(page: Page, docs: Path, *, wait: bool = True, backend: Backend |
 
     await page.route(f"{ORIGIN}/**", handler)
     await page.route(f"{build_dashboard.SUPABASE_URL}/**", backend.handle)
+    # the later route wins: sign-in requests never reach the jobs backend
+    await page.route(f"{build_dashboard.SUPABASE_URL}/auth/v1/**", (auth or AuthBackend()).handle)
     page.on("console", lambda m: problems.append(m.text) if m.type == "error" else None)
     page.on("pageerror", lambda e: problems.append(str(e)))
     await page.goto(f"{ORIGIN}/index.html")
@@ -359,8 +438,11 @@ async def test_the_page_csp_allows_only_itself_and_the_project_host(site: Path) 
     assert "__SUPABASE" not in html
     assert "__PAGE_DATA__" not in html
     assert build_dashboard.SUPABASE_ANON_KEY.startswith("sb_publishable_")  # never a secret or service-role key
+    vendored = {Path(name).name for name in build_dashboard.VENDORED_FILES}  # supabase-js names "sb_secret_" itself
     for built in site.iterdir():
         text = built.read_text(encoding="utf-8") if built.suffix in {".html", ".js", ".css", ".json"} else ""
+        if built.name in vendored:
+            continue
         assert "sb_secret_" not in text
         assert "service_role" not in text
     assert "__SUPABASE" not in (site / "dashboard.js").read_text(encoding="utf-8")
