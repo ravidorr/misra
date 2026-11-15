@@ -12,6 +12,12 @@ All notable changes are documented here. Format follows [Keep a Changelog](https
 - Crawl problems are not silent: the digest step prints one line to the job log, counts and company names only (for example `coverage gaps: 2 (1 new): failing 1 (Acme); held 1 (Beta)`), and marks the gaps as logged, so "new" still means the first day; a new gap is printed as a `::warning::` annotation of the run. The detection (crawl guards, closing rules, the dashboard's coverage gap card) and the failure alert of `send_alert.py` are unchanged; a broken coverage check still turns the step red.
 - Tests: the digest never contains the section even with failing, held and believed-drop companies in the crawl log; the log line; a gap-only day sends nothing; the subscriber digest already had its own test that it has no coverage content.
 
+## [0.33.0] - 2026-11-15
+
+### Removed
+
+- The "This page is built from ... (source and full history on GitHub)" line at the bottom of the generated `privacy.html`, `terms.html` and `security.html`, and everything that only existed for it: the `__SOURCE__`, `__BLOB_URL__` and `__HISTORY_URL__` placeholders, the `blob_url` and `history_url` properties of `LegalPage`, and the `.legal-source` styles. The footer navigation (Privacy, Terms, Security) stays and the Markdown files stay the source of truth. A test checks the built pages carry no "built from" line and no link to the GitHub blob or commits URLs.
+
 ## [0.32.0] - 2026-11-15
 
 ### Added
