@@ -1,94 +1,94 @@
-name,domain,segment,reason,note
-OX Security,ox.security,cyber_infra,no_careers_url,
-Radware,radware.com,cyber_infra,site_unusable,The page is empty
-Deep Instinct,deepinstinct.com,cyber_infra,needs_reader,Job descriptions are PDF files
-Mitiga,mitiga.io,cyber_infra,no_openings,No openings right now
-Pillar Security,pillar.security,cyber_infra,needs_reader,"Jobs on its own site, no ATS behind them"
-Pliops,pliops.com,cyber_infra,no_openings,The Comeet board is deactivated; a Workable account lists no job
-Lumigo,lumigo.io,cyber_infra,no_feed_found,"No ATS link, feed or job link found"
-env0,env0.com,cyber_infra,needs_reader,"Jobs on its own site, no ATS behind them"
-Swimm,swimm.io,cyber_infra,needs_reader,Only an email address
-Applitools,applitools.com,cyber_infra,no_openings,No openings right now
-lakeFS,lakefs.io,cyber_infra,bot_protection,Access denied (403)
-SQream,sqream.com,cyber_infra,needs_reader,Comeet plugin page: the jobs are only in the page markup
-Upsolver,upsolver.com,cyber_infra,no_careers_url,
-Walnut,walnut.io,biz_software,needs_reader,"Jobs on its own site, no ATS behind them"
-Pay-Me,paymeservice.com,biz_software,no_feed_found,"No ATS link, feed or job link found"
-Syte,syte.ai,biz_software,needs_reader,"The job list is drawn by a script, with no job link"
-Tabit,tabit.cloud,biz_software,no_feed_found,"No ATS link, feed or job link found"
-Apester,apester.com,biz_software,needs_reader,Comeet plugin page: the jobs are only in the page markup
-AnyClip,anyclip.com,biz_software,no_feed_found,"No ATS link, feed or job link found"
-Aniview,aniview.com,biz_software,no_feed_found,"No ATS link, feed or job link found"
-Madgicx,madgicx.com,biz_software,no_openings,No open positions; CVs go through a form
-Guesty,guesty.com,biz_software,needs_reader,Comeet plugin page: the jobs are only in the page markup
-Magic Software,magicsoftware.com,biz_software,no_feed_found,"Its Comeet account is Matrix IFS's, not its own"
-Ex Libris,exlibrisgroup.com,biz_software,needs_reader,Links to its parent Clarivate's worldwide board
-Playstudios,playstudios.com,biz_software,needs_reader,Dayforce portal; its jobs have no location
-Jelly Button Games,jellybuttongames.com,biz_software,site_unusable,Domain parked at GoDaddy
-Optibus,optibus.com,biz_software,no_feed_found,No feed in its page or network requests
-Ceva,ceva-ip.com,deeptech,no_careers_url,
-Camtek,camtek.com,deeptech,site_unusable,The page is empty
-Speedata,speedata.io,deeptech,no_careers_url,
-NeuReality,neureality.ai,deeptech,no_openings,The Comeet board lists no open position
-Teramount,teramount.com,deeptech,no_careers_url,
-X-Globe,x-globe.com,deeptech,no_careers_url,
-Q Factor,qfactor.ai,deeptech,no_careers_url,
-Cognata,cognata.com,deeptech,no_feed_found,"No ATS link, feed or job link found"
-REE Automotive,ree.auto,deeptech,needs_reader,Comeet plugin page: the jobs are only in the page markup
-Gilat,gilat.com,deeptech,no_careers_url,
-Siklu,siklu.com,deeptech,no_careers_url,
-Satixfy,satixfy.com,deeptech,site_unusable,The page is now an MDA Space page
-Silicom,silicom.co.il,deeptech,no_careers_url,
-Elbit Systems,elbitsystems.com,deeptech,site_unusable,Timeout; its careers site is a Hebrew custom site with no feed seen
-Line 5,line5.ai,deeptech,site_unusable,Needs a login
-Quantum Art,quantum-art.com,deeptech,bot_protection,Access denied (403); the domain was also reported parked
-Sight Diagnostics,sightdx.com,deeptech,no_careers_url,
-Brainsway,brainsway.com,deeptech,no_careers_url,
-ReWalk,rewalk.com,deeptech,no_openings,"The list is US jobs, none in Israel"
-EarlySign,earlysign.com,deeptech,no_careers_url,
-Kahun,kahun.com,deeptech,site_unusable,Domain parked at GoDaddy
-Tyto Care,tytocare.com,deeptech,needs_reader,A list or CV form with no job link
-Diagnostic Robotics,diagnosticrobotics.com,deeptech,no_careers_url,
-Aleph Farms,aleph-farms.com,deeptech,no_feed_found,"No ATS link, feed or job link found"
-Tevel Aerobotics,tevel-tech.com,deeptech,no_careers_url,
-Evogene,evogene.com,deeptech,no_feed_found,"No ATS link, feed or job link found"
-Remilk,remilk.com,deeptech,no_feed_found,"No ATS link, feed or job link found"
-Redefine Meat,redefinemeat.com,deeptech,no_feed_found,"No ATS link, feed or job link found"
-CytoReason,cytoreason.com,deeptech,no_careers_url,
-Nucleai,nucleai.com,deeptech,site_unusable,Domain parked at GoDaddy
-Converge Bio,convergebio.com,deeptech,no_careers_url,
-StoreDot,store-dot.com,deeptech,needs_reader,A list or CV form with no job link
-Ormat,ormat.com,deeptech,needs_reader,"ViziRecruiter board, no adapter yet"
-SolarEdge,solaredge.com,deeptech,no_careers_url,
-H2Pro,h2pro.co,deeptech,no_openings,No open positions
-Watergen,watergen.com,deeptech,no_careers_url,
-Nano Dimension,nano-di.com,deeptech,no_feed_found,"No ATS link, feed or job link found"
-Stratasys,stratasys.com,deeptech,no_careers_url,
-Kornit Digital,kornit.com,deeptech,needs_reader,Comeet plugin page: the jobs are only in the page markup
-Landa,landanano.com,deeptech,no_feed_found,"No ATS link, feed or job link found"
-AIR,air.one,deeptech,no_careers_url,
-Gauzy,gauzy.com,deeptech,needs_reader,Comeet plugin page: the jobs are only in the page markup
-Google,google.com,multinational,needs_reader,The results page embeds its data; a worldwide search
-Apple,apple.com,multinational,needs_reader,A script app; its search API redirects
-Meta,meta.com,multinational,no_feed_found,No feed found
-Intel,intel.com,multinational,no_careers_url,Blocks plain requests (403); the Workday address guessed is sent to maintenance
-SAP,sap.com,multinational,no_careers_url,Blocks plain requests (403)
-IBM,ibm.com,multinational,no_feed_found,No feed found
-eBay,ebay.com,multinational,no_careers_url,No feed found in the careers page HTML
-AMD,amd.com,multinational,needs_reader,"iCIMS board, no adapter yet"
-Synopsys,synopsys.com,multinational,needs_reader,"Avature board, no adapter yet"
-Siemens,siemens.com,multinational,site_unusable,No DNS answer for jobs.siemens.com
-Intuit,intuit.com,multinational,needs_reader,Radancy search; many jobs show Multiple Locations
-Autodesk,autodesk.com,multinational,no_careers_url,Blocks plain requests (403); the Workday address guessed is sent to maintenance
-Akamai,akamai.com,multinational,no_careers_url,Blocks plain requests (403); the Workday address guessed answers 500
-Walmart Global Tech,walmart.com,multinational,site_unusable,Timeout
-Ford,ford.com,multinational,no_careers_url,Blocks plain requests (403)
-General Motors,gm.com,multinational,bot_protection,Blocks plain requests (403)
-Western Digital,westerndigital.com,multinational,no_openings,The SmartRecruiters board has no job in Israel today
-Ericsson,ericsson.com,multinational,no_careers_url,Eightfold board shows 0 jobs in Israel today
-Cloudflare,cloudflare.com,multinational,needs_reader,"Greenhouse locations are Hybrid or Distributed, never a city"
-Rapid7,rapid7.com,multinational,no_feed_found,No feed found in the page HTML
-Booking.com,booking.com,multinational,bot_protection,The iCIMS board answers 403; the careers site has no feed
-Uber,uber.com,multinational,no_careers_url,Blocks plain requests (403)
-Align Technology,aligntech.com,multinational,no_feed_found,No feed found in the page HTML
-Keysight,keysight.com,multinational,no_careers_url,
+name,domain,careers_url,segment,reason,note
+OX Security,ox.security,,cyber_infra,no_careers_url,
+Radware,radware.com,https://www.radware.com/careers,cyber_infra,site_unusable,The page is empty
+Deep Instinct,deepinstinct.com,https://www.deepinstinct.com/careers,cyber_infra,needs_reader,Job descriptions are PDF files
+Mitiga,mitiga.io,https://www.mitiga.io/company/careers,cyber_infra,no_openings,No openings right now
+Pillar Security,pillar.security,https://www.pillar.security/careers,cyber_infra,needs_reader,"Jobs on its own site, no ATS behind them"
+Pliops,pliops.com,https://www.pliops.com/careers,cyber_infra,no_openings,The Comeet board is deactivated; a Workable account lists no job
+Lumigo,lumigo.io,https://lumigo.io/careers/,cyber_infra,no_feed_found,"No ATS link, feed or job link found"
+env0,env0.com,https://www.envzero.com/careers,cyber_infra,needs_reader,"Jobs on its own site, no ATS behind them"
+Swimm,swimm.io,https://swimm.io/careers,cyber_infra,needs_reader,Only an email address
+Applitools,applitools.com,https://www.applitools.com/company/careers/,cyber_infra,no_openings,No openings right now
+lakeFS,lakefs.io,https://lakefs.io/careers/,cyber_infra,bot_protection,Access denied (403)
+SQream,sqream.com,https://sqream.com/careers/,cyber_infra,needs_reader,Comeet plugin page: the jobs are only in the page markup
+Upsolver,upsolver.com,,cyber_infra,no_careers_url,
+Walnut,walnut.io,https://www.walnut.io/jobs/,biz_software,needs_reader,"Jobs on its own site, no ATS behind them"
+Pay-Me,paymeservice.com,https://payme.io/careers/,biz_software,no_feed_found,"No ATS link, feed or job link found"
+Syte,syte.ai,https://www.syte.ai/careers/,biz_software,needs_reader,"The job list is drawn by a script, with no job link"
+Tabit,tabit.cloud,https://www.tabit.cloud/,biz_software,no_feed_found,"No ATS link, feed or job link found"
+Apester,apester.com,https://apester.com/careers/,biz_software,needs_reader,Comeet plugin page: the jobs are only in the page markup
+AnyClip,anyclip.com,https://anyclip.com/careers/,biz_software,no_feed_found,"No ATS link, feed or job link found"
+Aniview,aniview.com,https://aniview.com/careers/,biz_software,no_feed_found,"No ATS link, feed or job link found"
+Madgicx,madgicx.com,https://madgicx.com/careers,biz_software,no_openings,No open positions; CVs go through a form
+Guesty,guesty.com,https://www.guesty.com/careers/,biz_software,needs_reader,Comeet plugin page: the jobs are only in the page markup
+Magic Software,magicsoftware.com,https://www.magicsoftware.com/careers/,biz_software,no_feed_found,"Its Comeet account is Matrix IFS's, not its own"
+Ex Libris,exlibrisgroup.com,https://exlibrisgroup.com/careers/,biz_software,needs_reader,Links to its parent Clarivate's worldwide board
+Playstudios,playstudios.com,https://www.playstudios.com/careers/,biz_software,needs_reader,Dayforce portal; its jobs have no location
+Jelly Button Games,jellybuttongames.com,https://www.jellybuttongames.com/careers,biz_software,site_unusable,Domain parked at GoDaddy
+Optibus,optibus.com,https://optibus.com/company/careers/,biz_software,no_feed_found,No feed in its page or network requests
+Ceva,ceva-ip.com,,deeptech,no_careers_url,
+Camtek,camtek.com,https://www.camtek.com/careers/,deeptech,site_unusable,The page is empty
+Speedata,speedata.io,,deeptech,no_careers_url,
+NeuReality,neureality.ai,https://www.neureality.ai/careers/,deeptech,no_openings,The Comeet board lists no open position
+Teramount,teramount.com,,deeptech,no_careers_url,
+X-Globe,x-globe.com,,deeptech,no_careers_url,
+Q Factor,qfactor.ai,,deeptech,no_careers_url,
+Cognata,cognata.com,https://www.cognata.com,deeptech,no_feed_found,"No ATS link, feed or job link found"
+REE Automotive,ree.auto,https://ree.auto/careers/,deeptech,needs_reader,Comeet plugin page: the jobs are only in the page markup
+Gilat,gilat.com,,deeptech,no_careers_url,
+Siklu,siklu.com,,deeptech,no_careers_url,
+Satixfy,satixfy.com,https://satixfy.com,deeptech,site_unusable,The page is now an MDA Space page
+Silicom,silicom.co.il,,deeptech,no_careers_url,
+Elbit Systems,elbitsystems.com,https://www.elbitsystems.com,deeptech,site_unusable,Timeout; its careers site is a Hebrew custom site with no feed seen
+Line 5,line5.ai,https://line5.ai/careers,deeptech,site_unusable,Needs a login
+Quantum Art,quantum-art.com,https://www.quantum-art.com/careers,deeptech,bot_protection,Access denied (403); the domain was also reported parked
+Sight Diagnostics,sightdx.com,,deeptech,no_careers_url,
+Brainsway,brainsway.com,,deeptech,no_careers_url,
+ReWalk,rewalk.com,https://golifeward.com/,deeptech,no_openings,"The list is US jobs, none in Israel"
+EarlySign,earlysign.com,,deeptech,no_careers_url,
+Kahun,kahun.com,https://www.kahun.com/careers,deeptech,site_unusable,Domain parked at GoDaddy
+Tyto Care,tytocare.com,https://www.tytocare.com/careers/,deeptech,needs_reader,A list or CV form with no job link
+Diagnostic Robotics,diagnosticrobotics.com,,deeptech,no_careers_url,
+Aleph Farms,aleph-farms.com,https://aleph-farms.com/careers/,deeptech,no_feed_found,"No ATS link, feed or job link found"
+Tevel Aerobotics,tevel-tech.com,,deeptech,no_careers_url,
+Evogene,evogene.com,https://evogene.com/careers/,deeptech,no_feed_found,"No ATS link, feed or job link found"
+Remilk,remilk.com,https://www.remilk.com/careers,deeptech,no_feed_found,"No ATS link, feed or job link found"
+Redefine Meat,redefinemeat.com,https://www.redefinemeat.com/company/,deeptech,no_feed_found,"No ATS link, feed or job link found"
+CytoReason,cytoreason.com,,deeptech,no_careers_url,
+Nucleai,nucleai.com,https://www.nucleai.com/careers,deeptech,site_unusable,Domain parked at GoDaddy
+Converge Bio,convergebio.com,,deeptech,no_careers_url,
+StoreDot,store-dot.com,https://store-dot.com/careers,deeptech,needs_reader,A list or CV form with no job link
+Ormat,ormat.com,https://www.ormat.com/en/company/careers/main/,deeptech,needs_reader,"ViziRecruiter board, no adapter yet"
+SolarEdge,solaredge.com,,deeptech,no_careers_url,
+H2Pro,h2pro.co,https://www.h2pro.co/careers,deeptech,no_openings,No open positions
+Watergen,watergen.com,,deeptech,no_careers_url,
+Nano Dimension,nano-di.com,https://www.nano-di.com/careers,deeptech,no_feed_found,"No ATS link, feed or job link found"
+Stratasys,stratasys.com,,deeptech,no_careers_url,
+Kornit Digital,kornit.com,https://careers.kornit.com/,deeptech,needs_reader,Comeet plugin page: the jobs are only in the page markup
+Landa,landanano.com,https://www.landa-corporation.com/,deeptech,no_feed_found,"No ATS link, feed or job link found"
+AIR,air.one,,deeptech,no_careers_url,
+Gauzy,gauzy.com,https://www.gauzy.com/careers/,deeptech,needs_reader,Comeet plugin page: the jobs are only in the page markup
+Google,google.com,https://www.google.com/about/careers/applications/,multinational,needs_reader,The results page embeds its data; a worldwide search
+Apple,apple.com,https://www.apple.com/careers/us/,multinational,needs_reader,A script app; its search API redirects
+Meta,meta.com,https://www.metacareers.com/,multinational,no_feed_found,No feed found
+Intel,intel.com,,multinational,no_careers_url,Blocks plain requests (403); the Workday address guessed is sent to maintenance
+SAP,sap.com,,multinational,no_careers_url,Blocks plain requests (403)
+IBM,ibm.com,https://www.ibm.com/careers,multinational,no_feed_found,No feed found
+eBay,ebay.com,,multinational,no_careers_url,No feed found in the careers page HTML
+AMD,amd.com,https://www.amd.com/en/corporate/careers.html,multinational,needs_reader,"iCIMS board, no adapter yet"
+Synopsys,synopsys.com,https://careers.synopsys.com,multinational,needs_reader,"Avature board, no adapter yet"
+Siemens,siemens.com,https://www.siemens.com/en-us/company/jobs/,multinational,site_unusable,No DNS answer for jobs.siemens.com
+Intuit,intuit.com,https://www.intuit.com/careers/,multinational,needs_reader,Radancy search; many jobs show Multiple Locations
+Autodesk,autodesk.com,,multinational,no_careers_url,Blocks plain requests (403); the Workday address guessed is sent to maintenance
+Akamai,akamai.com,,multinational,no_careers_url,Blocks plain requests (403); the Workday address guessed answers 500
+Walmart Global Tech,walmart.com,https://careers.walmart.com,multinational,site_unusable,Timeout
+Ford,ford.com,,multinational,no_careers_url,Blocks plain requests (403)
+General Motors,gm.com,https://search-careers.gm.com/en/,multinational,bot_protection,Blocks plain requests (403)
+Western Digital,westerndigital.com,https://www.westerndigital.com/careers,multinational,no_openings,The SmartRecruiters board has no job in Israel today
+Ericsson,ericsson.com,,multinational,no_careers_url,Eightfold board shows 0 jobs in Israel today
+Cloudflare,cloudflare.com,https://www.cloudflare.com/careers/,multinational,needs_reader,"Greenhouse locations are Hybrid or Distributed, never a city"
+Rapid7,rapid7.com,https://careers.rapid7.com/,multinational,no_feed_found,No feed found in the page HTML
+Booking.com,booking.com,https://careers.booking.com,multinational,bot_protection,The iCIMS board answers 403; the careers site has no feed
+Uber,uber.com,,multinational,no_careers_url,Blocks plain requests (403)
+Align Technology,aligntech.com,https://jobs.aligntech.com,multinational,no_feed_found,No feed found in the page HTML
+Keysight,keysight.com,,multinational,no_careers_url,

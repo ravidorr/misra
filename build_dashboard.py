@@ -148,6 +148,45 @@ def add_days_skipped(blocked: list[dict[str, Any]], since: dict[str, str], lates
             gap["days"] = (date.fromisoformat(latest[gap["c"]]) - date.fromisoformat(since[gap["c"]])).days
 
 
+# The public job board of a company on an ATS whose board address is one fixed pattern; a person can open it in a
+# browser even where the crawl is not allowed to read it. An ATS not listed here has no entry: the company's own site
+# is the link then.
+BOARD_URLS = {
+    "smartrecruiters": "https://jobs.smartrecruiters.com/{slug}",
+    "greenhouse": "https://boards.greenhouse.io/{slug}",
+    "ashby": "https://jobs.ashbyhq.com/{slug}",
+    "workable": "https://apply.workable.com/{slug}",
+    "comeet": "https://www.comeet.com/jobs/{slug}",
+    "bamboohr": "https://{slug}.bamboohr.com/careers",
+    "jazzhr": "https://{slug}.applytojob.com/apply",
+}
+
+
+def https_only(url: str | None) -> str:
+    """The address when it is an https address with a host, else an empty string: the card never links to anything
+    else (no http, no javascript:, no relative path)."""
+    parts = urlsplit((url or "").strip())
+    return parts.geturl() if parts.scheme == "https" and parts.netloc else ""
+
+
+def own_site(domain: str | None) -> str:
+    """The company's own site, or an empty string when the domain is missing or not a plain host name."""
+    host = (domain or "").strip().lower()
+    return f"https://{host}" if re.fullmatch(r"[a-z0-9-]+(\.[a-z0-9-]+)*\.[a-z]{2,}", host) else ""
+
+
+def careers_address(company: dict[str, Any]) -> str:
+    """Where a person finds the company's roles: its careers page, else the public board of its ATS, else its own site
+    (never empty when the company has a domain)."""
+    board = BOARD_URLS.get(company.get("ats") or "", "")
+    slug = company.get("slug") or ""
+    return (
+        https_only(company.get("careers_url"))
+        or (https_only(board.format(slug=slug)) if board and slug else "")
+        or own_site(company.get("domain"))
+    )
+
+
 def read_unresolved(excluded: list[str] | None = None) -> list[dict[str, str]]:
     """The rows of the unresolved-candidates CSV, without the companies on the exclusion list; a reason that is not in
     REASONS stops the build."""
@@ -159,35 +198,48 @@ def read_unresolved(excluded: list[str] | None = None) -> list[dict[str, str]]:
         rows = [row for row in reader if not is_excluded(row["name"], excluded or [])]
     for row in rows:
         row["note"] = row["note"] or ""
+        row["domain"] = row.get("domain") or ""
+        row["careers_url"] = row.get("careers_url") or ""
         if row["reason"] not in REASONS:
             raise ValueError(f"{UNRESOLVED}: {row['name']} has the unknown reason {row['reason']!r}")
     return rows
 
 
 def gap_groups(
-    blocked: list[dict[str, Any]], untracked: list[dict[str, str]], unresolved: list[dict[str, str]]
+    blocked: list[dict[str, Any]],
+    untracked: list[dict[str, Any]],
+    unresolved: list[dict[str, str]],
+    companies: list[dict[str, Any]] | None = None,
 ) -> list[dict[str, Any]]:
-    """Every site that is not crawled, grouped by why, in REASONS order. A site named twice is counted once."""
-    sites: dict[str, tuple[str, str]] = {}
+    """Every site that is not crawled, grouped by why, in REASONS order. A site named twice is counted once. Each site
+    has the `url` its name links to (https only): the careers page, or the company's own site when it has no careers
+    page (`no_careers_url`) or when no careers address is known. `companies` is every company of companies.json; it
+    gives the address of the failing and robots.txt sites."""
+    known = {c["name"]: c for c in [*untracked, *(companies or [])]}
+    # a company that left companies.json for the CSV can still be in the crawl log: its row gives the address
+    rows = {r["name"]: https_only(r.get("careers_url")) or own_site(r.get("domain")) for r in unresolved}
+    sites: dict[str, tuple[str, str, str]] = {}
     for gap in blocked:
+        url = careers_address(known.get(gap["c"], {})) or rows.get(gap["c"], "")
         if gap["why"].startswith(ROBOTS_NOTE):  # a decision to respect the site, not a failure
-            sites.setdefault(gap["c"], ("robots_disallowed", robots_why(gap["why"], gap["days"], gap["last"])))
+            why = robots_why(gap["why"], gap["days"], gap["last"])
+            sites.setdefault(gap["c"], ("robots_disallowed", why, url))
             continue
         code = "bot_protection" if gap["why"] == BLOCKED_WHY else "crawl_failing"
-        sites.setdefault(
-            gap["c"],
-            (code, f"{gap['why'][:1].upper()}{gap['why'][1:]}; its roles may be old (last good crawl {gap['last']})"),
-        )
+        why = f"{gap['why'][:1].upper()}{gap['why'][1:]}; its roles may be old (last good crawl {gap['last']})"
+        sites.setdefault(gap["c"], (code, why, url))
     for row in unresolved:  # the researched reason and note win over the bare status of companies.json
-        sites.setdefault(row["name"], (row["reason"], row["note"]))
+        url = own_site(row.get("domain")) if row["reason"] == "no_careers_url" else ""
+        url = url or https_only(row.get("careers_url")) or own_site(row.get("domain"))
+        sites.setdefault(row["name"], (row["reason"], row["note"], url))
     for company in untracked:
         code = "no_careers_url" if company["status"] == "not_found" else "no_feed_found"
-        sites.setdefault(company["name"], (code, ""))
+        sites.setdefault(company["name"], (code, "", careers_address(company)))
     groups = []
     for code, label in REASONS.items():
         members = [
-            {"c": name, "why": why}
-            for name, (c, why) in sorted(sites.items(), key=lambda site: site[0].lower())
+            {"c": name, "why": why, "url": url}
+            for name, (c, why, url) in sorted(sites.items(), key=lambda site: site[0].lower())
             if c == code
         ]
         if members:
@@ -382,7 +434,7 @@ def main() -> None:
         companies = [x for x in json.load(fh) if not is_excluded(x["name"], excluded)]
     unfed = [x for x in companies if x["status"] != "ok"]
     untracked = sorted(x["name"] for x in unfed)
-    groups = gap_groups(blocked, unfed, read_unresolved(excluded))
+    groups = gap_groups(blocked, unfed, read_unresolved(excluded), companies)
     gaps = {
         "blocked": blocked,
         "untracked": untracked,
@@ -471,7 +523,10 @@ def main() -> None:
             INTEGRITY.sub(lambda m: integrity(out / f"{m[1]}.{m[2]}".lower()), page.read_text(encoding="utf-8")),
             encoding="utf-8",
         )
+    unlinked = [s["c"] for g in groups for s in g["sites"] if not s["url"]]
     print(f"gaps: {[g['c'] for g in gaps['blocked']]} failing, {len(untracked)} untracked, {gaps['total']} in all")
+    if unlinked:  # the tests catch this on the committed data; the daily run has no tests, so it says so here
+        print(f"WARNING: no link for {unlinked}")
     print(
         f"dashboard: {len(jobs)} open jobs, {sum(j['il'] for j in jobs)} in Israel, jobs.json {len(payload) // 1024} KB"
     )

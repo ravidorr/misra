@@ -64,30 +64,6 @@ Observations about live sites below come from checks made on 2026-11-14 and may 
   - Done when: a first-time visitor finds the search without scrolling or opening a panel, at 375px and at desktop
     width, and the review of the two or three layouts is recorded in the PR.
 
-- [ ] **Give every coverage gap a link.** Trigger: the coverage gap card lists company names with a reason but no
-  link, so a visitor who wants those roles has nowhere to go. Applies to all seven reasons (the keys of
-  `build_dashboard.REASONS`).
-  - What each reason links to:
-    - Blocks automated access (`bot_protection`, and the crawl-failing sites blocked by HTTP 401/403): the blocked
-      careers page itself. A person in a browser can open it.
-    - No careers page found (`no_careers_url`): the company's own site (`https://<domain>`).
-    - Site down, parked or unreachable (`site_unusable`): the company's own site, same as above.
-    - No open roles in Israel, or the board is closed (`no_openings`): the careers page or board.
-    - Roles are listed, but we cannot read them yet (`needs_reader`): the careers page, where the roles are.
-    - No job feed found yet (`no_feed_found`): the careers page.
-    - Failing in the latest crawl (`crawl_failing`): the careers page.
-  - Where: `build_dashboard.py` builds the gap groups and the sites in each (the `gaps` object in `jobs.json`);
-    `templates/dashboard.js` draws them (the `gap-sites` list); styles in `templates/dashboard.css`.
-    `data/unresolved_candidates.csv` has only `domain`, so it needs a `careers_url` column or a lookup in
-    `data/companies.json` (which has `careers_url` for most); a link for a site that is down or parked must not point
-    at a parked page, so use the domain only when the careers address is missing.
-  - How: add a `url` to each site in the `gaps` data; render the name as a link that opens in a new tab with
-    `rel="noopener noreferrer"`; follow the design system (visible focus, 44px target, light and dark). Only
-    `https:` addresses. Update the tests (`tests/`, and the `jobs.jsonld` and `data-*` hooks if they carry the list),
-    the CSV columns if you add one (CRLF line endings, update `tests/test_todo_counts.py` if it reads them), and
-    `CHANGELOG.md` with a version bump (a Python module changes).
-  - Done when: every site on the card is a working link, and a test fails if one has no address.
-
 - [ ] **Show how many companies we cover.** Trigger: nothing on the dashboard says how many companies Misra crawls
   each day, which is the main reason to trust it. As of 2026-11-15 `data/companies.json` has 253 companies, 234 with
   status `ok`; the number must come from the data, not from text typed into the page.
