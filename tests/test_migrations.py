@@ -31,6 +31,14 @@ PROVIDER_DATA = re.compile(
     r"raw_user_meta_data|raw_app_meta_data|user_metadata|identity_data|identities|avatar|full_name|picture|\bname\b"
 )
 AUTH_TRIGGER_FUNCTIONS = {"sync_profile"}  # the only functions allowed to run on auth.users
+# The spam guard of the report-site Edge Function (step 5.1): two counter tables and the two functions that change
+# them. Only the service role may touch any of it (no grant or policy for the public roles, execute for service_role).
+REPORT_COLUMNS = {"report_ip_limits": {"day", "ip_hash", "reports"}, "report_daily_cap": {"day", "sent"}}
+REPORT_TABLES = set(REPORT_COLUMNS)
+REPORT_FUNCTIONS = {
+    "report_site_reserve": "p_day date, p_ip_hash text, p_ip_limit integer, p_daily_cap integer",
+    "report_site_release": "p_day date, p_ip_hash text",
+}
 BACKFILL = (
     "insert into public.profiles (user_id, email) select id, email from auth.users where email is not null "
     "on conflict do nothing"
@@ -60,8 +68,17 @@ HOOK_GRANTS = {
     "grant usage on schema public to supabase_auth_admin",
     "grant execute on function public.custom_access_token_hook(jsonb) to supabase_auth_admin",
 }
+REPORT_FUNCTION = re.compile(
+    r"create function public\.(?P<name>report_site_reserve|report_site_release)\((?P<args>[a-z_0-9 ,]*)\) "
+    r"returns (?:text|void) language plpgsql set search_path = '' as \$\$(?P<body>.*)\$\$"
+)
+REPORT_SIGNATURE = r"(?:jsonb|date, text|date, text, integer, integer)?"
 REVOKE_FUNCTION = re.compile(
-    r"revoke (?:all|execute) on function public\.(?P<name>\w+)\((?:jsonb)?\) from (?P<roles>[a-z, ]+)"
+    rf"revoke (?:all|execute) on function public\.(?P<name>\w+)\({REPORT_SIGNATURE}\) from (?P<roles>[a-z, ]+)"
+)
+GRANT_REPORT_FUNCTION = re.compile(
+    r"grant execute on function public\.(?P<name>report_site_reserve|report_site_release)"
+    r"\((?:date, text, integer, integer|date, text)\) to service_role"
 )
 TRIGGER = re.compile(
     r"create trigger \w+ (?:before|after) (?:insert|update|delete)(?: or (?:insert|update|delete))*"
@@ -172,6 +189,8 @@ def table_problems(table: str, body: str) -> list[str]:
     ]
     if table == "profiles" and set(columns) != PROFILE_COLUMNS:
         found.append(f"profiles may hold only {sorted(PROFILE_COLUMNS)}, not {sorted(columns)}")
+    if table in REPORT_COLUMNS and set(columns) != REPORT_COLUMNS[table]:
+        found.append(f"{table} may hold only {sorted(REPORT_COLUMNS[table])}, not {sorted(columns)}")
     if table in USER_TABLES and CASCADE not in columns.get("user_id", ""):
         found.append(f"{table}.user_id must be `{CASCADE}`")
     return found
@@ -182,6 +201,15 @@ def parse_function(s: str) -> tuple[str, bool, list[str]] | None:
     if m := HOOK.fullmatch(s):
         bad = [] if m["body"] == HOOK_BODY else [f"the access token hook may only empty user_metadata: {s}"]
         return "custom_access_token_hook", False, bad
+    if m := REPORT_FUNCTION.fullmatch(s):
+        touched = set(re.findall(r"public\.(\w+)", m["body"]))
+        elsewhere = re.findall(r"\b(?:auth|storage|vault|extensions|net|pg_catalog|supabase_\w+)\.\w+", m["body"])
+        bad = [] if m["args"] == REPORT_FUNCTIONS[m["name"]] else [f"function {m['name']} has another signature: {s}"]
+        bad += [f"function {m['name']} may touch only the report tables, not {sorted(touched - REPORT_TABLES)}"] * bool(
+            touched - REPORT_TABLES
+        )
+        bad += [f"function {m['name']} reaches outside public: {elsewhere}"] * bool(elsewhere)
+        return m["name"], False, bad
     if m := FUNCTION.fullmatch(s):
         bad = [f"function {m['name']} reads data the provider sends: {s}"] if PROVIDER_DATA.search(m["body"]) else []
         return m["name"], bool(m["definer"]), bad
@@ -217,7 +245,13 @@ def problems(stmts: list[str]) -> list[str]:
             closed |= {(m["name"], role) for role in words(m["roles"])}
         elif m := TRIGGER.fullmatch(s):
             triggers.append((m["table"], m["function"]))
-        elif not (CREATE_INDEX.fullmatch(s) or GRANT.fullmatch(s) or s in HOOK_GRANTS or s == BACKFILL):
+        elif not (
+            CREATE_INDEX.fullmatch(s)
+            or GRANT.fullmatch(s)
+            or GRANT_REPORT_FUNCTION.fullmatch(s)
+            or s in HOOK_GRANTS
+            or s == BACKFILL
+        ):
             found.append(f"statement kind not allowed by the lint: {s}")
         found.extend(p for p in (grant_problem(s), policy_problem(s)) if p)
     found.extend(f"row-level security not enabled on {t}" for t in sorted(tables - secured))
@@ -266,7 +300,7 @@ def test_there_are_migrations_with_cli_names() -> None:
 def test_migrations_are_safe() -> None:
     stmts = statements()
     tables = {m["table"] for s in stmts if (m := CREATE_TABLE.fullmatch(s))}
-    assert tables == {"jobs", "crawl_log", "profiles", "user_prefs", "user_jobs"}
+    assert tables == {"jobs", "crawl_log", "profiles", "user_prefs", "user_jobs"} | REPORT_TABLES
     assert any(POLICY.fullmatch(s) for s in stmts)
     assert problems(stmts) == []
 
@@ -560,3 +594,100 @@ def test_the_lint_rejects_a_weakened_job_choices_migration(old: str, new: str) -
     migration = "\n".join(p.read_text(encoding="utf-8") for p in sorted(MIGRATION_DIR.glob("*.sql")))
     assert old in migration, old
     assert problems(statements_of(migration.replace(old, new)))
+
+
+# ---- Report a site (step 5.1; FR-7): the counters of the spam guard belong to the service role alone ----
+
+
+def test_the_report_counters_have_no_policy_and_no_grant_for_anyone_but_the_service_role() -> None:
+    stmts = statements()
+    mentions = [s for s in stmts if any(table in s for table in REPORT_TABLES)]
+    assert not [s for s in mentions if s.startswith(("create policy", "grant"))]
+    assert {m["table"] for s in stmts if (m := ENABLE_RLS.fullmatch(s))} >= REPORT_TABLES
+    grants = [m for s in stmts if (m := GRANT_REPORT_FUNCTION.fullmatch(s))]
+    assert {g["name"] for g in grants} == set(REPORT_FUNCTIONS)  # execute for service_role, and nothing else
+    assert not [
+        s
+        for s in stmts
+        if s.startswith("grant execute") and not GRANT_REPORT_FUNCTION.fullmatch(s) and s not in HOOK_GRANTS
+    ]
+
+
+def test_the_report_functions_are_invoker_functions_over_the_two_counters_only() -> None:
+    functions = {m["name"]: m for s in statements() if (m := REPORT_FUNCTION.fullmatch(s))}
+    assert set(functions) == set(REPORT_FUNCTIONS)
+    for name, signature in REPORT_FUNCTIONS.items():
+        assert functions[name]["args"] == signature
+        assert "security definer" not in functions[name][0]  # they run with the caller's rights, the service role's
+    reserve = functions["report_site_reserve"]["body"]
+    assert "p_daily_cap < 1" in reserve  # a cap of zero sends nothing
+    assert "where c.sent < p_daily_cap" in reserve  # the upsert refuses the one past the cap, atomically
+    assert "delete from public.report_ip_limits where day < p_day - 1" in reserve  # old hashes do not pile up
+
+
+def test_the_report_counters_keep_nothing_personal() -> None:
+    bodies = {
+        m["table"]: columns_of(m["body"])
+        for s in statements()
+        if (m := CREATE_TABLE.fullmatch(s)) and m["table"] in REPORT_TABLES
+    }
+    assert {table: set(columns) for table, columns in bodies.items()} == REPORT_COLUMNS
+
+
+@pytest.mark.parametrize(
+    ("old", "new"),
+    [
+        ("alter table public.report_ip_limits enable row level security;", ""),
+        ("alter table public.report_daily_cap enable row level security;", ""),
+        (
+            "revoke all on public.report_ip_limits from anon, authenticated;",
+            "revoke all on public.report_ip_limits from anon;",
+        ),
+        ("revoke all on public.report_daily_cap from anon, authenticated;", ""),
+        (
+            "revoke all on function public.report_site_reserve(date, text, integer, integer)"
+            " from public, anon, authenticated;",
+            "revoke all on function public.report_site_reserve(date, text, integer, integer) from public, anon;",
+        ),
+        ("revoke all on function public.report_site_release(date, text) from public, anon, authenticated;", ""),
+        (
+            "grant execute on function public.report_site_release(date, text) to service_role;",
+            "grant execute on function public.report_site_release(date, text) to service_role, anon;",
+        ),
+        (
+            "grant execute on function public.report_site_reserve(date, text, integer, integer) to service_role;",
+            "grant execute on function public.report_site_reserve(date, text, integer, integer) to anon;",
+        ),
+        (
+            "revoke all on public.report_daily_cap from anon, authenticated;",
+            "grant select on public.report_daily_cap to anon;",
+        ),
+        (
+            "alter table public.report_daily_cap enable row level security;",
+            "alter table public.report_daily_cap enable row level security;\n"
+            'create policy "all" on public.report_daily_cap for select to anon using (true);',
+        ),
+        ("  ip_hash text    not null,", "  ip_hash text    not null,\n  email text,"),
+        ("  ip_hash text    not null,", "  ip_hash text    not null,\n  address text,"),
+        (
+            "language plpgsql\nset search_path = ''\nas $$\ndeclare",
+            "language plpgsql\nsecurity definer\nset search_path = ''\nas $$\ndeclare",
+        ),
+        ("language plpgsql\nset search_path = ''\nas $$\ndeclare", "language plpgsql\nas $$\ndeclare"),
+        ("delete from public.report_ip_limits where day < p_day - 1;", "delete from public.user_jobs;"),
+        ("delete from public.report_ip_limits where day < p_day - 1;", "delete from auth.users;"),
+        (
+            "revoke all on function public.report_site_release(date, text) from public, anon, authenticated;",
+            "revoke all on function public.report_site_release(date, text) from anon, authenticated;",
+        ),
+        (
+            "create function public.report_site_release(p_day date, p_ip_hash text)",
+            "create function public.report_site_release(p_day date, p_ip_hash text, p_extra text)",
+        ),
+    ],
+)
+def test_the_lint_rejects_a_weakened_report_limits_migration(old: str, new: str) -> None:
+    migration = (MIGRATION_DIR / "20261116110000_report_site_limits.sql").read_text(encoding="utf-8")
+    assert old in migration, old
+    weakened = migration.replace(old, new)
+    assert problems(statements_of(f"{REAL.replace(migration, '')}\n{weakened}")), old
