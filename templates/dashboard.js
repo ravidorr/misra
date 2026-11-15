@@ -760,7 +760,7 @@ async function pushLoop(a) {
       p.failure = 'refused';
       if (p.pending === sending) p.pending = null;
       savePendingFilters(a);
-      return;
+      continue; /* a newer change made meanwhile is still sent */
     }
     p.failure = null;
     p.retries = 0;
@@ -886,7 +886,10 @@ function renderImportResult() {
    keeps them until the service confirms (a reload or an outage loses nothing). */
 async function bringOver(a, wanted) {
   const owned = [...new Set([...a.server.keys(), ...a.pending.keys()])].filter((k) => choiceOf(k) !== null).length;
-  const ops = wanted
+  /* Anything the account holds or is about to change (also a pending removal) is left as it is, whatever the user did
+     since the list was made. */
+  const open = wanted.filter(({ item }) => !a.server.has(key(item)) && !a.pending.has(key(item)));
+  const ops = open
     .slice(0, Math.max(0, MAX_CHOICES - owned))
     .map(({ item, state }) => ({ ...snapshotOf(item), state, keep: true, id: `${Date.now()}-${Math.random()}` }));
   for (const op of ops) a.pending.set(key(op), op);
@@ -896,7 +899,7 @@ async function bringOver(a, wanted) {
   const kept = ops.filter((op) => a.pending.get(key(op)) === op).length;
   const saved = ops.filter((op) => fates.get(op) === 'saved').length;
   if (account === a && ops.length > 0 && kept === 0) await loadServer(a); /* some rows may have been there already */
-  return { saved, kept, refused: ops.length - saved - kept, left: wanted.length - ops.length };
+  return { saved, kept, refused: ops.length - saved - kept, left: open.length - ops.length };
 }
 
 /* What became of a bringing over, in words. */
@@ -925,11 +928,9 @@ async function answerOffer(a, bring) {
   $('importBox').hidden = true;
   const parts = [];
   if (bring.filters && offer.filters) {
-    a.prefs.pending = syncable(offer.browser);
+    a.prefs.pending ??= syncable(offer.browser); /* a change made while the offer waited is the newest */
     savePendingFilters(a);
-    F = cleanFilters(a.prefs.pending);
-    page = 0;
-    sync();
+    setFilters(cleanFilters(a.prefs.pending));
     parts.push('Your filters are saved to your account.');
   }
   applyAccountFilters(a);
@@ -939,11 +940,19 @@ async function answerOffer(a, bring) {
   renderSyncNote();
 }
 
+function failedAnswer(error) {
+  console.error(error);
+  if (account) {
+    account.result = 'Something went wrong bringing the choices over. Anything not saved yet stays on this device.';
+    renderSyncNote();
+  }
+}
+
 $('importYes').addEventListener('click', () => {
-  if (account?.offer) answerOffer(account, { choices: $('importChoices').checked, filters: $('importFilters').checked });
+  if (account?.offer) answerOffer(account, { choices: $('importChoices').checked, filters: $('importFilters').checked }).catch(failedAnswer);
 });
 $('importNo').addEventListener('click', () => {
-  if (account?.offer) answerOffer(account, { choices: false, filters: false });
+  if (account?.offer) answerOffer(account, { choices: false, filters: false }).catch(failedAnswer);
 });
 
 const TODAY = DATA.generated.slice(0, 10);
@@ -1439,7 +1448,11 @@ $('file').addEventListener('change', (e) => {
     try {
       const imported = JSON.parse(reader.result);
       if (imported && typeof imported === 'object' && account) {
-        importFileToAccount(account, imported);
+        importFileToAccount(account, imported).catch((error) => {
+          console.error(error);
+          account.result = 'The file could not be imported.';
+          renderSyncNote();
+        });
       } else if (imported && typeof imported === 'object') {
         Object.assign(gone, imported);
         for (const k of Object.keys(imported)) Reflect.deleteProperty(starred, k); /* a job is never both */

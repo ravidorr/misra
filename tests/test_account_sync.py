@@ -766,3 +766,27 @@ async def test_the_page_still_lists_the_roles_after_the_offer(page: Page, site: 
         await page.locator("#summary").inner_text()
         == f"Showing {shown} of {ISRAEL_JOBS} open roles in Israel. 3 discarded."
     )
+
+
+async def test_bringing_filters_over_keeps_a_change_made_while_the_offer_waited(page: Page, site: Path) -> None:
+    prefs = PrefsBackend({**DEFAULTS, "q": "Designer"})
+    await sign_in(page, site, ChoicesBackend(), prefs, local={"filters": {**DEFAULTS, "q": "Manager"}})
+    await page.fill("#q", "Analyst")
+    await page.click("#importYes")
+    await until(lambda: prefs.writes)
+    assert saved_filters(prefs)["q"] == "Analyst"
+    assert await page.input_value("#q") == "Analyst"
+
+
+async def test_a_choice_pending_for_a_job_is_not_overwritten_by_the_file(
+    page: Page, site: Path, tmp_path: Path
+) -> None:
+    choices = ChoicesBackend([star_row("1", "Product Manager 1", "Tel Aviv, Israel", "Acme")])
+    await sign_in(page, site, choices)
+    choices.mode = "down"
+    await page.click(f"{PM1} [data-act=star]")  # un-star: a removal waits
+    imported = tmp_path / "discarded-jobs.json"
+    imported.write_text(json.dumps({"Acme|1": "x"}), encoding="utf-8")
+    await page.set_input_files("#file", imported)
+    await expect(page.locator("#importResult .notice")).to_contain_text("Nothing new")
+    assert (await pending(page))["Acme|1"]["state"] is None
