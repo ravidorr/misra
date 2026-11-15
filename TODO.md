@@ -3,7 +3,129 @@
 Open work, as of 2026-11-14. Each item says what triggers it, how to do it and when it is done. When one is finished,
 delete it and update the counts in the others: the 93 and the four segment counts in the research item (a pin removes
 one row from one segment), its "(30)" if the company had no careers URL, else its "(63 today)".
+An item with a screenshot in `todo-images/` goes with it: delete the image file in the same PR.
 Observations about live sites below come from checks made on 2026-11-14 and may have changed.
+
+## Web app fixes
+
+- [ ] **"Hiring now" row scrolls sideways.** Trigger: whenever there are many companies in the row (up to 15 are
+  shown), `.stories` scrolls horizontally and the last circle is cut off. A horizontal scroll should almost never
+  appear.
+
+  ![The Hiring now row with a horizontal scrollbar and the last circle cut off](todo-images/hiring-now-scroll.png)
+  - Where: `.stories` in `templates/dashboard.css` (`display: flex` with `overflow-x: auto`); the items are built by
+    `renderStories` in `templates/dashboard.js`; the circles are `design-system/components/story.css`.
+  - How: let the row wrap (`flex-wrap: wrap`) or use a grid that fits the width, and drop `overflow-x: auto`. Check on
+    a phone width and in light and dark. Edit the templates, never `docs/`.
+  - Done when: 15 companies show with no horizontal scrollbar at 375px and at desktop width.
+
+- [ ] **The "account deleted" notice has a different border from the other cards.** Trigger: delete an account; the
+  message "Your account and everything saved in it were deleted..." (`MESSAGES.deleted` in `templates/auth.js`) shows
+  in a `.notice`.
+
+  ![The account deleted notice, with a thinner border than the cards](todo-images/account-deleted-notice.png)
+  - Where: `.notice` in `design-system/components/field.css` has a hard-coded `border-radius: 16px` and no shadow,
+    while `.card` (`design-system/components/card.css`) uses `--radius-card` and `--shadow-md`. The `.import-offer`
+    in `templates/dashboard.css` adds `--shadow-md` by hand for the same reason.
+  - How: decide whether a notice should look like a card; if so, use `--radius-card` and `--shadow-md` in `.notice`
+    (and drop the hand-added shadow), and check the other notices (`.sync-note`, the email page) still look right in
+    light and dark.
+  - Done when: the notice and a card have the same border, radius and shadow.
+
+- [ ] **Search is hard to find.** Trigger: user reviews say the search is unusable because it is hidden. In the
+  screen they sent, the search box sits below the "More filters" panel, under Level, Role type, Region, Places and
+  Sort, so on a phone it is far down the page and easy to miss.
+
+  ![The filters panel open, with the search box below it](todo-images/search-below-filters.png)
+  - Where: the search field and the `controls` bar in `templates/dashboard.html`; layout in `templates/dashboard.css`;
+    field styles in `design-system/components/field.css`.
+  - How: redesign it with Claude Designer plus the UI/UX experts, starting with the `design-super-agent`,
+    `ui-design-review` and `ux-web-review` skills, and keep the result inside the design system (tokens only, 44px
+    targets, light and dark, WCAG AA). Have them propose two or three layouts, for example search first and always
+    visible at the top, sticky on scroll, with a clear button, and filters collapsed below it. Pick one, then build
+    it from the templates, never `docs/`. Keep the WebMCP search tool in `templates/dashboard.js` working.
+  - Done when: a first-time visitor finds the search without scrolling or opening a panel, at 375px and at desktop
+    width, and the review of the two or three layouts is recorded in the PR.
+
+- [ ] **Give every coverage gap a link.** Trigger: the coverage gap card lists company names with a reason but no
+  link, so a visitor who wants those roles has nowhere to go. Applies to all seven reasons (the keys of
+  `build_dashboard.REASONS`).
+  - What each reason links to:
+    - Blocks automated access (`bot_protection`, and the crawl-failing sites blocked by HTTP 401/403): the blocked
+      careers page itself. A person in a browser can open it.
+    - No careers page found (`no_careers_url`): the company's own site (`https://<domain>`).
+    - Site down, parked or unreachable (`site_unusable`): the company's own site, same as above.
+    - No open roles in Israel, or the board is closed (`no_openings`): the careers page or board.
+    - Roles are listed, but we cannot read them yet (`needs_reader`): the careers page, where the roles are.
+    - No job feed found yet (`no_feed_found`): the careers page.
+    - Failing in the latest crawl (`crawl_failing`): the careers page.
+  - Where: `build_dashboard.py` builds the gap groups and the sites in each (the `gaps` object in `jobs.json`);
+    `templates/dashboard.js` draws them (the `gap-sites` list); styles in `templates/dashboard.css`.
+    `data/unresolved_candidates.csv` has only `domain`, so it needs a `careers_url` column or a lookup in
+    `data/companies.json` (which has `careers_url` for most); a link for a site that is down or parked must not point
+    at a parked page, so use the domain only when the careers address is missing.
+  - How: add a `url` to each site in the `gaps` data; render the name as a link that opens in a new tab with
+    `rel="noopener noreferrer"`; follow the design system (visible focus, 44px target, light and dark). Only
+    `https:` addresses. Update the tests (`tests/`, and the `jobs.jsonld` and `data-*` hooks if they carry the list),
+    the CSV columns if you add one (CRLF line endings, update `tests/test_todo_counts.py` if it reads them), and
+    `CHANGELOG.md` with a version bump (a Python module changes).
+  - Done when: every site on the card is a working link, and a test fails if one has no address.
+
+- [ ] **Show how many companies we cover.** Trigger: nothing on the dashboard says how many companies Misra crawls
+  each day, which is the main reason to trust it. As of 2026-11-15 `data/companies.json` has 253 companies, 234 with
+  status `ok`; the number must come from the data, not from text typed into the page.
+  - Where: the count is already in the build data (`build_dashboard.py`, `docs/jobs.json`); the page is
+    `templates/dashboard.html`, drawn by `templates/dashboard.js`.
+  - How: do three consults before writing code, and record the answers in the PR.
+    1. Claude Designer and a UI/UX expert (`design-super-agent`, `ui-design-review`): where it goes (the page header,
+       next to the "Hiring now" row, above the search, or the footer), how loud it is (a quiet line or a stat tile),
+       and how it behaves on a phone, in light and dark. It must not push the search or the jobs further down.
+    2. The `technical-writer` agent (`.claude/agents/technical-writer.md`): the exact words, short and true. Decide
+       what the number counts (companies with a working feed, not every company we tried) and whether to add the
+       coverage gap count next to it, so the claim stays honest. No fluff, no superlatives.
+    3. Decide whether the same line also belongs in the digest email, the README and `llms.txt`.
+  - Build it from the templates, never `docs/`. Use tokens only, with the number as one `data-*` hook so agents can
+    read it. A new count means a test that the number matches `data/companies.json`.
+  - Done when: a visitor sees the count without scrolling at 375px and at desktop width, the number is computed at
+    build time, and a test pins it to the data.
+
+- [ ] **Make the web app work well on a phone.** Trigger: most users open Misra on a phone, and it looks bad there.
+  From the iPhone 16 view (393 px wide) in Chrome's device mode:
+
+  ![The dashboard at 393 px: the filters fill the first screens and the search is under them](todo-images/mobile-393px.png)
+  - the filters (Level, Role type, Region, Places, Sort) fill the first screens, so the jobs start far down the page;
+  - the search box comes after all of them (see "Search is hard to find");
+  - the "Hiring now" row scrolls sideways (see its item);
+  - the controls are small and dense (tiny chips, small checkboxes and links) and may miss the 44 px target;
+  - notices and cards use different borders and shadows (see "account deleted" item).
+  - Where: layout in `templates/dashboard.css`, markup in `templates/dashboard.html`, components in
+    `design-system/components/*.css`. Edit the templates, never `docs/`.
+  - How: three consults before code, recorded in the PR.
+    1. Claude Designer and the UI/UX experts (`design-super-agent`, `ui-design-review`, `ux-web-review`,
+       `accessibility-expert`): design mobile first. Start from the jobs and the search, with the filters in a bottom
+       sheet or a "Filters" button that shows the number of active filters, quick chips for the level, and cards that
+       show the title, company, place and Apply first. Test at 320, 375, 393 and 430 px, in portrait and landscape,
+       in light and dark.
+    2. The `technical-writer` agent (`.claude/agents/technical-writer.md`): shorter labels and headings that fit a
+       small screen, one word per concept.
+    3. Do one pass with real devices or the iOS Simulator and Chrome device mode, and list what breaks.
+  - Fold the three related items (search, "Hiring now" scroll, notice border) into this one design so they are not
+    fixed one by one in different styles.
+  - Keep the design system rules (tokens only, 44 px targets, WCAG AA) and the agent hooks (`data-*` on
+    `article.card`, `jobs.jsonld`, the WebMCP tools). Add a test that fails on a horizontal scroll at 320 and 393 px
+    (Playwright, as the browser tests do).
+  - Done when: the first screen at 393 px shows the search and the first jobs, no page scrolls sideways at 320 px, every
+    control is at least 44 px, and the PR shows before and after screenshots.
+
+- [ ] **Run the technical writer agent over all the text in the app.** Trigger: when you are ready for a copy pass;
+  nothing blocks it.
+  - Where: the agent is `.claude/agents/technical-writer.md`. It reads the docs and every text source, then tightens
+    the wording (short, exact, no fluff) and keeps identifiers, `data-*` hooks and `REASONS` keys unchanged.
+  - How: ask Claude Code to run the `technical-writer` agent. It edits `templates/` and the sources, rebuilds `docs/`,
+    and runs lint and tests. It lists proposed edits to `PRIVACY.md` and the lawyer-approved wording instead of making
+    them: review that list. A change to a listed Python module needs a version bump and a changelog entry.
+  - Done when: the PR is merged, `npm run lint` and `npm run test:coverage` pass, and you have decided on the legal
+    wording it left for you.
 
 ## Review the Node and Python pins
 
