@@ -59,8 +59,10 @@ All of these hold after the run:
 
 ### What to know
 
-- The match is the exact name when deleting (`Acme` does not delete `Acme Corp` or `acme`) and ignores case when
-  skipping a crawl. Read the log line: if it says nothing was deleted, the name is not the one in the data.
+- The match is the exact name when deleting (`Acme` does not delete `Acme Corp`) and ignores case when skipping a
+  crawl, so a list that spells a company differently from the data (`acme` for `Acme`) stops the run with a message: use
+  the stored spelling. Read the log line: if it says nothing was deleted, the name is not the one in the data. The
+  database file is vacuumed after a deletion, so the deleted titles and links do not stay in it.
 - The list is checked on every run. A missing file, a wrong header, a blank or one-letter name, a repeated name, a
   missing reason or a bad date stops the run, and the failure alert is sent: that is deliberate, because nobody could
   say who must not be crawled. `tests/test_politeness.py` reads the real file, so CI catches a typo before it merges.
@@ -68,6 +70,7 @@ All of these hold after the run:
   in separate runs.
 - Earlier commits of `data/jobs.db` and `docs/jobs.json` still hold the old links. A removal request does not rewrite
   history; if a company insists, that is a separate decision.
+- With a non-empty list and empty Supabase secrets the sync step fails on purpose: a removal must not look done.
 - Nothing here is applied to the Supabase project by hand: no migration is involved, and the service-role key that the
   sync step already has does the deleting.
 

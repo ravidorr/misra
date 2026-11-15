@@ -55,12 +55,12 @@ def load_excluded(path: str = EXCLUDED) -> list[str]:
     blank or very short name, a repeated name, a reason or date that is missing or not a date, or is very long raises
     ExclusionError: a list nobody can trust must stop the run, not be skipped."""
     try:
-        with open(path, newline="", encoding="utf-8") as fh:
+        with open(path, newline="", encoding="utf-8-sig") as fh:  # -sig: Excel writes a byte order mark
             reader = csv.DictReader(fh)
             if reader.fieldnames != EXCLUDED_COLUMNS:
                 raise ExclusionError(f"{path}: the header must be {','.join(EXCLUDED_COLUMNS)}")
             rows = list(reader)
-    except OSError as exc:
+    except (OSError, UnicodeDecodeError, csv.Error) as exc:
         raise ExclusionError(f"{path}: cannot be read ({type(exc).__name__})") from None
     if len(rows) > EXCLUDED_MAX:
         raise ExclusionError(f"{path}: more than {EXCLUDED_MAX} rows")

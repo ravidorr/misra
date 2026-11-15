@@ -178,11 +178,12 @@ def main() -> None:
         if is_excluded(company, excluded):
             continue
         latest[company] = (ts, ok, note)
-        recent.setdefault(company, []).append(ok)
+        if not note.startswith(ROBOTS_NOTE):  # a skip is neither a failure nor a success for the streak
+            recent.setdefault(company, []).append(ok)
     last_good = dict(c.execute("SELECT company, MAX(substr(ts,1,10)) FROM crawl_log WHERE ok=1 GROUP BY company"))
     # failing = the last two crawls both failed (one-off errors do not count)
     # a company skipped for robots.txt is listed at once: it is a decision, so there is no second crawl to wait for
-    failing = {co: v for co, v in latest.items() if not any(recent[co][-2:]) or v[2].startswith(ROBOTS_NOTE)}
+    failing = {co: v for co, v in latest.items() if not any(recent.get(co, [])[-2:]) or v[2].startswith(ROBOTS_NOTE)}
     with open("data/companies.json") as fh:
         companies = [x for x in json.load(fh) if not is_excluded(x["name"], excluded)]
     unfed = [x for x in companies if x["status"] != "ok"]

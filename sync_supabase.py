@@ -202,6 +202,12 @@ def quality_report(conn: sqlite3.Connection) -> str:
 def main() -> None:
     url, key = os.environ.get("SUPABASE_URL", "").strip(), os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "").strip()
     if not url or not key:  # an unset repository secret reaches the step as an empty string
+        try:
+            owed = load_excluded()
+        except ExclusionError as exc:
+            sys.exit(f"Supabase sync failed: {exc}")
+        if owed:  # a removal that cannot reach Supabase must not look done
+            sys.exit(f"Supabase sync failed: {len(owed)} companies are on the exclusion list but the secrets are empty")
         print(SKIP_MESSAGE)
         return
     conn = sqlite3.connect(DB)

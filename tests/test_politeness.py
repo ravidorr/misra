@@ -630,7 +630,7 @@ def test_an_excluded_company_is_never_crawled_and_its_data_is_deleted(
     crawled: list[str] = []
     monkeypatch.setitem(run.ADAPTERS, "fake", lambda slug: crawled.append(slug) or [job("1")])
     conn = run.init()
-    for name in ("Acme", "Acme Corp", "acme", "Other"):
+    for name in ("Acme", "Acme Corp", "Other"):
         add_job(conn, name, "old", "Old job")
     add_crawls(conn, "Acme", [(1, "")], ats="fake")
     add_crawls(conn, "Acme Corp", [(1, "")], ats="fake")
@@ -639,14 +639,14 @@ def test_an_excluded_company_is_never_crawled_and_its_data_is_deleted(
     conn.execute("INSERT INTO gap_alerts VALUES('Other', 'x', 'failing')")
     conn.commit()
     conn.close()
-    write_json(workdir / "data" / "companies.json", [co("Acme"), co("Other"), co("ACME")])
+    write_json(workdir / "data" / "companies.json", [co("Acme"), co("Other")])
     exclude(workdir, "Acme")
     run.main()
-    assert crawled == ["other"]  # Acme and its spelling ACME are not crawled
+    assert crawled == ["other"]  # Acme is not crawled
     assert "exclusion list: deleted 1 jobs of Acme" in capsys.readouterr().out
     check = sqlite3.connect(run.DB)
     left = {r[0] for r in check.execute("SELECT company FROM jobs")}
-    assert left == {"Acme Corp", "acme", "Other"}  # deleted by the exact name only
+    assert left == {"Acme Corp", "Other"}  # deleted by the exact name only
     assert {r[0] for r in check.execute("SELECT company FROM crawl_log")} == {"Acme Corp", "Other"}
     assert [r[0] for r in check.execute("SELECT company FROM gap_alerts")] == ["Other"]
     check.close()
@@ -880,3 +880,52 @@ def test_main_stops_on_a_bad_list_and_touches_nothing(
     with pytest.raises(SystemExit, match="blank or shorter"):
         sync_supabase.main()
     assert fake.calls == []
+
+
+def test_a_list_that_spells_a_company_differently_stops_the_run_and_deletes_nothing(
+    workdir: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    crawled: list[str] = []
+    monkeypatch.setitem(run.ADAPTERS, "fake", lambda slug: crawled.append(slug) or [])
+    conn = run.init()
+    add_job(conn, "Acme", "1", "T")
+    conn.close()
+    write_json(workdir / "data" / "companies.json", [co("Acme")])
+    exclude(workdir, "acme")  # skipping ignores case, deleting does not: the run must say so
+    with pytest.raises(ExclusionError, match="spells a company differently"):
+        run.main()
+    assert crawled == []
+    check = sqlite3.connect(run.DB)
+    assert check.execute("SELECT COUNT(*) FROM jobs").fetchone() == (1,)
+    check.close()
+
+
+def test_the_purge_vacuums_so_deleted_rows_leave_no_trace(db: sqlite3.Connection) -> None:
+    add_job(db, "Acme", "1", "A very recognisable title")
+    db.commit()
+    assert run.purge_excluded(db, ["Acme"]) == {"Acme": 1}
+    with open(run.DB, "rb") as fh:
+        assert b"A very recognisable title" not in fh.read()
+
+
+def test_a_list_saved_by_excel_with_a_byte_order_mark_is_read(tmp_path: Path) -> None:
+    path = tmp_path / "x.csv"
+    path.write_text("\ufeff" + HEADER + "Acme,asked,2026-11-20\n", encoding="utf-8")
+    assert common.load_excluded(str(path)) == ["Acme"]
+
+
+def test_a_list_that_is_not_text_is_a_bad_list(tmp_path: Path) -> None:
+    path = tmp_path / "x.csv"
+    path.write_bytes(b"\xff\xfe\x00bad")
+    with pytest.raises(ExclusionError, match="cannot be read"):
+        common.load_excluded(str(path))
+
+
+def test_a_robots_skip_between_crawls_does_not_turn_one_failure_into_a_streak(db: sqlite3.Connection) -> None:
+    add_crawls(db, "W", [(1, ""), (0, common.ROBOTS_NOTE), (0, "boom"), (1, "")])
+    add_crawls(db, "V", [(0, "boom"), (0, common.ROBOTS_NOTE), (1, "")])
+    assert digest.coverage_gaps(db) == []
+    add_crawls(db, "U", [(0, "boom"), (0, common.ROBOTS_NOTE), (0, "boom"), (1, "")])
+    assert digest.coverage_gaps(db) == []
+    add_crawls(db, "T", [(0, "boom"), (0, common.ROBOTS_NOTE), (0, "boom")])
+    assert [g["company"] for g in digest.coverage_gaps(db)] == ["T"]

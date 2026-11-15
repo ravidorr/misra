@@ -112,7 +112,9 @@ def coverage_gaps(c: sqlite3.Connection) -> list[dict[str, Any]]:
         ok, note, _ts = seq[-1]
         if not ok and note.startswith(DROP_NOTE):
             add(company, "held", note, _outage_start(seq))
-        elif not any(o for o, _n, _t in seq[-FAILING_RUNS:]):
+        elif not any(
+            o for o, n, _t in [x for x in seq if not x[1].startswith(ROBOTS_NOTE)][-FAILING_RUNS:]
+        ):  # a skip is neither failure nor success
             add(company, "failing", note, _outage_start(seq))
     return gaps
 

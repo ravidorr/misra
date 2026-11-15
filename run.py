@@ -142,14 +142,31 @@ def purge_excluded(c: sqlite3.Connection, excluded: list[str]) -> dict[str, int]
             if table in tables:
                 c.execute(f"DELETE FROM {table} WHERE company=?", (name,))
     c.commit()
+    if held:
+        c.execute("VACUUM")  # the deleted titles and links must not stay in the free pages of the committed file
     return held
+
+
+def check_spelling(c: sqlite3.Connection, known: list[str], excluded: list[str]) -> None:
+    """Deleting needs the exact name, skipping does not care about case: a list that says `acme` while the data says
+    `Acme` would hide the company but leave its rows. That must stop the run, so the list gets the stored spelling."""
+    tables = {r[0] for r in c.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+    stored = {
+        r[0] for t in ("jobs", "crawl_log", "gap_alerts") if t in tables for r in c.execute(f"SELECT company FROM {t}")
+    }
+    for name in sorted(n for n in {*known, *stored} if n and is_excluded(n, excluded) and n not in excluded):
+        raise ExclusionError(
+            f"the exclusion list spells a company differently from the data ({name!r}): use that exact spelling"
+        )
 
 
 def main() -> None:  # noqa: PLR0912, PLR0915
     excluded = load_excluded()  # a bad list stops the run: nobody can say who must not be crawled
     with open("data/companies.json") as fh:
-        companies = [c for c in json.load(fh) if c["status"] == "ok" and not is_excluded(c["name"], excluded)]
+        every = json.load(fh)
+    companies = [c for c in every if c["status"] == "ok" and not is_excluded(c["name"], excluded)]
     c = init()
+    check_spelling(c, [co["name"] for co in every], excluded)
     for name, n in purge_excluded(c, excluded).items():
         print(f"exclusion list: deleted {n} jobs of {name}")
     print(f"robots.txt: {'enforced' if common.ROBOTS_ENFORCED else 'NOT enforced (ROBOTS_ENFORCED is False)'}")
