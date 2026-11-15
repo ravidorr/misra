@@ -625,13 +625,14 @@ Files: `supabase/migrations/20261118100000_digest_signup_and_limits.sql`, `supab
 
 The signup was hidden and closed until PLAN.md step 6.6 (the lawyer's wording is in, the sender of step 6.3 is built). There are two
 switches, and both must be on; v0.31.0 turns the first (the build constant) on, and the second (the function secret) is set by the
-maintainer after that version is merged and its page has been published, so the button never shows before the function can take a
-sign-up (a press before then is answered "not open yet", 403 `signup_closed`, and stores nothing).
+maintainer after that version is merged and its page has been published, so the function never takes a sign-up before the page shows
+the agreement line (a press in between is answered "not open yet", 403 `signup_closed`, and stores nothing).
 
-**Opening day, in this order** (nothing here is done by the pull request): (1) merge the v0.31.0 pull request and wait for the
-`publish-docs` run to publish the page with the "Daily email" button and `digest.js`; (2) apply the migrations
+**Opening day, in this order** (nothing here is done by the pull request): (1) BEFORE merging, apply the migrations
 `20261119100000_report_site_cleanup.sql` and `20261120100000_confirm_counters_cleanup.sql` if they are not applied yet (the daily
-sync calls both cleanups, and fails on a missing function); (3) `supabase secrets set --project-ref dncodqeqpoqwcxdctzco
+sync of the merged code calls both cleanups and fails on a missing function; they only add functions, so applying them early is
+safe); (2) merge the v0.31.0 pull request and wait for the `publish-docs` run to publish the page with the "Daily email" button
+and `digest.js`; (3) `supabase secrets set --project-ref dncodqeqpoqwcxdctzco
 DIGEST_SIGNUP_ENABLED=true`; (4) the signed-in live checks that waited for this day, listed under "Check it live" below: turning on
 with the secret unset is 403 `signup_closed` (do it BEFORE step 3 if you want that check), turning off with no row is a 200, and the
 maintainer's own turn-on flow (turn the email on, read the confirmation email, confirm from the link, see the dialog say "on"); then

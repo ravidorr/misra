@@ -279,7 +279,7 @@ Decisions made in planning (they change the PRD's wording, so update the PRD in 
   after `report_site_cleanup`); `SECURITY.md` scopes `BACKUP_DEPLOY_KEY` to `ravidorr/misra-backups` only, adds its rotation to the yearly review (by 2027-11-15) and the
   rule to delete any local clone of the backup repository at once; and the restore without `--create-auth-users` skips every user id no longer in `auth.users` (never resurrects a
   deleted account; `CONTRIBUTING.md`, "Restore", with a second rehearsal). No encryption of our own is claimed anywhere.
-  Opening day, still to do by the maintainer, in this order: merge, wait for `publish-docs`, apply the two cleanup migrations if not applied, run the signed-in checks that need the
+  Opening day, still to do by the maintainer, in this order: apply the two cleanup migrations (before merging, or the next daily sync fails), merge, wait for `publish-docs`, run the signed-in checks that need the
   secret unset (`supabase/README.md`, "Check it live"), then `supabase secrets set DIGEST_SIGNUP_ENABLED=true --project-ref dncodqeqpoqwcxdctzco`, then the maintainer's own turn-on flow
   and `send_digests.py` twice with a test subscriber. The legacy maintainer digest stays until one digest from `send_digests.py` has reached the maintainer (step 6.4).
 

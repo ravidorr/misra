@@ -36,6 +36,7 @@ OFF_HEAD = "create function public.unsubscribe_user(p_user_id uuid, p_now timest
 OFF_ATTRS = "returns text\nlanguage plpgsql\nset search_path = ''"
 RELEASE_HEAD = "create function public.confirm_email_release(p_day date, p_user_hash text, p_address_hash text)"
 CALL = "  return public.unsubscribe_subscription(token_hash, p_now);"
+COUNTER_TABLES = 2  # confirm_limits and confirm_daily_cap
 GIVEN_BACK = 3  # the address refusal gives back one place and the cap refusal two
 
 
@@ -99,7 +100,7 @@ def test_the_daily_cleanup_of_the_confirmation_counters_deletes_only_earlier_day
     assert "delete from public.confirm_limits where day < p_day;" in body
     assert "delete from public.confirm_daily_cap where day < p_day;" in body
     assert "p_day is null or p_day > current_date" in body  # a wrong date can never wipe today's counters
-    assert body.count("delete from") == len(CONFIRM_LIMIT_COLUMNS)  # one delete per counter table, nothing else
+    assert body.count("delete from") == COUNTER_TABLES  # one delete per counter table, nothing else
 
 
 @pytest.mark.parametrize(
