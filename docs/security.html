@@ -67,6 +67,9 @@ the browser or the repository. Other secrets by name: <code>RESEND_API_KEY</code
 <code>REPORT_TO_EMAIL</code>, <code>IP_HASH_SECRET</code> and the GitHub deploy key. Values are typed into the providers' own pages.</li>
 <li><strong>Accounts:</strong> two-factor sign-in is on for Supabase, GitHub, Resend and Google. Users sign in with Google only: the
 email-and-password provider is switched off. A database hook empties the personal part of the sign-in token.</li>
+<li><strong>Policy tests:</strong> the SQL policy tests of <code>supabase/tests</code> run in CI on every pull request and push to <code>main</code>, against a
+plain Postgres 17 database with a stub of Supabase's roles and <code>auth</code> schema. They are the real tests of the
+row-level security; a stub is not a Supabase project, so the live checks in <code>supabase/README.md</code> still apply.</li>
 <li><strong>Abuse limits:</strong> the report form has a honeypot, a per-visitor daily limit and a daily cap; the email functions have
 per-user, per-address and daily limits.</li>
 <li><strong>Deletion:</strong> a person can delete their account in one step, and every row tied to it is removed at once.</li>
@@ -77,7 +80,6 @@ the Supabase project.</li>
 <ul>
 <li>Supabase's free plan has no backups. Before the first daily-email subscriber, upgrade to a plan with backups or build
 the export in plan step 9.1.</li>
-<li>The SQL policy tests are not run in CI.</li>
 <li>Two low-risk Dependabot alerts in development tools (not shipped to users) were open on 2026-11-15.</li>
 <li>One maintainer: no second person for access or recovery.</li>
 </ul>
