@@ -169,9 +169,23 @@ Decisions made in planning (they change the PRD's wording, so update the PRD in 
   says already confirmed, an RFC 8058 POST with no key unsubscribes (proves `verify_jwt = false`), a GET unsubscribe answers
   303 to `email.html#unsubscribed` on the default domain, and an unsubscribe keeps the timestamps and clears the filters and
   `emailed` rows.
-- [ ] 6.2 Dashboard digest settings: on/off, address (Google email by default), daily or weekly, "Use these filters for
+- [x] ~~6.2 Dashboard digest settings: on/off, address (Google email by default), daily or weekly, "Use these filters for
   my email" copying regions, levels, role types and keywords only. Sends the confirmation email through Resend.
-  Done when: FR-8 AC 1 to 3 hold.
+  Done when: FR-8 AC 1 to 3 hold.~~
+  Built as the Edge Function `email-settings` (turn on, turn off; the user id only from the verified token; limits of 3
+  confirmation emails per user, 3 per address and 30 in all per day, counted in the database; the same unsubscribe
+  clean-up as the link), the migration `20261118100000_digest_signup_and_limits.sql` and the "Daily email" dialog
+  (`templates/digest.js`). The whole signup is behind two switches, both off: `DIGEST_SIGNUP_ENABLED = False` in
+  `build_dashboard.py` (the page has no button, dialog or script) and the function secret `DIGEST_SIGNUP_ENABLED` (the
+  function refuses to create a subscription unless it is `true`). Step 6.6 switches them on (`supabase/README.md`,
+  "Daily email").
+  Remaining checks, live only: apply the migration and record it, deploy `email-settings`, then run the five curl checks of
+  `supabase/README.md` ("Check it live", none of them creates a subscription): no token and the publishable key as the bearer
+  are 401 from the gateway, the preflight answers 204 with `authorization` allowed (if the gateway refuses it, set
+  `verify_jwt = false`), turning on is 403 `signup_closed` while the secret is unset, and turning off with no row is a 200. Once signups open (step 6.6),
+  with the maintainer's own account: turn it on, read the confirmation email (plain text, `Reply-To` `raanan@avidor.org`, the
+  link opens `email.html`), confirm it, and see the dialog say "on". Open for step 6.3: the raw unsubscribe token made here
+  is not kept (only its hash is stored), so 6.3 has to decide how digests get a working unsubscribe link.
 - [ ] 6.3 `send_digests.py` replaces the per-recipient logic of `send_email.py`: match each confirmed subscriber's
   filters against jobs first seen after their confirmation, never emailed before, via the new `level`/`role_types`
   columns (this removes the Product-plus-Intern/Junior bug); no email when nothing new; weekly summary; per-user
@@ -186,7 +200,7 @@ Decisions made in planning (they change the PRD's wording, so update the PRD in 
 - [ ] 6.6 GATE: the lawyer review from "Before launch" and the addendum, with written answers (answered 2026-11-15; the
   outcome is in the PRD's "Before launch"; the gate stays until its wording is in). Nothing sends to a real
   user, and the sign-up control stays hidden behind a flag, until the answers are in and any required wording is added
-  to the emails, `PRIVACY.md`, a new `TERMS.md` (as-is disclaimer) and the notice next to the sign-in button (FR-1 AC 7). Done when: the answers are filed, those four are in, and the flag is switched on.
+  to the emails, `PRIVACY.md`, a new `TERMS.md` (as-is disclaimer) and the notice next to the sign-in button (FR-1 AC 7). Done when: the answers are filed, those four are in, and the flag is switched on (both switches of step 6.2: the constant in `build_dashboard.py` and the function secret).
 
 ## FR-4 (richer job data)
 

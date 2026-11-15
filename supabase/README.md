@@ -380,7 +380,7 @@ timestamps, the tokens and the address of the cycle before.
 One random 256-bit token (32 bytes, base64url, 43 characters) per purpose, so a confirmation link cannot unsubscribe and the
 reverse. Only its SHA-256 (64 hex characters, made in the function with Web Crypto; the table refuses anything else) is stored,
 so a database leak can neither confirm nor unsubscribe anyone, and the raw token exists only in the emailed link.
-`newToken()` in `_shared/subscription.ts` makes a token and its hash: step 6.2's function uses it for both and keeps no copy.
+`newToken()` in `_shared/subscription.ts` makes a token and its hash: the `email-settings` function (step 6.2) uses it for both and keeps no copy.
 
 The functions look a token up by its hash inside the database function. An attacker cannot choose a hash, so an index lookup
 leaks nothing through timing, which is why there is no byte-by-byte comparison to make constant-time. Guessing a token is a
@@ -491,12 +491,173 @@ rows cascade. In a browser open `https://ravidorr.github.io/misra/email.html#tok
 the Confirm button, and the row stays unconfirmed until it is pressed. That a 303 from a function reaches the browser on the
 default domain is assumed: the GET above confirms it.
 
-### What step 6.2 needs
+## Daily email: turn it on and off (Edge Function `email-settings`)
 
-A function that a signed-in user calls (JWT verified, so `verify_jwt` stays on) to turn the email on or change the address:
-it takes the user id from the token, sets `address`, `frequency`, `filters` and `consent_given_at = now()`, clears
-`consent_confirmed_at` and `unsubscribed_at`, makes both tokens with `newToken()` and stores only their hashes (with
-`confirm_token_expires_at`), sends the confirmation email through Resend with the link
-`https://ravidorr.github.io/misra/email.html#token=<confirm token>`, and rate-limits confirmation emails per user per day, since
-otherwise any user could repeatedly mail a victim's address. Turning the email off must go through the same clean-up as an
-unsubscribe, so the audit record is kept and the choices cleared.
+PLAN.md step 6.2, PRD FR-8 AC 1 to 3: a signed-in user turns the personalised email on or off, chooses the address (their
+Google email by default), daily or weekly, and copies four dashboard filters for it. This step delivers the dashboard
+settings, one Edge Function and four database functions. It does not send the digest (steps 6.3 and 6.4), so even with the
+switches on, the only email that ever leaves is the confirmation email.
+
+Files: `supabase/migrations/20261118100000_digest_signup_and_limits.sql`, `supabase/functions/email-settings/`
+(`index.ts` starts the server, `handler.ts` holds the logic, `validate.ts` the input checks),
+`supabase/functions/_shared/identity.ts` (who the token belongs to), `supabase/config.toml` (`verify_jwt = true`),
+`templates/digest.js` and the marked parts of `templates/dashboard.html` (the "Daily email" button and dialog),
+`build_dashboard.py` (the switch).
+
+### The two switches (both are off)
+
+The signup stays hidden and closed until the maintainer opens it, because the sender of step 6.3 does not exist yet and the
+lawyer gate of PLAN.md step 6.6 is still to be closed. There are two switches, and both must be on:
+
+1. The function refuses to create a subscription unless its secret `DIGEST_SIGNUP_ENABLED` is exactly `true` (anything else, or
+   unset, answers 403 `signup_closed` and stores nothing, sends nothing and uses no limit place). Turning the email off still
+   works when the secret is off, so a user can always unsubscribe.
+   `supabase secrets set --project-ref dncodqeqpoqwcxdctzco DIGEST_SIGNUP_ENABLED=true` opens it, and `supabase secrets unset
+   --project-ref dncodqeqpoqwcxdctzco DIGEST_SIGNUP_ENABLED` closes it again.
+2. The page shows the control only when `DIGEST_SIGNUP_ENABLED = True` in `build_dashboard.py`. While it is `False` the build cuts
+   everything between `<!--digest-->` and `<!--/digest-->` out of the page (the button, the dialog and the script tag) and does
+   not write `docs/digest.js` (it also removes one left by an earlier build). Change the constant in a pull request, merge, and
+   the next daily build publishes it. `tests/test_build_dashboard.py` tests both values.
+
+Because the function checks its own switch, calling the API directly does not get around the page's flag.
+
+### The email-settings request and the answers
+
+`POST <project url>/functions/v1/email-settings`, `Content-Type: application/json`, `Authorization: Bearer <the user's access
+token>`, `apikey: <publishable key>`. The gateway checks the token (`verify_jwt = true`; the CORS preflight carries no token and
+the platform lets `OPTIONS` through), then the function asks Supabase Auth who owns it (`/auth/v1/user`) and takes the user id
+and the default address only from that answer: nothing in the body, the query string or the token's unchecked claims can name
+another user. Bodies:
+
+- `{"action": "turn_on", "address": null | "<address>", "frequency": "daily" | "weekly", "filters": {"regions": [], "levels": [], "role_types": [], "keywords": ""}}`.
+  An empty or missing `address` means the Auth account's email (a Google account's email is verified); a different address is
+  accepted only as typed input and gets the confirmation email first (see "Who can mail whom, and the limits"). `filters` has
+  exactly those four keys (at most 30 names of at most 80 characters each, keywords at most 200 characters; the names are not
+  checked against the data).
+- `{"action": "turn_off"}`.
+
+Answers: 200 `{"ok": true, "state": "waiting"}` (settings stored, one confirmation email sent) or `{"ok": true, "state": "on"}` (it
+was running for that address already: nothing changed, nothing sent, no place used); 200 `{"ok": true, "status": "unsubscribed" |
+"already_unsubscribed" | "not_subscribed"}` for turn off. Errors are `{"ok": false, "error": {"code", "message"}}`: 400
+`invalid_input` (with `fields`) or `invalid_request`, 401 `not_signed_in`, 403 `origin_not_allowed` or `signup_closed`, 405, 413,
+415, 429 `rate_limited` (the user) or `address_limited`, 503 `daily_cap_reached` or `service_unavailable` (Auth did not answer),
+502 `send_failed` (Resend refused: nothing was sent) or `send_unconfirmed` (Resend did not answer clearly: it may have been sent),
+500 `server_error`. No answer holds a token, a hash, an address or a user id. The page never takes its state from the answer: it
+reads the user's own `subscriptions` row again (row-level security gives them their row without the token hashes).
+
+What turn on writes (`subscribe_start`, one statement under a row lock): `address`, `frequency`, `filters`, `consent_given_at = now`,
+`consent_confirmed_at = null`, `unsubscribed_at = null`, the SHA-256 of a fresh confirmation token (valid 7 days:
+`CONFIRM_TTL_DAYS`) and of a fresh unsubscribe token. A new address is a new consent: nothing is sent until the new link is
+confirmed. Asking again while waiting issues a new link (the old one stops working); asking for the running address leaves the
+row alone. The `emailed` list is not touched. The raw unsubscribe token is not kept anywhere and is not in the confirmation email,
+so a digest cannot rebuild an unsubscribe link from what is stored: step 6.3 has to decide how the digests get a working link
+(step 6.1 documents the unsubscribe token as stable for the life of the row, and replacing it would break the links of earlier emails).
+
+The confirmation email is plain text from `Misra <digest@send.avidor.org>` with `Reply-To: raanan@avidor.org` (the sending address
+cannot receive mail), subject "Confirm your email for Misra job alerts". It says that the address was entered on Misra, what
+will be sent (a daily or weekly list of new job postings that match the chosen filters), that nothing is sent until the link is
+confirmed, that it can be ignored if it was not the reader, the link
+`https://ravidorr.github.io/misra/email.html#token=<token>` (the token in the fragment, as step 6.1 designed) and the footer
+`Misra (https://ravidorr.github.io/misra/) is a free, non-commercial project. Contact: raanan@avidor.org`. The raw token exists only
+in that email and in the one request to Resend, and is never logged or returned.
+
+### Who can mail whom, and the limits
+
+A signed-in user can ask for one email to any address they type, so the function limits it. In the order they run, before anything
+is stored or sent:
+
+1. The signup switch (above), then the validation of the body.
+2. At most `USER_DAILY_LIMIT` (3) confirmation emails per user and day, `ADDRESS_DAILY_LIMIT` (3) per address and day (any
+   number of users, the address compared in lower case) and `DAILY_CAP` (30) in all. The counters are keyed hashes (HMAC-SHA-256
+   of the day and `user:<id>` or `address:<address>`, keyed by the secret `IP_HASH_SECRET`, the one `report-site` uses), so a
+   key changes every day and the database never holds an id or an address; rows older than yesterday are deleted on every call.
+   The three places are taken in one atomic database call (`confirm_email_reserve`), so parallel requests cannot all pass, and a
+   refused request uses nothing.
+3. A place is given back (`confirm_email_release`) when nothing was sent: Resend answered with a 4xx, or the subscription could
+   not be stored. A timeout, a network error or a 5xx may have sent the email, so the place stays used and the answer says so. If the
+   database cannot be reached nothing is sent (fail closed).
+
+The caps are constants with a comment in `handler.ts`: Resend's free plan is 100 emails a day and 3,000 a month, shared with the
+other project, and `report-site` may use 20 a day, so these use at most 30 of the rest. Change them there. A plus-address
+(`name+1@example.com`) counts as another address, so a person with many Google accounts could still reach one inbox up to the
+per-address limit for each; the daily cap bounds the total.
+
+### Turning it off
+
+`unsubscribe_user` reads the row's unsubscribe hash (the raw token is never stored) and calls the step 6.1 function
+`unsubscribe_subscription`, so the clean-up is the very same code as the unsubscribe link's: it keeps the address and the consent
+timestamps, sets `unsubscribed_at`, and clears `filters`, `frequency`, the confirmation token and the `emailed` rows. A repeat is
+not an error. A user with no row gets `not_subscribed`. `supabase/tests/digest_signup.sql` runs both ways on identical rows and
+compares them.
+
+### The page
+
+`templates/digest.js` (a module with its own integrity hash, built to `docs/digest.js` only while the switch is on). The "Daily
+email" button sits next to "Sign out" and opens a native dialog with the state (not on, waiting for you to confirm, on, unsubscribed),
+the address field, daily or weekly, the filters the email will use, "Use these filters for my email" and the actions "Turn the email
+on" (or "Send the confirmation again" while waiting, "Change the address and confirm it" while on) and "Turn the email off". The
+button copies exactly regions, levels, role types and keywords from the dashboard at that moment (`globalThis.misraEmailFilters()`
+in `dashboard.js` returns copies); later changes to the page's filters, a quick search included, change nothing until it is pressed
+again. While the email is off the choices are a draft sent with "Turn the email on"; while it waits or runs, a new frequency or
+filter set is saved straight to the user's own row (the only two columns they may update). Every failure is explained and never
+called a success, and the page reads the row again after every call.
+
+There is deliberately no WebMCP tool for any of this (it would email a person). Agents can read `data-digest-state` (`off`,
+`waiting`, `on`, `unsubscribed`, `unknown`, `loading`) and `data-digest-frequency` on the button, and `data-state` on the dialog;
+no address is in a hook. `tests/test_digest_settings.py` checks that no registered tool name has anything to do with email.
+
+### How email-settings and the page are tested
+
+`test/email-settings.test.ts` (vitest, part of `npm run test` and CI) runs the handler with a fake Auth, a fake of the four database
+functions that mirrors the SQL (`test/support/fake-email-settings.ts`) and a fake Resend: what is stored and sent, the user id
+only from the token, the address rules, the limits (user, address, cap, a refusal using nothing, a new day), the give-back rules,
+the switch, the failures, and that no log line or answer holds a token, hash, address, user id or key. `tests/test_digest_settings.py`
+runs the dialog in a real browser against fakes (every state, each error message, the busy state, light and dark, phone width, axe,
+keyboard). The SQL is tested against a database with `supabase/tests/digest_signup.sql`
+(`psql "$TEST_DATABASE_URL" -v ON_ERROR_STOP=1 -f supabase/tests/digest_signup.sql`, ending in `all digest signup checks passed`),
+and `tests/test_migrations.py` lints the migration on every push.
+
+### Apply and deploy email-settings (the maintainer; nothing here is done by the pull request)
+
+1. Apply the migration `supabase/migrations/20261118100000_digest_signup_and_limits.sql` (`supabase db push`, or paste it into the
+   [SQL editor](https://supabase.com/dashboard/project/dncodqeqpoqwcxdctzco/sql/new) and record it with
+   `supabase migration repair --status applied 20261118100000 --remote=dncodqeqpoqwcxdctzco`).
+2. Deploy: `supabase functions deploy email-settings --project-ref dncodqeqpoqwcxdctzco` (`config.toml` sets `verify_jwt = true`).
+   Secrets it reads: `RESEND_API_KEY` and `IP_HASH_SECRET` (both already set for `report-site`), and `DIGEST_SIGNUP_ENABLED` (leave it
+   unset until signups open). Optional: `DIGEST_FROM_EMAIL` (default `Misra <digest@send.avidor.org>`) and `DIGEST_REPLY_TO_EMAIL`
+   (default `raanan@avidor.org`). Without the mail secrets turning on answers 500 and the log names what is missing, while turning
+   off keeps working.
+
+### Check it live (none of these creates a subscription or sends an email)
+
+```sh
+URL=https://dncodqeqpoqwcxdctzco.supabase.co/functions/v1/email-settings
+# 1. no token: the gateway answers 401 and the function never runs. The same with the publishable key as the bearer.
+curl -s -i -X POST "$URL" -H 'Content-Type: application/json' -d '{"action":"turn_off"}'
+curl -s -i -X POST "$URL" -H "Authorization: Bearer $PUBLISHABLE_KEY" -H 'Content-Type: application/json' -d '{"action":"turn_off"}'
+# 2. the preflight must pass the gateway without a token: 204, allow-origin the dashboard, authorization among the allowed headers
+curl -s -i -X OPTIONS "$URL" -H 'Origin: https://ravidorr.github.io' -H 'Access-Control-Request-Method: POST' -H 'Access-Control-Request-Headers: authorization,content-type,apikey'
+```
+
+With the access token of the maintainer's own signed-in session (in the browser: `JSON.parse(localStorage['misra-auth']).access_token`)
+as `$TOKEN`, and the secret `DIGEST_SIGNUP_ENABLED` unset:
+
+```sh
+# 3. turning on is refused while the switch is off: 403 signup_closed, and the SQL editor shows no row for you
+curl -s -i -X POST "$URL" -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' -H 'Origin: https://ravidorr.github.io' \
+  -d '{"action":"turn_on","frequency":"daily","filters":{"regions":[],"levels":[],"role_types":[],"keywords":""}}'
+# 4. turning off with no subscription is a harmless 200 {"ok":true,"status":"not_subscribed"}
+curl -s -X POST "$URL" -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' -d '{"action":"turn_off"}'
+# 5. a body that names someone else is just ignored (still not_subscribed): the user is the token's
+curl -s -X POST "$URL" -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' -d '{"action":"turn_off","user_id":"00000000-0000-4000-8000-000000000000"}'
+```
+
+In the SQL editor: `select count(*) from public.subscriptions;` is 0 after these, and
+`select has_function_privilege('anon', 'public.subscribe_start(uuid,text,text,jsonb,text,timestamptz,text,timestamptz)', 'execute')`
+(and the same for `authenticated`) is `false`. The checks that open the switch and send the first real confirmation email belong to
+the day signups open (PLAN.md step 6.6): turn the secret on, build the page with the constant `True`, and with the maintainer's own
+account turn the email on, confirm from the link and read the row. If the preflight in check 2 is refused (a gateway that wants a
+token even for `OPTIONS`), or a real user token in check 3 gets a 401 from the gateway instead of `403 signup_closed` (a project
+whose signing keys the gateway's JWT check does not accept), set `verify_jwt = false` for this function in `config.toml` and
+redeploy: the function already asks Auth who the caller is and refuses everything without a token Auth accepts. Then update the
+test in `tests/test_function_config.py` and the comment in `config.toml`.

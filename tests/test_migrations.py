@@ -79,6 +79,23 @@ REPORT_FUNCTIONS = {
     "report_site_reserve": "p_day date, p_ip_hash text, p_ip_limit integer, p_daily_cap integer",
     "report_site_release": "p_day date, p_ip_hash text",
 }
+# Step 6.2: the spam guard of the confirmation email (counter tables) and the functions that turn the digest on and off
+# for a signed-in user. Only the service role may touch any of it. The functions touch the subscription tables or these
+# counters (and unsubscribe_user calls the step 6.1 function that does the clean-up) and nothing else.
+CONFIRM_LIMIT_COLUMNS = {"confirm_limits": {"day", "key_hash", "sent"}, "confirm_daily_cap": {"day", "sent"}}
+CONFIRM_LIMIT_TABLES = set(CONFIRM_LIMIT_COLUMNS)
+SUBSCRIBE_FUNCTIONS = {
+    "subscribe_start": (
+        "p_user_id uuid, p_address text, p_frequency text, p_filters jsonb, p_confirm_hash text, "
+        "p_confirm_expires timestamptz, p_unsubscribe_hash text, p_now timestamptz"
+    ),
+    "unsubscribe_user": "p_user_id uuid, p_now timestamptz",
+    "confirm_email_reserve": (
+        "p_day date, p_user_hash text, p_address_hash text, p_user_limit integer, p_address_limit integer, "
+        "p_daily_cap integer"
+    ),
+    "confirm_email_release": "p_day date, p_user_hash text, p_address_hash text",
+}
 BACKFILL = (
     "insert into public.profiles (user_id, email) select id, email from auth.users where email is not null "
     "on conflict do nothing"
@@ -119,13 +136,28 @@ SUBSCRIPTION_FUNCTION = re.compile(
     r"create function public\.(?P<name>confirm_subscription|unsubscribe_subscription)\((?P<args>[a-z_0-9 ,]*)\) "
     r"returns text language plpgsql set search_path = '' as \$\$(?P<body>.*)\$\$"
 )
-REPORT_SIGNATURE = r"(?:jsonb|date, text|date, text, integer, integer|text, timestamptz)?"
+SUBSCRIBE_FUNCTION = re.compile(
+    r"create function public\.(?P<name>subscribe_start|unsubscribe_user|confirm_email_reserve|confirm_email_release)"
+    r"\((?P<args>[a-z_0-9 ,]*)\) "
+    r"returns text language plpgsql set search_path = '' as \$\$(?P<body>.*)\$\$"
+)
+REPORT_SIGNATURE = (
+    r"(?:jsonb|date, text|date, text, integer, integer|text, timestamptz|date, text, text"
+    r"|date, text, text, integer, integer, integer|uuid, timestamptz"
+    r"|uuid, text, text, jsonb, text, timestamptz, text, timestamptz)?"
+)
 REVOKE_FUNCTION = re.compile(
     rf"revoke (?:all|execute) on function public\.(?P<name>\w+)\({REPORT_SIGNATURE}\) from (?P<roles>[a-z, ]+)"
 )
 GRANT_REPORT_FUNCTION = re.compile(
     r"grant execute on function public\.(?P<name>report_site_reserve|report_site_release)"
     r"\((?:date, text, integer, integer|date, text)\) to service_role"
+)
+GRANT_SUBSCRIBE_FUNCTION = re.compile(
+    r"grant execute on function public\.(?P<name>confirm_email_reserve|confirm_email_release|subscribe_start"
+    r"|unsubscribe_user)"
+    r"\((?:date, text, text, integer, integer, integer|date, text, text"
+    r"|uuid, text, text, jsonb, text, timestamptz, text, timestamptz|uuid, timestamptz)\) to service_role"
 )
 GRANT_SUBSCRIPTION_FUNCTION = re.compile(
     r"grant execute on function public\.(?P<name>confirm_subscription|unsubscribe_subscription)"
@@ -257,6 +289,8 @@ def table_problems(table: str, body: str) -> list[str]:
         found.append(f"profiles may hold only {sorted(PROFILE_COLUMNS)}, not {sorted(columns)}")
     if table in REPORT_COLUMNS and set(columns) != REPORT_COLUMNS[table]:
         found.append(f"{table} may hold only {sorted(REPORT_COLUMNS[table])}, not {sorted(columns)}")
+    if table in CONFIRM_LIMIT_COLUMNS and set(columns) != CONFIRM_LIMIT_COLUMNS[table]:
+        found.append(f"{table} may hold only {sorted(CONFIRM_LIMIT_COLUMNS[table])}, not {sorted(columns)}")
     if table == "subscriptions" and set(columns) != SUBSCRIPTION_COLUMNS:
         found.append(f"subscriptions has other columns than {sorted(SUBSCRIPTION_COLUMNS)}: {sorted(columns)}")
     if table == "emailed" and set(columns) != EMAILED_COLUMNS:
@@ -278,6 +312,17 @@ def parse_function(s: str) -> tuple[str, bool, list[str]] | None:
         bad += [f"function {m['name']} may touch only the report tables, not {sorted(touched - REPORT_TABLES)}"] * bool(
             touched - REPORT_TABLES
         )
+        bad += [f"function {m['name']} reaches outside public: {elsewhere}"] * bool(elsewhere)
+        return m["name"], False, bad
+    if m := SUBSCRIBE_FUNCTION.fullmatch(s):
+        touched = set(re.findall(r"public\.(\w+)", m["body"])) - {"unsubscribe_subscription"}
+        allowed = SUBSCRIPTION_TABLES | CONFIRM_LIMIT_TABLES
+        elsewhere = re.findall(r"\b(?:auth|storage|vault|extensions|net|pg_catalog|supabase_\w+)\.\w+", m["body"])
+        signature = m["args"].strip() == SUBSCRIBE_FUNCTIONS[m["name"]]
+        bad = [] if signature else [f"function {m['name']} has another signature"]
+        bad += [
+            f"function {m['name']} may touch only the subscription tables and counters: {sorted(touched - allowed)}"
+        ] * bool(touched - allowed)
         bad += [f"function {m['name']} reaches outside public: {elsewhere}"] * bool(elsewhere)
         return m["name"], False, bad
     if m := SUBSCRIPTION_FUNCTION.fullmatch(s):
@@ -330,6 +375,7 @@ def problems(stmts: list[str]) -> list[str]:
             or COLUMN_GRANT.fullmatch(s)
             or GRANT_REPORT_FUNCTION.fullmatch(s)
             or GRANT_SUBSCRIPTION_FUNCTION.fullmatch(s)
+            or GRANT_SUBSCRIBE_FUNCTION.fullmatch(s)
             or s in HOOK_GRANTS
             or s == BACKFILL
         ):
@@ -383,7 +429,9 @@ def test_migrations_are_safe() -> None:
     tables = {m["table"] for s in stmts if (m := CREATE_TABLE.fullmatch(s))}
     assert (
         tables
-        == {"jobs", "crawl_log", "profiles", "user_prefs", "user_jobs", "subscriptions", "emailed"} | REPORT_TABLES
+        == {"jobs", "crawl_log", "profiles", "user_prefs", "user_jobs", "subscriptions", "emailed"}
+        | REPORT_TABLES
+        | CONFIRM_LIMIT_TABLES
     )
     assert any(POLICY.fullmatch(s) for s in stmts)
     assert problems(stmts) == []
@@ -696,6 +744,7 @@ def test_the_report_counters_have_no_policy_and_no_grant_for_anyone_but_the_serv
         if s.startswith("grant execute")
         and not GRANT_REPORT_FUNCTION.fullmatch(s)
         and not GRANT_SUBSCRIPTION_FUNCTION.fullmatch(s)
+        and not GRANT_SUBSCRIBE_FUNCTION.fullmatch(s)
         and s not in HOOK_GRANTS
     ]
 

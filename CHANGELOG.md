@@ -2,6 +2,22 @@
 
 All notable changes are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses [Semantic Versioning](https://semver.org/).
 
+## [0.23.0] - 2026-11-18
+
+### Added
+
+- The daily email settings (PLAN.md step 6.2, PRD FR-8 AC 1 to 3), built and switched off. A signed-in user gets a "Daily email" button beside "Sign out" that opens a dialog with the state (not on, waiting for you to confirm, on, unsubscribed), the address (the Google email by default, or one they type), daily (the default) or weekly, the filters the email will use, and the actions turn on, send the confirmation again, change the address, and turn off. "Use these filters for my email" copies exactly regions, levels, role types and keywords from the dashboard at that moment; later changes to the page's filters, a quick search included, change nothing until it is pressed again. Every failure is explained in plain words (rate limits included) and never called a success, and the page reads the user's own row again after every call, so it shows what the database holds. No WebMCP tool can turn the email on or send mail; agents can read `data-digest-state` and `data-digest-frequency`.
+- Edge Function `email-settings` (JWT verified by the gateway; the user id and the default address come only from Supabase Auth's answer about the token). Turning on stores the address, frequency and filters, sets `consent_given_at`, clears `consent_confirmed_at` and `unsubscribed_at`, makes both tokens (only their hashes are stored, the confirmation one expires in 7 days) and sends one plain-text confirmation email through Resend (`Reply-To: raanan@avidor.org`) with the link `email.html#token=<token>`; the token is never logged or returned. Turning off does exactly what the unsubscribe link does: it calls the step 6.1 SQL function, so the address and consent times are kept and the filters, frequency, confirmation token and emailed list are cleared.
+- Abuse limits for the confirmation email, counted in the database with keyed daily hashes (no id or address is stored): 3 per user, 3 per address and 30 in all per day (constants in `handler.ts`, with the Resend plan in a comment). A refused request uses nothing, and a place is given back only when Resend definitely refused (a 4xx), never after a timeout or a 5xx.
+- Two switches, both off: `DIGEST_SIGNUP_ENABLED = False` in `build_dashboard.py` (the page has no button, dialog or script, and `docs/digest.js` is not built) and the function secret `DIGEST_SIGNUP_ENABLED`, without which the function refuses to create a subscription (403 `signup_closed`), so calling the API directly cannot get around the page. Turning off always works.
+- Migration `20261118100000_digest_signup_and_limits.sql`: the counter tables `confirm_limits` and `confirm_daily_cap` and the service-role-only functions `subscribe_start`, `unsubscribe_user`, `confirm_email_reserve` and `confirm_email_release`. `supabase/tests/digest_signup.sql` tests them against a database, including that both ways of unsubscribing leave identical rows. The lint of `tests/test_migrations.py` knows the new tables and functions.
+- `templates/digest.js`, `supabase/functions/email-settings/`, `supabase/functions/_shared/identity.ts`, `test/email-settings.test.ts` and `tests/test_digest_settings.py` (real browser, every state and error, light and dark, phone width, axe, keyboard). The daily workflow stages `docs/digest.js` once it exists.
+
+### Changed
+
+- `PRIVACY.md` says the email settings are built but switched off, what turning the email on stores, that one confirmation email is sent and nothing else until it is confirmed, the confirmation-email counters, and Resend's part.
+- `auth.js` also shares the signed-in email with the page scripts, and `dashboard.js` exposes a read-only copy of the four email filters.
+
 ## [0.22.0] - 2026-11-17
 
 ### Added
