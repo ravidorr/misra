@@ -70,7 +70,8 @@ def test_every_column_is_named_and_values_go_through_the_database_types(tmp_path
     text = script(loaded(write_export(tmp_path / "e")))
     for table in TABLES:
         columns = ", ".join(table.columns)
-        assert f"insert into public.{table.name} ({columns})\nselect {columns} from json_populate_recordset(" in text
+        qualified = ", ".join(f"r.{column}" for column in table.columns)
+        assert f"insert into public.{table.name} ({columns})\nselect {qualified} from json_populate_recordset(" in text
         assert f"null::public.{table.name}" in text
 
 
@@ -96,9 +97,24 @@ def test_the_empty_export_gives_a_script_that_inserts_nothing(tmp_path: Path) ->
     assert text.count("$restore$[]$restore$") == len(TABLES)
 
 
+def test_without_the_auth_users_step_only_the_rows_of_people_who_still_have_a_sign_in_row_are_restored(
+    tmp_path: Path,
+) -> None:
+    """The safe default (restoring into the live project): the database itself skips every exported user id that is no
+    longer in auth.users, so an account deleted after the backup is not brought back and no email is looked at."""
+    content = loaded(write_export(tmp_path / "e"))
+    text = script(content)
+    check = "where exists (select 1 from auth.users u where u.id = r.user_id)\non conflict do nothing;\n"
+    assert text.count(check) == len(TABLES)  # every table, no exception
+    assert "insert into auth.users" not in text  # never creates a sign-in row in this mode
+    created = script(content, with_auth_users=True)
+    assert "from auth.users u" not in created  # a fresh project: the rows are created first, then all are restored
+    assert created.count("on conflict do nothing;") == len(TABLES) + 1
+
+
 def test_the_auth_users_step_is_optional_comes_first_and_only_adds_missing_rows(tmp_path: Path) -> None:
     content = loaded(write_export(tmp_path / "e"))
-    assert "auth.users" not in script(content)
+    assert "insert into auth.users" not in script(content)
     text = script(content, with_auth_users=True)
     assert text.count("insert into auth.users") == 1
     assert text.index("insert into auth.users") < text.index("insert into public.profiles")

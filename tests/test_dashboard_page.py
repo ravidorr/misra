@@ -50,7 +50,15 @@ GAP_GROUPS = [
 
 
 @pytest.fixture
-def site(db: sqlite3.Connection, workdir: Path) -> Path:
+def site(db: sqlite3.Connection, workdir: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """The page built with the daily-email signup switch off, so these tests (written before the signup opened, with
+    stand-in backends that know nothing of the `subscriptions` table) keep checking the rest of the page. The page
+    with the switch on is the `digest_site` fixture of tests/test_digest_settings.py."""
+    monkeypatch.setattr(build_dashboard, "DIGEST_SIGNUP_ENABLED", False)
+    return build_site(db, workdir)
+
+
+def build_site(db: sqlite3.Connection, workdir: Path) -> Path:
     """The real templates and design system built over a small database; returns docs/."""
     shutil.copytree(REPO / "templates", workdir / "templates", dirs_exist_ok=True)
     shutil.copytree(REPO / "design-system", workdir / "design-system")

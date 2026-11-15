@@ -183,7 +183,7 @@ Decisions made in planning (they change the PRD's wording, so update the PRD in 
   confirmation emails per user, 3 per address and 30 in all per day, counted in the database; the same unsubscribe
   clean-up as the link), the migration `20261118100000_digest_signup_and_limits.sql` and the "Daily email" dialog
   (`templates/digest.js`). The whole signup is behind two switches, both off: `DIGEST_SIGNUP_ENABLED = False` in
-  `build_dashboard.py` (the page has no button, dialog or script) and the function secret `DIGEST_SIGNUP_ENABLED` (the
+  `build_dashboard.py` (the page has no button, dialog or script; on since v0.31.0) and the function secret `DIGEST_SIGNUP_ENABLED` (the
   function refuses to create a subscription unless it is `true`). Step 6.6 switches them on (`supabase/README.md`,
   "Daily email"): set `DIGEST_SIGNUP_ENABLED = True` in `build_dashboard.py` and run
   `supabase secrets set DIGEST_SIGNUP_ENABLED=true --project-ref dncodqeqpoqwcxdctzco`. The control carries the lawyer's wording (label "Email me new matching roles", Daily or Weekly, helper text with the
@@ -257,12 +257,12 @@ Decisions made in planning (they change the PRD's wording, so update the PRD in 
   `api.smartrecruiters.com` disallows everyone, so its five companies are skipped until SmartRecruiters gives permission;
   a company skipped for 7 days in a row has its open jobs closed, from v0.26.0), and the company exclusion list `data/excluded_companies.csv` (a company
   on it is never crawled, is deleted from `data/jobs.db` and from Supabase `jobs`, `user_jobs` and `emailed`, and is
-  off the exports and the coverage card; the process is in `CONTRIBUTING.md`). Still to do before the gate closes: the
-  digest email itself (step 6.3, with its footer and headers), the flag, and the present-tense `PRIVACY.md` edits below. The gate stays open.
+  off the exports and the coverage card; the process is in `CONTRIBUTING.md`). ~~Still to do before the gate closes: the
+  digest email itself (step 6.3, with its footer and headers), the flag, and the present-tense `PRIVACY.md` edits below.~~ Done in v0.31.0 except the function secret (see "Opening day" below). The gate closes when the secret is set.
   Small wording and checks done in v0.29.0: the weekly choice reads "Weekly (Sundays)" (the lawyer's suggestion), the coverage card says what happens to the roles of a
   company skipped for robots.txt in both phases (kept for up to 7 days, then closed, with the days skipped), and the SQL policy tests now run in CI (job `sql-tests`).
   Second lawyer answer (2026-11-15), applied: the `auth.users` sentence in `PRIVACY.md` now says why Supabase keeps
-  Google's name and photo, and `TERMS.md` gained the liability, acceptable-use and governing-law points. Still to do on
+  Google's name and photo, and `TERMS.md` gained the liability, acceptable-use and governing-law points. ~~Still to do on
   the day the flag is switched on (the text is true only then, so it is not in `PRIVACY.md` yet): in `PRIVACY.md`, (a)
   "Why we collect it": "If you turn on the email digest, your email address is also used to send you the job alerts you
   asked for, and for nothing else."; (b) "Email settings": rewrite the paragraph in the present tense (the address, the
@@ -270,7 +270,18 @@ Decisions made in planning (they change the PRD's wording, so update the PRD in 
   already emailed to you, and what an unsubscribe keeps and deletes); (c) "Resend": "Resend (Ireland): sends the
   site-report email to the maintainer and, if you turn on the email digest, processes your email address and the
   matched job links to deliver your confirmation and digest emails." Also on that day, the line "By turning this on you
-  agree to the Terms and the Privacy notice" next to the email control (built in 6.2) must be visible.
+  agree to the Terms and the Privacy notice" next to the email control (built in 6.2) must be visible.~~
+  Done in v0.31.0 (the PR that sets `DIGEST_SIGNUP_ENABLED = True`): (a), (b) and (c) are in `PRIVACY.md` in the present tense (and the short version says the email
+  settings are kept too), the "not live" and "planned" wording is gone from it and from the Providers section, the guard test in `tests/test_legal_wording.py`
+  now requires the present-tense wording while the constant is on, and the agreement line is in the dialog (visible, links of at least 44px; tested in a browser
+  and pinned in the markup). Third lawyer answer (2026-11-15), applied in the same PR: the spam-guard wording is "is deleted in the next daily cleanup" (form and `PRIVACY.md`,
+  no "24 hours"); the confirmation-email counters get the same daily cleanup (migration `20261120100000_confirm_counters_cleanup.sql`, `confirm_email_cleanup`, called by `sync_supabase.py`
+  after `report_site_cleanup`); `SECURITY.md` scopes `BACKUP_DEPLOY_KEY` to `ravidorr/misra-backups` only, adds its rotation to the yearly review (by 2027-11-15) and the
+  rule to delete any local clone of the backup repository at once; and the restore without `--create-auth-users` skips every user id no longer in `auth.users` (never resurrects a
+  deleted account; `CONTRIBUTING.md`, "Restore", with a second rehearsal). No encryption of our own is claimed anywhere.
+  Opening day, still to do by the maintainer, in this order: apply the two cleanup migrations (before merging, or the next daily sync fails), merge, wait for `publish-docs`, run the signed-in checks that need the
+  secret unset (`supabase/README.md`, "Check it live"), then `supabase secrets set DIGEST_SIGNUP_ENABLED=true --project-ref dncodqeqpoqwcxdctzco`, then the maintainer's own turn-on flow
+  and `send_digests.py` twice with a test subscriber. The legacy maintainer digest stays until one digest from `send_digests.py` has reached the maintainer (step 6.4).
 
 ## FR-4 (richer job data)
 
