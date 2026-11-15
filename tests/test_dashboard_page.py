@@ -58,13 +58,17 @@ def site(db: sqlite3.Connection, workdir: Path) -> Path:
     for legal in build_dashboard.LEGAL_PAGES:
         shutil.copy(REPO / legal.source, workdir / legal.source)
     write_json(
-        workdir / "data" / "companies.json", [{"name": "Acme", "status": "ok"}, {"name": "Nowhere", "status": "x"}]
+        workdir / "data" / "companies.json",
+        [
+            {"name": "Acme", "status": "ok"},
+            {"name": "Nowhere", "status": "x", "domain": "nowhere.test", "careers_url": "https://nowhere.test/jobs"},
+        ],
     )
     (workdir / "data" / "unresolved_candidates.csv").write_text(
-        "name,domain,segment,reason,note\r\n"
-        "Parked,parked.test,deeptech,site_unusable,Domain parked at GoDaddy\r\n"
-        f'LongName,long.test,deeptech,needs_reader,"{LONG_NOTE}"\r\n'
-        "Walled,walled.test,multinational,bot_protection,\r\n",
+        "name,domain,careers_url,segment,reason,note\r\n"
+        "Parked,parked.test,,deeptech,site_unusable,Domain parked at GoDaddy\r\n"
+        f'LongName,long.test,https://long.test/careers,deeptech,needs_reader,"{LONG_NOTE}"\r\n'
+        "Walled,walled.test,https://walled.test/jobs,multinational,bot_protection,\r\n",
         encoding="utf-8",
     )
     old = (datetime.now(UTC) - timedelta(days=30)).strftime("%Y-%m-%dT00:00:00")
@@ -628,9 +632,62 @@ async def test_the_coverage_gap_card_counts_the_sites_by_reason(page: Page, site
         assert (visible, str(listed)) == (await group.get_attribute("data-count"), visible)
         shown.append((label, int(visible)))
     assert shown == GAP_GROUPS
-    assert await page.locator("[data-reason=site_unusable] li b").text_content() == "Parked"
+    assert await page.locator("[data-reason=site_unusable] li b").text_content() == "Parked (opens in a new tab)"
     assert await page.locator("[data-reason=site_unusable] li .gap-why").text_content() == "Domain parked at GoDaddy"
-    assert await page.locator("[data-reason=bot_protection] li").text_content() == "Walled"
+    assert await page.locator("[data-reason=bot_protection] li").text_content() == "Walled (opens in a new tab)"
+
+
+async def test_every_site_on_the_coverage_gap_card_is_a_safe_link_that_the_keyboard_reaches(
+    page: Page, site: Path
+) -> None:
+    await serve(page, site)
+    await open_gaps(page)
+    links = page.locator("#gaps .gap-sites li a")
+    assert await page.locator("#gaps .gap-sites li").count() == await links.count() == len(GAP_GROUPS)
+    found = {}
+    for link in await links.all():
+        name = (await link.text_content() or "").replace(" (opens in a new tab)", "")
+        found[name] = await link.get_attribute("href")
+        assert await link.get_attribute("target") == "_blank"
+        assert await link.get_attribute("rel") == "noopener noreferrer"
+        assert await link.locator(".sr-only").text_content() == " (opens in a new tab)"
+        assert await link.get_attribute("tabindex") is None
+        box = await link.bounding_box()
+        assert box is not None
+        assert box["height"] >= TAP
+    assert found == {
+        "Walled": "https://walled.test/jobs",  # blocked: the careers page itself
+        "Parked": "https://parked.test",  # no careers address: the own site
+        "LongName": "https://long.test/careers",
+        "Nowhere": "https://nowhere.test/jobs",
+    }
+    assert all(href is not None and href.startswith("https://") for href in found.values())
+    # Tab reaches every link, in order, and the focus is drawn
+    await page.locator("#gaps-title").focus()
+    reached = []
+    for _ in range(40):
+        await page.keyboard.press("Tab")
+        active = await page.evaluate(
+            "document.activeElement.matches('.gap-sites a') && document.activeElement.getAttribute('href')"
+        )
+        if active:
+            reached.append(active)
+            outline = await page.evaluate("getComputedStyle(document.activeElement).outlineStyle")
+            assert outline == "solid"
+        if len(reached) == len(found):
+            break
+    assert sorted(reached) == sorted(found.values())
+
+
+async def test_a_site_without_an_https_address_is_shown_as_plain_text(page: Page, site: Path) -> None:
+    html = (site / "index.html").read_text(encoding="utf-8")
+    assert '"url":"https://walled.test/jobs"' in html
+    html = html.replace('"url":"https://walled.test/jobs"', '"url":"javascript:alert(1)"')
+    (site / "index.html").write_text(html, encoding="utf-8")
+    await serve(page, site)
+    await open_gaps(page)
+    assert await page.locator("#gaps .gap-sites li a").count() == len(GAP_GROUPS) - 1
+    assert await page.locator("[data-reason=bot_protection] li b").text_content() == "Walled"
 
 
 async def test_the_coverage_gap_card_opens_and_closes_and_says_so(page: Page, site: Path) -> None:
