@@ -230,6 +230,7 @@ def test_site_files_are_written_next_to_the_page(db: sqlite3.Connection, workdir
         "auth.js",
         "dashboard.css",
         "dashboard.js",
+        "digest.js",
         "email.html",
         "email.js",
         "index.html",
@@ -441,9 +442,11 @@ def test_every_file_the_build_writes_to_docs_is_staged_by_the_daily_workflow(
     assert built == staged
 
 
-def test_the_daily_email_signup_is_off_in_the_repository() -> None:
-    """The maintainer switches it on in a PR of its own (PLAN.md step 6.6); until then nobody can sign up."""
-    assert build_dashboard.DIGEST_SIGNUP_ENABLED is False
+def test_the_daily_email_signup_is_on_in_the_repository() -> None:
+    """Switched on in the PR of PLAN.md step 6.6, together with the present-tense PRIVACY.md (the guard in
+    tests/test_legal_wording.py). Never set it back to False once anyone has subscribed: that also removes
+    "Turn the email off" from the page."""
+    assert build_dashboard.DIGEST_SIGNUP_ENABLED is True
     assert (Path(__file__).resolve().parents[1] / "templates" / "digest.js").is_file()
 
 

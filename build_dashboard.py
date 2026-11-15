@@ -39,10 +39,10 @@ STATIC_FILES = (
 )
 # The daily-email signup (PLAN.md steps 6.2 and 6.6). While False the page has no "Daily email" button, no settings
 # dialog and no script for them, and docs/digest.js is not built: everything between `<!--digest-->` and
-# `<!--/digest-->` in templates/dashboard.html is cut out. Switch it on (True) only when the maintainer opens signups,
+# `<!--/digest-->` in templates/dashboard.html is cut out. It is True since PLAN.md step 6.6 (the signup is open),
 # together with the function secret DIGEST_SIGNUP_ENABLED=true (supabase/README.md), which the function checks again on
-# its own.
-DIGEST_SIGNUP_ENABLED = False
+# its own. Never set it back to False once anyone has subscribed: that also removes "Turn the email off" from the page.
+DIGEST_SIGNUP_ENABLED = True
 DIGEST_SCRIPT = "templates/digest.js"
 DIGEST_REGION = re.compile(r"<!--digest-->(.*?)<!--/digest-->", re.DOTALL)
 # The same region with its own line (indent and line break), so removing it leaves no whitespace-only line.

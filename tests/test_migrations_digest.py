@@ -94,6 +94,14 @@ def test_the_guard_takes_the_user_then_the_address_then_the_day_and_a_refusal_us
     assert "where day < p_day - 1" in body  # old rows go on every call
 
 
+def test_the_daily_cleanup_of_the_confirmation_counters_deletes_only_earlier_days_and_refuses_a_wrong_day() -> None:
+    body = functions()["confirm_email_cleanup"]["body"]
+    assert "delete from public.confirm_limits where day < p_day;" in body
+    assert "delete from public.confirm_daily_cap where day < p_day;" in body
+    assert "p_day is null or p_day > current_date" in body  # a wrong date can never wipe today's counters
+    assert body.count("delete from") == len(CONFIRM_LIMIT_COLUMNS)  # one delete per counter table, nothing else
+
+
 @pytest.mark.parametrize(
     ("old", "new"),
     [

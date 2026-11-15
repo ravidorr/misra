@@ -269,5 +269,49 @@ begin
   perform set_config('role', 'postgres', true);
 end $$;
 
+----------------------------------------------------------------------------------------------------------------------
+-- The daily cleanup of the confirmation counters (migration 20261120100000_confirm_counters_cleanup.sql): deletes every
+-- row of an earlier day, keeps today's, says how many it deleted, is safe to run twice, refuses a day that cannot be
+-- today, and only the service role may run it. Real dates, because the function refuses a day later than today.
+----------------------------------------------------------------------------------------------------------------------
+do $$
+begin
+  delete from public.confirm_limits;
+  delete from public.confirm_daily_cap;
+  insert into public.confirm_limits (day, key_hash, sent) values
+    (current_date, 'a', 1), (current_date - 1, 'a', 1), (current_date - 1, 'b', 2), (current_date - 2, 'a', 1);
+  insert into public.confirm_daily_cap (day, sent) values (current_date, 1), (current_date - 1, 4);
+  assert public.confirm_email_cleanup(current_date) = 4, 'the cleanup did not count the rows it deleted';  -- 3 hash rows + 1 cap row
+  assert (select count(*) from public.confirm_limits) = 1 and (select day from public.confirm_limits) = current_date,
+    'the cleanup kept an earlier hash or deleted today''s';
+  assert (select count(*) from public.confirm_daily_cap) = 1 and (select sent from public.confirm_daily_cap) = 1,
+    'the cleanup kept an earlier cap row or changed today''s';
+  assert public.confirm_email_cleanup(current_date) = 0, 'a second cleanup deleted something';
+  begin
+    perform public.confirm_email_cleanup(current_date + 1);  -- tomorrow would delete all of today's rows
+    assert false, 'a cleanup of tomorrow was accepted';
+  exception when invalid_parameter_value then null; end;
+  begin
+    perform public.confirm_email_cleanup(date '2999-01-01');
+    assert false, 'a cleanup of a day in the future was accepted';
+  exception when invalid_parameter_value then null; end;
+  begin
+    perform public.confirm_email_cleanup(null);
+    assert false, 'a cleanup of no day was accepted';
+  exception when invalid_parameter_value then null; end;
+  assert (select count(*) from public.confirm_limits) = 1, 'a refused cleanup deleted rows';
+  perform set_config('role', 'authenticated', true);
+  begin perform public.confirm_email_cleanup(current_date);
+    assert false, 'a signed-in user ran confirm_email_cleanup';
+  exception when insufficient_privilege then null; end;
+  perform set_config('role', 'anon', true);
+  begin perform public.confirm_email_cleanup(current_date);
+    assert false, 'the anonymous role ran confirm_email_cleanup';
+  exception when insufficient_privilege then null; end;
+  perform set_config('role', 'service_role', true);
+  assert public.confirm_email_cleanup(current_date) = 0, 'the service role cannot run the cleanup';
+  perform set_config('role', 'postgres', true);
+end $$;
+
 rollback;
 select 'all digest signup checks passed' as result;

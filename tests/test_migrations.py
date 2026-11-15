@@ -96,6 +96,7 @@ SUBSCRIBE_FUNCTIONS = {
         "p_daily_cap integer"
     ),
     "confirm_email_release": "p_day date, p_user_hash text, p_address_hash text",
+    "confirm_email_cleanup": "p_day date",
 }
 BACKFILL = (
     "insert into public.profiles (user_id, email) select id, email from auth.users where email is not null "
@@ -139,9 +140,10 @@ SUBSCRIPTION_FUNCTION = re.compile(
     r"returns text language plpgsql set search_path = '' as \$\$(?P<body>.*)\$\$"
 )
 SUBSCRIBE_FUNCTION = re.compile(
-    r"create function public\.(?P<name>subscribe_start|unsubscribe_user|confirm_email_reserve|confirm_email_release)"
+    r"create function public\.(?P<name>subscribe_start|unsubscribe_user|confirm_email_reserve|confirm_email_release"
+    r"|confirm_email_cleanup)"
     r"\((?P<args>[a-z_0-9 ,]*)\) "
-    r"returns text language plpgsql set search_path = '' as \$\$(?P<body>.*)\$\$"
+    r"returns (?:text|integer) language plpgsql set search_path = '' as \$\$(?P<body>.*)\$\$"
 )
 REPORT_SIGNATURE = (
     r"(?:jsonb|date|date, text|date, text, integer, integer|text, timestamptz|date, text, text"
@@ -156,9 +158,9 @@ GRANT_REPORT_FUNCTION = re.compile(
     r"\((?:date, text, integer, integer|date, text|date)\) to service_role"
 )
 GRANT_SUBSCRIBE_FUNCTION = re.compile(
-    r"grant execute on function public\.(?P<name>confirm_email_reserve|confirm_email_release|subscribe_start"
-    r"|unsubscribe_user)"
-    r"\((?:date, text, text, integer, integer, integer|date, text, text"
+    r"grant execute on function public\.(?P<name>confirm_email_reserve|confirm_email_release|confirm_email_cleanup"
+    r"|subscribe_start|unsubscribe_user)"
+    r"\((?:date, text, text, integer, integer, integer|date, text, text|date"
     r"|uuid, text, text, jsonb, text, timestamptz, text, timestamptz|uuid, timestamptz)\) to service_role"
 )
 GRANT_SUBSCRIPTION_FUNCTION = re.compile(
