@@ -42,7 +42,7 @@ jobs:
       - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
-      - run: pip install requests playwright==1.65.0
+      - run: pip install requests playwright==1.65.0 markdown-it-py==4.0.0
       - run: playwright install --with-deps chromium
       - name: Crawl and diff
         id: crawl
@@ -80,7 +80,7 @@ jobs:
           python3 -c "import sqlite3,sys; r=sqlite3.connect('data/jobs.db').execute('pragma integrity_check').fetchone()[0]; sys.exit(0 if r == 'ok' else 'integrity_check: ' + r)"
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          for f in data/jobs.db docs/index.html docs/dashboard.css docs/dashboard.js docs/auth.js docs/report.js docs/digest.js docs/email.html docs/email.js docs/supabase.js docs/theme.js docs/jobs.json docs/jobs.jsonld; do
+          for f in data/jobs.db docs/index.html docs/dashboard.css docs/dashboard.js docs/auth.js docs/report.js docs/digest.js docs/email.html docs/email.js docs/supabase.js docs/theme.js docs/jobs.json docs/jobs.jsonld docs/privacy.html docs/terms.html docs/security.html; do
             if [ -f "$f" ]; then
               git add "$f"
             fi

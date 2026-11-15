@@ -146,7 +146,7 @@ export function renderEmail(frequency: TurnOn['frequency'], to: string, link: st
       '---',
       'Misra (https://ravidorr.github.io/misra/) is a free, non-commercial project run by Raanan Avidor (raanan@avidor.org), Ditsa 8, Herzliya 4627825, Israel.',
       'If you did not ask for this email, ignore it, and nothing will be sent to you.',
-      'Privacy: https://github.com/ravidorr/misra/blob/main/PRIVACY.md | Terms: https://github.com/ravidorr/misra/blob/main/TERMS.md',
+      'Privacy: https://ravidorr.github.io/misra/privacy.html | Terms: https://ravidorr.github.io/misra/terms.html',
       '',
     ].join('\n'),
   };

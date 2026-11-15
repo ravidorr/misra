@@ -379,8 +379,6 @@ async def test_blocked_browser_storage_does_not_break_the_page_or_the_sign_in_bu
 
 # ---- FR-1 AC 7: the notice next to the sign-in button (PLAN.md step 6.6) ----
 
-BLOB = "https://github.com/ravidorr/misra/blob/main"
-
 
 async def test_fr1_ac7_the_notice_says_what_signing_in_is_for(page: Page, site: Path) -> None:
     await serve(page, site)
@@ -395,14 +393,13 @@ async def test_fr1_ac7_the_notice_says_what_signing_in_is_for(page: Page, site: 
         "(Supabase)\u2014never your CV, password, or tracking cookies. "
         # accuracy fix: Supabase's own sign-in record also holds the Google name and photo, as PRIVACY.md says
         "(Supabase's own sign-in record also holds your Google name and photo until you delete your account.) "
-        "By signing in, you agree to the Terms (opens in a new tab) and Privacy Notice (opens in a new tab)."
+        "By signing in, you agree to the Terms and Privacy Notice."
     )
-    privacy = note.get_by_role("link", name="Privacy Notice (opens in a new tab)")
-    assert await privacy.get_attribute("href") == f"{BLOB}/PRIVACY.md"
-    assert await note.get_by_role("link", name="Terms (opens in a new tab)").get_attribute("href") == f"{BLOB}/TERMS.md"
-    for link in await note.locator("a").all():
-        assert await link.get_attribute("target") == "_blank"
-        assert await link.get_attribute("rel") == "noopener noreferrer"
+    privacy = note.get_by_role("link", name="Privacy Notice")
+    assert await privacy.get_attribute("href") == "privacy.html"
+    assert await note.get_by_role("link", name="Terms").get_attribute("href") == "terms.html"
+    for link in await note.locator("a").all():  # the pages are on the site: the same tab, no new-tab words
+        assert await link.get_attribute("target") is None
     # the button points to it, so a screen reader reads the notice with the button
     assert await page.locator("#signIn").get_attribute("aria-describedby") == "signInNote"
     # it opens the main region (a notice outside a landmark fails axe), and the links work by keyboard
@@ -457,9 +454,9 @@ async def test_the_footer_links_to_the_privacy_notice_the_terms_and_the_contact(
     nav = page.get_by_role("navigation", name="About Misra")
     links = nav.locator("a")
     assert await links.count() == FOOTER_LINKS
-    privacy = nav.get_by_role("link", name="Privacy (opens in a new tab)")
-    assert await privacy.get_attribute("href") == f"{BLOB}/PRIVACY.md"
-    assert await nav.get_by_role("link", name="Terms (opens in a new tab)").get_attribute("href") == f"{BLOB}/TERMS.md"
+    privacy = nav.get_by_role("link", name="Privacy")
+    assert await privacy.get_attribute("href") == "privacy.html"
+    assert await nav.get_by_role("link", name="Terms").get_attribute("href") == "terms.html"
     assert await nav.get_by_role("link", name="Contact").get_attribute("href") == "mailto:raanan@avidor.org"
     for link in await links.all():
         box = await link.bounding_box()

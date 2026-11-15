@@ -917,20 +917,18 @@ async def test_the_lawyers_wording_is_on_the_control_with_big_links(page: Page, 
     await expect(page.locator("#digestToggleLabel")).to_have_text("Email me new matching roles")
     line = page.locator("#digestConsent")
     await expect(line).to_be_visible()
-    text = (await line.evaluate("el => el.textContent")).replace(" (opens in a new tab)", "")
+    text = await line.evaluate("el => el.textContent")
     assert text == (
         f"We will first send a confirmation link to {EMAIL}. Nothing is sent until you confirm, and you get an email "
         "only when there are new matches. One-click unsubscribe is in every email. By turning this on you agree to "
         "the Terms and the Privacy Notice."
     )
-    blob = "https://github.com/ravidorr/misra/blob/main"
-    terms = line.get_by_role("link", name="Terms (opens in a new tab)")
-    privacy = line.get_by_role("link", name="Privacy Notice (opens in a new tab)")
-    assert await terms.get_attribute("href") == f"{blob}/TERMS.md"
-    assert await privacy.get_attribute("href") == f"{blob}/PRIVACY.md"
-    for link in await line.locator("a").all():
-        assert await link.get_attribute("target") == "_blank"
-        assert await link.get_attribute("rel") == "noopener noreferrer"
+    base = "https://ravidorr.github.io/misra"
+    assert await line.get_by_role("link", name="Terms").get_attribute("href") == f"{base}/terms.html"
+    assert await line.get_by_role("link", name="Privacy Notice").get_attribute("href") == f"{base}/privacy.html"
+    for link in await line.locator("a").all():  # same tab: pages of the site
+        assert await link.get_attribute("target") is None
+        assert await link.get_attribute("rel") is None
         size = await link.bounding_box()
         assert size is not None
         assert size["height"] >= TAP

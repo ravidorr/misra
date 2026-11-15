@@ -9,6 +9,7 @@ import build_dashboard
 REPO = Path(__file__).resolve().parents[1]
 CONTACT = "raanan@avidor.org"
 MAX_TERMS_BULLETS = 6
+FOOTERS = 2  # the confirmation email and the digest
 DIGEST_FOOTER = (
     "You are receiving this {{schedule}} digest because you confirmed job alerts on Misra "
     "(https://ravidorr.github.io/misra/). Misra is a free, non-commercial project run by Raanan Avidor "
@@ -137,17 +138,18 @@ def test_the_terms_say_what_the_lawyer_asked_and_no_more() -> None:
     assert len(re.findall(r"^- ", text, flags=re.MULTILINE)) <= MAX_TERMS_BULLETS  # a short list, not boilerplate
 
 
-def test_the_documents_that_the_page_links_to_exist_in_the_repository() -> None:
+def test_the_page_links_to_the_legal_pages_on_the_site_and_each_has_its_document_in_the_repository() -> None:
     page = read("templates/dashboard.html")
-    paths = set(re.findall(r"https://github\.com/ravidorr/misra/blob/main/([A-Z]+\.md)", page))
-    assert paths == {"PRIVACY.md", "TERMS.md"}
-    for name in paths:
-        assert (REPO / name).is_file()
+    assert "blob/main" not in page  # no link to the Markdown files on GitHub
+    assert set(re.findall(r"href=\"((?:privacy|terms|security)\.html)\"", page)) == {"privacy.html", "terms.html"}
+    sources = {legal.output: legal.source for legal in build_dashboard.LEGAL_PAGES}
+    for name in ("privacy.html", "terms.html"):
+        assert (REPO / sources[name]).is_file()
 
 
 def test_the_documents_that_describe_the_project_link_to_the_terms() -> None:
     assert "(./TERMS.md)" in read("README.md")
-    assert "(/TERMS.md)" in read("llms.txt")
+    assert "(https://ravidorr.github.io/misra/terms.html)" in read("llms.txt")
     assert "(./TERMS.md)" in read("PRIVACY.md")
 
 
@@ -168,3 +170,14 @@ def test_the_email_texts_are_kept_exactly_in_one_file_for_the_steps_that_build_t
     prd = " ".join(read("PRD.md").split())
     assert DIGEST_FOOTER in prd
     assert CONFIRM_FOOTER in prd
+
+
+def test_the_email_footers_link_to_the_pages_on_the_site() -> None:
+    links = (
+        "Privacy: https://ravidorr.github.io/misra/privacy.html | Terms: https://ravidorr.github.io/misra/terms.html"
+    )
+    assert read("supabase/email-texts.md").count(links) == FOOTERS
+    for name in ("supabase/email-texts.md", "PRD.md", "PLAN.md"):
+        assert "blob/main/PRIVACY.md" not in read(name), name
+        assert "blob/main/TERMS.md" not in read(name), name
+    assert "https://ravidorr.github.io/misra/privacy.html" in read("PRD.md")

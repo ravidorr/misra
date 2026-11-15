@@ -272,9 +272,9 @@
  * Dialog: a native <dialog> opened with showModal(), so the browser traps focus, closes on Esc and hides the rest of the
  * page from screen readers. Name it with aria-labelledby and describe it with aria-describedby.
  *   <dialog class="dialog" aria-labelledby="t" aria-describedby="d">
- *     <h2 class="dialog-title" id="t" tabindex="-1">Delete your account?</h2>
+ *     <h2 class="dialog-title" id="t" tabindex="-1">Delete your Misra account?</h2>
  *     <div id="d"><p>What happens.</p></div>
- *     <p class="dialog-actions"><button type="button" class="btn btn-pill">Keep</button>
+ *     <p class="dialog-actions"><button type="button" class="btn btn-pill">Cancel</button>
  *     <button type="button" class="btn btn-pill btn-danger">Delete</button></p>
  *   </dialog>
  */
@@ -668,14 +668,27 @@ a {
 
 /* The notice under the header, shown while signed out, that the sign-in button points to with aria-describedby. */
 .sign-in-note {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
   margin: calc(-1 * var(--space-2)) 0 var(--space-4);
   color: var(--muted);
   font-size: 0.875rem;
 }
 
+.sign-in-line {
+  margin: 0;
+}
+
 /* Inline links keep the line height and still get a 44px hit area: padding on an inline box grows the target, not the line. */
-.sign-in-note a {
+.sign-in-note a,
+.report-privacy a {
   padding: 14px 4px;
+}
+
+/* The signed-in address in the delete dialog is one unbroken word: let a long one wrap on a phone. */
+.delete-email {
+  overflow-wrap: anywhere;
 }
 
 .sign-in-note[hidden] {
@@ -1122,4 +1135,124 @@ a {
 
 .load-error h2 {
   font-size: var(--text-lg);
+}
+
+/* The legal pages (privacy.html, terms.html, security.html): the Markdown of the repository, converted by
+   build_dashboard.py. A readable measure, and links, table cells and long words that never push the page sideways. */
+.legal {
+  max-width: 68ch;
+  line-height: 1.6;
+  overflow-wrap: break-word;
+}
+
+.legal h1 {
+  margin: 0 0 var(--space-4);
+  font-size: var(--text-xl);
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  line-height: 1.15;
+}
+
+.legal h2 {
+  margin: var(--space-6) 0 var(--space-3);
+  font-size: var(--text-lg);
+  font-weight: 800;
+  line-height: 1.25;
+}
+
+.legal h3 {
+  margin: var(--space-5) 0 var(--space-2);
+  font-size: var(--text-md);
+  font-weight: 800;
+  line-height: 1.3;
+}
+
+.legal h1,
+.legal h2,
+.legal h3 {
+  scroll-margin-top: var(--space-4);
+}
+
+.legal p,
+.legal ul,
+.legal ol {
+  margin: 0 0 var(--space-3);
+}
+
+.legal ul,
+.legal ol {
+  padding-inline-start: var(--space-5);
+}
+
+.legal li {
+  margin-bottom: var(--space-2);
+}
+
+/* Inline links keep the line height and still get a 44px hit area: padding on an inline box grows the target, not the line. */
+.legal a {
+  padding-block: 14px;
+  padding-inline: 0;
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+}
+
+.legal code {
+  padding: 0 var(--space-1);
+  border-radius: var(--space-1);
+  background: var(--accent-bg);
+  font-family: var(--font-mono);
+  font-size: 0.9em;
+  overflow-wrap: anywhere;
+}
+
+.legal table {
+  width: 100%;
+  margin: 0 0 var(--space-4);
+  border-collapse: collapse;
+}
+
+.legal th,
+.legal td {
+  padding: var(--space-2) var(--space-3);
+  border: var(--border-width) solid var(--line);
+  text-align: start;
+  vertical-align: top;
+  overflow-wrap: anywhere;
+}
+
+.legal th {
+  background: var(--accent-bg);
+}
+
+.legal-foot {
+  max-width: 68ch;
+  margin-top: var(--space-6);
+  padding-top: var(--space-4);
+  border-top: var(--border-width) solid var(--line);
+  color: var(--muted);
+  font-size: var(--text-sm);
+}
+
+.legal-source {
+  margin: 0 0 var(--space-3);
+}
+
+.legal-source a {
+  padding-block: 15px;
+  padding-inline: 0;
+}
+
+.legal-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 var(--space-3);
+  margin-bottom: var(--space-3);
+}
+
+.legal-nav a {
+  display: inline-flex;
+  align-items: center;
+  min-width: var(--tap);
+  min-height: var(--tap);
+  justify-content: center;
 }

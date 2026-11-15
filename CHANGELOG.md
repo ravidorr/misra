@@ -17,7 +17,7 @@ All notable changes are documented here. Format follows [Keep a Changelog](https
 - `PRIVACY.md` names the database controller (Raanan Avidor, a private individual) and the contact `raanan@avidor.org`, says why the data is collected and that giving it is voluntary, names the providers and where they are (Supabase and Resend in Ireland, Google and GitHub in the United States), gives the rights to inspect, correct and delete (Sections 13 and 14 of the Israeli Privacy Protection Law) with an answer within 30 days, and states that Supabase's and Resend's standard data processing agreements apply. The digest is still described as planned, not live.
 - `PLAN.md` step 6.3 and the PRD (FR-8) carry the lawyer's exact footer text for every digest email and the Reply-To requirement.
 
-## [0.24.0] - 2026-11-19
+## [0.25.0] - 2026-11-15
 
 ### Added
 
@@ -28,12 +28,27 @@ All notable changes are documented here. Format follows [Keep a Changelog](https
 - Migration `20261118100000_digest_signup_and_limits.sql`: the counter tables `confirm_limits` and `confirm_daily_cap` and the service-role-only functions `subscribe_start`, `unsubscribe_user`, `confirm_email_reserve` and `confirm_email_release`. `supabase/tests/digest_signup.sql` tests them against a database, including that both ways of unsubscribing leave identical rows. The lint of `tests/test_migrations.py` knows the new tables and functions.
 - The lawyer's wording for the control (shown only when the flag is on): the label "Email me new matching roles", "Daily" and "Weekly", the helper text "We will first send a confirmation link to <address>. Nothing is sent until you confirm, and you get an email only when there are new matches. One-click unsubscribe is in every email. By turning this on you agree to the Terms and the Privacy Notice." (links to `TERMS.md` and `PRIVACY.md`, 44px targets, new-tab links say so), and after turning on "Check <address> for a confirmation link. Your <daily or weekly> digest will start only after you click it." The confirmation email is the lawyer's text verbatim, subject "Confirm your Misra job alerts".
 - `templates/digest.js`, `supabase/functions/email-settings/`, `supabase/functions/_shared/identity.ts`, `test/email-settings.test.ts` and `tests/test_digest_settings.py` (real browser, every state and error, light and dark, phone width, axe, keyboard). The daily workflow stages `docs/digest.js` once it exists.
-- The notice next to the sign-in button (PLAN.md step 6.6, FR-1 AC 7): signing in is voluntary, the email is used only to save choices and send alerts the user turns on, with links to the privacy notice and the terms. It shows only while signed out and the button names it with `aria-describedby`.
 
 ### Changed
 
+- The Terms and Privacy Notice links in the Daily email dialog and in the confirmation email point to the site's `terms.html` and `privacy.html` (same tab in the dialog), the same pages the rest of the site links to.
 - `PRIVACY.md` says the email settings are built but switched off, what turning the email on stores, that one confirmation email is sent and nothing else until it is confirmed, the confirmation-email counters, and Resend's part.
 - `auth.js` also shares the signed-in email with the page scripts, and `dashboard.js` exposes a read-only copy of the four email filters.
+
+## [0.24.0] - 2026-11-15
+
+### Added
+
+- The privacy notice, the terms and the security note are pages of the site: `docs/privacy.html`, `docs/terms.html` and `docs/security.html`, built by `build_dashboard.py` from `PRIVACY.md`, `TERMS.md` and `SECURITY.md` with `templates/legal.html` (markdown-it-py, pinned `==4.0.0`, a normal dependency). The Markdown stays the source of truth: raw HTML in it is escaped, a heading gets the id GitHub gives it, a relative link to another legal document becomes a link to its page, a link to any other file becomes a link to it on GitHub, and an image or a link out of the repository stops the build. Each page says it is built from the file and links to the file and its history on GitHub. Prose styles in `templates/dashboard.css`.
+- Sync tests (`tests/test_legal_pages.py`): every heading, link target, paragraph and the date line of each document must be on its page, read back with a parser of its own; plus tests of the converter, the template (same Content-Security-Policy as the email page, no inline script or style), the workflows, and axe in light and dark at phone and desktop width.
+- `.github/workflows/publish-docs.yml`: rebuilds `docs/` and pushes it with the deploy key when `PRIVACY.md`, `TERMS.md`, `SECURITY.md`, `templates/`, `design-system/`, `vendor/` or `build_dashboard.py` change on `main`, so an edit to a legal document is on the site in minutes and not at the next daily run. It runs only `build_dashboard.py`, shares the daily workflow's concurrency group, and cannot start itself (its commit changes `docs/` only).
+- `CONTRIBUTING.md`: how the legal pages are built.
+
+### Changed
+
+- The sign-in notice, the footer, the report-form line and the delete dialog link to `privacy.html` and `terms.html` on the site (same tab), not to the Markdown files on GitHub. The email footers in `supabase/email-texts.md`, `PRD.md` and `PLAN.md`, and `llms.txt`, use the site URLs.
+- The daily workflow stages the three new pages and installs the pinned `markdown-it-py`.
+- "Data updated" on the dashboard is the time of the latest crawl (it was the time of the build), so a rebuild over the same data writes the same files.
 
 ## [0.23.0] - 2026-11-18
 
