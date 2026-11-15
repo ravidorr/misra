@@ -44,6 +44,8 @@ STATIC_FILES = (
 DIGEST_SIGNUP_ENABLED = False
 DIGEST_SCRIPT = "templates/digest.js"
 DIGEST_REGION = re.compile(r"<!--digest-->(.*?)<!--/digest-->", re.DOTALL)
+# The same region with its own line (indent and line break), so removing it leaves no whitespace-only line.
+DIGEST_LINE = re.compile(r"^[ \t]*<!--digest-->.*?<!--/digest-->[ \t]*\n", re.DOTALL | re.MULTILINE)
 # The built pages that carry __SRI_*__ placeholders.
 PAGES = ("index.html", "email.html")
 OUTPUT_NAMES = {"templates/dashboard.html": "index.html"}
@@ -425,7 +427,7 @@ def main() -> None:
         )  # a file of an earlier build must not outlive the switch
     for source in (*STATIC_FILES, *((DIGEST_SCRIPT,) if DIGEST_SIGNUP_ENABLED else ())):
         text = Path(source).read_text(encoding="utf-8")
-        text = DIGEST_REGION.sub(r"\1" if DIGEST_SIGNUP_ENABLED else "", text)
+        text = DIGEST_REGION.sub(r"\1", text) if DIGEST_SIGNUP_ENABLED else DIGEST_LINE.sub("", text)
         text = text.replace("__SUPABASE_URL__", SUPABASE_URL).replace("__SUPABASE_ANON_KEY__", SUPABASE_ANON_KEY)
         text = text.replace("__PAGE_DATA__", page_data)
         (out / OUTPUT_NAMES.get(source, Path(source).name)).write_text(text, encoding="utf-8")

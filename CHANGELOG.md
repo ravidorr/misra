@@ -17,6 +17,18 @@ All notable changes are documented here. Format follows [Keep a Changelog](https
 - `PRIVACY.md` names the database controller (Raanan Avidor, a private individual) and the contact `raanan@avidor.org`, says why the data is collected and that giving it is voluntary, names the providers and where they are (Supabase and Resend in Ireland, Google and GitHub in the United States), gives the rights to inspect, correct and delete (Sections 13 and 14 of the Israeli Privacy Protection Law) with an answer within 30 days, and states that Supabase's and Resend's standard data processing agreements apply. The digest is still described as planned, not live.
 - `PLAN.md` step 6.3 and the PRD (FR-8) carry the lawyer's exact footer text for every digest email and the Reply-To requirement.
 
+## [0.25.1] - 2026-11-15
+
+### Fixed
+
+- With the daily email signup switched off, the built `docs/index.html` kept a blank, indented line where the "Daily email" button was removed, and `html-validate` (CI lint) rejected it. The build now removes the whole line.
+
+## [0.25.1] - 2026-11-15
+
+### Fixed
+
+- With the daily email signup switched off, the built `docs/index.html` kept a blank, indented line where the "Daily email" button was removed, and `html-validate` (CI lint) rejected it. The build now removes the whole line.
+
 ## [0.25.0] - 2026-11-15
 
 ### Added
