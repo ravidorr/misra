@@ -161,6 +161,9 @@ Every answer is JSON, `{"ok": true}` or `{"ok": false, "error": {"code", "messag
 
 The limits are the constants `IP_DAILY_LIMIT` (3) and `DAILY_CAP` (20) in `handler.ts`; change them there.
 
+The function reads the answer of `report_site_reserve` (text, sent by PostgREST as a bare JSON string) but not that of
+`report_site_release` (`returns void`: PostgREST sends no body, 204 or an empty 200), whose success is the status alone.
+
 ### What is stored
 
 `report_ip_limits` (day, hash, number of reports) and `report_daily_cap` (day, emails sent). Rows older than yesterday
