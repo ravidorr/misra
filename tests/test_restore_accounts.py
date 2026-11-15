@@ -150,7 +150,9 @@ def test_main_writes_a_private_script_and_prints_counts_only(
 ) -> None:
     directory = write_export(tmp_path / "e")
     target = tmp_path / "restore.sql"
-    restore_accounts.main([str(directory), str(target), "--create-auth-users"])
+    nobody = tmp_path / "nobody.txt"
+    nobody.write_text("", encoding="utf-8")
+    restore_accounts.main([str(directory), str(target), "--create-auth-users", f"--exclude-user-ids={nobody}"])
     assert stat.S_IMODE(target.stat().st_mode) == export_accounts.FILE_MODE
     assert "insert into auth.users" in target.read_text(encoding="utf-8")
     shown = capsys.readouterr().out
@@ -193,3 +195,57 @@ def test_running_the_module_reads_the_command_line(monkeypatch: pytest.MonkeyPat
 def test_a_table_the_export_writes_is_a_table_the_restore_reads() -> None:
     assert all(isinstance(table, Table) for table in TABLES)
     assert restore_accounts.TABLES is export_accounts.TABLES
+
+
+def test_people_who_left_after_the_backup_are_left_out_of_every_table(tmp_path: Path) -> None:
+    directory = write_export(tmp_path / "e")
+    ids = tmp_path / "gone.txt"
+    ids.write_text(f"# deleted since\n\n{U2}\n", encoding="utf-8")
+    target = tmp_path / "restore.sql"
+    restore_accounts.main([str(directory), str(target), f"--exclude-user-ids={ids}"])
+    text = target.read_text(encoding="utf-8")
+    assert EMAILS[1] not in text and EMAILS[0] in text
+    assert restore_accounts.read_ids(ids) == {U2}
+
+
+def test_leave_out_filters_all_tables() -> None:
+    kept = restore_accounts.leave_out(data(), {U1})
+    assert [row["user_id"] for row in kept["profiles"]] == [U2]
+    assert not any(kept[name] for name in kept if name != "profiles")
+
+
+def test_an_unreadable_id_file_is_an_error(tmp_path: Path) -> None:
+    with pytest.raises(RestoreError, match="cannot be read"):
+        restore_accounts.read_ids(tmp_path / "missing.txt")
+    directory = write_export(tmp_path / "e")
+    missing = tmp_path / "missing.txt"
+    with pytest.raises(SystemExit, match=r"restore failed: missing\.txt cannot be read"):
+        restore_accounts.main([str(directory), str(tmp_path / "r.sql"), f"--exclude-user-ids={missing}"])
+
+
+def test_creating_sign_in_rows_needs_the_list_of_people_who_left(tmp_path: Path) -> None:
+    directory = write_export(tmp_path / "e")
+    target = tmp_path / "restore.sql"
+    with pytest.raises(SystemExit, match="needs --exclude-user-ids"):
+        restore_accounts.main([str(directory), str(target), "--create-auth-users"])
+    assert not target.exists()
+    empty = tmp_path / "none.txt"
+    empty.write_text("", encoding="utf-8")
+    restore_accounts.main([str(directory), str(target), "--create-auth-users", f"--exclude-user-ids={empty}"])
+    assert "insert into auth.users" in target.read_text(encoding="utf-8")
+
+
+def test_pausing_marks_active_subscriptions_unsubscribed_without_filters(tmp_path: Path) -> None:
+    content = data()
+    content["subscriptions"][0]["filters"] = {"levels": ["Intern"]}
+    content["subscriptions"].append(
+        {"user_id": U2, "address": "b@t.example", "unsubscribed_at": "2026-11-01T00:00:00+00:00", "filters": {}}
+    )
+    restore_accounts.pause(content, "2026-11-16T00:00:00+00:00")
+    assert content["subscriptions"][0]["unsubscribed_at"] == "2026-11-16T00:00:00+00:00"
+    assert content["subscriptions"][0]["filters"] == {}
+    assert content["subscriptions"][1]["unsubscribed_at"] == "2026-11-01T00:00:00+00:00"  # already unsubscribed: kept
+    directory = write_export(tmp_path / "e")
+    target = tmp_path / "restore.sql"
+    restore_accounts.main([str(directory), str(target), "--pause-subscriptions"])
+    assert '"unsubscribed_at": "20' in target.read_text(encoding="utf-8")

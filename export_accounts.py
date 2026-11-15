@@ -157,6 +157,9 @@ class Source:
             missing = [column for column in table.key if row.get(column) is None]
             if missing:
                 raise ExportError(f"{table.name} has a row without {', '.join(missing)}: the schema changed")
+            if set(row) != set(table.columns):  # a new or dropped column: the restore would refuse this file
+                drift = sorted(set(row) ^ set(table.columns))
+                raise ExportError(f"{table.name} columns differ from TABLES ({', '.join(drift)}): update TABLES")
         if len(rows) != total or len({pk(table, row) for row in rows}) != len(rows):
             raise Changed
         return rows
@@ -183,6 +186,7 @@ def render(rows: Sequence[Mapping[str, Any]]) -> str:
 def write_files(directory: Path, data: Mapping[str, Sequence[Mapping[str, Any]]]) -> None:
     """Write every table's file; each file appears whole (written beside, then renamed over)."""
     directory.mkdir(parents=True, mode=DIR_MODE, exist_ok=True)
+    directory.chmod(DIR_MODE)
     for name, rows in data.items():
         target = directory / f"{name}.json"
         scratch = directory / f".{name}.json.tmp"
@@ -197,6 +201,8 @@ def export(source: Source, directory: Path) -> dict[str, int]:
     """Read all the tables, then write all the files. Returns the row count of each table."""
     directory = outside_repository(directory)
     data = {table.name: source.read(table) for table in TABLES}
+    if not data["profiles"] and any(data[name] for name in data):  # a wrong key sees nothing through row-level security
+        raise ExportError("profiles is empty but other tables are not: the key may be wrong, nothing was written")
     write_files(directory, data)
     return {name: len(rows) for name, rows in data.items()}
 

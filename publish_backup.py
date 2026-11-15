@@ -34,6 +34,8 @@ SECRET_ENV = ("SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY", "BACKUP_DEPLOY_KEY")
 # Variables a git hook (or a caller) sets to point git at some other repository: the clone is the only one used.
 LOCAL_REPO_ENV = ("GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "GIT_OBJECT_DIRECTORY", "GIT_PREFIX", "GIT_COMMON_DIR")
 STDERR_SHOWN = 300
+SHRINK_FROM = 5  # a table that held at least this many rows and now holds under half of them is not published
+ALLOW_SHRINK = "--allow-shrink"
 
 
 class BackupError(Exception):
@@ -104,12 +106,32 @@ def place_files(work: Path, source: Path) -> None:
         (work / f"{table.name}.json").write_bytes((source / f"{table.name}.json").read_bytes())
 
 
-def publish(source: Path, remote: str, work: Path, now: datetime | None = None) -> str:
+def previous_counts(work: Path) -> dict[str, int]:
+    """Rows per table of the files at the tip of the clone (a missing or odd file counts as none)."""
+    try:
+        return counts(work)
+    except BackupError:
+        return {}
+
+
+def shrunk(before: dict[str, int], after: dict[str, int]) -> list[str]:
+    """The tables whose row count fell by more than half. A wrong key sees nothing through row-level security, and a
+    change of policy can hide rows: neither may replace the good copy, least of all its history."""
+    return [name for name, old in before.items() if old >= SHRINK_FROM and after.get(name, 0) * 2 < old]
+
+
+def publish(source: Path, remote: str, work: Path, now: datetime | None = None, allow_shrink: bool = False) -> str:
     """Publish the export; returns one line of counts saying what happened (unchanged, committed, history replaced)."""
     now = now or datetime.now(UTC)
     source, work = outside_repository(source), outside_repository(work)
     numbers = counts(source)
     tip = open_clone(work, remote)
+    fallen = [] if allow_shrink or tip is None else shrunk(previous_counts(work), numbers)
+    if fallen:
+        raise BackupError(
+            f"{', '.join(fallen)} fell by more than half since the last backup: nothing was published "
+            f"(a wrong key or a policy change?); if it is real, run again with {ALLOW_SHRINK}"
+        )
     squash = tip is not None and history_is_old(work, now)
     if squash:
         git(work, "checkout", "--quiet", "--orphan", "replacement")
@@ -136,12 +158,14 @@ def publish(source: Path, remote: str, work: Path, now: datetime | None = None) 
 
 def main(argv: Sequence[str] | None = None) -> None:
     args = list(sys.argv[1:] if argv is None else argv)
+    allow_shrink = ALLOW_SHRINK in args
+    args = [arg for arg in args if arg != ALLOW_SHRINK]
     try:
         source, remote, work = args
     except ValueError:
         sys.exit("usage: python publish_backup.py <export directory> <remote> <work directory>")
     try:
-        print(publish(Path(source), remote, Path(work)))
+        print(publish(Path(source), remote, Path(work), allow_shrink=allow_shrink))
     except (BackupError, ExportError) as exc:
         sys.exit(f"backup failed: {exc}")
 

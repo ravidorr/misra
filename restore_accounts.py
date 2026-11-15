@@ -28,12 +28,15 @@ import json
 import os
 import sys
 from collections.abc import Mapping, Sequence
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
 from export_accounts import FILE_MODE, TABLES, ExportError, Table, outside_repository
 
 CREATE_AUTH_USERS = "--create-auth-users"
+PAUSE = "--pause-subscriptions"
+EXCLUDE = "--exclude-user-ids="
 EMPTY_INSTANCE = "00000000-0000-0000-0000-000000000000"
 
 
@@ -57,6 +60,29 @@ def load(directory: Path, table: Table) -> list[dict[str, Any]]:
     if absent:
         raise RestoreError(f"{path.name} has a row without {', '.join(absent)}")
     return rows
+
+
+def read_ids(path: Path) -> set[str]:
+    """The user ids to leave out: one per line, blank lines and # comments ignored. An empty file is a valid answer
+    ("nobody deleted their account since the backup")."""
+    try:
+        lines = path.read_text(encoding="utf-8").splitlines()
+    except OSError:
+        raise RestoreError(f"{path.name} cannot be read") from None
+    return {line.strip() for line in lines if line.strip() and not line.lstrip().startswith("#")}
+
+
+def leave_out(data: Mapping[str, Sequence[Mapping[str, Any]]], ids: set[str]) -> dict[str, list[dict[str, Any]]]:
+    """The tables without the rows of the people who deleted their account after the backup was made."""
+    return {name: [dict(row) for row in rows if str(row["user_id"]) not in ids] for name, rows in data.items()}
+
+
+def pause(data: dict[str, list[dict[str, Any]]], when: str) -> None:
+    """Mark every subscription that is still active as unsubscribed (as the unsubscribe does: no filters), so that the
+    people who unsubscribed after the backup are never emailed against their wish and must turn the email on again."""
+    for row in data["subscriptions"]:
+        if row.get("unsubscribed_at") is None:
+            row["unsubscribed_at"], row["filters"] = when, {}
 
 
 def literal(rows: Sequence[Mapping[str, Any]]) -> str:
@@ -117,15 +143,25 @@ def write_script(target: Path, text: str) -> None:
 
 def main(argv: Sequence[str] | None = None) -> None:
     args = list(sys.argv[1:] if argv is None else argv)
-    with_auth_users = CREATE_AUTH_USERS in args
-    paths = [arg for arg in args if arg != CREATE_AUTH_USERS]
+    with_auth_users, pausing = CREATE_AUTH_USERS in args, PAUSE in args
+    excluded = [arg.removeprefix(EXCLUDE) for arg in args if arg.startswith(EXCLUDE)]
+    paths = [arg for arg in args if arg not in (CREATE_AUTH_USERS, PAUSE) and not arg.startswith(EXCLUDE)]
     try:
         source, output = paths
     except ValueError:
-        sys.exit(f"usage: python restore_accounts.py <export directory> <output .sql file> [{CREATE_AUTH_USERS}]")
+        sys.exit(
+            f"usage: python restore_accounts.py <export directory> <output .sql file> "
+            f"[{CREATE_AUTH_USERS}] [{PAUSE}] [{EXCLUDE}<file of user ids>]"
+        )
+    if with_auth_users and not excluded:  # recreating sign-in rows would bring back people who asked for deletion
+        sys.exit(f"restore failed: {CREATE_AUTH_USERS} needs {EXCLUDE}<file> (empty: nobody left since the backup)")
     try:
         target = outside_repository(Path(output))
         data = {table.name: load(Path(source), table) for table in TABLES}
+        if excluded:
+            data = leave_out(data, read_ids(Path(excluded[0])))
+        if pausing:
+            pause(data, datetime.now(UTC).isoformat())
         write_script(target, script(data, with_auth_users))
     except (ExportError, RestoreError) as exc:
         sys.exit(f"restore failed: {exc}")

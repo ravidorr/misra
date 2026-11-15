@@ -56,7 +56,8 @@ class FakeAccounts:
 
 
 def fixture() -> dict[str, list[dict[str, Any]]]:
-    return {
+    """Rows as PostgREST gives them: every column of the table, null when empty."""
+    partial = {
         "profiles": [{"user_id": U2, "email": "bob@test.example"}, {"user_id": U1, "email": "ann@test.example"}],
         "user_prefs": [{"user_id": U1, "filters": {"b": 1, "a": [1]}, "email_settings": {}, "updated_at": "t"}],
         "user_jobs": [
@@ -66,6 +67,11 @@ def fixture() -> dict[str, list[dict[str, Any]]]:
         ],
         "subscriptions": [{"user_id": U1, "address": "ann@test.example", "unsubscribe_token_hash": "f" * 64}],
         "emailed": [],
+    }
+    return {
+        name: [{column: row.get(column) for column in table.columns} for row in partial[name]]
+        for table in TABLES
+        for name in [table.name]
     }
 
 
@@ -303,3 +309,19 @@ def test_running_the_module_reads_its_arguments_from_the_command_line(
     monkeypatch.delitem(sys.modules, "export_accounts", raising=False)
     with pytest.raises(SystemExit, match="usage"):
         runpy.run_module("export_accounts", run_name="__main__")
+
+
+def test_a_column_that_is_not_in_tables_fails_the_export_the_day_it_appears(tmp_path: Path) -> None:
+    tables = fixture()
+    tables["profiles"][0]["nickname"] = "x"
+    with pytest.raises(ExportError, match=r"profiles columns differ from TABLES \(nickname\)"):
+        export(source(FakeAccounts(tables)), tmp_path / "out")
+
+
+def test_an_empty_profiles_table_beside_full_ones_means_the_key_is_wrong(tmp_path: Path) -> None:
+    tables = fixture()
+    tables["profiles"] = []
+    with pytest.raises(ExportError, match="key may be wrong"):
+        export(source(FakeAccounts(tables)), tmp_path / "out")
+    assert not (tmp_path / "out").exists()
+    assert export(source(FakeAccounts({})), tmp_path / "none")["profiles"] == 0  # all empty: a real empty project

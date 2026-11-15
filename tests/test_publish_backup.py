@@ -289,3 +289,49 @@ def test_running_the_module_reads_the_command_line(monkeypatch: pytest.MonkeyPat
     monkeypatch.delitem(sys.modules, "publish_backup", raising=False)
     with pytest.raises(SystemExit, match="usage"):
         runpy.run_module("publish_backup", run_name="__main__")
+
+
+def big_export(directory: Path, rows: int) -> Path:
+    directory.mkdir(parents=True, exist_ok=True)
+    for table in TABLES:
+        count = rows if table.name == "profiles" else 0
+        content = [{"user_id": f"{n:08d}-0000-4000-8000-000000000000"} for n in range(count)]
+        (directory / f"{table.name}.json").write_text(render(content), encoding="utf-8")
+    return directory
+
+
+def test_an_export_that_lost_most_rows_is_refused_and_never_squashes(
+    tmp_path: Path, remote: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    old = NOW - timedelta(days=MAX_AGE_DAYS + 3)
+    at(monkeypatch, old)
+    publish(big_export(tmp_path / "x", 10), str(remote), tmp_path / "w1", old)
+    monkeypatch.delenv("GIT_COMMITTER_DATE")
+    monkeypatch.delenv("GIT_AUTHOR_DATE")
+    before = history(remote)
+    with pytest.raises(BackupError, match=r"profiles fell by more than half.*--allow-shrink"):
+        publish(big_export(tmp_path / "e", 0), str(remote), tmp_path / "w2", NOW)
+    assert history(remote) == before  # the good copy and its history are still there
+    assert "backup history replaced" in publish(big_export(tmp_path / "e", 0), str(remote), tmp_path / "w3", NOW, True)
+
+
+def test_a_small_loss_is_not_a_shrink(tmp_path: Path, remote: Path) -> None:
+    publish(big_export(tmp_path / "x", 10), str(remote), tmp_path / "w1", NOW)
+    assert publish(big_export(tmp_path / "e", 6), str(remote), tmp_path / "w2", NOW).startswith("backup committed")
+    assert publish_backup.shrunk({"a": 4}, {"a": 0}) == []  # too few rows to judge
+
+
+def test_main_passes_the_allow_shrink_flag(tmp_path: Path, remote: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    publish_backup.main([str(big_export(tmp_path / "x", 10)), str(remote), str(tmp_path / "w1")])
+    publish_backup.main([str(big_export(tmp_path / "e", 0)), str(remote), str(tmp_path / "w2"), "--allow-shrink"])
+    assert "backup committed: profiles 0" in capsys.readouterr().out
+
+
+def test_a_remote_whose_tip_has_no_table_files_is_not_judged_as_shrunk(tmp_path: Path, remote: Path) -> None:
+    seed = tmp_path / "seed"
+    run(tmp_path, "clone", "--quiet", str(remote), str(seed))
+    (seed / "README.md").write_text("x", encoding="utf-8")
+    run(seed, "add", "README.md")
+    run(seed, "-c", "user.name=o", "-c", "user.email=o@o", "commit", "--quiet", "-m", "readme")
+    run(seed, "push", "--quiet", "origin", "HEAD:main")
+    assert publish(big_export(tmp_path / "x", 0), str(remote), tmp_path / "w", NOW).startswith("backup committed")

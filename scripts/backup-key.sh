@@ -9,4 +9,4 @@ hosts="$(mktemp "$RUNNER_TEMP/backup_hosts.XXXXXX")"
 trap 'rm -rf "$key" "$hosts" ${BACKUP_WORK:+"$BACKUP_WORK"}' EXIT
 (umask 077 && printf '%s\n' "$BACKUP_DEPLOY_KEY" > "$key")
 curl -fsSL ${GH_TOKEN:+-H "Authorization: Bearer $GH_TOKEN"} https://api.github.com/meta | jq -r '.ssh_keys[] | "github.com \(.)"' > "$hosts"
-export GIT_SSH_COMMAND="ssh -i $key -o IdentitiesOnly=yes -o IdentityAgent=none -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$hosts"
+export GIT_SSH_COMMAND="ssh -i $key -o IdentitiesOnly=yes -o IdentityAgent=none -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$hosts"
