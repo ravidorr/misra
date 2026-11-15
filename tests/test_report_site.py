@@ -334,7 +334,7 @@ async def test_the_function_s_words_for_a_field_appear_beside_that_field(page: P
 @pytest.mark.parametrize(
     ("mode", "words"),
     [
-        ("down", "could not reach the service, so nothing was sent"),
+        ("down", "could not reach the service, so your report was most likely not sent"),
         ("garbage", "could not confirm that your report was sent"),
         ("not_ok", "could not confirm that your report was sent"),
         ("html", "could not confirm that your report was sent"),
@@ -648,3 +648,13 @@ def test_privacy_md_says_where_the_form_is() -> None:
     text = (REPO / "PRIVACY.md").read_text(encoding="utf-8")
     assert "not on the dashboard yet" not in text
     assert "Report a site" in text
+
+
+def test_the_daily_workflow_publishes_every_file_the_page_loads() -> None:
+    workflow = (REPO / ".github" / "workflows" / "daily.yml").read_text(encoding="utf-8")
+    names = {Path(s).name for s in (*build_dashboard.STATIC_FILES, *build_dashboard.VENDORED_FILES)}
+    names |= {"dashboard.css", "jobs.json", "jobs.jsonld"}
+    names.discard("dashboard.html")
+    for name in names:
+        assert f"docs/{name}" in workflow, name
+    assert "docs/index.html" in workflow

@@ -17,7 +17,7 @@ const LIMITS = { company: 100, link: 500, whyMin: 3, why: 1000 };
 const STATUS = { badRequest: 400, forbidden: 403, tooLarge: 413, limited: 429, unavailable: 503, failed: 502 };
 const FIELDS = ['company', 'link', 'why'];
 const MESSAGES = {
-  unreachable: 'We could not reach the service, so nothing was sent. Check your connection and try again.',
+  unreachable: 'We could not reach the service, so your report was most likely not sent. Check your connection and try again.',
   slow: 'The service took too long to answer, so we cannot tell whether your report arrived. Please wait a minute and try again; if it did arrive, the repeat reaches us twice and uses one more of the reports allowed for today.',
   unclear: 'We could not confirm that your report was sent. Please try again in a few minutes.',
   invalid: 'Some details were not accepted, so nothing was sent. Check the fields below and try again.',
