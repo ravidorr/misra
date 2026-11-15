@@ -137,7 +137,7 @@ describe('a good report', () => {
     await handleReport(post(GOOD, { 'cf-connecting-ip': '203.0.113.7' }), world.deps);
     for (const [url, init] of world.fakeFetch.mock.calls) {
       const sent = JSON.stringify(init.headers);
-      if (url.startsWith('https://api.resend.com')) expect(sent).not.toContain('service-role-test-key');
+      if (new URL(url).hostname === 'api.resend.com') expect(sent).not.toContain('service-role-test-key');
       else expect(sent).not.toContain('re_test_key');
     }
   });
