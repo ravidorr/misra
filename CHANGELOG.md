@@ -4,6 +4,12 @@ All notable changes are documented here. Format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
+## [0.49.1] - 2026-11-16
+
+### Fixed
+
+- The first footer sentence is no longer taller on one line. The "Coverage gaps" link was a 44px box inside the sentence, which made its line 44px tall and left a gap in the paragraph. The whole second sentence ("Coverage gaps lists N companies whose roles may be missing or old.") is now the link, a 44px block under the first sentence; the words are the same. A browser test pins even lines at 320, 375 and 1480 px in light and dark.
+
 ## [0.49.0] - 2026-11-16
 
 ### Added
