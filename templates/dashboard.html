@@ -69,7 +69,7 @@
   </section>
   <search class="search" id="searchBar">
     <label class="sr-only" for="q">Search roles at __COMPANIES__ by title, company, team or location</label>
-    <input class="field" type="search" id="q" placeholder="Search __COMPANIES__" autocomplete="off" enterkeyhint="search">
+    <input class="field" type="search" id="q" data-companies-covered="__COVERED__" placeholder="Search __COMPANIES__" autocomplete="off" enterkeyhint="search">
   </search>
 
   <div class="toolbar">
@@ -148,10 +148,7 @@
   </section>
 </main>
 <footer class="foot">
-  <div class="foot-info">
-    <p class="foot-coverage" id="coverage" data-companies-covered="__COVERED__">Roles from __COMPANIES__ whose career pages we read daily.__COVERAGE_GAPS__</p>
-    <p class="foot-updated">Career pages last read <time id="upd"></time>.</p>
-  </div>
+  <p class="foot-updated">Career pages last read <time id="upd"></time>. Career pages are read daily.</p>
   <nav class="foot-links" aria-label="About Misra">
     <a href="privacy.html">Privacy</a>
     <a href="terms.html">Terms</a>
