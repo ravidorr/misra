@@ -249,8 +249,29 @@ def grant_problem(s: str) -> str | None:
     return None
 
 
+# The columns of `jobs` that the public roles may read: all but the text of a posting and its details, which stay closed
+# until the lawyer has seen them (migration 20261121100000_jobs_text_not_public.sql, PLAN.md steps 7.3 and 8.1).
+JOBS_PUBLIC_COLUMNS = {
+    "company", "job_id", "title", "team", "location", "url", "posted", "first_seen", "last_seen", "status",
+    "level", "role_types", "regions", "locations",
+}  # fmt: skip
+JOBS_CLOSED_COLUMNS = {"description", "details"}
+
+
 def column_grant_problem(grant: re.Match[str], s: str) -> str | None:
-    """A column grant is for the signed-in role only, on `subscriptions` only, and only the listed columns."""
+    """A column grant is for the signed-in role only, on `subscriptions` only, and only the listed columns. The one
+    other: `jobs`, for anon and authenticated, the public columns and never the text."""
+    if grant["table"] == "jobs":
+        right = (
+            grant["priv"] == "select"
+            and words(grant["roles"]) == {"anon", "authenticated"}
+            and words(grant["columns"]) == JOBS_PUBLIC_COLUMNS
+        )
+        return (
+            None
+            if right
+            else f"jobs may be granted to anon and authenticated only as {sorted(JOBS_PUBLIC_COLUMNS)}: {s}"
+        )
     allowed = COLUMN_GRANTS.get(grant["priv"], set())
     wrong = (
         grant["table"] != "subscriptions"
@@ -840,3 +861,25 @@ def test_the_lint_rejects_a_weakened_report_limits_migration(old: str, new: str)
     assert old in migration, old
     weakened = migration.replace(old, new)
     assert problems(statements_of(f"{REAL.replace(migration, '')}\n{weakened}")), old
+
+
+def test_the_text_of_a_posting_is_closed_to_the_public_roles_and_every_other_column_is_granted() -> None:
+    stmts = statements()
+    created = next(columns_of(m["body"]) for s in stmts if (m := CREATE_TABLE.fullmatch(s)) and m["table"] == "jobs")
+    assert set(created) == JOBS_PUBLIC_COLUMNS | JOBS_CLOSED_COLUMNS  # a new column must be sorted into one of the two
+    assert not JOBS_PUBLIC_COLUMNS & JOBS_CLOSED_COLUMNS
+    # the table-level grant of the first migration is taken back, after it, and only the column grant follows
+    table_level = stmts.index("grant select on public.jobs to anon, authenticated")
+    revoke = stmts.index("revoke select on public.jobs from anon, authenticated")
+    assert table_level < revoke
+    column_grants = [m for s in stmts[revoke:] if (m := COLUMN_GRANT.fullmatch(s)) and m["table"] == "jobs"]
+    assert len(column_grants) == 1
+    assert words(column_grants[0]["columns"]) == JOBS_PUBLIC_COLUMNS
+    assert not [s for s in stmts[revoke:] if GRANT.fullmatch(s) and "public.jobs" in s]  # no table-level grant again
+
+
+def test_a_grant_of_the_posting_text_to_the_public_roles_is_refused() -> None:
+    for columns in ("description", "company, details", "company, description, details"):
+        s = f"grant select ({columns}) on public.jobs to anon, authenticated"
+        assert grant_problem(s)
+    assert grant_problem("grant select (company) on public.jobs to anon")  # both roles, the whole list

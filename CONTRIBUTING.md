@@ -224,6 +224,14 @@ PLAN.md step 7.1. Where the text of a posting lives, and how it gets there:
   so a description there would grow every daily commit and publish other companies' full postings on GitHub. The
   database has no description column, and `tests/test_descriptions_flow.py` fails if the workflow stages anything that
   could carry one.
+- **Not public yet.** The migration `20261121100000_jobs_text_not_public.sql` takes the table-level `select` on `jobs` from
+  `anon` and `authenticated` and gives it back on every column except `description` and `details`, so the text is not
+  readable through the public API, signed in or not, until the lawyer has seen that other companies' full postings are
+  stored. Step 7.3 (the dashboard drill-down) and step 8.1 (`get_job`) will expose it, with a new migration, only after
+  that approval. The service role (the sync) keeps full access. A column added to `jobs` later has no column grant, so it is
+  closed by default: the migration that adds it must grant it, and `tests/test_migrations.py` fails until its list of
+  public and closed columns agrees with the table. `supabase/tests/job_text_private.sql` (the `sql-tests` CI job) pins it.
+  The maintainer applies the migration before the first daily run that writes text.
 - **How it travels.** The crawl (`python run.py`) writes the texts of the day to a work file outside the checkout,
   `$RUNNER_TEMP/misra-descriptions.jsonl` (the system's temporary directory when run elsewhere), and the sync step
   (`python sync_supabase.py`) of the same job reads it. A step after the crawl reads what the crawl left, and a sync

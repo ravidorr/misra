@@ -295,7 +295,7 @@ Decisions made in planning (they change the PRD's wording, so update the PRD in 
   the texts in a work file in `$RUNNER_TEMP`; the sync step writes them to the `description` and `details` columns that
   migration 2.1 already created (no migration), with a hash in `details` to skip an unchanged text; the log line per ATS
   is in the crawl step. CONTRIBUTING.md, "Job descriptions", has the design, the size cap (20,000 characters) and the
-  storage estimate. Left: the browser crawl (1,589 jobs, 23 percent: no standard field), Workday (318, one request per job
+  storage estimate. The text is not readable through the public API (migration `20261121100000_jobs_text_not_public.sql`, column-level `select`): steps 7.3 and 8.1 expose it only after the lawyer approves. Left: the browser crawl (1,589 jobs, 23 percent: no standard field), Workday (318, one request per job
   and a new path to check against `robots.txt`), Phenom (89, a teaser only), Oracle HCM, `comeet_page`, JazzHR and BambooHR
   (a request per job), SmartRecruiters (skipped by `robots.txt`). After the first daily run with descriptions: check the
   log line and the size of the `jobs` table in the dashboard (Reports, Database), and write both in CONTRIBUTING.md.
