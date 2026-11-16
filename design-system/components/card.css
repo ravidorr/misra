@@ -4,7 +4,7 @@
  *     <span class="sticker card-flag">New</span>
  *     <p class="card-company">Acme</p>
  *     <h3 class="card-title"><a href="...">Role</a></h3>
- *     <p class="card-snippet" dir="auto">First 255 characters of the posting, as written</p>
+ *     <p class="card-snippet" dir="auto">Start of the posting, up to 255 characters, as written</p>
  *     <p class="card-tags"><span class="pill">Tel Aviv</span></p>
  *     <p class="card-actions"><a class="btn btn-primary" href="...">Apply ↗</a></p>
  *   </article>

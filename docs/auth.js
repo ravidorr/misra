@@ -122,15 +122,27 @@ function publish(client, session) {
   document.dispatchEvent(new CustomEvent('misra:account'));
 }
 
+const menuButton = $('accountMenuButton');
+const menu = $('accountMenu');
+
+/* The account menu is a disclosure: the profile button shows and hides the panel (the email, then the three actions). */
+function setMenu(open) {
+  menu.hidden = !open;
+  menuButton.setAttribute('aria-expanded', String(open));
+}
+
 let signedInEmail = ''; /* the address of the signed-in user, for the delete dialog; empty when there is none */
 
 function show(session) {
   const email = session?.user?.email;
   signedInEmail = typeof email === 'string' ? email : '';
+  const lostFocus = !session && $('accountUser').contains(document.activeElement); /* "Sign out" was chosen */
   $('account').classList.toggle('is-signed-in', Boolean(session));
   $('signIn').hidden = Boolean(session);
   $('accountUser').hidden = !session;
+  if (!session) setMenu(false); /* not on a token refresh: the user may be using the menu */
   $('accountEmail').textContent = session ? (email ?? 'Signed in') : '';
+  if (lostFocus) $('signIn').focus(); /* the focused profile button just went away */
 }
 
 if (typeof globalThis.supabase?.createClient === 'function') {
@@ -145,6 +157,31 @@ if (typeof globalThis.supabase?.createClient === 'function') {
   });
   $('account').hidden = false;
   say(failure);
+
+  menuButton.addEventListener('click', () => setMenu(menu.hidden));
+  /* Choosing an action closes the menu first and puts the focus on the profile button, so a dialog that the action opens
+     hands the focus back to a button that is still there. This runs before the action's own handler (capture). The explicit
+     focus() is needed: Safari does not focus a button when it is clicked. */
+  menu.addEventListener(
+    'click',
+    (event) => {
+      if (!event.target.closest('button')) return;
+      setMenu(false);
+      menuButton.focus();
+    },
+    true,
+  );
+  document.addEventListener('keydown', (event) => {
+    if (event.key !== 'Escape' || menu.hidden) return;
+    setMenu(false);
+    menuButton.focus();
+  });
+  /* A click or the Tab key that lands anywhere else closes it too. */
+  for (const type of ['click', 'focusin']) {
+    document.addEventListener(type, (event) => {
+      if (!$('accountUser').contains(event.target)) setMenu(false);
+    });
+  }
 
   /* "Sign in" only opens the notice (what signing in is for, what is stored, the Terms and the privacy notice). The
      Google redirect starts from "Continue with Google" and from nothing else. */

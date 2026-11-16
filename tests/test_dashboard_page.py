@@ -403,6 +403,21 @@ class PrefsBackend:
 UNDO_TAP = 44  # the smallest target the design system allows
 
 
+async def account_action(page: Page, selector: str) -> None:
+    """Pick an item of the account menu with the mouse: open the menu if it is closed, then press the item."""
+    if await page.locator("#accountMenu").is_hidden():
+        await page.click("#accountMenuButton")
+    await page.click(selector)
+
+
+async def account_action_by_keyboard(page: Page, selector: str) -> None:
+    """The same with the keyboard: Enter on the profile button, then Enter on the item."""
+    await page.focus("#accountMenuButton")
+    await page.keyboard.press("Enter")
+    await page.focus(selector)
+    await page.keyboard.press("Enter")
+
+
 async def serve(  # noqa: PLR0913  (each stand-in is optional, and a test names the ones it wants)
     page: Page,
     docs: Path,
@@ -1386,3 +1401,18 @@ async def test_an_assistant_gets_the_snippet_and_null_when_a_role_has_none(page:
     jobs = {j["id"]: j for j in (await ask(page, "search_jobs", {"limit": 10}))["jobs"]}
     assert jobs["Acme|a"]["snippet"] == WHOLE
     assert jobs["Acme|b"]["snippet"] is None
+
+
+async def test_the_ellipsis_starts_at_200_characters_and_never_follows_a_sentence_end(page: Page, site: Path) -> None:
+    unpunctuated = {"s199": "a" * 199, "s200": "a" * 200}
+    sentences = {f"end{ch}": "a" * 199 + ch for ch in ".!?"}
+    rows = [
+        job(job_id, job_id, "Haifa, Israel", snippet=text) for job_id, text in {**unpunctuated, **sentences}.items()
+    ]
+    assert await serve(page, site, backend=Backend(rows)) == []
+
+    async def ellipses(job_id: str) -> int:
+        return await page.locator(f"article[data-job-id='Acme|{job_id}'] .card-snippet [aria-hidden=true]").count()
+
+    assert [await ellipses(j) for j in unpunctuated] == [0, 1]  # a short text is whole; 200 or more was cut
+    assert [await ellipses(j) for j in sentences] == [0, 0, 0]  # a cut never ends a sentence, so this one is whole
