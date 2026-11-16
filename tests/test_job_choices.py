@@ -158,7 +158,7 @@ async def test_fr2_ac1_the_starred_jobs_can_be_viewed_as_a_list(page: Page, site
     assert await switch.get_attribute("aria-pressed") == "true"
     assert await page.locator("#list article").count() == len(("Acme|1", "Acme|2"))
     assert await summary(page) == "2 starred roles. The filters do not apply to this list."
-    for part in ("#controlsBar", "#moreFilters", "#searchBar", "#hiring"):
+    for part in ("#moreFilters", "#searchBar", "#hiring"):
         assert await page.locator(part).is_hidden()
     await page.click(f"{PM1} [data-act=star]")  # take the star off from the list: the card goes
     assert await page.locator("#list article").count() == 1
@@ -170,7 +170,7 @@ async def test_fr2_ac1_the_starred_jobs_can_be_viewed_as_a_list(page: Page, site
     )
     await switch.click()  # back to the roles, with their filters
     assert await switch.get_attribute("aria-pressed") == "false"
-    assert await page.locator("#controlsBar").is_visible()
+    assert await page.locator("#moreFilters").is_visible()
     assert await summary(page) == f"Showing {ISRAEL_JOBS} of {ISRAEL_JOBS} open roles in Israel. 0 discarded."
 
 

@@ -230,7 +230,9 @@ async def test_hiring_now_is_reached_and_operated_by_keyboard(page: Page, crowd:
 async def test_hiring_now_keeps_its_choice_for_the_page_and_follows_the_width(page: Page, crowd: Path) -> None:
     await open_page(page, crowd, 375)
     await page.click("#hiringToggle")
+    await open_sheet(page)
     await page.click('.chip[data-group=levels][data-value="Intern"]')  # a new render keeps it open
+    await page.click("#filtersDone")
     assert await page.locator("#hiringToggle").get_attribute("aria-expanded") == "true"
     await page.set_viewport_size({"width": 1650, "height": 800})
     await settle(page, "document.querySelectorAll('#stories > li:not([hidden])').length === 15")
@@ -382,11 +384,11 @@ async def test_the_filters_button_counts_the_active_filters_and_opens_the_sheet(
     await open_page(page, crowd, 375)
     button = page.locator("#filtersOpen")
     assert await button.inner_text() == "Filters"
+    await open_sheet(page)  # the level chips and "New only" are in the sheet
     await page.click('.chip[data-group=levels][data-value="Intern"]')
     await page.click('.chip[data-group=levels][data-value="Junior"]')  # one group counts once
     await page.click("#onlyNew")
     assert await button.inner_text() == "Filters (2)"
-    await open_sheet(page)
     await page.click('.chip[data-group=types][data-value="R&D"]')
     await page.select_option("#sort", "co")
     await page.check("#hideStale")
@@ -508,14 +510,33 @@ async def test_the_sheet_follows_the_window_between_a_phone_and_a_desktop(page: 
     assert await sheet.is_visible()
 
 
+async def test_the_level_chips_and_new_only_are_the_first_filters_in_the_sheet(page: Page, crowd: Path) -> None:
+    await open_page(page, crowd, 375)
+    for control in ("#levels", "#onlyNew"):
+        assert await page.locator(f"{SHEET} .sheet-body {control}").count() == 1, control
+    assert await page.locator(f"{SHEET} .sheet-body > .filter-group:first-child #levels").count() == 1
+    assert await page.locator(f"{SHEET} #levels-h").evaluate("e => e.tagName") == "H3"
+    assert await page.locator(".toolbar #starredView").count() == 1  # a view, not a filter: it stays outside the sheet
+    assert await page.locator(".toolbar #onlyNew, .toolbar #levels").count() == 0
+    assert await page.locator("#levels").is_hidden()  # a phone: closed sheet
+    await open_sheet(page)
+    assert await page.locator("#levels").is_visible()
+    assert await page.locator("#onlyNew").is_visible()
+    await page.set_viewport_size({"width": 1200, "height": 800})  # a wide screen: the sheet is a panel in the page
+    await page.locator(SHEET).wait_for(state="visible")
+    assert await page.locator("#levels").is_visible()
+    assert await page.locator("#onlyNew").is_visible()
+
+
 async def test_the_starred_list_puts_the_filter_controls_away(page: Page, crowd: Path) -> None:
     await open_page(page, crowd, 375)
     await page.click("#starredView")
-    for part in ("#filtersOpen", "#onlyNew", "#controlsBar", "#searchBar", SHEET):
+    for part in ("#filtersOpen", "#onlyNew", "#levels", "#searchBar", SHEET):
         assert await page.locator(part).is_hidden(), part
     await page.click("#starredView")
-    for part in ("#filtersOpen", "#onlyNew", "#controlsBar", "#searchBar"):
+    for part in ("#filtersOpen", "#searchBar"):
         assert await page.locator(part).is_visible(), part
+    assert await page.locator(SHEET).is_hidden()  # a phone: the sheet opens from "Filters"
 
 
 async def test_a_notice_and_a_card_have_the_same_border_radius_and_shadow(page: Page, crowd: Path) -> None:

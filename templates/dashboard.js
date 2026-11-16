@@ -1321,7 +1321,7 @@ function announce(text) {
    type), so they are put away while it shows. */
 function showView() {
   const roles = view === 'roles';
-  for (const id of ['controlsBar', 'moreFilters', 'searchBar', 'filtersOpen', 'onlyNew']) $(id).hidden = !roles;
+  for (const id of ['moreFilters', 'searchBar', 'filtersOpen']) $(id).hidden = !roles;
   $('starredView').setAttribute('aria-pressed', String(!roles));
   $('starredView').textContent = `Starred (${starredItems().length})`;
 }
