@@ -12,6 +12,19 @@ All notable changes are documented here. Format follows [Keep a Changelog](https
 - The audit behind it, on the stored database (6,793 open jobs): 150 open jobs of 16 companies share their link with at least one other job (Coralogix 23, VAST Data 20, Checkmarx 18, Bizzabo 12, Stampli 12, UVeye 11, OX Security 10, Port 10, Allot 8, Nova 6, Sunbit 6, Wiliot 4, Tufin 3, Zenity 3, Ceragon 2, Upwind 2), and seven more have a job on the careers page alone (Claroty, Qodo, Global-e, Cycode, Cynet, BlueWhite, Elementor). On the live feeds of the 77 Comeet companies, 158 of 1,767 jobs of 24 companies change link, and none of them shares a link with another job afterwards. No other adapter is affected: the other API adapters build the link from the job's own id or take the job's own link, `comeet_page` and the browser crawler take the link of the job's card, and the stored jobs of those companies share no link.
 - Only the link changes. The job's key is still `(company, job_id)` with the Comeet uid as the id, so a job is not new, is not closed and reopened, keeps its `first_seen` and its `reported` flag, and is not announced again (a test crawls a stored job with the careers page as its link and checks the row). The stored links, and the Supabase `jobs.url` (the sync upserts on `(company, job_id)` and merges the columns), are updated by the next daily crawl and sync, with no migration.
 
+## [0.47.0] - 2026-11-16
+
+### Removed
+
+- The maintainer's own single-recipient digest: `send_email.py`, its workflow step "Send the maintainer digest (legacy, single recipient)" with the constant `LEGACY_MAINTAINER_DIGEST`, and `digest.py` with the selection logic that the FR-9 rule replaced (`select`, `ROLE`, `EXCLUDE`, `render` and the preview). The maintainer is an ordinary subscriber and gets `send_digests.py`'s email. `send_alert.py` (Gmail) still emails a failed run, and its step list no longer has `digest=`.
+- `PRIVACY.md`, Providers, no longer says Gmail sends "the maintainer's own daily summary email": it says only that failure alerts go to the maintainer's own address and hold no account data.
+
+### Changed
+
+- The coverage gaps are still logged, now by their own workflow step, "Log the coverage gaps" (`python run.py --gaps`, `log_coverage_gaps`), right after the crawl: one line `coverage gaps: N (M new): ...` of counts and company names, as a `::warning::` annotation when a gap is new, and `gap_alerts` marks the gaps already logged. A broken check turns that step red, so the failure alert fires (its `STEPS` line has `gaps=`), and the sync, the digests and the commit still run.
+- The `DB` path constant moved to `common.py`; `build_dashboard.py` and `sync_supabase.py` read it there.
+- `CONTRIBUTING.md`, `PLAN.md` (steps 6.4 and 6.6 are done), `README.md` and `AGENTS.md` describe the one remaining sender.
+
 ## [0.46.0] - 2026-11-16
 
 ### Added

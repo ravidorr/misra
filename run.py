@@ -1,8 +1,10 @@
-"""Crawl all companies with a working ATS, diff against SQLite, mark new/closed."""
+"""Crawl all companies with a working ATS, diff against SQLite, mark new/closed. `--gaps` logs the coverage gaps."""
 
 import contextlib
+import datetime
 import json
 import sqlite3
+import sys
 import time
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any
@@ -11,6 +13,7 @@ import common
 from adapters import ADAPTERS
 from browser_crawl import WHY, crawl_many
 from common import (
+    DB,
     DROP_BELIEVED,
     DROP_HOLD_DAYS,
     DROP_NOTE,
@@ -23,7 +26,6 @@ from common import (
     load_excluded,
 )
 
-DB = "data/jobs.db"
 DROP_MIN_OPEN = 10  # fewer open jobs swing too much to judge a drop; this many returning nothing is a broken page
 
 
@@ -198,6 +200,124 @@ def check_spelling(c: sqlite3.Connection, known: list[str], excluded: list[str])
         )
 
 
+GAP_KINDS = ("failing", "held", "closed")  # the order gap_summary lists them in
+FAILING_RUNS = 2  # a company is failing when its last two crawls failed, as in the dashboard (one-offs do not count)
+GAP_STALE_DAYS = 7  # a company not crawled for this long before the newest crawl is no longer one of ours
+
+
+def _outage_start(seq: list[tuple[int, str, str]]) -> str:
+    """Timestamp of the first crawl of the run of failed crawls that ends the history."""
+    start = seq[-1][2]
+    for ok, _note, ts in reversed(seq):
+        if ok:
+            break
+        start = ts
+    return start
+
+
+def coverage_gaps(c: sqlite3.Connection) -> list[dict[str, Any]]:
+    """Companies whose crawls need a person's attention, one dict each: company, kind, note, since, new.
+
+    kind is "failing" (the last two crawls failed, as in the dashboard's coverage gaps), "held" (the last crawl was
+    held back as a sharp drop: nothing closed) or "closed" (a crawl believed a sharp drop and closed the jobs it no
+    longer saw; this is an event, listed until the daily run has logged it). `since` identifies the gap: the start of
+    the outage, or the believed crawl. A company whose last crawl was skipped because of robots.txt is none of these:
+    it is on the dashboard's coverage card, and nobody has to act. `new` is True until the daily run logged the gap
+    (see mark_alerted), so one outage is new once however its kind changes. Companies not
+    crawled in the last GAP_STALE_DAYS days are skipped. A database without a crawl log, a note column or an alert
+    table has nothing to report or nothing alerted yet."""
+    tables = {r[0] for r in c.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+    if "crawl_log" not in tables:
+        return []
+    note_col = "COALESCE(note, '')" if "note" in [r[1] for r in c.execute("PRAGMA table_info(crawl_log)")] else "''"
+    alerted = set(c.execute("SELECT company, since FROM gap_alerts")) if "gap_alerts" in tables else set()
+    history: dict[str, list[tuple[int, str, str]]] = {}
+    query = f"SELECT company, ts, ok, {note_col} FROM crawl_log WHERE company IS NOT NULL ORDER BY ts, rowid"
+    for company, ts, ok, note in c.execute(query):
+        history.setdefault(company, []).append((ok, note, ts))
+    if not history:
+        return []
+    newest = max(seq[-1][2][:10] for seq in history.values())
+    cutoff = (datetime.date.fromisoformat(newest) - datetime.timedelta(days=GAP_STALE_DAYS)).isoformat()
+    gaps: list[dict[str, Any]] = []
+
+    def add(company: str, kind: str, note: str, since: str) -> None:
+        gaps.append(
+            {"company": company, "kind": kind, "note": note, "since": since, "new": (company, since) not in alerted}
+        )
+
+    for company, seq in sorted(history.items()):
+        if seq[-1][2][:10] < cutoff:
+            continue
+        if seq[-1][1].startswith(ROBOTS_NOTE):
+            continue  # skipped on purpose because robots.txt does not allow it: a decision, not a failure to report
+        believed = next(((n, ts) for _ok, n, ts in reversed(seq) if n.startswith(DROP_BELIEVED)), None)
+        if believed and (company, believed[1]) not in alerted:
+            add(company, "closed", believed[0], believed[1])
+        ok, note, _ts = seq[-1]
+        if not ok and note.startswith(DROP_NOTE):
+            add(company, "held", note, _outage_start(seq))
+        elif not any(
+            o for o, n, _t in [x for x in seq if not x[1].startswith(ROBOTS_NOTE)][-FAILING_RUNS:]
+        ):  # a skip is neither failure nor success
+            add(company, "failing", note, _outage_start(seq))
+    return gaps
+
+
+def safe_coverage_gaps(c: sqlite3.Connection) -> tuple[list[dict[str, Any]], str]:
+    """(gaps, error): a problem in the gap check comes back as text, so the gaps step can report it and go red."""
+    try:
+        return coverage_gaps(c), ""
+    except (sqlite3.Error, ValueError, TypeError) as exc:
+        error = f"{type(exc).__name__}: {exc}"
+        return [], error
+
+
+def gap_summary(gaps: list[dict[str, Any]]) -> str:
+    """One log line: counts and company names only (the log is public, the names are public companies)."""
+    parts = []
+    for kind in GAP_KINDS:
+        names = [g["company"] for g in gaps if g["kind"] == kind]
+        if names:
+            parts.append(f"{kind} {len(names)} ({', '.join(names)})")
+    return f"coverage gaps: {len(gaps)} ({sum(1 for g in gaps if g['new'])} new): " + "; ".join(parts)
+
+
+def mark_alerted(c: sqlite3.Connection, gaps: list[dict[str, Any]]) -> None:
+    """Remember that the daily run logged these gaps, so they stop being new. The caller commits."""
+    c.execute("CREATE TABLE IF NOT EXISTS gap_alerts(company TEXT, since TEXT, kind TEXT, PRIMARY KEY(company, since))")
+    c.executemany(
+        "INSERT OR IGNORE INTO gap_alerts(company, since, kind) VALUES(?,?,?)",
+        [(g["company"], g["since"], g["kind"]) for g in gaps],
+    )
+
+
+def log_coverage_gaps(c: sqlite3.Connection) -> bool:
+    """Put the coverage gaps in the job log, so a crawl problem is never silent (nothing is emailed for them).
+
+    One line of counts and company names (the log is public, the names are public companies). A gap that is new, one
+    the log has not carried before, makes the line a ::warning:: annotation on the run. Logged gaps are recorded in
+    gap_alerts, so they stop being new. Returns False when the check itself failed, so the step can go red."""
+    gaps, error = safe_coverage_gaps(c)
+    if error:
+        print(f"::warning::coverage check failed, {error}")
+        return False
+    if gaps:
+        print(("::warning::" if any(g["new"] for g in gaps) else "") + gap_summary(gaps))
+        mark_alerted(c, gaps)
+        c.commit()
+    return True
+
+
+def gaps_step() -> int:
+    """`python run.py --gaps`: its own workflow step after the crawl, red when the coverage check is broken."""
+    c = sqlite3.connect(DB)
+    try:
+        return 0 if log_coverage_gaps(c) else 1
+    finally:
+        c.close()
+
+
 def main() -> None:  # noqa: PLR0912, PLR0915
     excluded = load_excluded()  # a bad list stops the run: nobody can say who must not be crawled
     with open("data/companies.json") as fh:
@@ -266,8 +386,8 @@ def main() -> None:  # noqa: PLR0912, PLR0915
                     (now, j["title"], j["location"], j["url"], name, j["job_id"]),
                 )
             else:
-                # a company seen for the first time gets a silent baseline (reported=1),
-                # so adding companies never floods the digest
+                # a company seen for the first time gets a silent baseline (reported=1). Nothing reads the column
+                # any more (send_digests.py goes by first_seen and the emailed table); it is kept for old databases
                 c.execute(
                     "INSERT INTO jobs(company,job_id,title,team,location,url,posted,first_seen,last_seen,reported) "
                     "VALUES(?,?,?,?,?,?,?,?,?,?)",
@@ -305,4 +425,6 @@ def main() -> None:  # noqa: PLR0912, PLR0915
 
 
 if __name__ == "__main__":
+    if "--gaps" in sys.argv:
+        sys.exit(gaps_step())
     main()

@@ -18,7 +18,6 @@ import requests
 import browser_crawl
 import build_dashboard
 import common
-import digest
 import discover
 import run
 import sync_supabase
@@ -529,7 +528,7 @@ def test_the_switch_off_crawls_everything_and_the_log_says_so(
 def test_a_robots_skip_is_not_a_coverage_gap_for_the_maintainer(db: sqlite3.Connection) -> None:
     add_crawls(db, "Walled", [(0, ROBOTS_NOTE), (0, ROBOTS_NOTE), (0, f"{ROBOTS_NOTE} (walled.test)")], ats="fake")
     add_crawls(db, "Broken", [(0, "request failed"), (0, "request failed")], ats="fake")
-    assert [g["company"] for g in digest.coverage_gaps(db)] == ["Broken"]
+    assert [g["company"] for g in run.coverage_gaps(db)] == ["Broken"]
 
 
 def test_the_coverage_card_lists_a_robots_skip_at_once_with_its_reason(db: sqlite3.Connection, workdir: Path) -> None:
@@ -961,11 +960,11 @@ def test_a_list_that_is_not_text_is_a_bad_list(tmp_path: Path) -> None:
 def test_a_robots_skip_between_crawls_does_not_turn_one_failure_into_a_streak(db: sqlite3.Connection) -> None:
     add_crawls(db, "W", [(1, ""), (0, common.ROBOTS_NOTE), (0, "boom"), (1, "")])
     add_crawls(db, "V", [(0, "boom"), (0, common.ROBOTS_NOTE), (1, "")])
-    assert digest.coverage_gaps(db) == []
+    assert run.coverage_gaps(db) == []
     add_crawls(db, "U", [(0, "boom"), (0, common.ROBOTS_NOTE), (0, "boom"), (1, "")])
-    assert digest.coverage_gaps(db) == []
+    assert run.coverage_gaps(db) == []
     add_crawls(db, "T", [(0, "boom"), (0, common.ROBOTS_NOTE), (0, "boom")])
-    assert [g["company"] for g in digest.coverage_gaps(db)] == ["T"]
+    assert [g["company"] for g in run.coverage_gaps(db)] == ["T"]
 
 
 def test_no_host_is_exempt_from_a_blanket_disallow_until_one_has_written_permission() -> None:
@@ -1003,7 +1002,7 @@ def test_a_company_on_smartrecruiters_is_skipped_for_robots_txt_not_failed(
     assert check.execute("SELECT status FROM jobs WHERE company='Armis'").fetchone() == ("open",)  # not before 7 days
     assert check.execute("SELECT company, since FROM robots_skips").fetchall() == [("Armis", time.strftime("%Y-%m-%d"))]
     check.close()
-    assert digest.coverage_gaps(run.init()) == []  # no alert for the maintainer
+    assert run.coverage_gaps(run.init()) == []  # no alert for the maintainer
 
 
 # --- the 7-day rule: a company skipped for robots.txt on every run for a week gets its open jobs closed ---------------

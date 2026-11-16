@@ -336,7 +336,11 @@ def test_the_lawyers_round_of_2026_11_16_editorial_wording_is_in_the_notice_the_
     assert (
         "the small programs (Edge Functions) behind the report form, account deletion, job alerts, and the" in privacy
     )
-    assert "the maintainer's own daily summary email" in privacy
+    assert (
+        "- **Gmail (Google SMTP)**: failure alerts about the daily run go to the maintainer's own address."
+        " They hold no account data."
+    ) in privacy
+    assert "daily summary email" not in privacy
     assert "use the private route in [the security note](./SECURITY.md)." in privacy
     assert "[SECURITY.md]" not in privacy  # a file name is not link text
     assert "stars, discards" not in privacy

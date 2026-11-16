@@ -1,7 +1,6 @@
 # Support
 
-- Bugs and feature requests: open a GitHub issue using the templates.
-- Questions: open a [GitHub issue](https://github.com/ravidorr/misra/issues).
+- Bugs, feature requests and questions: open a [GitHub issue](https://github.com/ravidorr/misra/issues/new/choose) with one of the templates.
 - Security issues: see [SECURITY.md](./SECURITY.md).
 
 ## Troubleshooting

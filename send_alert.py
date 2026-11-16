@@ -1,8 +1,8 @@
 """Email a short alert that a step of the daily workflow failed. `python3 send_alert.py <run url>`.
 Standard library only, so it still works when the dependencies were never installed.
 Env: GMAIL_USER, GMAIL_APP_PASSWORD, DIGEST_TO (optional, defaults to GMAIL_USER), STEPS (optional, the outcome of
-each workflow step, for example "crawl=failure digest=skipped").
-It uses the same Gmail account as the digest, so it cannot report a Gmail outage."""
+each workflow step, for example "crawl=failure digests=skipped").
+It uses the maintainer's Gmail account, so it cannot report a Gmail outage."""
 
 import os
 import smtplib
