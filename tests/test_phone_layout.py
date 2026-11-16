@@ -528,6 +528,22 @@ async def test_the_level_chips_and_new_only_are_the_first_filters_in_the_sheet(p
     assert await page.locator("#onlyNew").is_visible()
 
 
+@pytest.mark.parametrize("width", PHONE_WIDTHS)
+async def test_reset_filters_is_a_secondary_button_beside_the_primary_one(page: Page, crowd: Path, width: int) -> None:
+    await open_page(page, crowd, width)
+    await open_sheet(page)
+    reset = page.locator("#reset")
+    assert await reset.get_attribute("class") == "btn btn-pill"  # a button, not a link look, and not the primary one
+    assert await page.locator("#filtersDone").get_attribute("class") == "btn btn-pill btn-primary sheet-done"
+    foot = page.locator(f"{SHEET} .sheet-foot > button")
+    assert await foot.evaluate_all("els => els.map(e => e.id)") == ["reset", "filtersDone"]  # Tab order: Reset first
+    box = await reset.bounding_box()
+    assert box is not None
+    assert box["height"] >= TAP
+    assert box["width"] >= TAP
+    assert await page.locator(SHEET).evaluate("e => e.scrollWidth <= e.clientWidth")
+
+
 async def test_the_starred_list_puts_the_filter_controls_away(page: Page, crowd: Path) -> None:
     await open_page(page, crowd, 375)
     await page.click("#starredView")

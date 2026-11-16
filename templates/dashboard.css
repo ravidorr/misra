@@ -470,10 +470,6 @@ dialog.sheet[hidden],
   height: 1.5rem;
 }
 
-.sheet-body .btn-link {
-  justify-self: start;
-}
-
 .sheet-body .filter-group {
   min-width: 0;
 }
