@@ -39,7 +39,7 @@ function button(url: string): string {
   if (!/^https?:\/\//u.test(url)) return `<p style="margin:0 0 16px 0">${escapeHtml(url)}</p>`;
   const label = escapeHtml(url);
   return (
-    `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 16px 0"><tr>` +
+    `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 16px 0;table-layout:fixed"><tr>` +
     `<td bgcolor="${light.solid}" style="background-color:${light.solid};border-radius:14px;mso-padding-alt:14px 20px">` +
     `<a dir="ltr" href="${escapeHtml(url)}" style="display:block;padding:14px 20px;font-weight:700;line-height:22px;` +
     `color:${light['on-solid']};text-decoration:none;word-break:break-all;overflow-wrap:anywhere">${label}</a></td></tr></table>`
@@ -71,7 +71,7 @@ export function renderHtml(subject: string, text: string, link: string): string 
     `<title>${escapeHtml(subject)}</title><style>${DARK_CSS}</style></head>` +
     `<body class="bg" style="margin:0;padding:0;background-color:${light.bg};-webkit-text-size-adjust:100%">` +
     `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" class="bg" style="background-color:${light.bg}"><tr><td align="center" style="padding:24px 16px">` +
-    `<table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" class="panel" style="width:100%;max-width:600px;background-color:${light.panel};border:2px solid ${light.line};border-radius:20px">` +
+    `<table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" class="panel" style="width:100%;max-width:600px;table-layout:fixed;background-color:${light.panel};border:2px solid ${light.line};border-radius:20px">` +
     `<tr><td aria-hidden="true" height="8" bgcolor="${light.lime}" style="height:8px;line-height:8px;font-size:8px;background-color:${light.lime};border-radius:18px 18px 0 0">&nbsp;</td></tr>` +
     `<tr><td class="ink" style="padding:24px 24px 8px 24px;font-family:${FONT};font-size:16px;line-height:1.5;color:${light.ink}">${body}</td></tr></table>` +
     '</td></tr></table></body></html>'

@@ -23,7 +23,7 @@ All notable changes are documented here. Format follows [Keep a Changelog](https
 ### Added
 
 - The two emails people receive are now designed HTML documents as well as plain text (multipart: the plain text stays, with the headers unchanged, and is sent together with the HTML). The confirmation email (Edge Function `email-settings`, `email-html.ts`) and the digest (`send_digests.py`, `render_digest_html`) use one 600px column on the page colour, a lime band, the product's colours (fixed values in `supabase/functions/_shared/email-colors.json`, kept equal to `design-system/tokens.css` by a test), a light and a dark version (`prefers-color-scheme`), table layout, inline styles, system fonts, no image, no script, no remote stylesheet. The confirmation link is a button (a link with a background and padding; a padded cell for Outlook). Not one word changed: the text of each HTML email equals its plain text, which a test checks for both emails.
-- Gmail clips a message near 102 KB and would hide the footer with the unsubscribe link, so a digest whose HTML would pass 90,000 bytes (about 130 roles with typical addresses) is sent as plain text only, the same words. The digest has no cap on the number of roles, and this adds none.
+- Gmail clips a message near 102 KB and would hide the footer with the unsubscribe link, so a digest whose HTML would pass 90,000 bytes (about 150 roles with the average 68-character address, 125 with 122-character ones) is sent as plain text only, the same words. The digest has no cap on the number of roles, and this adds none.
 - The Edge Function `email-settings` must be redeployed after the merge for the confirmation email to carry the HTML.
 
 ## [0.49.0] - 2026-11-16

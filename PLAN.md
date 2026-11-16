@@ -175,7 +175,7 @@ Decisions made in planning (they change the PRD's wording, so update the PRD in 
 - [x] ~~6.2 Dashboard digest settings: on/off, address (Google email by default), daily or weekly, "Use these filters for
   my email" copying regions, levels, role types and keywords only. Sends the confirmation email through Resend.
   Done when: FR-8 AC 1 to 3 hold.~~
-  The confirmation email is plain text, subject "Confirm your Misra job alerts", with `Reply-To` `raanan@avidor.org`, the
+  The confirmation email is plain text plus an HTML version of the same words (multipart), subject "Confirm your Misra job alerts", with `Reply-To` `raanan@avidor.org`, the
   lawyer's body ("Someone (hopefully you) turned on {{schedule}} job alerts for {{user_email}} on Misra." and the
   rest) and this footer: `Misra (https://ravidorr.github.io/misra/) is a free, non-commercial project run by Raanan Avidor (raanan@avidor.org). If you did not ask for this email, ignore it, and nothing will be sent to you.` then the privacy and terms links.
   It does not carry the digest's "you signed up" sentence, because its reader may be someone who did not ask.
@@ -196,7 +196,7 @@ Decisions made in planning (they change the PRD's wording, so update the PRD in 
   `supabase/README.md` ("Check it live", none of them creates a subscription): no token and the publishable key as the bearer
   are 401 from the gateway, the preflight answers 204 with `authorization` allowed (if the gateway refuses it, set
   `verify_jwt = false`), turning on is 403 `signup_closed` while the secret is unset, and turning off with no row is a 200. Once signups open (step 6.6),
-  with the maintainer's own account: turn it on, read the confirmation email (plain text, `Reply-To` `raanan@avidor.org`, the
+  with the maintainer's own account: turn it on, read the confirmation email (plain text and HTML, `Reply-To` `raanan@avidor.org`, the
   link opens `email.html`), confirm it, and see the dialog say "on".) Settled in step 6.3: the unsubscribe link is a stateless
   HMAC token, so this function no longer makes an unsubscribe token (the `NOT NULL` hash column gets a random value that nothing reads).
 - [x] ~~6.3 `send_digests.py` replaces the per-recipient logic of `send_email.py`: match each confirmed subscriber's

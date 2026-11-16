@@ -415,7 +415,7 @@ not unsubscribed subscriptions and every job with the service-role key, and for 
 day; weekly: Sundays) selects the open jobs in Israel that were first seen after `consent_confirmed_at`, are not in `emailed`,
 are not the baseline of a company seen for the first time, and fit the saved filters by the dashboard's rules (regions, levels,
 role types, keywords; the separate `level` and `role_types` columns, so Product with Intern and Junior gives only the entry-level
-Product roles). With nothing left there is no email. Otherwise one plain-text email goes out through Resend from
+Product roles). With nothing left there is no email. Otherwise one email (plain text and HTML, the same words) goes out through Resend from
 `Misra <digest@send.avidor.org>` with `Reply-To: raanan@avidor.org`, the `List-Unsubscribe` and `List-Unsubscribe-Post` headers and
 the footer of `supabase/email-texts.md`, and only after Resend accepts it are the jobs written to `emailed`. Every user is its own
 try block; the run exits 1 after all were handled when any failed. It needs `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`,
@@ -693,7 +693,7 @@ confirmed. Asking again while waiting issues a new link (the old one stops worki
 row alone. The `emailed` list is not touched. The confirmation email has no unsubscribe link: its reader may be someone who did not ask for it. The digests get theirs from
 the stateless unsubscribe token (see "Tokens").
 
-The confirmation email is plain text from `Misra <digest@send.avidor.org>` with `Reply-To: raanan@avidor.org` (the sending address
+The confirmation email is plain text and HTML (the same words) from `Misra <digest@send.avidor.org>` with `Reply-To: raanan@avidor.org` (the sending address
 cannot receive mail), subject "Confirm your Misra job alerts". The body is the lawyer's wording, verbatim: "Someone (hopefully
 you) turned on daily (or weekly) job alerts for ADDRESS on Misra", the link
 `https://ravidorr.github.io/misra/email.html#token=<token>` (the token in the fragment, as step 6.1 designed), that nothing is sent

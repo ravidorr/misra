@@ -100,6 +100,24 @@ def test_a_hundred_roles_with_typical_addresses_fit_the_budget_below_gmails_clip
     assert size < HTML_BUDGET <= GMAIL_CLIP - 10_000
 
 
+def approved_lines(section: str) -> list[str]:
+    """The lines of the first text block under `## <section>` in supabase/email-texts.md, without the `---` rule."""
+    texts = (REPO / "supabase/email-texts.md").read_text()
+    block = re.search(rf"## {section}\n[\s\S]*?```text\n([\s\S]*?)```", texts).group(1)  # type: ignore[union-attr]
+    return [line for line in block.split("\n") if line not in ("", "---")]
+
+
+def test_every_approved_footer_line_appears_in_the_html_word_for_word() -> None:
+    """Read straight from the lawyer's file, not through the plain text."""
+    html = render_digest_html("weekly", [job(url="https://jobs.test/a")], UNSUBSCRIBE)
+    seen = words_of(html)
+    for line in approved_lines("Digest footer"):
+        filled = line.replace("{{schedule}}", "weekly").replace("{{unsubscribe_url}}", UNSUBSCRIBE)
+        assert " ".join(filled.split()) in seen, line
+    for line in approved_lines("Digest subject and list")[:1]:
+        assert line.replace("{{count}}", "1").replace("{{roles}}", "role") in seen
+
+
 def css_values(block: str) -> dict[str, str]:
     return dict(re.findall(r"--([a-z-]+):\s*([^;]+);", block))
 

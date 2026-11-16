@@ -15,7 +15,8 @@ For each subscriber who confirmed and has not unsubscribed it
   levels and role types are the separate `level` and `role_types` columns, so Product with Intern and Junior gives only
   the entry-level Product roles);
 - sends nothing when no job is left;
-- otherwise sends ONE plain-text email through Resend and only after Resend accepted it records the jobs in `emailed`.
+- otherwise sends ONE email (plain text and HTML, the same words) through Resend and only after Resend accepted it
+  records the jobs in `emailed`.
   A send that fails records nothing, so the jobs are tried again at the next run.
 
 Each user is handled in its own try block: a failure for one person (a bad address, Resend refusing, a database error)
@@ -321,8 +322,8 @@ def render_footer(frequency: str, url: str) -> str:
 
 
 def render_digest(frequency: str, jobs: Sequence[Job], url: str) -> tuple[str, str]:
-    """(subject, plain-text body): a count line, one block per job (company, title and place, then the link), and the
-    lawyer's footer. The email carries job listings only."""
+    """(subject, plain-text body; render_digest_html is the HTML of the same words): a count line, one block per job
+    (company, title and place, then the link), and the lawyer's footer. The email carries job listings only."""
     count = len(jobs)
     noun = "role" if count == 1 else "roles"
     subject = (
@@ -368,7 +369,8 @@ def html_document(subject: str, content: str) -> str:
         f'<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" class="bg" '
         f'style="background-color:{LIGHT["bg"]}"><tr><td align="center" style="padding:24px 16px">'
         f'<table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" class="panel" '
-        f'style="width:100%;max-width:600px;background-color:{LIGHT["panel"]};border:2px solid {LIGHT["line"]};'
+        f'style="width:100%;max-width:600px;table-layout:fixed;background-color:{LIGHT["panel"]};'
+        f"border:2px solid {LIGHT['line']};"
         f'border-radius:20px"><tr><td aria-hidden="true" height="8" bgcolor="{LIGHT["lime"]}" '
         f'style="height:8px;line-height:8px;font-size:8px;background-color:{LIGHT["lime"]};'
         f'border-radius:18px 18px 0 0">&nbsp;</td></tr><tr><td class="ink" style="padding:24px 24px 8px 24px;'

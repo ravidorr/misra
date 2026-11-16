@@ -1,6 +1,6 @@
 // The logic of the `email-settings` Edge Function (PLAN.md step 6.2; PRD FR-8 AC 1 to 3): a signed-in user turns the
 // personalised email on, or off. Turning it on stores the address, frequency and filters snapshot, makes the confirmation token,
-// and sends ONE plain-text confirmation email with the link `email.html#token=<token>`; nothing else is ever sent from
+// and sends ONE confirmation email (plain text and HTML, the same words) with the link `email.html#token=<token>`; nothing else is ever sent from
 // here, and nothing is sent to the user's digest until they confirm (step 6.1's `confirm-email`). Turning it off does
 // exactly what the unsubscribe link does (the SQL function `unsubscribe_subscription`, reached through
 // `unsubscribe_user`), so there is one clean-up, not two.
