@@ -61,7 +61,7 @@ Decisions made in planning (they change the PRD's wording, so update the PRD in 
   `level`, `role_types text[]`, `regions text[]`, `locations text[]`), `crawl_log`, and RLS: public read of open jobs,
   no public write. Done when: migrations apply to a fresh project and a read with the anon key works.~~
   ~~Remaining check, live only: apply the migrations to the Supabase project (`supabase/README.md`) and read with the anon key.~~ Done: migration applied 2026-11-14, anon read and write refusal verified live.
-- [x] ~~2.2 `sync_supabase.py`: after each daily run upsert every open job (all 6,026 today, as in `docs/jobs.json`, not only Israeli ones, so the signed-out dashboard stays whole) and mark missing ones closed, using the
+- [x] ~~2.2 `sync_supabase.py`: after each daily run upsert every open job (all 6,026 on 2026-11-14, as in `docs/jobs.json`, not only Israeli ones, so the signed-out dashboard stays whole) and mark missing ones closed, using the
   service-role key; new module (release lists), tests with a fake client. Add a daily-workflow step after the crawl and
   before the deploy push, with the secret exposed only to that step, and the maintainer failure alert covering it.
   Done when: a manual daily run fills the table and a second run changes nothing.~~
@@ -146,7 +146,7 @@ Decisions made in planning (they change the PRD's wording, so update the PRD in 
   Added in v0.29.0: a daily cleanup of the two counter tables, so the old hashes really are gone daily (migration `20261119100000_report_site_cleanup.sql`,
   called by `sync_supabase.py` after a good sync), and the lawyer's one-sentence wording ("expires after 24 hours") in the form and `PRIVACY.md`. Live check
   left: apply that migration before the first daily run that includes it, or the sync step fails on the missing function (`supabase/README.md`, "Daily cleanup of the counters").
-- [x] ~~5.2 Dashboard: "Report a site" action on the coverage card opens a short form (company, careers link, why it
+- [x] ~~5.2 Dashboard: "Report a site" action on the coverage card opens a short form (company, career page link, why it
   matters), confirmation and error messages, no account needed, CSP `connect-src` already covers the host. Process note
   in `CONTRIBUTING.md` for accepting a site (moves to `data/seed_companies.csv` or the gap card with a reason).
   Done when: FR-7 AC 1 to 6 hold.~~
@@ -182,7 +182,7 @@ Decisions made in planning (they change the PRD's wording, so update the PRD in 
   Built as the Edge Function `email-settings` (turn on, turn off; the user id only from the verified token; limits of 3
   confirmation emails per user, 3 per address and 30 in all per day, counted in the database; the same unsubscribe
   clean-up as the link), the migration `20261118100000_digest_signup_and_limits.sql` and the "Job alerts" dialog
-  (`templates/digest.js`). The whole signup is behind two switches, both off: `DIGEST_SIGNUP_ENABLED = False` in
+  (`templates/digest.js`). The whole signup is behind two switches, both off at first: `DIGEST_SIGNUP_ENABLED = False` in
   `build_dashboard.py` (the page has no button, dialog or script; on since v0.31.0) and the function secret `DIGEST_SIGNUP_ENABLED` (the
   function refuses to create a subscription unless it is `true`). Step 6.6 switches them on (`supabase/README.md`,
   "Job alerts"): set `DIGEST_SIGNUP_ENABLED = True` in `build_dashboard.py` and run
@@ -257,7 +257,7 @@ Decisions made in planning (they change the PRD's wording, so update the PRD in 
   a company skipped for 7 days in a row has its open jobs closed, from v0.26.0), and the company exclusion list `data/excluded_companies.csv` (a company
   on it is never crawled, is deleted from `data/jobs.db` and from Supabase `jobs`, `user_jobs` and `emailed`, and is
   off the exports and the coverage card; the process is in `CONTRIBUTING.md`). ~~Still to do before the gate closes: the
-  digest email itself (step 6.3, with its footer and headers), the flag, and the present-tense `PRIVACY.md` edits below.~~ Done in v0.31.0 except the function secret (see "Opening day" below). The gate closed when the secret was set.
+  digest email itself (step 6.3, with its footer and headers), the flag, and the present-tense `PRIVACY.md` edits below.~~ Done in v0.31.0 except the function secret (see "Opening day" below). The secret is set, so the gate is closed.
   Small wording and checks done in v0.29.0: the weekly choice reads "Weekly (Sundays)" (the lawyer's suggestion), the coverage card says what happens to the roles of a
   company skipped for robots.txt in both phases (kept for up to 7 days, then closed, with the days skipped), and the SQL policy tests now run in CI (job `sql-tests`).
   Second lawyer answer (2026-11-15), applied: the `auth.users` sentence in `PRIVACY.md` now says why Supabase keeps

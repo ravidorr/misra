@@ -6,9 +6,9 @@ For the graphic designer. Misra is a small, independent product. This brief cove
 
 Misra is a daily list of entry-level, student and product roles at companies in Israel. Every morning it checks company career pages and shows what is open and what is new. People open it on their phone, scroll, tap Apply or move on.
 
-There is no sign-up and no account. It is a quick, useful habit, like checking the weather.
+No account is needed. Signing in is optional: it saves choices across devices and lets people turn on job alerts. It is a quick, useful habit, like checking the weather.
 
-Open questions for the owner, to settle before you start:
+Open questions for the maintainer, to settle before you start:
 
 - What does the name "Misra" mean, and how is it pronounced? Use it if it helps the idea.
 - Should there also be a Hebrew version of the wordmark? Optional, design it only if asked.
@@ -111,7 +111,7 @@ Pick two or three and show variations. You are welcome to propose a better idea.
 
 ## 9. Deliverables
 
-Please send:
+Send these files:
 
 | File | Use |
 | --- | --- |
@@ -123,7 +123,7 @@ Please send:
 | `icon-192.png`, `icon-512.png` | App icons |
 | `icon-maskable-512.png` | Maskable app icon |
 | `social-1200x630.png` | Link preview image: logo, name, one line of copy |
-| `email-header.png` | 2x export, about 600 px wide, for the email digest header (email clients do not show SVG) |
+| `email-header.png` | 2x export, about 600 px wide, for the job alerts email header (email clients do not show SVG) |
 | `avatar-512.png` | GitHub and social profile picture |
 | Source file | Figma, Illustrator or Affinity, with fonts outlined or listed |
 | One-page guide | Clear space, minimum size, color use, and 3 or 4 "do not" examples |

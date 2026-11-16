@@ -1,9 +1,10 @@
 # PRD: Accounts, personalisation and reach
 
 Status: agreed. Updated 2026-11-15 with the decisions made in planning and since (see the decisions log at the end). The
-work is broken into a step-by-step plan tracked in `PLAN.md`; steps 1.1 to 5.1 are built and merged (the coverage gap card,
-jobs in Supabase, level, role type and region, sign-in, stars, discards and synced filters, account deletion, and the
-report-a-site function). The rest is not built yet.
+work is broken into a step-by-step plan tracked in `PLAN.md`; steps 1.1 to 6.3, 6.5 and 6.6 are built and merged (the coverage
+gap card, jobs in Supabase, level, role type and region, sign-in, stars, discards and synced filters, account deletion,
+report a site, and job alerts, now open to signups). Step 6.4 is done (the old maintainer digest was removed in v0.47.0), the
+account backups of step 9.1 are built, and FR-4 and FR-6 (steps 7 and 8) are not built yet.
 
 ## Background
 
@@ -53,8 +54,8 @@ it and they loved it. Their feedback points at eight gaps:
 - Free to run. Supabase (free plan, EU region, Ireland) is the chosen backend: it holds the jobs, user accounts and
   preferences.
 - No server. The project is a daily batch run on GitHub Actions, a static dashboard, and Supabase. Anything that needs a
-  secret runs as a Supabase Edge Function (`report-site` and `delete-account` today; `confirm-email`, `unsubscribe` and the assistant endpoint
-  are planned) or in the daily Actions workflow, and nowhere else. The public (anon) key is not a secret, so row-level
+  secret runs as a Supabase Edge Function (`report-site`, `delete-account`, `confirm-email`, `unsubscribe` and `email-settings` today; the assistant
+  endpoint is planned) or in the daily Actions workflow, and nowhere else. The public (anon) key is not a secret, so row-level
   security is the whole security model for user data: each user can reach only their own rows.
 - Sign-in uses Google, through Supabase, so account security rests on Google.
 - The service keeps working for visitors who do not sign in.
@@ -188,11 +189,11 @@ starting with the ones that matter most to users.
 - AC: The coverage gap card has a "report a site" action that opens a short form on the dashboard.
 - AC: The form asks for the company, the career page link and why it matters. No account and no personal details are
   needed, so a visitor who is not signed in can send a report.
-- AC: Each report is sent by email to the administrator, through Resend.
+- AC: Each report is sent by email to the maintainer, through Resend.
 - AC: The user sees a confirmation after sending, and an error message if it could not be sent.
-- AC: A flood of reports, or automated spam, cannot fill the administrator's inbox. The guard is a hidden honeypot field,
+- AC: A flood of reports, or automated spam, cannot fill the maintainer's inbox. The guard is a hidden honeypot field,
   a limit of 3 reports a day per visitor (counted by a keyed hash of the network address, never the address itself), and
-  a daily cap of 20 emails to the administrator. There is no captcha, and nothing personal is stored.
+  a daily cap of 20 emails to the maintainer. There is no captcha, and nothing personal is stored.
 - AC: Accepted sites move onto the crawl list or the coverage gap card with a reason.
 
 ### FR-8: Personalised daily digest
@@ -289,7 +290,7 @@ see.
 - **Coverage:** the number of sites on the coverage gap card, and the number of sites reported and accepted.
 - **Assistant:** not measured. The assistant reads public data without signing in, so we cannot see who connects or
   how it is used.
-- **Cost:** monthly cost stays at zero. The free-tier limits that could break this will be written down, with
+- **Cost:** monthly cost stays at zero. The free-tier limits that could break this are written down, with
   the upgrade triggers, in `CONTRIBUTING.md` (PLAN.md steps 0.2 and 6.5).
 
 The first-minute sign-in experience is not a metric. It is checked once, by hand, as a launch test: sign in on a phone
@@ -319,9 +320,9 @@ outcome, in short:
 - Full-text job descriptions are a grey area. Facts, links and short snippets are fine; full text needs care; remove a
   company on request; respect `robots.txt`.
 
-The wording changes this asks for are in FR-1, FR-4 and FR-8, and `PLAN.md` step 6.6 stays the gate: nothing sends to a
-real user, and the sign-up control stays hidden, until the wording is in the emails (footer), `PRIVACY.md`, `TERMS.md` and
-the notice shown when the sign-in button is pressed. The review is answered; the gate closes when that wording is in.
+The wording changes this asks for are in FR-1, FR-4 and FR-8, and `PLAN.md` step 6.6 was the gate: nothing was sent to a
+real user, and the sign-up control stayed hidden, until the wording was in the emails (footer), `PRIVACY.md`, `TERMS.md` and
+the notice shown when the sign-in button is pressed. The wording is in and signups are open.
 
 ## Proposed order (the plan in `PLAN.md` differs, and is the one followed)
 
@@ -351,8 +352,8 @@ Technical direction agreed so far. These are inputs to the step plan, not requir
 - The backend choice is made: Supabase, project region EU (Ireland), in use since 2026-11-14.
 - Email sending uses Resend, from the sending domain `send.avidor.org` in the Ireland region. Resend replaces Gmail SMTP
   for the digest only; the maintainer's failure alerts (`send_alert.py`) stay on Gmail, so they still work when Resend
-  does not. The site-report function is written to send through Resend (the sending domain still has to be verified, PLAN.md step 0.1). The free tier is shared across the apps on that
-  account, including `easy-theory` (the daily limit will be written in `CONTRIBUTING.md`, step 0.2), so check the sending
+  does not. The site-report function sends through Resend. The free tier is shared across the apps on that
+  account, including `easy-theory` (the limits are in `CONTRIBUTING.md`, "Resend volume"), so check the sending
   volume before opening the digest to many subscribers (step 6.5), and move to a larger plan or another sender if it is
   outgrown.
 
