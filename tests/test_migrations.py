@@ -442,6 +442,10 @@ def problems(stmts: list[str]) -> list[str]:
 
 
 JOBS_TRIM_NAME = "jobs_text_trim"
+JOBS_TRIM_WHERE = (
+    "status = 'closed' and (description is not null or details is not null or snippet is not null) "
+    "and coalesce(left(last_seen, 10), '') < to_char(p_day - 30, 'yyyy-mm-dd')"
+)
 JOBS_TRIM_NULLS = ("description", "details", "snippet")  # all the trim may write, to null
 
 
@@ -458,6 +462,8 @@ def jobs_trim_problems(m: re.Match[str]) -> list[str]:
     found += [f"function {JOBS_TRIM_NAME} must delete nothing and update only closed jobs"] * bool(
         "delete" in body or "status = 'closed'" not in body
     )
+    where = [" ".join(w.split()) for w in re.findall(r"\bwhere (.+?);", body, re.S)]
+    found += [f"function {JOBS_TRIM_NAME} has another where clause: {where}"] * bool(where != [JOBS_TRIM_WHERE])
     assigned = re.findall(r"\bset (.+?) where", body, re.S)
     found += [f"function {JOBS_TRIM_NAME} may set only {sorted(JOBS_TRIM_NULLS)}"] * bool(
         [" ".join(a.split()) for a in assigned] != [", ".join(f"{c} = null" for c in JOBS_TRIM_NULLS)]
@@ -970,6 +976,9 @@ def test_the_trim_is_an_invoker_function_executable_by_the_service_role_alone() 
             "create function public.jobs_text_trim(p_day date, p_x text)",
         ),
         ("where status = 'closed'", "where status = 'open'"),
+        ("where status = 'closed'", "where true or status = 'closed'"),
+        ("p_day - 30", "p_day - 3"),
+        ("     and coalesce(", "     or coalesce("),
         ("   set description = null,", "   set description = null, title = null,"),
         (
             "  get diagnostics trimmed = row_count;",

@@ -246,7 +246,8 @@ def push_texts(
         KeyError,
         TypeError,
     ) as exc:  # an answer of another shape is no reason to fail the step
-        print(f"::warning::the stored descriptions could not be read, so none is written: {type(exc).__name__}")
+        reason = str(exc) if isinstance(exc, SyncError) else type(exc).__name__  # a SyncError is safe to print
+        print(f"::warning::the stored descriptions could not be read, so none is written: {reason}")
         return 0, 0, len(wanted)
     fresh: list[dict[str, Any]] = []
     for company, job_id in wanted:
@@ -292,10 +293,11 @@ def cleanup(client: Client, today: date) -> int:
     return total
 
 
-def trim_texts(client: Client, today: date) -> int:
+def trim_texts(client: Client, today: date) -> int | None:
     """Deletes the text of the jobs that closed more than 30 days ago (description, details, snippet) through the
     database function `jobs_text_trim` and returns how many jobs lost text. Counts only, nothing is read. Never
-    fails the step: a failure (the migration not applied yet, a bad answer) is a warning and 0; the next run retries."""
+    fails the step: a failure (the migration not applied yet, a bad answer) is a warning and None; the next run
+    retries."""
     try:
         trimmed = client.call(
             "POST", {}, {"p_day": today.isoformat()}, table="rpc/jobs_text_trim", prefer="return=representation"
@@ -304,7 +306,7 @@ def trim_texts(client: Client, today: date) -> int:
             raise SyncError("rpc/jobs_text_trim returned something other than a count")
     except (SyncError, ValueError) as exc:
         print(f"::warning::the text of closed jobs could not be trimmed: {exc}")
-        return 0
+        return None
     return trimmed
 
 
@@ -335,7 +337,10 @@ def main() -> None:
         done = f"{result.texts} written, {result.texts_same} unchanged, {result.texts_failed} failed"
         print(f"Supabase: descriptions {done}")
         trimmed = trim_texts(client, datetime.now(UTC).date())
-        print(f"Supabase: {trimmed} closed jobs lost their text (30 days after closing)")
+        if trimmed is None:
+            print("Supabase: the text of closed jobs was not trimmed today (see the warning above)")
+        else:
+            print(f"Supabase: {trimmed} closed jobs lost their text (30 days after closing)")
         print(f"Supabase: {cleanup(client, datetime.now(UTC).date())} spam-guard counter rows deleted")
         print(quality_report(conn))
     except (SyncError, ExclusionError) as exc:

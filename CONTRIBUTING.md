@@ -279,7 +279,7 @@ PLAN.md step 7.1. Where the text of a posting lives, and how it gets there:
   ATS (a company that failed or was skipped has no count). That is the list of what to improve next (FR-4 AC 3). The
   sync step logs `Supabase: descriptions N written, N unchanged, N failed` and `Supabase: N closed jobs lost their text (30
   days after closing)`: counts only, never a text. A trim that fails is `::warning::the text of closed jobs could not be
-  trimmed: ...`, and the next run tries again.
+  trimmed: ...` followed by `Supabase: the text of closed jobs was not trimmed today`, and the next run tries again.
 - **Adding an adapter.** Return the description with `attach(job, text, details)` from `descriptions.py` (`html_to_text`
   for HTML, `plain_text` for text), from the request the adapter already makes. Do not add a request per job without
   measuring: one host takes one request a second.

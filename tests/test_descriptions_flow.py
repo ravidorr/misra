@@ -488,7 +488,7 @@ def test_the_trim_calls_the_function_with_today_and_logs_the_count(capsys: pytes
 def test_a_trim_answer_that_is_not_a_count_is_a_warning_not_a_failure(
     answer: Any, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    assert sync_supabase.trim_texts(client(FakeSupabase(rpc_answer=answer)), date(2026, 11, 16)) == 0
+    assert sync_supabase.trim_texts(client(FakeSupabase(rpc_answer=answer)), date(2026, 11, 16)) is None
     assert (
         "::warning::the text of closed jobs could not be trimmed: rpc/jobs_text_trim returned"
         in capsys.readouterr().out
@@ -497,7 +497,7 @@ def test_a_trim_answer_that_is_not_a_count_is_a_warning_not_a_failure(
 
 def test_a_trim_that_cannot_reach_the_server_is_a_warning_not_a_failure(capsys: pytest.CaptureFixture[str]) -> None:
     fake = FakeSupabase(error=sync_supabase.requests.ConnectionError("down"))
-    assert sync_supabase.trim_texts(client(fake), date(2026, 11, 16)) == 0
+    assert sync_supabase.trim_texts(client(fake), date(2026, 11, 16)) is None
     assert (
         "::warning::the text of closed jobs could not be trimmed: POST rpc/jobs_text_trim failed"
         in capsys.readouterr().out
@@ -505,7 +505,7 @@ def test_a_trim_that_cannot_reach_the_server_is_a_warning_not_a_failure(capsys: 
 
 
 def test_a_failing_trim_is_a_warning_not_a_failure(capsys: pytest.CaptureFixture[str]) -> None:
-    assert sync_supabase.trim_texts(client(FakeSupabase(fail_on="POST")), date(2026, 11, 16)) == 0
+    assert sync_supabase.trim_texts(client(FakeSupabase(fail_on="POST")), date(2026, 11, 16)) is None
     out = capsys.readouterr().out
     assert "::warning::the text of closed jobs could not be trimmed: POST rpc/jobs_text_trim failed" in out
 
@@ -527,3 +527,26 @@ def test_main_trims_after_the_descriptions_and_logs_the_count_only(
     out = capsys.readouterr().out
     assert "Supabase: 5 closed jobs lost their text" in out
     assert SENTINEL not in out
+
+
+def test_a_failing_trim_does_not_stop_the_step_and_is_not_logged_as_a_count(
+    seeded: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    class TrimFails(FakeSupabase):
+        def request(self, method: str, url: str, **kw: Any) -> Any:
+            if url.endswith("jobs_text_trim"):
+                self.calls.append({"method": method, "url": url, **kw})
+                return FakeHttpResponse(status_code=404, text="no such function")
+            return super().request(method, url, **kw)
+
+    seeded.commit()
+    fake = TrimFails(rpc_answer=7)
+    monkeypatch.setenv("SUPABASE_URL", URL)
+    monkeypatch.setenv("SUPABASE_SERVICE_ROLE_KEY", "k")
+    monkeypatch.setattr(sync_supabase.requests, "Session", lambda: fake)
+    sync_supabase.main()  # no SystemExit
+    out = capsys.readouterr().out
+    assert "::warning::the text of closed jobs could not be trimmed" in out
+    assert "was not trimmed today" in out
+    assert "closed jobs lost their text" not in out
+    assert "Supabase: 14 spam-guard counter rows deleted" in out  # the cleanups after it still ran
