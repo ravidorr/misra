@@ -279,6 +279,13 @@ class FakeSupabase:
         else:
             keys.reverse()
         window = keys[params["offset"] : params["offset"] + min(params["limit"], self.page)]
+        if "hash:details->>text_sha256" in params["select"]:  # the stored fingerprint of the description, or null
+            return FakeHttpResponse(
+                data=[
+                    {"company": c, "job_id": j, "hash": (self.table[(c, j)].get("details") or {}).get("text_sha256")}
+                    for c, j in window
+                ]
+            )
         return FakeHttpResponse(data=[{"company": c, "job_id": j} for c, j in window])
 
     def by_company(self, method: str, table: str, company: str) -> FakeHttpResponse:

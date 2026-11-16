@@ -24,7 +24,12 @@ a request to `crawl_log`, and any `POST`, `PATCH` or `DELETE` with the anon key,
 
 ## Access model
 
-- `jobs`: anonymous and signed-in users read rows whose `status` is `open`. Nobody but the service role writes.
+- `jobs`: anonymous and signed-in users read rows whose `status` is `open`, by column: `description` (the full text of a
+  posting) and `details` are not readable by them (migration `20261121100000_jobs_text_not_public.sql`), so a request that
+  names them, or `select=*`, is refused with a permission error. The grant is per column, so a column added later stays closed
+  until a migration grants it. Step 7.3 (the dashboard drill-down) and step 8.1 (`get_job`) will expose the text, with a
+  new migration, only after the lawyer has approved storing other companies' full postings. Nobody but the service role
+  writes, and the service role reads and writes everything.
 - `crawl_log`: no policy, so only the service role reads or writes it.
 - `profiles` (user id, email): a signed-in user reads their own row. Nobody writes it but the trigger below and the
   service role.
@@ -75,6 +80,10 @@ psql "$TEST_DATABASE_URL" -v ON_ERROR_STOP=1 -f supabase/tests/accounts_rls.sql
 It stops at the first failed check with a message that names it and ends with `all account policy checks passed`.
 Pasting it into the SQL editor of the test project works too. CI runs it, see "SQL tests in CI" below; the lint above
 runs everywhere.
+
+`supabase/tests/job_text_private.sql` checks that `anon` and `authenticated` cannot select `description` or `details` (alone,
+with other columns, by `*` or in an expression), can select every other column of open jobs, cannot read a column added later,
+and that the service role writes and reads both (`all job text checks passed`).
 
 `supabase/tests/job_choices.sql` checks the two rules of step 4.2 the same way (`all job choice checks passed`): a user
 can keep at most 2,000 rows (the 2,001st is refused with error 54000, a change to a job the user already has is not, and

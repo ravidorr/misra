@@ -450,3 +450,7 @@ Recorded 2026-11-15, one line per decision, newest last. The first lines were ma
   infrastructure, cloud, release, build, CI/CD, Kubernetes and production engineer titles leave R&D and belong to it (a
   title that another R&D pattern also matches, such as "Senior Software DevOps Engineer", keeps both). A saved filter or
   email alert that lists "R&D" no longer matches the DevOps roles; the person has to add "DevOps & SRE" (FR-9).
+- 2026-11-16: The full text of a posting lives in Supabase only, never in `data/jobs.db` or any other committed file: the
+  daily commit would grow, and other companies' full postings would be published on GitHub. The crawl hands the text to the
+  sync step through a work file outside the checkout (FR-4, `PLAN.md` step 7.1). The short description (step 7.2) is a
+  separate, later decision.

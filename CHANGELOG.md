@@ -4,6 +4,19 @@ All notable changes are documented here. Format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
+## [0.49.0] - 2026-11-16
+
+### Added
+
+- Descriptions in the crawl (PLAN.md step 7.1, the first slice). The `greenhouse`, `greenhouse_url`, `lever`, `ashby`, `workable`, `comeet` and `amazon` adapters return `description` (plain text) and `details` (employment type, department, experience, workplace type, offices) for the jobs whose site gives them, from the request they already made: Greenhouse and Workable ask for the content in the same list request (`?content=true`, `?details=true`), the others read fields that were already in the answer. These adapters cover about 4,760 of the 6,814 open jobs (70 percent). The HTML is turned into plain text (`descriptions.py`): scripts, styles and frames are dropped, paragraph and list line breaks are kept, control characters are removed, and a text is cut at 20,000 characters (recorded as `description_truncated` in `details`).
+- The full text lives in Supabase only. It is never written to `data/jobs.db` or any committed file (the daily workflow commits those to a public repository): `run.py` leaves the texts in a work file in the runner's temporary directory and `sync_supabase.py` reads it, writing `description` and `details` in a second pass in batches of its own. A hash in `details` (`text_sha256`) skips a text that did not change; a job without a text today keeps the one it has; a failure in this pass is a warning, never a failed step. Tests pin that no description reaches SQLite, `docs/` or the staging list of the daily workflow.
+- The migration `20261121100000_jobs_text_not_public.sql` (SQL only; the maintainer applies it before the first daily run that writes text): `anon` and `authenticated` lose the table-level `select` on `jobs` and get it back on every column except `description` and `details`, so the text of other companies' postings is not readable through the public API until the lawyer has seen it. The service role is unchanged. A later column stays closed until a migration grants it. Pinned by `supabase/tests/job_text_private.sql` (CI `sql-tests`) and by the migration lint.
+- The crawl log has one new line with the share of jobs with a full description per ATS (counts and percentages only), FR-4 AC 3.
+
+### Changed
+
+- `PLAN.md` step 7.1 no longer says the SQLite `jobs` table gains the columns: the description is in Supabase only. `CONTRIBUTING.md` has a "Job descriptions" section and a storage estimate from real sizes.
+
 ## [0.48.0] - 2026-11-16
 
 ### Fixed
