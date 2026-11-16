@@ -43,9 +43,9 @@ The "Daily email" settings (PLAN.md step 6.2, built only while `DIGEST_SIGNUP_EN
 
 ## Logo and favicon
 
-The mark is a violet badge with an ink pulse line and a lime sparkle: a daily "something new" signal. The wordmark is lowercase `misra` on a tilted lime highlighter swipe.
+The mark is a lime badge with an ink pulse line and a violet sparkle: a daily "something new" signal. The wordmark is lowercase `misra` on a tilted lime highlighter swipe.
 
-`assets/mark.svg` (also `docs/favicon.svg`) and `docs/apple-touch-icon.png` are provisional: rebuilt from the designer's concept board, not the designer's masters. Replace them with the final files from [logo-brief.md](./logo-brief.md) when they arrive. The favicon is simplified for 16px: no outer white ring, no hard shadow, thicker pulse.
+`assets/mark.svg` and `assets/apple-touch-icon.png` (a 180 px render of the mark on white; `build_dashboard.py` copies them to `docs/favicon.svg` and `docs/apple-touch-icon.png`) are provisional: rebuilt from the designer's concept board, not the designer's masters. Replace them with the final files from [logo-brief.md](./logo-brief.md) when they arrive. The favicon is simplified for 16px: no outer white ring, no hard shadow, thicker pulse.
 
 ## Agents (WebMCP)
 

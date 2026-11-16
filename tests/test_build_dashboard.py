@@ -71,6 +71,9 @@ def write_static(workdir: Path) -> None:
         (workdir / legal.source).write_text(f"# {legal.source}\n", encoding="utf-8")
     (workdir / "templates" / "report.js").write_text("const report = '__SUPABASE_URL__/report';\n", encoding="utf-8")
     (workdir / "templates" / "digest.js").write_text("const digest = '__SUPABASE_URL__/digest';\n", encoding="utf-8")
+    (workdir / "design-system" / "assets").mkdir(parents=True, exist_ok=True)
+    (workdir / "design-system" / "assets" / "mark.svg").write_text("<svg><title>mark</title></svg>", encoding="utf-8")
+    (workdir / "design-system" / "assets" / "apple-touch-icon.png").write_bytes(b"\x89PNG stand-in")
     (workdir / "vendor").mkdir(exist_ok=True)
     (workdir / "vendor" / "supabase.js").write_bytes(b"var supabase = '__SUPABASE_URL__'; \xc3\xa9\r\n")
 
@@ -99,6 +102,9 @@ def test_main_builds_dashboard(db: sqlite3.Connection, workdir: Path, capsys: py
     add_job(db, "Acme", "9", "Junior Product Manager")
     db.close()
     build_dashboard.main()
+    docs = workdir / "docs"
+    assert (docs / "favicon.svg").read_text(encoding="utf-8") == "<svg><title>mark</title></svg>"
+    assert (docs / "apple-touch-icon.png").read_bytes() == b"\x89PNG stand-in"
     payload = read_payload(workdir)
     gaps = payload["gaps"]
     assert gaps["untracked"] == ["Alpha"]
@@ -232,12 +238,14 @@ def test_site_files_are_written_next_to_the_page(db: sqlite3.Connection, workdir
     build_dashboard.main()
     docs = workdir / "docs"
     assert sorted(p.name for p in docs.iterdir()) == [
+        "apple-touch-icon.png",
         "auth.js",
         "dashboard.css",
         "dashboard.js",
         "digest.js",
         "email.html",
         "email.js",
+        "favicon.svg",
         "index.html",
         "jobs.json",
         "jobs.jsonld",
