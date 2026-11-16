@@ -1,11 +1,11 @@
 # misra
 
-> Daily batch pipeline that crawls career pages, keeps history in SQLite, and emails a digest. Runs on GitHub Actions; there is no server or API; the only UI is a static dashboard.
+> Daily batch pipeline that crawls career pages, keeps history in SQLite, and emails job alerts. Runs on GitHub Actions; there is no server or API. The only UI is a static dashboard.
 
 ## Project
 
 - [Dashboard](https://ravidorr.github.io/misra/): Open entry-level, student and product roles in Israel, read daily from company career pages; the footer gives the live company count and links to Coverage gaps.
-- [Overview and quickstart](/README.md): Purpose, requirements, quickstart, and usage.
+- [Overview and quickstart](/README.md): Pipeline commands, the daily run, the dashboard and development setup.
 - [Changelog](/CHANGELOG.md): Released changes.
 
 ## Policies and support
@@ -13,11 +13,11 @@
 - [Security](https://ravidorr.github.io/misra/security.html): Vulnerability reporting and supported versions.
 - [Privacy](https://ravidorr.github.io/misra/privacy.html): Data-handling policy.
 - [Terms](https://ravidorr.github.io/misra/terms.html): The as-is terms of use.
-- [Support](/SUPPORT.md): Support and troubleshooting information.
+- [Support](/SUPPORT.md): Where to ask, and troubleshooting.
 
 ## Miscellaneous
 
 - [Design system](/design-system/README.md): Tokens, components, logo brief, and the WebMCP tools the dashboard exposes.
 - [Agent guide](/AGENTS.md): Canonical instructions for AI coding agents.
-- [Contributing](/CONTRIBUTING.md): Development and contribution guidance.
+- [Contributing](/CONTRIBUTING.md): Workflow, standards and maintainer runbooks.
 - [License](/LICENSE): License terms.
