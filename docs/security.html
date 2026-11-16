@@ -58,7 +58,8 @@ emailed, and a consent log (when they were turned on, confirmed and unsubscribed
 sign-in record until the account is deleted. The jobs data is public job postings.</li>
 <li>Where it lives: Supabase (EU, Ireland) for the database, sign-in and Edge Functions; Resend (Ireland) for email;
 Google for sign-in; GitHub for the repository, the dashboard and the daily job, and for a private repository
-(<code>ravidorr/misra-backups</code>) that holds the daily backup copy of the account tables. One maintainer runs all of them.</li>
+(<code>ravidorr/misra-backups</code>) that holds the daily backup copy of the account tables; cron-job.org, which starts the daily job and holds a GitHub
+token for it (see below), but no personal data. One maintainer runs all of them.</li>
 </ul>
 <h3 id="controls-in-place">Controls in place</h3>
 <ul>
@@ -85,6 +86,9 @@ email-and-password provider is switched off. A database hook empties the persona
 <li><strong>Policy tests:</strong> the SQL policy tests of <code>supabase/tests</code> run in CI on every pull request and push to <code>main</code>, against a
 plain Postgres 17 database with a stub of Supabase's roles and <code>auth</code> schema. They are the real tests of the
 row-level security; a stub is not a Supabase project, so the live checks in <code>supabase/README.md</code> still apply.</li>
+<li><strong>The daily-job token:</strong> cron-job.org holds a GitHub token limited to this repository with only &quot;Actions: read and
+write&quot;, used to start the daily job. That permission can also cancel and disable this repository's workflows, but it
+cannot read secrets or change code. The token expires within a year and is stored only at cron-job.org.</li>
 <li><strong>Abuse limits:</strong> the report form has a honeypot, a per-visitor daily limit and a daily cap; the email functions have
 per-user, per-address and daily limits.</li>
 <li><strong>Deletion:</strong> a person can delete their account in one step, and every row tied to it is removed at once.</li>
@@ -99,15 +103,18 @@ the Supabase project.</li>
 (the restore can recreate the bare sign-in rows). GitHub may keep the replaced history for a short time after it is
 replaced.</li>
 <li>Two low-risk Dependabot alerts in development tools (not shipped to users) were open on 2026-11-15.</li>
+<li>The cron-job.org token could be used to cancel or disable the daily job. This risk is accepted. A disabled workflow
+raises no alert and shows only as a missing daily commit of <code>data/jobs.db</code>.</li>
 <li>One maintainer: no second person for access or recovery.</li>
 </ul>
 <h3 id="yearly-review-by-2027-11-15-then-every-year">Yearly review (by 2027-11-15, then every year)</h3>
 <ol>
 <li>Read Supabase's auth and API logs for odd sign-ins or request patterns.</li>
 <li>List who has access to the Supabase organisation, the GitHub repository (collaborators, deploy keys, tokens), the
-private backup repository <code>ravidorr/misra-backups</code> (collaborators and its one deploy key) and the Resend team, and
-remove anyone or anything not needed.</li>
-<li>Confirm two-factor sign-in is still on for all four providers.</li>
+private backup repository <code>ravidorr/misra-backups</code> (collaborators and its one deploy key), the Resend team and the cron-job.org
+account (and the expiry date of its GitHub token, renewing it before it expires), and remove anyone or anything not
+needed.</li>
+<li>Confirm two-factor sign-in is still on for Supabase, GitHub, Resend and Google (and for cron-job.org, if it offers it).</li>
 <li>Rotate the service-role key and the Resend key, and update the secrets. Rotate <code>BACKUP_DEPLOY_KEY</code> (a deploy key has
 no expiry date): make a new key, add it to the deploy keys of <code>ravidorr/misra-backups</code>, update the Actions secret,
 run the workflow once, then delete the old key in that repository's deploy keys. The first rotation is due by
