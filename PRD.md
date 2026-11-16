@@ -228,8 +228,8 @@ blends it with the levels. We keep the two apart, and recognise more role types 
 
 - AC: Every job has a level and a role type, shown on the card.
 - AC: Level and role type are separate filters, on the dashboard, in the digest settings and for the assistant.
-- AC: The role types are Product, R&D (software, hardware, QA, DevOps, algorithms), Data & AI, Design, IT, Finance,
-  Sales & BD, Customer success & support, and Other. Marketing, HR, Legal and Operations stay in Other until they have
+- AC: The role types are Product, R&D (software, hardware, QA, algorithms), DevOps & SRE, Data & AI, Design, IT,
+  Finance, Sales & BD, Customer success & support, and Other. Marketing, HR, Legal and Operations stay in Other until they have
   volume. A job we cannot place is listed as "Other" and is never dropped.
 - AC: A job can belong to more than one role type when its title says so.
 - AC: Adding a role type later does not need a change to how users set their filters.
@@ -423,7 +423,7 @@ ads. We are a private individual, not a company, and we expect tens of users at 
 Recorded 2026-11-15, one line per decision, newest last. The first lines were made in planning (`PLAN.md`), the rest since.
 
 - 2026-11-15: Role types are Product, R&D, Data & AI, Design, IT, Finance, Sales & BD, Customer success & support and
-  Other; levels are Intern, Junior and Not specified (FR-9).
+  Other (DevOps & SRE was added on 2026-11-16, below); levels are Intern, Junior and Not specified (FR-9).
 - 2026-11-15: The plan order differs from the PRD's list: backend trial, jobs in Supabase, filters, accounts and stars,
   report a site, the digest, descriptions, the assistant.
 - 2026-11-15: The report-a-site spam guard is a honeypot, 3 reports a day per hashed address, a daily cap of 20 emails and
@@ -445,3 +445,7 @@ Recorded 2026-11-15, one line per decision, newest last. The first lines were ma
   wording are required; no registration or data protection officer; providers' standard terms accepted; two-factor
   sign-in done; full-text descriptions are a grey area (Before launch, FR-1, FR-4, FR-8). `PLAN.md` step 6.6 stays the
   gate.
+- 2026-11-16: "DevOps & SRE" is a role type, right after R&D. DevOps, DevSecOps, SRE, site reliability, platform,
+  infrastructure, cloud, release, build, CI/CD, Kubernetes and production engineer titles leave R&D and belong to it (a
+  title that another R&D pattern also matches, such as "Senior Software DevOps Engineer", keeps both). A saved filter or
+  email alert that lists "R&D" no longer matches the DevOps roles; the person has to add "DevOps & SRE" (FR-9).

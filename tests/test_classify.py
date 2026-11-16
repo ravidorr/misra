@@ -5,7 +5,9 @@ import pytest
 import classify
 from classify import NOT_SPECIFIED, OTHER
 
-# (title, level, role types): titles of open jobs in data/jobs.db, except the last three, which are synthetic.
+DEVOPS = "DevOps & SRE"
+
+# (title, level, role types): titles of open jobs in data/jobs.db, except the ones marked "synthetic".
 REAL_TITLES: list[tuple[str, str, list[str]]] = [
     ("Product Manager Intern", "Intern", ["Product"]),
     ("Senior Product Manager - Mobile App", NOT_SPECIFIED, ["Product", "R&D"]),
@@ -14,7 +16,7 @@ REAL_TITLES: list[tuple[str, str, list[str]]] = [
     ("Junior Software Engineer", "Junior", ["R&D"]),
     ("Top Graduate Software Engineer - V-Force - New York", "Junior", ["R&D"]),
     ("Pre-Silicon Verification Engineer - Hod Hasharon", NOT_SPECIFIED, ["R&D"]),
-    ("DevOps Engineer - US East Coast/ Central", NOT_SPECIFIED, ["R&D"]),
+    ("DevOps Engineer - US East Coast/ Central", NOT_SPECIFIED, [DEVOPS]),
     ("Algorithm Developer for Objects Modeling", NOT_SPECIFIED, ["R&D"]),
     ("Junior Data Scientist", "Junior", ["Data & AI"]),
     ("Data Science INTERN", "Intern", ["Data & AI"]),
@@ -46,6 +48,46 @@ REAL_TITLES: list[tuple[str, str, list[str]]] = [
     ("Junior Intern", "Intern", [OTHER]),
     ("International Accountant", NOT_SPECIFIED, ["Finance"]),
     ("Internal Tools Engineer", NOT_SPECIFIED, ["R&D"]),
+    # DevOps & SRE leaves R&D; these titles are in the first group, the near misses after them stay where they were.
+    ("DevOps Engineer", NOT_SPECIFIED, [DEVOPS]),
+    ("Senior SRE - Government Cloud Operations", NOT_SPECIFIED, [DEVOPS]),
+    ("Senior SRE", NOT_SPECIFIED, [DEVOPS]),  # synthetic
+    ("Site Reliability Engineer", NOT_SPECIFIED, [DEVOPS]),
+    ("Senior Site Reliability Engineer (SRE)", NOT_SPECIFIED, [DEVOPS]),
+    ("Platform Engineer", NOT_SPECIFIED, [DEVOPS]),  # synthetic
+    ("Senior Platform Engineer", NOT_SPECIFIED, [DEVOPS]),
+    ("DevSecOps", NOT_SPECIFIED, [DEVOPS]),  # synthetic
+    ("Senior DevSecOps Engineer", NOT_SPECIFIED, [DEVOPS]),
+    ("Cloud Infrastructure Engineer", NOT_SPECIFIED, [DEVOPS]),  # synthetic
+    ("Azure Cloud Engineer", NOT_SPECIFIED, [DEVOPS]),
+    ("Staff Infrastructure Engineer", NOT_SPECIFIED, [DEVOPS]),
+    ("Release Engineer", NOT_SPECIFIED, [DEVOPS]),  # synthetic
+    ("Build Engineer", NOT_SPECIFIED, [DEVOPS]),  # synthetic
+    ("CI/CD Engineer", NOT_SPECIFIED, [DEVOPS]),  # synthetic
+    ("Kubernetes Engineer", NOT_SPECIFIED, [DEVOPS]),  # synthetic
+    ("Production Engineer", NOT_SPECIFIED, [DEVOPS]),  # synthetic
+    ("Junior DevOps Engineer", "Junior", [DEVOPS]),
+    ("Senior DevOps Engineer - Data Platform (Cortex)", NOT_SPECIFIED, [DEVOPS, "Data & AI"]),
+    ("IT DevOps Engineer", NOT_SPECIFIED, [DEVOPS, "IT"]),
+    ("Senior Software DevOps Engineer", NOT_SPECIFIED, ["R&D", DEVOPS]),  # another R&D pattern still matches
+    ("Backend Platform Engineer", NOT_SPECIFIED, ["R&D", DEVOPS]),
+    ("Software Engineer", NOT_SPECIFIED, ["R&D"]),
+    ("Backend Developer", NOT_SPECIFIED, ["R&D"]),
+    ("QA Automation Engineer", NOT_SPECIFIED, ["R&D"]),
+    ("QA Engineer (Networking Experience )", NOT_SPECIFIED, ["R&D"]),
+    ("Sales Engineer", NOT_SPECIFIED, ["Sales & BD"]),
+    ("Solution Architect, Cloud", NOT_SPECIFIED, [OTHER]),
+    ("Customer Platform Manager", NOT_SPECIFIED, [OTHER]),  # synthetic
+    ("Cloud Product Manager", NOT_SPECIFIED, ["Product"]),
+    ("Release Manager", NOT_SPECIFIED, [OTHER]),
+    ("IT Infrastructure Engineer", NOT_SPECIFIED, ["R&D", "IT"]),
+    ("Data Platform Engineer", NOT_SPECIFIED, ["R&D", "Data & AI"]),
+    ("Big Data & Data Infrastructure Engineer", NOT_SPECIFIED, ["R&D", "Data & AI"]),
+    ("Senior Mobile-Cross-Platform Engineer", NOT_SPECIFIED, ["R&D"]),
+    ("Senior FC Verification & Simulation Infrastructure Engineer", NOT_SPECIFIED, ["R&D"]),
+    ("Cloud Security Engineer", NOT_SPECIFIED, ["R&D"]),
+    ("Senior Presales Engineer, Cloud", NOT_SPECIFIED, ["Sales & BD"]),
+    ("Senior QA Automation Engineer - Platform", NOT_SPECIFIED, ["R&D"]),
 ]
 
 
@@ -66,10 +108,11 @@ def test_every_title_has_one_level_and_a_role_type() -> None:
         assert set(classify.role_types(title)) <= set(classify.ROLE_TYPE_NAMES)
 
 
-def test_first_role_types_cover_the_agreed_nine() -> None:
+def test_role_types_are_the_agreed_ten_in_display_order() -> None:
     assert classify.ROLE_TYPE_NAMES == (
         "Product",
         "R&D",
+        "DevOps & SRE",
         "Data & AI",
         "Design",
         "IT",
@@ -78,6 +121,33 @@ def test_first_role_types_cover_the_agreed_nine() -> None:
         "Customer success & support",
         "Other",
     )
+
+
+@pytest.mark.parametrize(
+    "title",
+    [
+        "DevOps Engineer",
+        "Senior SRE",
+        "Site Reliability Engineer",
+        "Platform Engineer",
+        "DevSecOps",
+        "Cloud Infrastructure Engineer",
+    ],
+)
+def test_devops_and_sre_titles_are_not_r_and_d(title: str) -> None:
+    assert classify.role_types(title) == [DEVOPS]
+    assert not classify.matches(title, [], ["R&D"])
+    assert classify.matches(title, [], [DEVOPS])
+
+
+def test_the_words_alone_are_not_devops() -> None:
+    for title in (
+        "Cloud Solutions Architect",
+        "Infrastructure Project Manager",
+        "Platform Business Partner",
+        "Build Manager",
+    ):
+        assert DEVOPS not in classify.role_types(title)
 
 
 def test_a_job_can_belong_to_several_role_types_and_other_only_alone() -> None:

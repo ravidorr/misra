@@ -22,8 +22,47 @@ LEVELS = (INTERN_LEVEL, JUNIOR_LEVEL, NOT_SPECIFIED)
 
 OTHER = "Other"
 
+# The words before "engineer" that make a title DevOps & SRE and keep it out of R&D, each with the lookbehinds that
+# cancel it ("Data Platform Engineer" is Data & AI, "IT Infrastructure Engineer" is IT, "Mobile-Cross-Platform
+# Engineer" is neither). Platform, infrastructure and cloud only count right before "engineer": alone they are too loose
+# ("Cloud Solutions Architect", "Customer Platform Manager"). `_devops_engineer` turns the table into the DevOps & SRE
+# patterns and `_not_before` into the lookbehinds that keep R&D's generic "engineer" pattern off the same titles.
+_DEVOPS_ENGINEER_PREFIXES: dict[str, tuple[str, ...]] = {
+    "devops": (),
+    "devsecops": (),
+    "sre": (),
+    "site reliability": (),
+    "platform": ("data ", "-"),
+    "infrastructure": ("data ", "it ", "simulation "),
+    "infra": (),
+    "cloud": (),
+    "release": (),
+    "build": (),
+    "ci/cd": (),
+    "kubernetes": (),
+    "k8s": (),
+    "production": (),
+}
+
+
+def _not_before(table: dict[str, tuple[str, ...]]) -> str:
+    """Lookbehinds that stop a pattern from matching right after one of the prefixes (unless an exception word is
+    before it): "(?<!(?<!data )platform )(?<!devops )" and so on."""
+    parts = ("".join(f"(?<!{other})" for other in others) + prefix for prefix, others in table.items())
+    return "".join(f"(?<!{part} )" for part in parts)
+
+
+def _devops_engineer(table: dict[str, tuple[str, ...]]) -> str:
+    """One alternation: "<prefix> engineer" for every prefix, minus the exception words."""
+    parts = (
+        "".join(f"(?<!{other})" for other in others) + rf"\b{re.escape(prefix)} engineer"
+        for prefix, others in table.items()
+    )
+    return "|".join(parts)
+
+
 # Role types in display order. A job belongs to every type whose patterns match its title, and to Other when none does.
-# R&D covers, for example, software, hardware, QA, DevOps and algorithms.
+# R&D covers, for example, software, hardware, QA and algorithms. DevOps and SRE titles are their own type, not R&D.
 # Acronyms that are also common words (IT, AI, ML, BI, UI, BD) use (?-i:...) so they only match as written; the other
 # acronyms match in any case.
 ROLE_TYPES: dict[str, tuple[str, ...]] = {
@@ -33,13 +72,20 @@ ROLE_TYPES: dict[str, tuple[str, ...]] = {
         r"\bR&D\b",
         r"software",
         r"hardware",
-        r"developer|\bdev\b|devops|\bsre\b|site reliability",
-        r"(?<!sales )(?<!solution )(?<!solutions )(?<!support )(?<!success )\bengineer(?:ing)?",
+        r"developer|\bdev\b",
+        # Generic "engineer", but not "Sales Engineer" and the like, nor the DevOps & SRE titles ("Platform Engineer").
+        rf"(?<!sales )(?<!solution )(?<!solutions )(?<!support )(?<!success ){_not_before(_DEVOPS_ENGINEER_PREFIXES)}"
+        r"\bengineer(?:ing)?",
         r"\bQA\b|\bSDET\b|quality assurance|test automation|verification|validation",
         r"algorithm|firmware|embedded|\bFPGA\b|\bASIC\b|\bRTL\b|\bDFT\b|silicon|chip\b|\bVLSI\b",
         r"full[ -]?stack|back[ -]?end|front[ -]?end|\bmobile\b|\bios\b|android",
         r"tech(nical)? lead|cyber|security (researcher|analyst)|(?<!market )researcher|research scientist",
         r"מפתח|הנדסה|מהנדס",
+    ),
+    # DevOps and SRE titles are only this type (no R&D), unless another pattern of R&D matches the title too.
+    "DevOps & SRE": (
+        r"dev ?sec ?ops|dev ?ops|\bsre\b|site reliability|\bci ?/ ?cd\b",
+        _devops_engineer(_DEVOPS_ENGINEER_PREFIXES),
     ),
     "Data & AI": (
         r"\bdata\b(?! cent)",
