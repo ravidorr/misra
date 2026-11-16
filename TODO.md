@@ -18,8 +18,9 @@ Observations about live sites below come from checks made on 2026-11-14 and may 
   - Done when: the PR is merged, `npm run lint` and `npm run test:coverage` pass, and you have decided on the legal
     wording it left for you.
 
-- [ ] **Redesign the Coverage gaps card.** Trigger: when you are ready for a design pass; nothing blocks it. Screenshots:
-  `todo-images/coverage-gaps-open.png` (open) and `todo-images/coverage-gaps-collapsed.png` (collapsed).
+- [ ] **Redesign the Coverage gaps card.** Trigger: when you are ready for a design pass; nothing blocks it. Screenshots, open and collapsed:
+  ![The Coverage gaps card open, with eight reason groups](todo-images/coverage-gaps-open.png)
+  ![The Coverage gaps card collapsed, with no Report a site button](todo-images/coverage-gaps-collapsed.png)
   - Problems seen:
     - The reader does not care why a company's roles are missing. The eight reason groups (failing crawl, blocks
       automated access, no careers page and so on) are internal detail. Show one list of companies, or at most a
@@ -34,7 +35,8 @@ Observations about live sites below come from checks made on 2026-11-14 and may 
     in light and dark, and on a phone.
 
 - [ ] **Redesign the footer and rewrite its text.** Trigger: when you are ready for a design pass; nothing blocks it.
-  Screenshot: `todo-images/footer.png`.
+  Screenshot:
+  ![The footer: a note about local storage, the data date, and Privacy, Terms and Contact links](todo-images/footer.png)
   - Problems seen: the layout needs a design pass, and the wording is loose. For example, "Stars and discards are
     saved in this browser only" needs the technical writer.
   - How: use Claude Design and a UI/UX expert for the layout, then the `technical-writer` agent
