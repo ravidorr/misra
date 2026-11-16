@@ -12,7 +12,8 @@ insert into public.jobs (company, job_id, title, status, description) values
   ('Acme', 'k2', 'Designer',  'open',   'Figma and typography, no engines here'),
   ('Acme', 'k3', 'Closed',    'closed', 'Rust rockets, but this job is closed'),
   ('Beta', 'k4', 'No text',   'open',   null),
-  ('Beta', 'k5', 'Hebrew',    'open',   'משרה בחיפה עם Rust');
+  ('Beta', 'k5', 'Hebrew',    'open',   'משרה בחיפה עם Rust'),
+  ('Beta', 'k6', 'Short word', 'open',   'We write go and a little C');
 
 create function pg_temp.keys(role_name text, query text) returns text language plpgsql as $$
 declare found jsonb;
@@ -52,6 +53,10 @@ begin
   assert pg_temp.keys('anon', '  ru  ') = '[]', 'two characters and spaces searched';
   assert pg_temp.keys('anon', '"a"') = '[]' and pg_temp.keys('anon', 'a a') = '[]', 'a short word probe searched';
   assert pg_temp.keys('anon', 'a b') = '[]', 'two short words searched';
+  -- punctuation must not make a short word long enough: k6's text has the words "go", "a" and "c"
+  assert pg_temp.keys('anon', 'go!') = '[]' and pg_temp.keys('anon', '"go"') = '[]' and pg_temp.keys('anon', 'a!!') = '[]',
+    'a short word padded with punctuation searched';
+  assert pg_temp.keys('anon', 'little') = '[["Beta", "k6"]]', 'a word of three letters or more does not search';
   assert pg_temp.keys('anon', '') = '[]', 'the empty query searched';
   assert pg_temp.keys('anon', null) = '[]', 'null searched';
   assert pg_temp.keys('anon', 'rust ' || repeat('x', 5000)) = '[]', 'a long query errored or matched';

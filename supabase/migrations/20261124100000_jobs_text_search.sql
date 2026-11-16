@@ -6,8 +6,8 @@
 -- a jsonb array of [company, job_id] pairs, never a character of the text, a rank or a snippet of it. It is SECURITY
 -- DEFINER (it reads a column the caller cannot), so the guards are in the function and not in row-level security:
 --   * only open jobs, the same rows the jobs policy lets the public roles read;
---   * a query with no word of 3 or more characters matches nothing (so "a" or "to be" cannot ask which jobs contain a
---     short word), and one longer than 200 is cut to 200, so a huge query cannot be sent to the parser;
+--   * a query with no run of 3 letters or digits matches nothing (so "a", "go!" or "to be" cannot ask which jobs contain
+--     a short word: the punctuation is not counted, plainto_tsquery drops it), and one longer than 200 is cut to 200, so a huge query cannot be sent to the parser;
 --   * at most 3000 keys come back (the table holds about 7,000 open jobs, and a word in more than 3000 of them is a stop
 --     word), in a stable order, and a single jsonb value is not cut by the API's 1,000-row page;
 --   * plainto_tsquery: the words are ANDed and nothing a person types is an operator (no quoted phrase, "or" or minus
@@ -32,7 +32,7 @@ as $$
       select j.company, j.job_id
         from public.jobs j
        where j.status = 'open'
-         and coalesce(p_query, '') ~ '[^[:space:]]{3}'
+         and coalesce(p_query, '') ~ '[[:alnum:]]{3}'
          and to_tsvector('simple', coalesce(j.description, '')) @@ plainto_tsquery('simple', left(p_query, 200))
        order by j.company, j.job_id
        limit 3000

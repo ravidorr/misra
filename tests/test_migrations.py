@@ -490,11 +490,11 @@ SEARCH_SELECTS = "select j.company, j.job_id from public.jobs j"
 SEARCH_RETURNS = "jsonb_agg(jsonb_build_array(found.company, found.job_id))"
 SEARCH_GUARDS = (  # each is something the function must keep saying, see the comment of the migration
     "j.status = 'open'",
-    "coalesce(p_query, '') ~ '[^[:space:]]{3}'",
+    "coalesce(p_query, '') ~ '[[:alnum:]]{3}'",
     "to_tsvector('simple', coalesce(j.description, '')) @@ plainto_tsquery('simple', left(p_query, 200))",
 )
 SEARCH_WHERE = (  # the whole clause, so nothing can be added to it or after it
-    "where j.status = 'open' and coalesce(p_query, '') ~ '[^[:space:]]{3}' "
+    "where j.status = 'open' and coalesce(p_query, '') ~ '[[:alnum:]]{3}' "
     "and to_tsvector('simple', coalesce(j.description, '')) "
     "@@ plainto_tsquery('simple', left(p_query, 200)) order by j.company, j.job_id limit 3000 ) found"
 )
@@ -1076,7 +1076,7 @@ def test_the_search_returns_keys_only_from_open_jobs_with_a_minimum_a_maximum_an
         ("(p_query text)\nreturns", "(p_query text, p_all boolean)\nreturns"),
         ("security definer\n", ""),
         ("where j.status = 'open'", "where true"),
-        ("coalesce(p_query, '') ~ '[^[:space:]]{3}'", "coalesce(p_query, '') ~ '[^[:space:]]{1}'"),
+        ("coalesce(p_query, '') ~ '[[:alnum:]]{3}'", "coalesce(p_query, '') ~ '[[:alnum:]]{1}'"),
         ("where j.status = 'open'", "where j.status = 'open' or true"),
         ("limit 3000", "limit 30000"),
         ("plainto_tsquery('simple', left(p_query, 200))", "websearch_to_tsquery('simple', left(p_query, 200))"),
