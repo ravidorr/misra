@@ -295,22 +295,26 @@ Decisions made in planning (they change the PRD's wording, so update the PRD in 
   the texts in a work file in `$RUNNER_TEMP`; the sync step writes them to the `description` and `details` columns that
   migration 2.1 already created (no migration), with a hash in `details` to skip an unchanged text; the log line per ATS
   is in the crawl step. CONTRIBUTING.md, "Job descriptions", has the design, the size cap (20,000 characters) and the
-  storage estimate. The text is not readable through the public API (migration `20261121100000_jobs_text_not_public.sql`, column-level `select`): steps 7.3 and 8.1 expose it only after the lawyer approves. Left: the browser crawl (1,589 jobs, 23 percent: no standard field), Workday (318, one request per job
+  storage estimate. The text is not readable through the public API (migration `20261121100000_jobs_text_not_public.sql`, column-level `select`): steps 7.3 and 8.1 expose it, as the lawyer approved on 2026-11-16 (PRD decisions log). Left: the browser crawl (1,589 jobs, 23 percent: no standard field), Workday (318, one request per job
   and a new path to check against `robots.txt`), Phenom (89, a teaser only), Oracle HCM, `comeet_page`, JazzHR and BambooHR
   (a request per job), SmartRecruiters (skipped by `robots.txt`). After the first daily run with descriptions: check the
   log line and the size of the `jobs` table in the dashboard (Reports, Database), and write both in CONTRIBUTING.md.
-- [ ] 7.2 Short description: first 255 characters as written, cut at a word boundary, none when no description; sync
-  stores it; card shows it. Done when: FR-4 AC 4 and 8 hold.
-- [ ] 7.3 Drill-down on the card (detail view without leaving the dashboard) and search over the full text (Postgres
-  full-text index, also used by the digest keyword filter). Done when: FR-4 AC 5 and 6 hold. FR-4 AC 11 (AI summary only if users ask) is a standing policy, not a step.
-- [ ] 7.4 Storage check after one month of descriptions against the free database size, with the trim plan (store
-  description text only for open jobs, drop on close after N days). Done when: FR-4 AC 10 holds, written in the note.
+- [ ] 7.2 Short description: a public `snippet` column holding the first 255 characters of the description as written, cut
+  at a word boundary, none when no description; sync stores it; the card and the detail view show it, with the link
+  "Read full description & apply on `<Company>`" to the employer's page. Done when: FR-4 AC 4 and 8 hold.
+- [ ] 7.3 Detail view from the card (it shows the snippet and the "Read full description & apply" button; the full text is
+  not shown) and search over the full text (Postgres full-text index, also used by the digest keyword filter) through
+  a database function that returns matching job keys only. Done when: FR-4 AC 5 and 6 hold. FR-4 AC 11 (AI summary only if users ask) is a standing policy, not a step.
+- [ ] 7.4 Storage check after one month of descriptions against the free database size, and the trim of closed jobs'
+  text: set the full text to NULL 30 days after the job closes (the lawyer's retention rule; the snippet and the other
+  columns stay). Done when: FR-4 AC 10 and 12 hold, written in the note.
 
 ## FR-6 (assistant connection)
 
 - [ ] 8.1 Edge Function MCP endpoint, public and read-only: `search_jobs` (region, level, role type, keyword incl. full
-  text), `get_job` (everything collected), no user data, rate limited. Same query code path as the dashboard (shared
-  SQL function) so the results match. Done when: FR-6 AC 1 to 4 and 8 hold against a real MCP client.
+  text; it returns keys, titles and snippets), `get_job` (everything collected, including the full text, for the
+  assistant; rate limited), no user data. Same query code path as the dashboard (shared SQL function) so the results
+  match. The text is exposed to assistants and search only by this step and 7.3, as the lawyer approved on 2026-11-16. Done when: FR-6 AC 1 to 4 and 8 hold against a real MCP client.
 - [ ] 8.2 "Connect your assistant" page on the dashboard with plain step-by-step instructions for the common assistants
   tested by hand, README cut to a short developer note, `llms.txt` updated. Done when: FR-6 AC 5 to 7 hold; a person with
   no technical skills connects in a couple of minutes (hand test).
