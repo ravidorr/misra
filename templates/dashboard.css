@@ -50,6 +50,7 @@ a {
 }
 
 .top {
+  position: relative;
   display: flex;
   align-items: center;
   gap: var(--space-3);
@@ -88,15 +89,14 @@ a {
   letter-spacing: -0.04em;
 }
 
-/* Optional sign-in: hidden until auth.js has what it needs, so the page is unchanged without it. The `hidden`
-   attribute loses to the display of .btn, hence the rule. */
+/* Optional sign-in: hidden until auth.js has what it needs, so the page is unchanged without it. The `hidden` attribute
+   loses to the display of .btn and .account-item, hence the rules. Signed in, the header shows one profile button; its
+   menu hangs under the header, right-aligned to it, so on a phone it can never run past the screen edge. A long email
+   wraps inside it (the whole address stays readable). */
 .account,
 .account-user {
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
-  gap: var(--space-2);
-  min-width: 0;
 }
 
 .account[hidden],
@@ -108,14 +108,63 @@ a {
   white-space: nowrap;
 }
 
+.account-menu {
+  position: absolute;
+  inset: 100% 0 auto auto;
+  z-index: 1;
+  box-sizing: border-box;
+  width: max-content;
+  min-width: 14rem;
+  max-width: 100%;
+  margin-top: var(--space-2);
+  padding: var(--space-2);
+  border: var(--border-width) solid var(--line);
+  border-radius: var(--radius-card);
+  background: var(--panel);
+  box-shadow: var(--shadow-md);
+}
+
 .account-email {
-  min-width: 0;
-  max-width: 14rem;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  border-bottom: var(--border-width) solid var(--line);
   color: var(--muted);
   font-size: 0.875rem;
+  overflow-wrap: anywhere;
+}
+
+.account-item {
+  display: block;
+  box-sizing: border-box;
+  width: 100%;
+  min-height: var(--tap);
+  padding: var(--space-2) var(--space-3);
+  border: 0;
+  border-radius: var(--radius-control);
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  font-weight: 600;
+  text-align: start;
+  cursor: pointer;
+}
+
+@media (hover: hover) {
+  .account-item:hover {
+    background: var(--accent-bg);
+  }
+}
+
+.account-item:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: -3px;
+}
+
+/* The destructive item keeps the dialog's warning colour, and the dialog still asks before anything is deleted. */
+.account-danger,
+.account-danger:hover {
+  margin-top: var(--space-2); /* set apart from the safe items, not by colour alone */
+  background: var(--warn-bg);
 }
 
 /* The sign-in notice is the text of a dialog now. Inline links keep the line height and still get a 44px hit area: padding
@@ -284,19 +333,6 @@ dialog.sheet[hidden],
 
 .btn-star[aria-pressed="true"] {
   background: var(--accent-bg);
-}
-
-/* Narrow screens: the signed-in account (a long email) gets its own row under the logo and the theme button. */
-@media (width < 561px) {
-  .top {
-    flex-wrap: wrap;
-  }
-
-  .account.is-signed-in {
-    order: 1;
-    flex: 1 0 100%;
-    justify-content: flex-end;
-  }
 }
 
 /* A phone gets a one-line headline: the search and the roles come first. */

@@ -377,6 +377,21 @@ class PrefsBackend:
 UNDO_TAP = 44  # the smallest target the design system allows
 
 
+async def account_action(page: Page, selector: str) -> None:
+    """Pick an item of the account menu with the mouse: open the menu if it is closed, then press the item."""
+    if await page.locator("#accountMenu").is_hidden():
+        await page.click("#accountMenuButton")
+    await page.click(selector)
+
+
+async def account_action_by_keyboard(page: Page, selector: str) -> None:
+    """The same with the keyboard: Enter on the profile button, then Enter on the item."""
+    await page.focus("#accountMenuButton")
+    await page.keyboard.press("Enter")
+    await page.focus(selector)
+    await page.keyboard.press("Enter")
+
+
 async def serve(  # noqa: PLR0913  (each stand-in is optional, and a test names the ones it wants)
     page: Page,
     docs: Path,
