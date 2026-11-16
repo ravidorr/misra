@@ -11,8 +11,10 @@
 //   ---------|------------------------------------------------------------------------|---------------------
 //   GET      | the user's click: unsubscribes at once, then 303 to the static page    | yes
 //            | (templates/email.html) with a word in the fragment (`#unsubscribed`,   |
-//            | `#already-unsubscribed`, `#link-not-valid`, `#try-again`), because a   |
-//            | function cannot render a page. The token is not in the Location.       |
+//            | `#already-unsubscribed`, `#unsubscribe-link-not-valid`, `#try-again`), |
+//            | because a function cannot render a page. The token is not in the      |
+//            | Location. A failed link ends on its own word, not `#link-not-valid`    |
+//            | (the page's text for a failed confirmation, untrue for this link).    |
 //   POST     | RFC 8058 one-click (Gmail, Apple Mail): the provider POSTs             | yes
 //            | `List-Unsubscribe=One-Click` to the header URL; the body is ignored,   |
 //            | the token in the URL is the credential. 200 text/plain `Unsubscribed.` |
@@ -66,6 +68,9 @@ export function loadConfig(get: (name: string) => string | undefined): { config:
 
 const ANSWERS = ['unsubscribed', 'already_unsubscribed', 'unknown'] as const;
 
+/** The landing state of a failed unsubscribe link (templates/email.js). Not `link-not-valid`: that page text is about confirmation links. */
+const LINK_NOT_VALID_WORD = 'unsubscribe-link-not-valid';
+
 const NOT_VALID = 'This link is not valid, or it is no longer active.';
 
 export async function handleUnsubscribe(request: Request, deps: Deps): Promise<Response> {
@@ -84,12 +89,12 @@ export async function handleUnsubscribe(request: Request, deps: Deps): Promise<R
     const token = new URL(request.url).searchParams.get('t');
     const id = await verifyUnsubscribeToken(config.unsubscribeSecret, token);
     if (id === undefined) {
-      return isGet ? redirectToPage('link-not-valid') : fail(null, 404, 'link_not_valid', NOT_VALID);
+      return isGet ? redirectToPage(LINK_NOT_VALID_WORD) : fail(null, 404, 'link_not_valid', NOT_VALID);
     }
     const answer = await callDatabase(deps, config, 'unsubscribe_user', { p_user_id: id, p_now: deps.now().toISOString() }, ANSWERS);
     if (isGet) {
       return redirectToPage(
-        { unsubscribed: 'unsubscribed', already_unsubscribed: 'already-unsubscribed', unknown: 'link-not-valid' }[
+        { unsubscribed: 'unsubscribed', already_unsubscribed: 'already-unsubscribed', unknown: LINK_NOT_VALID_WORD }[
           answer
         ],
       );

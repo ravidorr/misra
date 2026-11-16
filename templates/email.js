@@ -2,7 +2,10 @@
    Confirmation: the link is email.html#token=<token>. A GET never confirms: the page shows a button, and only the click
    POSTs the token to the confirm-email function. The token is read from the fragment (no server ever sees it), removed
    from the address bar at once, and sent in the request body.
-   Unsubscribe: the unsubscribe function has already done its work and redirects here with a word in the fragment. */
+   Unsubscribe: the unsubscribe function has already done its work and redirects here with a word in the fragment.
+   A failed confirmation shows NOT_VALID (from the confirm-email error codes; `#link-not-valid` is kept only for old
+   redirects); a failed unsubscribe lands on `#unsubscribe-link-not-valid` (its text must not mention the 7 days or a
+   newer link: an unsubscribe link never expires and is never replaced). */
 const FUNCTION_URL = '__SUPABASE_URL__/functions/v1/confirm-email';
 const TOKEN = /^[A-Za-z0-9_-]{43}$/u;
 const TIMEOUT_MS = 15000;
@@ -18,6 +21,10 @@ const NOT_VALID = [
   'This link is no longer valid',
   'It may have expired (confirmation links work for 7 days), been replaced by a newer link, or belong to job alerts that were turned off. To manage your job alerts or delete your account, sign in on the Misra dashboard.',
 ];
+const UNSUBSCRIBE_NOT_VALID = [
+  'This unsubscribe link no longer works',
+  'Your account may have been deleted, or we may have replaced the key that signs these links. To stop job alerts, sign in on the Misra dashboard and turn them off, or write to raanan@avidor.org and we will stop them for you.',
+];
 const UNSUBSCRIBED = [
   'You have been unsubscribed',
   'Your job alerts are stopped. We deleted the filters saved for them and the list of jobs we already emailed you. We keep your address and the times you turned the email on, confirmed it and unsubscribed, as a record of your consent. Your Misra account (stars, "Not for me" choices, and dashboard filters) is unchanged. To delete your entire account and all stored data, sign in on the dashboard and choose "Delete my account".',
@@ -26,6 +33,7 @@ const WORDS = {
   unsubscribed: UNSUBSCRIBED,
   'already-unsubscribed': UNSUBSCRIBED,
   'link-not-valid': NOT_VALID,
+  'unsubscribe-link-not-valid': UNSUBSCRIBE_NOT_VALID,
   'try-again': ['Something went wrong', 'We could not finish this. Open the link in your email again in a moment.'],
 };
 const CONFIRM_ERRORS = {

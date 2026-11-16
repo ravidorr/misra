@@ -507,7 +507,7 @@ the two Supabase supplies; without it the function logs the name and answers "tr
 
 | Method | `unsubscribe` | Database |
 | --- | --- | --- |
-| GET | the user's click: unsubscribes at once, then 303 to `email.html#unsubscribed` (or `#already-unsubscribed`, `#link-not-valid`, `#try-again`) | yes |
+| GET | the user's click: unsubscribes at once, then 303 to `email.html#unsubscribed` (or `#already-unsubscribed`, `#unsubscribe-link-not-valid`, `#try-again`; a failed unsubscribe link has its own page text, not the text of a failed confirmation link; the old `#link-not-valid` is no longer sent) | yes |
 | POST | RFC 8058 one-click (Gmail, Apple Mail; body `List-Unsubscribe=One-Click`, no sign-in, usually no Origin): 200 `text/plain` with the body `Unsubscribed.` (also when already unsubscribed); 404 JSON `link_not_valid`; 500 JSON `server_error` (the provider may retry) | yes |
 | HEAD | 200, no body: a scanner sees a healthy link and nothing changes | never |
 | OPTIONS and others | 405 | never |
