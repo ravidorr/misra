@@ -106,6 +106,7 @@ describe('turning the email on', () => {
         '',
       ].join('\n'),
     );
+    expect(text).toContain(`The link works for ${String(CONFIRM_TTL_DAYS)} days.`);
     expect(renderEmail('weekly', 'x@example.test', 'l').text).toContain('turned on weekly job alerts for x@example.test');
     expect(text).not.toContain('<');
   });

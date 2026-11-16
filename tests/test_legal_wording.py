@@ -244,6 +244,7 @@ def test_the_email_texts_are_kept_exactly_in_one_file_for_the_steps_that_build_t
     texts = read("supabase/email-texts.md")
     flat = " ".join(texts.split())
     assert DIGEST_FOOTER in flat
+    assert "To change your filters, or to delete your account and all stored data, sign in at https://" in flat
     assert CONFIRM_FOOTER in flat
     assert "Subject: `Confirm your Misra job alerts`" in texts
     assert "Someone (hopefully you) turned on {{schedule}} job alerts for {{user_email}} on Misra." in texts
@@ -326,6 +327,11 @@ def test_the_lawyers_round_of_2026_11_16_editorial_wording_is_in_the_notice_the_
     ) in parts["What we store"]
     assert 'mark "Not for me" (the dashboard also calls them discards)' in parts["The short version"]
     assert "Supabase's free plan keeps no backups for us." in parts["How long we keep it"]
+    assert "apart from the short-lived spam counter described below if you report a site" in parts["The short version"]
+    assert "the job history (`data/jobs.db`)" in privacy
+    assert "which signs the link (a keyed signature)" in privacy
+    assert "The signed sign-in pass (token) your browser holds" in privacy
+    assert "one-way codes (keyed hashes, made with a secret that changes every day;" in privacy
     assert "Supabase may keep database backups" not in privacy
     assert (
         "the small programs (Edge Functions) behind the report form, account deletion, job alerts, and the" in privacy
