@@ -205,9 +205,9 @@ the next daily cleanup" needs a timer. Migration `20261119100000_report_site_cle
 deletes every row of both tables from a day before `p_day` and returns how many it deleted (a day later than today, or no
 day, is refused so a wrong date cannot wipe today's rows; only the service role may run it). `sync_supabase.py` calls it through
 PostgREST (`POST /rest/v1/rpc/report_site_cleanup`, `{"p_day": "<today, UTC>"}`) right after a good sync, in the daily
-workflow's sync step that already holds the service-role key, and logs the count. The workflow is scheduled for 04:30 UTC, so
+workflow's sync step that already holds the service-role key, and logs the count. The workflow is scheduled for 04:23 UTC (with a second try at 09:53 UTC), so
 on a normal day a day's rows are deleted about 4.5 hours after the day ends and a hash lives at most about 28.5 hours (24 hours of
-its day plus the wait for the next run). GitHub may start the run late, and on a day the crawl step fails the sync step is skipped,
+its day plus the wait for the next run). GitHub may start the run late (on a day the 09:53 UTC second try does the work, the wait is about 5.5 hours longer), and on a day the crawl step fails the sync step is skipped,
 so the cleanup waits for the next good run (the failure alert fires). The hash itself is useless from the moment the day changes,
 because its key changes. The lawyer's wording (2026-11-15) is therefore "deleted in the next daily cleanup", not a number of hours.
 
