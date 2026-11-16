@@ -18,17 +18,6 @@ Observations about live sites below come from checks made on 2026-11-14 and may 
   - Done when: the PR is merged, `npm run lint` and `npm run test:coverage` pass, and you have decided on the legal
     wording it left for you.
 
-- [ ] **Redesign the footer and rewrite its text.** Trigger: when you are ready for a design pass; nothing blocks it.
-  Screenshot:
-  ![The footer: a note about local storage, the data date, and Privacy, Terms and Contact links](todo-images/footer.png)
-  - Problems seen: the layout needs a design pass, and the wording is loose. For example, "Stars and discards are
-    saved in this browser only" needs the technical writer.
-  - How: use Claude Design and a UI/UX expert for the layout, then the `technical-writer` agent
-    (`.claude/agents/technical-writer.md`) for the text. Follow `design-system/README.md`. The wording may be tied to
-    `PRIVACY.md` and the lawyer-approved text (`tests/test_legal_wording.py`): check before changing it and list
-    any change to that text for review instead of making it.
-  - Done when: the PR is merged and `npm run lint` and `npm run test:coverage` pass.
-
 - [ ] **Add a "DevOps & SRE" role type.** Trigger: DevOps, SRE, platform and infrastructure engineers sit inside
   "R&D" today (`classify.py` matches `devops|\bsre\b|site reliability` under R&D), so nobody can filter for them or get
   them in a job alert on their own.

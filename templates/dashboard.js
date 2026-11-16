@@ -280,8 +280,8 @@ const SYNC_MESSAGES = {
   filtersRefused: 'The service did not accept your filters, so they were not saved to your account.',
   filtersRestored: 'Your filters were restored from your account.',
 };
-const savedHere = 'Stars and discards are saved in this browser only.';
-const savedThere = 'Stars and discards are saved to your account.';
+const savedHere = 'Your stars, "Not for me" choices and filters stay in this browser and are sent nowhere.';
+const savedThere = 'Your stars, "Not for me" choices and filters are saved to your account and follow you to your other devices.';
 
 const fates = new WeakMap(); /* what became of each change sent: 'saved', 'limit' or 'refused' (none yet: still pending) */
 let account = null; /* the signed-in user's choices, or null */
@@ -1002,7 +1002,15 @@ function ago(first) {
 
 const companies = [...new Set(JOBS.map((j) => j.c))].sort((a, b) => a.localeCompare(b));
 for (const company of companies) $('company').append(h('option', { value: company, text: company }));
-$('upd').textContent = DATA.generated;
+/* "2026-11-15 20:28 UTC" as "15 Nov, 20:28 UTC" (the year too when it is not this year); anything else is shown as it is. */
+function friendlyTime(stamp) {
+  const m = /^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2}) UTC$/.exec(stamp);
+  if (!m) return stamp;
+  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const year = Number(m[1]) === new Date().getUTCFullYear() ? '' : ` ${m[1]}`;
+  return `${Number(m[3])} ${months[Number(m[2]) - 1]}${year}, ${m[4]}:${m[5]} UTC`;
+}
+$('upd').textContent = friendlyTime(DATA.generated);
 $('upd').setAttribute('datetime', DATA.generated.replace(' UTC', 'Z').replace(' ', 'T'));
 
 /* A job is in scope when it is in Israel, or the choice is all locations, or it is a remote role that does not say

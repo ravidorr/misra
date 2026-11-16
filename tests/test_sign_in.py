@@ -526,7 +526,7 @@ async def test_the_footer_links_to_the_privacy_notice_the_terms_and_the_contact(
         assert box is not None
         assert box["height"] >= TAP
         assert box["width"] >= TAP
-    assert "Data updated" in await page.locator("footer.foot").inner_text()  # the existing line is still there
+    assert "Career pages last read" in await page.locator("footer.foot").inner_text()  # the date line is still there
 
 
 async def test_the_footer_links_read_well_on_a_phone(page: Page, site: Path) -> None:
