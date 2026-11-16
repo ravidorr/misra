@@ -2,7 +2,8 @@
 
 The exact texts of the two emails, from the lawyer's review of 2026-11-15 and the editorial round of 2026-11-16. Step 6.2 (the confirmation email) and step 6.3
 (the digest) copy them line for line, line breaks included. `{{...}}` marks a value the code fills in. Both emails are
-plain text, are sent from `Misra <digest@send.avidor.org>`, and set `Reply-To: raanan@avidor.org`, because the sending
+sent as plain text with an HTML version that carries exactly these words, only laid out
+(`tests/test_email_html.py` and `test/email-html.test.ts` check it), are sent from `Misra <digest@send.avidor.org>`, and set `Reply-To: raanan@avidor.org`, because the sending
 address cannot receive mail and the lawyer said people may reply "Remove". The postal address in the footers is the maintainer's work address, added because Resend's acceptable-use policy asks bulk email to carry a valid address and company name (the lawyer's texts had only the email address; he should approve the addition). `tests/test_legal_wording.py` pins this file.
 
 ## Confirmation email

@@ -620,7 +620,7 @@ def test_every_email_has_the_one_click_headers_the_reply_to_the_project_from_and
         }
         assert email["from"] == "Misra <digest@send.avidor.org>"
         assert email["reply_to"] == "raanan@avidor.org"
-        assert "html" not in email  # plain text
+        assert email["html"].startswith("<!doctype html>") and url in email["html"]  # multipart: text and HTML
         assert email["text"].endswith(send_digests.render_footer(frequency, url))
         assert f"Unsubscribe in one click (no sign-in needed):\n{url}\n" in email["text"]
         assert f"this {frequency} email because you confirmed" in email["text"]

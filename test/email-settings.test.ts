@@ -164,6 +164,10 @@ describe('turning the email on', () => {
     expect(JSON.stringify(reserve)).not.toContain(ANN.email);
     const resend = w.requests.find((r) => r.url === 'https://api.resend.com/emails');
     expect(resend?.headers.authorization).toBe(`Bearer ${RESEND_KEY}`);
+    const sent = JSON.parse(resend?.body ?? '{}') as { text?: string; html?: string };
+    expect(sent.text).toContain('Confirm your Misra job alerts');
+    expect(sent.html?.startsWith('<!doctype html>')).toBe(true); /* multipart: the HTML goes with the text */
+    expect(sent.html).toContain(tokenIn(resend?.body ?? ''));
   });
 
   it('restarts a subscription that was unsubscribed: a new consent that must be confirmed again', async () => {

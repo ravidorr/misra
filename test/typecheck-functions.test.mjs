@@ -16,6 +16,7 @@ describe('TypeScript of the Edge Functions and their tests', () => {
     const names = [
       'handler.ts',
       'validate.ts',
+      'email-html.ts',
       'index.ts',
       'subscription.ts',
       'identity.ts',
@@ -24,6 +25,7 @@ describe('TypeScript of the Edge Functions and their tests', () => {
       'confirm-email.test.ts',
       'unsubscribe.test.ts',
       'email-settings.test.ts',
+      'email-html.test.ts',
     ];
     for (const name of names) {
       expect(parsed.fileNames.some((file) => file.endsWith(`/${name}`)), name).toBe(true);
