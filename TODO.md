@@ -1,8 +1,8 @@
 # TODO
 
 Open work, as of 2026-11-14. Each item says what triggers it, how to do it and when it is done. When one is finished,
-delete it and update the counts in the others: the 86 and the four segment counts in the research item (a pin removes
-one row from one segment), its "(28)" if the company had no careers URL, else its "(58 today)".
+delete it and update the counts in the others: the 85 and the four segment counts in the research item (a pin removes
+one row from one segment), its "(28)" if the company had no careers URL, else its "(57 today)".
 An item with a screenshot in `todo-images/` goes with it: delete the image file in the same PR.
 Observations about live sites below come from checks made on 2026-11-14 and may have changed.
 
@@ -60,10 +60,10 @@ Observations about live sites below come from checks made on 2026-11-14 and may 
 
 ## Research the remaining unresolved companies
 
-- [ ] `data/unresolved_candidates.csv` lists 86 researched companies with no usable job feed (as of 2026-11-14: 24
-  multinational, 38 deeptech, 12 cyber_infra, 12 biz_software). Each needs
+- [ ] `data/unresolved_candidates.csv` lists 85 researched companies with no usable job feed (as of 2026-11-14: 24
+  multinational, 37 deeptech, 12 cyber_infra, 12 biz_software). Each needs
   its own research; there is no batch fix left. Every observation about a live site below is from the checks of
-  2026-11-14, a crawl of the 105 rows that had a careers URL that day (58 today) and a scan of their rendered pages. The
+  2026-11-14, a crawl of the 105 rows that had a careers URL that day (57 today) and a scan of their rendered pages. The
   remaining work falls into these groups:
   - **No careers URL (28).** Status `not_found` in `data/new/*_companies.json`: Upsolver, Speedata,
     Teramount, X-Globe, Q Factor, Gilat, Siklu, Silicom, Sight Diagnostics, Brainsway, EarlySign, Diagnostic Robotics,
@@ -145,6 +145,8 @@ Observations about live sites below come from checks made on 2026-11-14 and may 
     "We don't have any open positions" today, so the first Israel job reaches the digest).
     On 2026-11-16, Ceva (`ceva/76.005`, found in the job-page source of its own `/career/` site; the page names the
     account SNC but the board answered under the name `ceva`, not `SNC`; 25 jobs, 14 in Israel, `israel_only`).
+    Nano Dimension (`nanodimension/62.003`: the `comeet_uid` is in the source of `nano-di.com/job-openings`, a Comeet
+    plugin page the `comeet_page` adapter cannot read; the board holds 4 jobs, none in Israel, `israel_only`).
     Not done, and why (checked on 2026-11-14, or 2026-11-16 where dated; do not repeat):
     - Comeet plugin pages that the `comeet_page` adapter does not read (checked on 2026-11-16): SQream
       (`sqream.com/careers/` lists 1 job, "Controller", whose card names no place, and its `/co/` link holds the
@@ -171,7 +173,7 @@ Observations about live sites below come from checks made on 2026-11-14 and may 
       MDA Space page), Line 5 (needs a login), lakeFS and Quantum Art (403 or "Access Denied": bot protection), Radware
       and Camtek (an empty page), Elbit Systems (timeout on the news page; its careers site `elbitsystemscareer.com` is a
       Hebrew custom site with no feed seen), ReWalk (its list on `golifeward.com/company/careers/` is US jobs, no Israel
-      job), Lumigo, Aniview, AnyClip, Pay-Me, Evogene, Aleph Farms, Remilk, Redefine Meat, Landa, Nano Dimension, Tabit,
+      job), Lumigo, Aniview, AnyClip, Pay-Me, Evogene, Aleph Farms, Remilk, Redefine Meat, Landa, Tabit,
       Cognata: no ATS link, feed or job link in the HTML or the network
       requests; not investigated further.
   - **Bot protection.** Some pages answered 403, "Access Denied" or a browser check. Leave them and record it. Do not try
