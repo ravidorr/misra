@@ -1,26 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
 import { renderEmail } from '../supabase/functions/email-settings/handler.ts';
+import { htmlText } from './support/html-text.ts';
 import { PAGE_URL } from '../supabase/functions/_shared/subscription.ts';
 
 const LINK = `${PAGE_URL}#token=${'a'.repeat(43)}`;
-
-/** The visible text of an email body: inline tags vanish, block tags are spaces, entities are decoded. */
-function words(html: string): string {
-  return html
-    .replace(/<head>[\s\S]*?<\/head>/u, '')
-    .replace(/<\/?(?:p|td|tr|table|div|h1|body|html)\b[^>]*>/gu, ' ')
-    .replace(/<[^>]+>/gu, '')
-    .replace(/&nbsp;/gu, ' ')
-    .replace(/&lt;/gu, '<')
-    .replace(/&gt;/gu, '>')
-    .replace(/&quot;/gu, '"')
-    .replace(/&#39;/gu, "'")
-    .replace(/&amp;/gu, '&')
-    .split(/\s+/u)
-    .filter((word) => word !== '')
-    .join(' ');
-}
 
 function plain(text: string): string {
   return text
@@ -36,7 +20,7 @@ describe('the confirmation email as HTML', () => {
   it('carries exactly the words and links of the plain text, in the same order', () => {
     for (const to of ['ann@example.test', "o'neil&co@example.test"]) {
       const { text, html } = renderEmail('weekly', to, LINK);
-      expect(words(html)).toBe(plain(text));
+      expect(htmlText(html)).toBe(plain(text));
       const links = [...html.matchAll(/href="([^"]*)"/gu)].map((match) => match[1]);
       expect(links).toContain(LINK);
       for (const link of links) expect(text).toContain(link?.replace(/&amp;/gu, '&'));
