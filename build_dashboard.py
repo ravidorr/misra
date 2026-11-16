@@ -393,6 +393,28 @@ def dump_json(obj: Any) -> str:
     return json.dumps(obj, ensure_ascii=False, separators=(",", ":"))
 
 
+def companies_covered(companies: list[dict[str, Any]]) -> int:
+    """How many companies have a working feed: status `ok` in companies.json (the excluded ones are already left out).
+    Some of them may be failing today and then also sit on the coverage card, which is why the page names the card's
+    count next to this one instead of adding the two."""
+    return sum(1 for c in companies if c["status"] == "ok")
+
+
+def count_words(n: int) -> str:
+    return f"{n} {'company' if n == 1 else 'companies'}"
+
+
+def coverage_words(covered: int, gaps: int) -> dict[str, str]:
+    """The values of the `__COVERED__`, `__COMPANIES__` and `__COVERAGE_GAPS__` placeholders of the page: the count, the
+    count in words, and the sentence that points at the coverage card (nothing when the card has no company)."""
+    link = '<a class="foot-gaps" href="#gaps">Coverage gaps</a>'
+    return {
+        "__COVERED__": str(covered),
+        "__COMPANIES__": count_words(covered),
+        "__COVERAGE_GAPS__": f" {link} lists {count_words(gaps)} whose roles may be missing or old." if gaps else "",
+    }
+
+
 def apply_digest_switch(text: str) -> str:
     """Keep the daily email regions of a source file when the signup switch is on, else remove them."""
     if DIGEST_SIGNUP_ENABLED:
@@ -479,7 +501,8 @@ def main() -> None:
     generated = (
         f"{last_crawl[:16].replace('T', ' ')} UTC" if last_crawl else time.strftime("%Y-%m-%d %H:%M UTC", time.gmtime())
     )
-    payload = dump_json({"jobs": jobs, "gaps": gaps, "generated": generated})
+    covered = companies_covered(companies)
+    payload = dump_json({"jobs": jobs, "gaps": gaps, "covered": covered, "generated": generated})
     listing = {
         "@context": "https://schema.org",
         "@type": "ItemList",
@@ -499,6 +522,7 @@ def main() -> None:
     page_data = dump_json(
         {
             "gaps": gaps,
+            "covered": covered,
             "generated": generated,
             "firstDay": first,
             # The filters are built from these lists (classify.py and regions.py), in display order.
@@ -516,6 +540,8 @@ def main() -> None:
         text = apply_digest_switch(text)
         text = text.replace("__SUPABASE_URL__", SUPABASE_URL).replace("__SUPABASE_ANON_KEY__", SUPABASE_ANON_KEY)
         text = text.replace("__PAGE_DATA__", page_data)
+        for placeholder, value in coverage_words(covered, gaps["total"]).items():
+            text = text.replace(placeholder, value)
         (out / OUTPUT_NAMES.get(source, Path(source).name)).write_text(text, encoding="utf-8")
     for legal in LEGAL_PAGES:
         (out / legal.output).write_text(render_legal(legal, docs=out), encoding="utf-8")

@@ -1615,6 +1615,11 @@ const gaps = DATA.gaps ?? { blocked: [], untracked: [], total: 0, groups: [] };
   el.hidden = false;
 }
 
+/* The footer's "Coverage gaps" link: the card is a closed details, so open it before the jump. */
+document.addEventListener('click', (e) => {
+  if (e.target.closest('a.foot-gaps')) $('gaps').open = true;
+});
+
 /* WebMCP: expose the same data and actions to browser agents (navigator.modelContext). */
 function describe(j) {
   return {

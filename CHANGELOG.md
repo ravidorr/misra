@@ -4,6 +4,12 @@ All notable changes are documented here. Format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
+## [0.38.0] - 2026-11-16
+
+### Added
+
+- The dashboard says how many companies it covers: the companies with a working feed (status `ok` in `data/companies.json`; a few of them can be failing today and are then also on the coverage card, so the page never adds the two counts). The count is computed by `build_dashboard.py` at build time (`covered` in `jobs.json` and in the page data), never typed. It shows as the search placeholder ("Search N companies", with the same fact in the field's screen-reader label), so the first screen gains no height at 320 px or on a desktop, and in a footer sentence with the number of companies on the coverage card next to it and a "Coverage gaps" link (a 44 px target) that opens the card. Agents read `data-companies-covered` on the footer sentence. The placeholder no longer lists "roles, companies, cities"; the label still names title, company or city. The digest email is unchanged. README and `llms.txt` say where the live count is, without a number.
+
 ## [0.36.0] - 2026-11-16
 
 ### Changed

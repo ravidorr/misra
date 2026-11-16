@@ -1,9 +1,10 @@
 # misra
 
-> Daily batch pipeline that crawls career pages, keeps history in SQLite, and emails a digest. Runs on GitHub Actions; there is no server, API, or UI of its own.
+> Daily batch pipeline that crawls career pages, keeps history in SQLite, and emails a digest. Runs on GitHub Actions; there is no server or API; the only UI is a static dashboard.
 
 ## Project
 
+- [Dashboard](https://ravidorr.github.io/misra/): Open entry-level, student and product roles in Israel, read daily from company career pages; the footer gives the live company count and links to Coverage gaps.
 - [Overview and quickstart](/README.md): Purpose, requirements, quickstart, and usage.
 - [Changelog](/CHANGELOG.md): Released changes.
 
