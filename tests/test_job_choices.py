@@ -27,6 +27,7 @@ from tests.test_dashboard_page import (
     WEBMCP,
     AuthBackend,
     ChoicesBackend,
+    account_action,
     serve,
     site,  # noqa: F401  (a fixture)
 )
@@ -648,7 +649,7 @@ async def test_signing_out_returns_to_the_choices_of_this_browser(page: Page, si
     choices = ChoicesBackend([star_row("1", "Product Manager 1", "Tel Aviv, Israel", "Acme")])
     await sign_in(page, site, choices)
     assert await page.locator(PM1).get_attribute("data-starred") == "true"
-    await page.click("#signOut")
+    await account_action(page, "#signOut")
     await page.wait_for_selector("#signIn")
     assert await page.locator(PM1).get_attribute("data-starred") == "false"  # the account's stars do not stay on screen
     assert await starred_count(page) == "Starred (0)"
@@ -664,7 +665,7 @@ async def test_changes_not_saved_before_signing_out_stay_and_are_saved_at_the_ne
     choices.mode = "down"
     await page.click(f"{PM1} [data-act=star]")
     await expect(page.locator("#syncNote .notice")).to_be_visible()
-    await page.click("#signOut")
+    await account_action(page, "#signOut")
     await page.wait_for_selector("#signIn")
     await expect(page.locator("#syncNote .notice")).to_have_text(
         "1 change made while you were signed in could not be saved to your account. "
