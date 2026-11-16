@@ -11,7 +11,9 @@ For each subscriber who confirmed and has not unsubscribed it
 - takes the open jobs in Israel that were first seen AFTER the user confirmed, that no earlier digest carried, that
   do not belong to a company seen for the first time in that run (the silent baseline of run.py: adding a company never
   floods anyone), and that fit the user's saved filters (regions, levels, role types, keywords; the same rules as the
-  dashboard: within one filter any chosen value matches, the filters combine, nothing chosen means everything, and the
+  dashboard: within one filter any chosen value matches, the filters combine, nothing chosen means everything, the
+  keywords match the title, company, team or location or, through the database's keys-only full-text search
+  (PLAN.md step 7.3), the full text of the posting, and the
   levels and role types are the separate `level` and `role_types` columns, so Product with Intern and Junior gives only
   the entry-level Product roles);
 - sends nothing when no job is left;
@@ -55,6 +57,8 @@ WEEKLY_DAY = 6  # Sunday, the first working day in Israel (date.weekday(): Monda
 PAGE = 1000  # rows asked per read; Supabase caps a response at 1,000 rows by default
 TIMEOUT = 60
 HTTP_OK, HTTP_REDIRECT, HTTP_TOO_MANY = 200, 300, 429
+SEARCH_PATH = "rpc/search_job_keys"  # the full-text search of step 7.3: job keys only
+KEY_LENGTH = 2  # a key is [company, job_id]
 SEND_INTERVAL = 0.6  # seconds between emails: Resend's default limit is 2 requests a second
 RETRY_SECONDS = 2.0  # wait after a 429 from Resend, then one more try
 SKIP_MESSAGE = "the Supabase, Resend or unsubscribe secrets are empty: skipping the digests"
@@ -265,9 +269,11 @@ def parse_job(row: Mapping[str, Any]) -> Job:
 # ---- Choosing the jobs of one subscriber ---------------------------------------------------------
 
 
-def matches(job: Job, filters: Filters) -> bool:
+def matches(job: Job, filters: Filters, text_hits: frozenset[tuple[str, str]] = frozenset()) -> bool:
     """The dashboard's rules for the four digest filters (templates/dashboard.js `select`). A job with no role type
-    counts as Other; a chosen name nobody has matches nothing."""
+    counts as Other; a chosen name nobody has matches nothing. The keywords match when every word is in the company,
+    title, team or location, or when the job is among `text_hits`, the keys the database found for the same words in the
+    full text of the posting (`Supabase.search_keys`; the text itself never leaves the database)."""
     if filters.regions and not filters.regions.intersection(job.regions):
         return False
     if filters.levels and job.level not in filters.levels:
@@ -275,7 +281,7 @@ def matches(job: Job, filters: Filters) -> bool:
     if filters.role_types and not filters.role_types.intersection(job.role_types or (OTHER,)):
         return False
     haystack = f"{job.company} {job.title} {job.team} {job.location}".lower()
-    return all(term in haystack for term in filters.terms)
+    return all(term in haystack for term in filters.terms) or job.key in text_hits
 
 
 def baseline_keys(rows: Sequence[Mapping[str, Any]]) -> set[tuple[str, str]]:
@@ -300,16 +306,27 @@ def is_due(subscriber: Subscriber, today: date) -> bool:
     return subscriber.frequency == "daily" or today.weekday() == WEEKLY_DAY
 
 
-def select_jobs(subscriber: Subscriber, jobs: Sequence[Job], emailed: set[tuple[str, str]]) -> list[Job]:
+def search_query(filters: Filters) -> str:
+    """The keywords as the full-text search gets them: the words, one space apart; empty when there are none."""
+    return " ".join(filters.terms)
+
+
+def select_jobs(
+    subscriber: Subscriber,
+    jobs: Sequence[Job],
+    emailed: set[tuple[str, str]],
+    text_hits: Mapping[str, frozenset[tuple[str, str]]] = {},
+) -> list[Job]:
     """The open jobs this subscriber has not been emailed that appeared after they confirmed and fit their filters,
-    in a fixed order (company, then title)."""
+    in a fixed order (company, then title). `text_hits` holds the full-text keys by search query."""
+    hits = text_hits.get(search_query(subscriber.filters), frozenset())
     chosen = [
         job
         for job in jobs
         if job.first_seen > subscriber.confirmed_at
         and job.key not in emailed
         and job.in_israel
-        and matches(job, subscriber.filters)
+        and matches(job, subscriber.filters, hits)
     ]
     return sorted(chosen, key=lambda job: (job.company.lower(), job.title.lower(), job.job_id))
 
@@ -455,10 +472,14 @@ class Supabase:
         self.headers = {"apikey": key, "Authorization": f"Bearer {key}", "Content-Type": "application/json"}
 
     def call(
-        self, method: str, table: str, params: Mapping[str, str | int], body: list[dict[str, Any]] | None = None
+        self,
+        method: str,
+        table: str,
+        params: Mapping[str, str | int],
+        body: list[dict[str, Any]] | dict[str, Any] | None = None,
     ) -> Response:
         headers = dict(self.headers)
-        if body is not None:
+        if isinstance(body, list):  # rows to insert; the body of a function call (a dict) wants its answer back
             headers["Prefer"] = "resolution=ignore-duplicates,return=minimal"
         try:
             response = self.session.request(
@@ -525,6 +546,17 @@ class Supabase:
     def jobs(self) -> list[dict[str, Any]]:
         """Every job, open and closed: the closed ones still say when a company was first seen."""
         return list(self.read_all("jobs", {"select": JOB_COLUMNS, "order": "company.asc,job_id.asc"}))
+
+    def search_keys(self, query: str) -> frozenset[tuple[str, str]]:
+        """The keys of the open jobs whose full text holds the words of `query` (the database function of migration
+        20261124100000_jobs_text_search.sql, which answers keys only). Never the text, and the query is not logged."""
+        try:
+            rows = self.call("POST", SEARCH_PATH, {}, {"p_query": query}).json()
+        except ValueError:
+            raise DigestError(f"POST {SEARCH_PATH} returned something that is not JSON") from None
+        if not isinstance(rows, list) or not all(isinstance(pair, list) and len(pair) == KEY_LENGTH for pair in rows):
+            raise DigestError(f"POST {SEARCH_PATH} returned something other than a list of keys")
+        return frozenset((str(company), str(job_id)) for company, job_id in rows)
 
     def emailed(self, user_id: str) -> set[tuple[str, str]]:
         rows = self.read_all(
@@ -615,6 +647,22 @@ def new_jobs(rows: Sequence[Mapping[str, Any]], summary: Summary) -> list[Job]:
     return jobs
 
 
+def full_text_hits(
+    supabase: Supabase, due: Sequence[Subscriber], summary: Summary
+) -> dict[str, frozenset[tuple[str, str]]]:
+    """The full-text keys of every distinct set of keywords among the subscribers, one search each. A search that fails
+    is counted (the run exits non-zero, so the alert fires) and its subscribers get the title match alone until the next
+    run: a job found only in the text is not recorded as emailed, so it is still new then."""
+    hits: dict[str, frozenset[tuple[str, str]]] = {}
+    for query in sorted({search_query(subscriber.filters) for subscriber in due} - {""}):
+        try:
+            hits[query] = supabase.search_keys(query)
+        except DigestError as exc:
+            summary.failed += 1
+            summary.failures.append(f"a keyword search failed: {exc}")
+    return hits
+
+
 def run(services: Services, today: date, dry_run: bool = False) -> Summary:
     """Handle every confirmed subscriber and return the counts. Reading the subscribers or the jobs failing stops the
     run (nothing can be decided); after that each subscriber is its own try block."""
@@ -624,9 +672,10 @@ def run(services: Services, today: date, dry_run: bool = False) -> Summary:
     if not due:
         return summary
     jobs = new_jobs(supabase.jobs(), summary)
+    text_hits = full_text_hits(supabase, due, summary)
     for position, subscriber in enumerate(due):
         try:
-            chosen = select_jobs(subscriber, jobs, supabase.emailed(subscriber.user_id))
+            chosen = select_jobs(subscriber, jobs, supabase.emailed(subscriber.user_id), text_hits)
             if not chosen:
                 summary.nothing_new += 1
                 continue
