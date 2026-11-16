@@ -6,6 +6,42 @@ one row from one segment), its "(28)" if the company had no careers URL, else it
 An item with a screenshot in `todo-images/` goes with it: delete the image file in the same PR.
 Observations about live sites below come from checks made on 2026-11-14 and may have changed.
 
+## Emails
+
+- [ ] **Make the emails designed HTML documents.** Trigger: both emails people receive from Misra (the confirmation
+  email and the job-alert digest) are plain text today. A designed email, in the look of the web app, is easier to read
+  and to act on, and looks like the same product. Plain text stays as the fallback.
+  - Where: the digest is built in `send_digests.py` (Resend payload, `"text"` today; add `"html"` so the message is
+    multipart); the confirmation email in the Edge Function `supabase/functions/email-settings` (and its plain modules
+    under `supabase/functions/`); the approved wording in `supabase/email-texts.md`, pinned by
+    `tests/test_legal_wording.py` and `test/email-texts.test.mjs`; colours and type from `design-system/tokens.css`
+    (emails cannot use CSS variables, so the tokens are copied as fixed values into one place and a test keeps them
+    equal to `tokens.css`). The site-report email to the maintainer and the failure alerts (`send_alert.py`, Gmail)
+    stay plain text: nobody else reads them.
+  - How: consult before building, and record every answer in the PR. 1) Claude Designer plus the UI/UX experts
+    (`design-super-agent`, `ui-design-review`, `ux-web-review`, `accessibility-expert`): a simple single-column layout
+    (about 600px, fluid on a phone), the logo as text or a small inline image with alt text (many clients block
+    images, so nothing may depend on one), the digest list (company, title, place, one clear "view role" link per job),
+    the confirmation email with one primary button, light and dark (`prefers-color-scheme` where supported, and colours
+    that stay readable where the client forces its own), 44px targets, contrast WCAG AA. Two or three layouts, one
+    picked with reasons. 2) The `technical-writer` agent: wording stays EXACTLY as in `supabase/email-texts.md`
+    (the lawyer approved it; the HTML only changes the layout, never the words, the footer, the postal address, the
+    unsubscribe link or the explanation of why the person got it). A wording change goes to the lawyer first, as always.
+    3) The `advisor`, before choosing the approach and before calling it done.
+  - Build it for email clients, not browsers: table layout, inline styles (a build step may inline a small stylesheet),
+    no JavaScript, no web fonts (system font stack), no background images, `role="presentation"` on layout tables,
+    `lang` and `dir` set, a visible plain-URL fallback for every button, preheader text, and keep the whole HTML well
+    below Gmail's clipping size (about 100 KB; a digest with many jobs must stay under it, so cap or split the list as
+    the digest already does). Keep the `List-Unsubscribe` and `List-Unsubscribe-Post` headers and the unsubscribe link in
+    the footer exactly as now. A test that the plain text and the HTML carry the same words and links (strip the tags and
+    compare), one that every approved sentence appears, one that the HTML has no script, no remote image and no
+    external stylesheet, and a test of the size limit. Render checks: Playwright at 600px and 375px, light and dark;
+    send test messages to the maintainer's own address only (never to a subscriber) and look at them in Gmail (web and
+    phone) and one other client; list what was checked.
+  - Done when: both emails go out as multipart (plain text plus HTML) with the same approved words, the maintainer has
+    looked at both in Gmail and one other client, the tests above pass, `npm run lint` and `npm run test:coverage` pass,
+    and the PR shows screenshots. A change to `send_digests.py` needs a version bump and a changelog entry.
+
 ## Yearly security review
 
 - [ ] **Do the yearly security review by 2027-11-15, then every year.** Trigger: the date. Where: the
