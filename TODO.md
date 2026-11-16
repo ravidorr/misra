@@ -39,8 +39,9 @@ Observations about live sites below come from checks made on 2026-11-14 and may 
        both; `CONTRIBUTING.md` ("The daily digest") says how a run from cron-job.org looks in the Actions tab. Still to
        do: add the service and the token's expiry to the next note to the lawyer.
   - What remains is the maintainer's: steps 1 and 2 (the token and the cron-job.org job; the guide is
-    `misra-cron-job-org-setup.md` on the maintainer's Desktop) and the end-to-end test below (also check there that the run is titled `daily-job-digest (cron-job.org)` in the
-    Actions tab and that the next guard log counts it: the title is what the guard matches, and it was not dispatched live).
+    `misra-cron-job-org-setup.md` on the maintainer's Desktop) and the end-to-end test below (also check there that the
+    run is titled `daily-job-digest (cron-job.org)` in the Actions tab and that the next guard log counts it: the title
+    is what the guard matches, and it was not dispatched live).
   - Done when: with the first two starts disabled, the cron-job.org call starts a full run that sends the digests once;
     on a normal day the call is skipped by the guard; a failed call (try a wrong token once) emails the maintainer; a
     test pins the input, the guard's rule and the secret scope; and `SECURITY.md` names the service.
