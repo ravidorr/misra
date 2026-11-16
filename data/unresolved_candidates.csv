@@ -9,17 +9,15 @@ env0,env0.com,https://www.envzero.com/careers,cyber_infra,needs_reader,"Jobs on 
 Swimm,swimm.io,https://swimm.io/careers,cyber_infra,needs_reader,Only an email address
 Applitools,applitools.com,https://www.applitools.com/company/careers/,cyber_infra,no_openings,No openings right now
 lakeFS,lakefs.io,https://lakefs.io/careers/,cyber_infra,bot_protection,Access denied (403)
-SQream,sqream.com,https://sqream.com/careers/,cyber_infra,needs_reader,Comeet plugin page: the jobs are only in the page markup
+SQream,sqream.com,https://sqream.com/careers/,cyber_infra,needs_reader,Comeet plugin page: its one job card names no place
 Upsolver,upsolver.com,,cyber_infra,no_careers_url,
 Walnut,walnut.io,https://www.walnut.io/jobs/,biz_software,needs_reader,"Jobs on its own site, no ATS behind them"
 Pay-Me,paymeservice.com,https://payme.io/careers/,biz_software,no_feed_found,"No ATS link, feed or job link found"
 Syte,syte.ai,https://www.syte.ai/careers/,biz_software,needs_reader,"The job list is drawn by a script, with no job link"
 Tabit,tabit.cloud,https://www.tabit.cloud/,biz_software,no_feed_found,"No ATS link, feed or job link found"
-Apester,apester.com,https://apester.com/careers/,biz_software,needs_reader,Comeet plugin page: the jobs are only in the page markup
 AnyClip,anyclip.com,https://anyclip.com/careers/,biz_software,no_feed_found,"No ATS link, feed or job link found"
 Aniview,aniview.com,https://aniview.com/careers/,biz_software,no_feed_found,"No ATS link, feed or job link found"
 Madgicx,madgicx.com,https://madgicx.com/careers,biz_software,no_openings,No open positions; CVs go through a form
-Guesty,guesty.com,https://www.guesty.com/careers/,biz_software,needs_reader,Comeet plugin page: the jobs are only in the page markup
 Magic Software,magicsoftware.com,https://www.magicsoftware.com/careers/,biz_software,no_feed_found,"Its Comeet account is Matrix IFS's, not its own"
 Ex Libris,exlibrisgroup.com,https://exlibrisgroup.com/careers/,biz_software,needs_reader,Links to its parent Clarivate's worldwide board
 Playstudios,playstudios.com,https://www.playstudios.com/careers/,biz_software,needs_reader,Dayforce portal; its jobs have no location
@@ -33,7 +31,6 @@ Teramount,teramount.com,,deeptech,no_careers_url,
 X-Globe,x-globe.com,,deeptech,no_careers_url,
 Q Factor,qfactor.ai,,deeptech,no_careers_url,
 Cognata,cognata.com,https://www.cognata.com,deeptech,no_feed_found,"No ATS link, feed or job link found"
-REE Automotive,ree.auto,https://ree.auto/careers/,deeptech,needs_reader,Comeet plugin page: the jobs are only in the page markup
 Gilat,gilat.com,,deeptech,no_careers_url,
 Siklu,siklu.com,,deeptech,no_careers_url,"Now part of Ceragon; the Comeet board on ceragon.com is Ceragon's, not Siklu's"
 Satixfy,satixfy.com,https://satixfy.com,deeptech,site_unusable,The page is now an MDA Space page
@@ -63,10 +60,9 @@ H2Pro,h2pro.co,https://www.h2pro.co/careers,deeptech,no_openings,No open positio
 Watergen,watergen.com,,deeptech,no_careers_url,
 Nano Dimension,nano-di.com,https://www.nano-di.com/careers,deeptech,no_feed_found,"No ATS link, feed or job link found"
 Stratasys,stratasys.com,,deeptech,no_careers_url,"Careers site is SuccessFactors (careers.stratasys.com), no adapter"
-Kornit Digital,kornit.com,https://careers.kornit.com/,deeptech,needs_reader,Comeet plugin page: the jobs are only in the page markup
+Kornit Digital,kornit.com,https://careers.kornit.com/,deeptech,needs_reader,"Own theme on /all-positions/ with /cmcareer/ links, not the plugin's"
 Landa,landanano.com,https://www.landa-corporation.com/,deeptech,no_feed_found,"No ATS link, feed or job link found"
 AIR,air.one,,deeptech,no_careers_url,
-Gauzy,gauzy.com,https://www.gauzy.com/careers/,deeptech,needs_reader,Comeet plugin page: the jobs are only in the page markup
 Google,google.com,https://www.google.com/about/careers/applications/,multinational,needs_reader,The results page embeds its data; a worldwide search
 Apple,apple.com,https://www.apple.com/careers/us/,multinational,needs_reader,A script app; its search API redirects
 Meta,meta.com,https://www.metacareers.com/,multinational,no_feed_found,No feed found

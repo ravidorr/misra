@@ -833,5 +833,25 @@
  "OX Security": {
   "ats": "comeet",
   "slug": "ox_security/F8.006"
+ },
+ "REE Automotive": {
+  "ats": "comeet_page",
+  "slug": "https://ree.auto/careers/",
+  "israel_only": true
+ },
+ "Gauzy": {
+  "ats": "comeet_page",
+  "slug": "https://www.gauzy.com/careers/",
+  "israel_only": true
+ },
+ "Guesty": {
+  "ats": "comeet_page",
+  "slug": "https://www.guesty.com/careers/",
+  "israel_only": true
+ },
+ "Apester": {
+  "ats": "comeet_page",
+  "slug": "https://apester.com/careers/",
+  "israel_only": true
  }
 }
