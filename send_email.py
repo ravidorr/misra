@@ -8,7 +8,7 @@ import sqlite3
 import sys
 from email.message import EmailMessage
 
-from digest import DB, mark_alerted, render, safe_coverage_gaps, select
+from digest import DB, gap_summary, mark_alerted, render, safe_coverage_gaps, select
 
 
 def send(dry: bool) -> str:
@@ -16,10 +16,16 @@ def send(dry: bool) -> str:
     c = sqlite3.connect(DB)
     jobs = select(c)
     gaps, gap_error = safe_coverage_gaps(c)
-    if not jobs and not any(g["new"] for g in gaps):  # a gap already in an earlier email is not news
-        print("no new matching jobs or new coverage gaps, nothing sent")
+    if gaps:  # the email carries jobs only; crawl problems are recorded in the job log, so they are not silent
+        new = any(g["new"] for g in gaps)
+        print(("::warning::" if new else "") + gap_summary(gaps))  # a new gap shows as an annotation on the run
+        if not dry:
+            mark_alerted(c, gaps)
+            c.commit()
+    if not jobs:
+        print("no new matching jobs, nothing sent")
         return gap_error
-    subject, body = render(jobs, gaps, gap_error)
+    subject, body = render(jobs, gap_error)
     if dry:
         print(f"[dry-run] would send: {subject}")
         return gap_error
@@ -31,9 +37,8 @@ def send(dry: bool) -> str:
     with smtplib.SMTP_SSL("smtp.gmail.com", 465, timeout=60) as s:
         s.login(user, pw)
         s.send_message(msg)
-    # only after a successful send: jobs are reported and gaps are alerted, so a failed send tries them again
+    # only after a successful send, so a failed send tries the jobs again
     c.execute("UPDATE jobs SET reported=1 WHERE status='open'")
-    mark_alerted(c, gaps)
     c.commit()
     print(f"sent: {subject}")
     return gap_error

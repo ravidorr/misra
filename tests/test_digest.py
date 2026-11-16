@@ -272,13 +272,6 @@ def test_a_company_no_longer_crawled_is_not_a_gap(
     assert bool(gaps_of(db, "Gone")) is listed
 
 
-def test_last_good_is_the_last_successful_day_or_never(db: sqlite3.Connection) -> None:
-    add_crawls(db, "Was", [(1, ""), (1, ""), (0, FAIL), (0, FAIL)])
-    add_crawls(db, "Never", [(0, FAIL), (0, FAIL)])
-    assert only_gap(db, "Was")["last_good"] == "2026-01-02"
-    assert only_gap(db, "Never")["last_good"] == "never"
-
-
 def test_any_kind_of_crawler_can_fail(db: sqlite3.Connection) -> None:
     add_crawls(db, "Acme", [(1, ""), (0, "request failed"), (0, "request failed")], ats="greenhouse")
     assert only_gap(db, "Acme")["kind"] == "failing"
@@ -298,7 +291,7 @@ def test_rows_are_read_in_time_order_with_the_later_row_winning_a_tie(db: sqlite
         [(t, c, "x", o, 0, n) for c, t, o, n in rows],
     )
     late = only_gap(db, "Late")
-    assert (late["since"], late["last_good"]) == (DAY.format(2), "2026-01-01")
+    assert late["since"] == DAY.format(2)
     assert only_gap(db, "Tie")["kind"] == "failing"  # [ok, fail, fail]: the last two failed
 
 
@@ -346,51 +339,38 @@ def test_a_problem_in_the_gap_check_comes_back_as_text(
     assert digest.safe_coverage_gaps(db)[1].startswith("OperationalError")
 
 
-def gap(company: str, kind: str, note: str, new: bool = True, last_good: str = "2026-01-02") -> dict[str, object]:
-    return {"company": company, "kind": kind, "note": note, "new": new, "last_good": last_good, "since": DAY.format(1)}
+def gap(company: str, kind: str, note: str, new: bool = True) -> dict[str, object]:
+    return {"company": company, "kind": kind, "note": note, "new": new, "since": DAY.format(1)}
 
 
-def test_render_lists_the_gaps_under_the_jobs() -> None:
-    jobs = [{"company": "A", "title": "PM", "location": "TLV", "url": "http://u", "pm": True}]
+def test_gap_summary_is_counts_and_names_only() -> None:
     gaps = [
         gap("Blocked & Co", "failing", FAIL),
         gap("Held", "held", HELD, new=False),
         gap("Gone", "closed", PARTIAL),
-        gap("Silent", "failing", "", new=False, last_good="never"),
-        gap("Long", "failing", "x" * 300),
+        gap("Silent", "failing", "", new=False),
     ]
-    subject, body = digest.render(jobs, gaps)
-    assert subject.startswith("New Israel jobs: 1 (")  # the gaps do not change the subject when there are jobs
-    assert "<h3>Not crawled properly (5)</h3>" in body
-    assert "<b>Blocked &amp; Co</b> <b>new</b>: not crawled: HTTP 403, title=&#x27;Access Denied&#x27; " in body
-    assert "<b>Held</b>: crawl held, nothing closed: " in body  # not new: no tag
-    assert "<b>Gone</b> <b>new</b>: jobs closed after a sharp drop was believed: " in body
-    assert "got 4, 20 open before" in body  # the counts come from the note
-    assert "<b>Silent</b>: not crawled <i>(last good crawl never)</i>" in body  # no note: no colon
-    assert "x" * digest.GAP_NOTE_MAX in body
-    assert "x" * (digest.GAP_NOTE_MAX + 1) not in body
-    assert body.index("Product roles") < body.index("Not crawled properly")
+    line = digest.gap_summary(gaps)
+    assert line == "coverage gaps: 4 (2 new): failing 2 (Blocked & Co, Silent); held 1 (Held); closed 1 (Gone)"
+    assert "403" not in line  # no crawl notes, only names and counts
 
 
-def test_render_subject_is_an_alert_counting_only_the_new_gaps() -> None:
-    gaps = [gap("A", "failing", FAIL), gap("B", "held", HELD, new=False)]
-    subject, body = digest.render([], gaps)
-    assert subject.startswith("Job crawl alert: 1 new (")
-    assert "Not crawled properly (2)" in body  # the list shows both
-    assert "<b>A</b> <b>new</b>" in body
-    assert "<b>B</b>: " in body
-    assert "No new matching jobs today." in body
-    quiet, _ = digest.render([], [gap("Blocked", "failing", FAIL, new=False)])
-    assert quiet.startswith("New Israel jobs: 0")  # an old gap alone is not news
+def test_render_never_has_the_not_crawled_section() -> None:
+    jobs = [{"company": "A", "title": "PM", "location": "TLV", "url": "http://u", "pm": True}]
+    subject, body = digest.render(jobs)
+    assert subject.startswith("New Israel jobs: 1 (")
+    assert "Product roles (1)" in body
+    assert "Not crawled" not in body
+    assert "last good crawl" not in body
 
 
 def test_render_says_when_the_gap_check_failed() -> None:
-    subject, body = digest.render([], [], "ValueError: bad <ts>")
+    subject, body = digest.render([], "ValueError: bad <ts>")
     assert subject.startswith("New Israel jobs: 0")
     assert "<b>Coverage check failed</b>: ValueError: bad &lt;ts&gt;. See the workflow log." in body
 
 
-def test_main_preview_prints_the_gaps_and_commit_marks_them_alerted(
+def test_main_preview_prints_the_gaps_but_the_digest_file_never_has_them(
     db: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     add_crawls(db, "Blocked", [(1, ""), (0, FAIL), (0, FAIL)])
@@ -398,10 +378,12 @@ def test_main_preview_prints_the_gaps_and_commit_marks_them_alerted(
     monkeypatch.setattr(sys, "argv", ["digest.py"])
     digest.main()
     out = capsys.readouterr().out
-    assert out.startswith("Job crawl alert: 2 new (")
+    assert out.startswith("New Israel jobs: 0 (")
     assert re.search(r"^GAP new Blocked +failing +HTTP 403", out, re.M)
     assert re.search(r"^GAP new Held +held +sharp drop", out, re.M)
-    assert "Not crawled properly (2)" in Path("data/digest.html").read_text()
+    written = Path("data/digest.html").read_text()
+    assert "Not crawled" not in written
+    assert "Blocked" not in written
     assert not db.execute(
         "SELECT name FROM sqlite_master WHERE name='gap_alerts'"
     ).fetchall()  # a preview alerts nothing

@@ -6,7 +6,6 @@ from typing import Any, ClassVar
 
 import pytest
 
-import digest
 import send_email
 from tests.conftest import add_crawls, add_job
 
@@ -82,82 +81,74 @@ def html_of(msg: Any) -> str:
     return str(msg.get_body(preferencelist=("html",)).get_content())
 
 
+TWO_GAPS = 2
 BLOCKED = [(1, ""), (0, "HTTP 403"), (0, "HTTP 403")]
 
 
-def test_a_new_coverage_gap_is_worth_an_email_without_any_new_jobs(
+def test_a_coverage_gap_alone_sends_no_email_but_is_in_the_log(
     db: sqlite3.Connection, capsys: pytest.CaptureFixture[str]
 ) -> None:
     add_crawls(db, "Blocked", BLOCKED)
     send_email.main()
-    (server,) = FakeSMTP.instances
-    assert server.sent[0]["Subject"].startswith("Job crawl alert: 1 new (")
-    assert "<b>Blocked</b> <b>new</b>: not crawled: HTTP 403" in html_of(server.sent[0])
-    assert "sent: Job crawl alert" in capsys.readouterr().out
+    out = capsys.readouterr().out
+    assert FakeSMTP.instances == []
+    assert "::warning::coverage gaps: 1 (1 new): failing 1 (Blocked)" in out
+    assert "nothing sent" in out
+    assert db.execute("SELECT COUNT(*) FROM gap_alerts").fetchone()[0] == 1  # logged: no longer new
 
 
-def test_a_gap_is_alerted_once_by_a_successful_send(db: sqlite3.Connection, capsys: pytest.CaptureFixture[str]) -> None:
+def test_a_gap_is_new_in_the_log_once(db: sqlite3.Connection, capsys: pytest.CaptureFixture[str]) -> None:
     add_crawls(db, "Blocked", BLOCKED)
     send_email.main()
     add_crawls(db, "Blocked", [(0, "HTTP 403")], start_day=4)  # still blocked tomorrow
+    capsys.readouterr()
     send_email.main()
-    assert len(FakeSMTP.instances) == 1  # the second run found nothing new
-    assert "nothing sent" in capsys.readouterr().out
+    out = capsys.readouterr().out
+    assert "coverage gaps: 1 (0 new): failing 1 (Blocked)" in out
+    assert "::warning::" not in out  # an old gap is only a log line
 
 
-def test_a_failed_send_is_tried_again_the_next_day(db: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch) -> None:
-    class Down(FakeSMTP):
-        def send_message(self, msg: Any) -> None:
-            raise smtplib.SMTPException("down")
-
-    add_crawls(db, "Blocked", BLOCKED)
-    monkeypatch.setattr(send_email.smtplib, "SMTP_SSL", Down)
-    with pytest.raises(smtplib.SMTPException):
-        send_email.main()
-    assert db.execute("SELECT COUNT(*) FROM sqlite_master WHERE name='gap_alerts'").fetchone()[0] == 0
-    add_crawls(db, "Blocked", [(0, "HTTP 403")], start_day=4)
-    monkeypatch.setattr(send_email.smtplib, "SMTP_SSL", FakeSMTP)
-    send_email.main()
-    (server,) = FakeSMTP.instances[-1:]
-    assert server.sent[0]["Subject"].startswith("Job crawl alert: 1 new (")
-
-
-def test_an_old_coverage_gap_alone_sends_nothing(db: sqlite3.Connection, capsys: pytest.CaptureFixture[str]) -> None:
-    add_crawls(db, "Blocked", BLOCKED)
-    digest.mark_alerted(db, digest.coverage_gaps(db))
-    db.commit()
-    send_email.main()
-    assert "nothing sent" in capsys.readouterr().out
-    assert FakeSMTP.instances == []
-
-
-def test_jobs_and_gaps_go_in_one_email_and_both_stop_being_new(db: sqlite3.Connection) -> None:
+def test_the_email_never_has_the_not_crawled_section_even_with_crawl_problems(db: sqlite3.Connection) -> None:
     add_job(db, "A", "1", "Product Manager")
     add_crawls(db, "Blocked", BLOCKED)
+    add_crawls(db, "Held", [(0, "sharp drop: got 0, 20 open before")])
     send_email.main()
     (server,) = FakeSMTP.instances
     assert server.sent[0]["Subject"].startswith("New Israel jobs: 1 (")
-    assert "Not crawled properly (1)" in html_of(server.sent[0])
+    body = html_of(server.sent[0])
+    assert "Product roles (1)" in body
+    for word in ("Not crawled", "Blocked", "Held", "last good crawl", "HTTP 403", "sharp drop"):
+        assert word not in body
     assert db.execute("SELECT reported FROM jobs").fetchone()[0] == 1
-    assert db.execute("SELECT COUNT(*) FROM gap_alerts").fetchone()[0] == 1
+    assert db.execute("SELECT COUNT(*) FROM gap_alerts").fetchone()[0] == TWO_GAPS
 
 
-def test_an_alert_only_send_marks_open_jobs_the_digest_does_not_match_as_reported(db: sqlite3.Connection) -> None:
-    add_job(db, "A", "1", "Senior Software Engineer")  # open, in Israel, not a digest match
-    add_crawls(db, "Blocked", BLOCKED)
-    send_email.main()
-    assert db.execute("SELECT reported FROM jobs").fetchone()[0] == 1
-
-
-def test_dry_run_reports_a_gap_alert_without_sending_or_marking(
+def test_dry_run_logs_the_gaps_without_sending_or_marking(
     db: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     add_crawls(db, "Held", [(0, "sharp drop: got 0, 20 open before")])
     monkeypatch.setattr(sys, "argv", ["send_email.py", "--dry-run"])
     send_email.main()
-    assert "[dry-run] would send: Job crawl alert: 1 new" in capsys.readouterr().out
+    assert "coverage gaps: 1 (1 new): held 1 (Held)" in capsys.readouterr().out
     assert FakeSMTP.instances == []
     assert db.execute("SELECT COUNT(*) FROM sqlite_master WHERE name='gap_alerts'").fetchone()[0] == 0
+
+
+def test_a_failed_send_tries_the_jobs_again_next_day(db: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch) -> None:
+    class Down(FakeSMTP):
+        def send_message(self, msg: Any) -> None:
+            raise smtplib.SMTPException("down")
+
+    add_job(db, "A", "1", "Product Manager")
+    add_crawls(db, "Blocked", BLOCKED)
+    monkeypatch.setattr(send_email.smtplib, "SMTP_SSL", Down)
+    with pytest.raises(smtplib.SMTPException):
+        send_email.main()
+    assert db.execute("SELECT reported FROM jobs").fetchone()[0] == 0
+    assert db.execute("SELECT COUNT(*) FROM gap_alerts").fetchone()[0] == 1  # logged before the send, not tied to it
+    monkeypatch.setattr(send_email.smtplib, "SMTP_SSL", FakeSMTP)
+    send_email.main()
+    assert FakeSMTP.instances[-1].sent[0]["Subject"].startswith("New Israel jobs: 1 (")
 
 
 def broken_crawl_log(db: sqlite3.Connection) -> None:

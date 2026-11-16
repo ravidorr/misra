@@ -4,6 +4,14 @@ All notable changes are documented here. Format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
+## [0.34.0] - 2026-11-15
+
+### Changed
+
+- The maintainer digest email (`send_email.py`, built by `digest.py`) no longer has the "Not crawled properly (N)" section: it holds the new Israel jobs only. It is no longer sent on a day with no new jobs, so the "Job crawl alert: N new" email (a day with only new crawl problems) is gone too. `render` lost its `gaps` argument and the unused `GAP_LABEL` and `GAP_NOTE_MAX` are removed.
+- Crawl problems are not silent: the digest step prints one line to the job log, counts and company names only (for example `coverage gaps: 2 (1 new): failing 1 (Acme); held 1 (Beta)`), and marks the gaps as logged, so "new" still means the first day; a new gap is printed as a `::warning::` annotation of the run. The detection (crawl guards, closing rules, the dashboard's coverage gap card) and the failure alert of `send_alert.py` are unchanged; a broken coverage check still turns the step red.
+- Tests: the digest never contains the section even with failing, held and believed-drop companies in the crawl log; the log line; a gap-only day sends nothing; the subscriber digest already had its own test that it has no coverage content.
+
 ## [0.33.0] - 2026-11-15
 
 ### Removed
