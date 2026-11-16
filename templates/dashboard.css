@@ -679,19 +679,37 @@ html:has(.sheet:modal) {
   font-size: var(--text-sm);
 }
 
+/* The footer: what the page says about itself (the companies read, where the choices are saved, when the roles were
+   last read), then the links. Stacked and centered on a phone; on a wide screen the text sits left and the links right,
+   under a rule in the card border colour. */
 .foot {
+  display: grid;
+  gap: var(--space-3);
   margin: var(--space-6) 0 0;
+  padding-top: var(--space-4);
+  border-top: var(--border-width) solid var(--line);
   color: var(--muted);
-  font-size: 0.8125rem;
+  font-size: var(--text-sm);
   text-align: center;
 }
 
+.foot-info {
+  display: grid;
+  gap: var(--space-1);
+}
+
 .foot-note,
-.foot-coverage {
+.foot-coverage,
+.foot-updated {
   margin: 0;
 }
 
-/* The link to the coverage gaps card sits in a sentence but is a 44px target like the footer links. */
+.foot-updated {
+  font-variant-numeric: tabular-nums;
+}
+
+/* The link to the coverage gaps card sits in a sentence but is a 44px target like the footer links: a real box of its
+   own, so it never covers the text around it. */
 .foot-gaps {
   display: inline-flex;
   align-items: center;
@@ -713,6 +731,18 @@ html:has(.sheet:modal) {
   min-width: 44px;
   min-height: 44px;
   justify-content: center;
+}
+
+@media (width >= 768px) {
+  .foot {
+    grid-template-columns: 1fr auto;
+    align-items: start;
+    text-align: start;
+  }
+
+  .foot-links {
+    justify-content: flex-end;
+  }
 }
 
 @media (width <= 560px) {

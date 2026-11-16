@@ -39,8 +39,10 @@ SECONDS = 0.05
 TRIES = 100
 PM1 = "article[data-job-id='Acme|1']"
 PM2 = "article[data-job-id='Acme|2']"
-SAVED_HERE = "Stars and discards are saved in this browser only."
-SAVED_THERE = "Stars and discards are saved to your account."
+SAVED_HERE = 'Your stars, "Not for me" choices and filters stay in this browser and are sent nowhere.'
+SAVED_THERE = (
+    'Your stars, "Not for me" choices and filters are saved to your account and follow you to your other devices.'
+)
 
 
 def star_row(job_id: str, title: str = "Gone Role", location: str = "Haifa", company: str = "Gone") -> dict[str, Any]:
