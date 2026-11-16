@@ -40,6 +40,7 @@ def plain_words(text: str) -> str:
 FIXTURES = {
     "one role, no place, no link": ("daily", [job(location="")]),
     "one role": ("weekly", [job(url="https://jobs.test/a")]),
+    "hostile data": ("weekly", [job("A<b>&Co", "T\"<i>'x", "L&M", "https://jobs.test/a?x=1&y=<2>")]),
     "several": (
         "daily",
         [
@@ -59,6 +60,8 @@ def test_the_html_carries_exactly_the_words_and_links_of_the_plain_text(name: st
     assert words_of(html) == plain_words(text)
     links = [unescape(href) for href in re.findall(r'href="([^"]*)"', html)]
     assert links and all(link in text for link in links)
+    anchors = re.findall(r'<a [^>]*href="([^"]*)"[^>]*>(.*?)</a>', html)
+    assert all(unescape(href) == unescape(label) for href, label in anchors)  # the link text is the address
     assert UNSUBSCRIBE in links
 
 
@@ -132,3 +135,12 @@ def test_the_email_colours_are_the_values_of_design_system_tokens_css() -> None:
         assert light[name] == value, name
     for name, value in colors["dark"].items():
         assert dark[name] == value, name
+
+
+def test_the_colours_in_the_html_are_only_the_shared_values() -> None:
+    colors = json.loads((REPO / "supabase/functions/_shared/email-colors.json").read_text())
+    allowed = set(colors["light"].values()) | set(colors["dark"].values())
+    html = render_digest_html("daily", [job(url="https://jobs.test/a")], UNSUBSCRIBE)
+    used = set(re.findall(r"#[0-9a-fA-F]{3,8}\b", html))
+    assert used and used <= allowed
+    assert set(colors["dark"].values()) <= used  # every dark value is in the dark style block

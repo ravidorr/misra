@@ -15,7 +15,6 @@ All notable changes are documented here. Format follows [Keep a Changelog](https
 
 ### Removed
 
-- The violet spark (star) in the top-right corner of the Misra logo: from `design-system/assets/mark.svg` (so the favicon), `design-system/assets/apple-touch-icon.png` (rendered again from the SVG, same 180 px size and white background), the header logo in `templates/dashboard.html`, the `.mark-spark` rule and the unused `--mark-spark` token. The logo is the lime disc with the ink pulse line, same size and position; the page, wordmark and layout are unchanged. `design-system/README.md` and `logo-brief.md` describe the new mark.
 - "Export discards" and "Import discards" on the filters card, the hidden file input behind them and the code that read and wrote the file. Accounts sync discards across devices, and the first sign-in already offers to bring this browser's own choices over (PLAN.md step 4.3), so the file was redundant. A signed-out visitor's discards stay in the browser as before. `PRIVACY.md` no longer says the "Import discards" file is read inside the browser (the sentence about the missing document upload keeps its first half); the lawyer must approve that edit before the merge.
 
 ## [0.49.3] - 2026-11-16
