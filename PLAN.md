@@ -61,7 +61,7 @@ Decisions made in planning (they change the PRD's wording, so update the PRD in 
   `level`, `role_types text[]`, `regions text[]`, `locations text[]`), `crawl_log`, and RLS: public read of open jobs,
   no public write. Done when: migrations apply to a fresh project and a read with the anon key works.~~
   ~~Remaining check, live only: apply the migrations to the Supabase project (`supabase/README.md`) and read with the anon key.~~ Done: migration applied 2026-11-14, anon read and write refusal verified live.
-- [x] ~~2.2 `sync_supabase.py`: after each daily run upsert every open job (all 6,026 today, as in `docs/jobs.json`, not only Israeli ones, so the signed-out dashboard stays whole) and mark missing ones closed, using the
+- [x] ~~2.2 `sync_supabase.py`: after each daily run upsert every open job (all 6,026 on 2026-11-14, as in `docs/jobs.json`, not only Israeli ones, so the signed-out dashboard stays whole) and mark missing ones closed, using the
   service-role key; new module (release lists), tests with a fake client. Add a daily-workflow step after the crawl and
   before the deploy push, with the secret exposed only to that step, and the maintainer failure alert covering it.
   Done when: a manual daily run fills the table and a second run changes nothing.~~
@@ -146,7 +146,7 @@ Decisions made in planning (they change the PRD's wording, so update the PRD in 
   Added in v0.29.0: a daily cleanup of the two counter tables, so the old hashes really are gone daily (migration `20261119100000_report_site_cleanup.sql`,
   called by `sync_supabase.py` after a good sync), and the lawyer's one-sentence wording ("expires after 24 hours") in the form and `PRIVACY.md`. Live check
   left: apply that migration before the first daily run that includes it, or the sync step fails on the missing function (`supabase/README.md`, "Daily cleanup of the counters").
-- [x] ~~5.2 Dashboard: "Report a site" action on the coverage card opens a short form (company, careers link, why it
+- [x] ~~5.2 Dashboard: "Report a site" action on the coverage card opens a short form (company, career page link, why it
   matters), confirmation and error messages, no account needed, CSP `connect-src` already covers the host. Process note
   in `CONTRIBUTING.md` for accepting a site (moves to `data/seed_companies.csv` or the gap card with a reason).
   Done when: FR-7 AC 1 to 6 hold.~~
@@ -182,7 +182,7 @@ Decisions made in planning (they change the PRD's wording, so update the PRD in 
   Built as the Edge Function `email-settings` (turn on, turn off; the user id only from the verified token; limits of 3
   confirmation emails per user, 3 per address and 30 in all per day, counted in the database; the same unsubscribe
   clean-up as the link), the migration `20261118100000_digest_signup_and_limits.sql` and the "Job alerts" dialog
-  (`templates/digest.js`). The whole signup is behind two switches, both off: `DIGEST_SIGNUP_ENABLED = False` in
+  (`templates/digest.js`). The whole signup is behind two switches, both off at first: `DIGEST_SIGNUP_ENABLED = False` in
   `build_dashboard.py` (the page has no button, dialog or script; on since v0.31.0) and the function secret `DIGEST_SIGNUP_ENABLED` (the
   function refuses to create a subscription unless it is `true`). Step 6.6 switches them on (`supabase/README.md`,
   "Job alerts"): set `DIGEST_SIGNUP_ENABLED = True` in `build_dashboard.py` and run
@@ -238,16 +238,17 @@ Decisions made in planning (they change the PRD's wording, so update the PRD in 
     confirmed and received one digest from `send_digests.py`, one PR sets the constant to `"false"` and deletes `send_email.py` and the selection logic that FR-9
     replaced in `digest.py` (`select`, `ROLE`, `EXCLUDE`), with the module-list clean-up (`CONTRIBUTING.md`, "The daily digest"). Keep `send_alert.py`.
   - Live checks left: run the workflow by hand with `digest_dry_run` ticked and read the counts (all four secrets are Actions secrets already), and,
-    once signups open (step 6.6), run it with a test subscriber twice: one email, then none.
+    now that signups are open (step 6.6), run it with a test subscriber twice: one email, then none.
 - [x] ~~6.5 Volume check before opening: count subscribers against the Resend free limit shared with `easy-theory`, write
   the number and the upgrade trigger in `CONTRIBUTING.md`. Done when: the limit and current use are written down.~~
   Done in v0.28.0: `CONTRIBUTING.md`, "Resend volume", states the free limits as Resend's pricing and quotas pages give them on 2026-11-15, the arithmetic, zero real subscribers today, the
   upgrade trigger (about 60 daily subscribers, or 80 of 100 a day or 2,400 of 3,000 a month in use, then Pro or close signups) and a query for the count. Not confirmed by the pages: whether the quota is per team or per domain
   and how much `easy-theory` uses; read both in the Resend dashboard.
-- [ ] 6.6 GATE: the lawyer review from "Before launch" and the addendum, with written answers (answered 2026-11-15; the
+- [x] ~~6.6 GATE: the lawyer review from "Before launch" and the addendum, with written answers (answered 2026-11-15; the
   outcome is in the PRD's "Before launch"; the gate stays until its wording is in). Nothing sends to a real
   user, and the sign-up control stays hidden behind a flag, until the answers are in and any required wording is added
-  to the emails, `PRIVACY.md`, a new `TERMS.md` (as-is disclaimer) and the notice shown when the sign-in button is pressed (FR-1 AC 7). Done when: the answers are filed, those four are in, and the flag is switched on (both switches of step 6.2: the constant in `build_dashboard.py` and the function secret).
+  to the emails, `PRIVACY.md`, a new `TERMS.md` (as-is disclaimer) and the notice shown when the sign-in button is pressed (FR-1 AC 7). Done when: the answers are filed, those four are in, and the flag is switched on (both switches of step 6.2: the constant in `build_dashboard.py` and the function secret).~~
+  Done in v0.31.0: both switches are on, signups are open and the maintainer is the first subscriber (`CONTRIBUTING.md`, "Resend volume").
   Progress: the wording is in for `PRIVACY.md` (controller, why and voluntary, providers and countries, rights under
   Sections 13 and 14, contact), `TERMS.md` (linked from the site footer and the sign-in notice), the notice shown when the
   sign-in button is pressed (FR-1 AC 7, with links to both) and the footer links on the page. The email footer text is written in
@@ -258,7 +259,7 @@ Decisions made in planning (they change the PRD's wording, so update the PRD in 
   a company skipped for 7 days in a row has its open jobs closed, from v0.26.0), and the company exclusion list `data/excluded_companies.csv` (a company
   on it is never crawled, is deleted from `data/jobs.db` and from Supabase `jobs`, `user_jobs` and `emailed`, and is
   off the exports and the coverage card; the process is in `CONTRIBUTING.md`). ~~Still to do before the gate closes: the
-  digest email itself (step 6.3, with its footer and headers), the flag, and the present-tense `PRIVACY.md` edits below.~~ Done in v0.31.0 except the function secret (see "Opening day" below). The gate closes when the secret is set.
+  digest email itself (step 6.3, with its footer and headers), the flag, and the present-tense `PRIVACY.md` edits below.~~ Done in v0.31.0 except the function secret (see "Opening day" below). The secret is set, so the gate is closed.
   Small wording and checks done in v0.29.0: the weekly choice reads "Weekly (Sundays)" (the lawyer's suggestion), the coverage card says what happens to the roles of a
   company skipped for robots.txt in both phases (kept for up to 7 days, then closed, with the days skipped), and the SQL policy tests now run in CI (job `sql-tests`).
   Second lawyer answer (2026-11-15), applied: the `auth.users` sentence in `PRIVACY.md` now says why Supabase keeps
@@ -279,7 +280,7 @@ Decisions made in planning (they change the PRD's wording, so update the PRD in 
   after `report_site_cleanup`); `SECURITY.md` scopes `BACKUP_DEPLOY_KEY` to `ravidorr/misra-backups` only, adds its rotation to the yearly review (by 2027-11-15) and the
   rule to delete any local clone of the backup repository at once; and the restore without `--create-auth-users` skips every user id no longer in `auth.users` (never resurrects a
   deleted account; `CONTRIBUTING.md`, "Restore", with a second rehearsal). No encryption of our own is claimed anywhere.
-  Opening day, still to do by the maintainer, in this order: apply the two cleanup migrations (before merging, or the next daily sync fails), merge, wait for `publish-docs`, run the signed-in checks that need the
+  Opening day, in this order (signups are open since v0.31.0): apply the two cleanup migrations (before merging, or the next daily sync fails), merge, wait for `publish-docs`, run the signed-in checks that need the
   secret unset (`supabase/README.md`, "Check it live"), then `supabase secrets set DIGEST_SIGNUP_ENABLED=true --project-ref dncodqeqpoqwcxdctzco`, then the maintainer's own turn-on flow
   and `send_digests.py` twice with a test subscriber. The legacy maintainer digest stays until one digest from `send_digests.py` has reached the maintainer (step 6.4).
 
