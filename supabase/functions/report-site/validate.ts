@@ -39,7 +39,7 @@ function cleanWhy(value: unknown): string | undefined {
 /** An http(s) address with a host name and no sign-in details. Returns the normalised address, or the reason. */
 export function checkLink(raw: unknown): { link: string } | { error: string } {
   const text = typeof raw === 'string' ? raw.trim() : '';
-  if (!text) return { error: 'Enter the link to the careers page.' };
+  if (!text) return { error: 'Enter the link to the career page.' };
   if (text.length > LIMITS.link) return { error: `The link can be at most ${String(LIMITS.link)} characters.` };
   if (LINK_FORBIDDEN.test(text)) return { error: 'The link cannot contain spaces or line breaks.' };
   let url: URL;

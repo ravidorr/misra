@@ -173,13 +173,13 @@ export async function handleDelete(request: Request, deps: Deps): Promise<Respon
   } catch {
     // A timeout or a dropped connection: the deletion may have happened.
     console.error('delete-account: the deletion did not answer');
-    return fail(origin, 502, 'delete_unconfirmed', 'We could not confirm that your account was deleted. Please try again.');
+    return fail(origin, 502, 'delete_unconfirmed', 'We could not confirm that your account was deleted. Try again.');
   }
   // 404: the user was already gone (a second tab, or a repeat that crossed the first). The goal is reached.
   if (response.ok || response.status === 404) return reply(origin, 200, { ok: true });
   console.error(`delete-account: the deletion answered ${String(response.status)}`);
   if (response.status >= 500) {
-    return fail(origin, 502, 'delete_unconfirmed', 'We could not confirm that your account was deleted. Please try again.');
+    return fail(origin, 502, 'delete_unconfirmed', 'We could not confirm that your account was deleted. Try again.');
   }
-  return fail(origin, 502, 'delete_failed', 'Your account was not deleted. Please try again later.');
+  return fail(origin, 502, 'delete_failed', 'Your account was not deleted. Try again later.');
 }

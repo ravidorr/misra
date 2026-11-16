@@ -1,7 +1,7 @@
 /*
  * Card: one role. Machine-readable by design, so keep the data-* attributes.
  *   <article class="card" data-job-id="..." data-company="..." data-new="true">
- *     <span class="sticker card-flag">NEW</span>
+ *     <span class="sticker card-flag">New</span>
  *     <p class="card-company">Acme</p>
  *     <h3 class="card-title"><a href="...">Role</a></h3>
  *     <p class="card-tags"><span class="pill">Tel Aviv</span></p>

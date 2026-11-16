@@ -387,6 +387,9 @@ async def test_fr2_ac9_a_starred_job_that_has_closed_is_still_shown_marked_as_no
     card = page.locator("article[data-job-id='Gone|7']")
     assert await card.get_attribute("data-listed") == "false"
     assert await card.get_attribute("data-starred") == "true"
+    # sentence case in the markup (screen readers read words), uppercase on screen
+    assert await card.locator(".sticker").text_content() == "No longer listed"
+    assert await card.locator(".sticker").evaluate("e => getComputedStyle(e).textTransform") == "uppercase"
     assert await card.locator(".sticker").inner_text() == "NO LONGER LISTED"
     assert await card.locator(".card-company").inner_text() == "Gone"
     link = card.locator(".card-title a")

@@ -97,6 +97,6 @@ export async function handleUnsubscribe(request: Request, deps: Deps): Promise<R
     return answer === 'unknown' ? fail(null, 404, 'link_not_valid', NOT_VALID) : plainText(200, 'Unsubscribed.');
   } catch (error) {
     console.error('unsubscribe: failed', describe(error));
-    return isGet ? redirectToPage('try-again') : fail(null, 500, 'server_error', 'Something went wrong. Please try again.');
+    return isGet ? redirectToPage('try-again') : fail(null, 500, 'server_error', 'Something went wrong. Try again.');
   }
 }
