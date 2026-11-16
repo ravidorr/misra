@@ -480,6 +480,7 @@ dialog.sheet[hidden],
 
 .sheet-body label {
   display: grid;
+  min-width: 0;
   gap: var(--space-1);
   color: var(--muted);
   font-size: var(--text-sm);
@@ -503,6 +504,12 @@ dialog.sheet[hidden],
 }
 
 .sheet-body .filter-group {
+  min-width: 0;
+}
+
+/* A long company name must not make the sheet wider than the screen: the select takes the width it is given. */
+.sheet-body .field {
+  width: 100%;
   min-width: 0;
 }
 
@@ -729,6 +736,10 @@ html:has(.sheet:modal) {
     display: flex;
     align-items: center;
     gap: var(--space-2);
+  }
+
+  .sheet-body .field {
+    width: auto;
   }
 
   .sheet-body .filter-group {

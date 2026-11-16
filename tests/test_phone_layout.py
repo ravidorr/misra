@@ -34,7 +34,7 @@ def add_companies(db: sqlite3.Connection) -> None:
     old = (datetime.now(UTC) - timedelta(days=30)).strftime("%Y-%m-%dT00:00:00")
     today = datetime.now(UTC).strftime("%Y-%m-%dT00:00:00")
     for n in range(HIRING_COMPANIES):
-        company = f"Company number {n:02d} with a long name"
+        company = f"Company number {n:02d} with a rather long name that must fit"
         add_job(db, company, "0", "Accountant", first_seen=old)
         add_job(db, company, "1", f"Software Engineering Intern {n}", first_seen=today)
 
@@ -225,6 +225,9 @@ async def test_every_control_is_a_44px_target_on_a_phone(page: Page, crowd: Path
         assert 0 <= box["x"] <= box["x"] + box["width"] <= width, name
     await open_sheet(page)
     await page.locator("#places-title").click()
+    assert await page.locator(SHEET).evaluate(
+        "e => e.scrollWidth <= e.clientWidth"
+    )  # the sheet does not scroll sideways
     sheet_controls = await visible_controls(page, SHEET)
     assert len(sheet_controls) > len(["levels", "types", "regions"])
     for name, box in sheet_controls:
@@ -333,7 +336,7 @@ async def test_the_sheet_closes_and_gives_the_focus_back(page: Page, crowd: Path
 async def test_the_sheet_filters_the_roles_behind_it(page: Page, crowd: Path) -> None:
     await open_page(page, crowd, 375)
     await open_sheet(page)
-    await page.select_option("#company", "Company number 02 with a long name")
+    await page.select_option("#company", "Company number 02 with a rather long name that must fit")
     await page.click("#filtersDone")
     assert await page.locator("#list article").count() == ROLES_PER_COMPANY
     assert await page.locator("#filtersOpen").inner_text() == "Filters (1)"
