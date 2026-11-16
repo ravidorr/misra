@@ -490,9 +490,13 @@ SEARCH_SELECTS = "select j.company, j.job_id from public.jobs j"
 SEARCH_RETURNS = "jsonb_agg(jsonb_build_array(found.company, found.job_id))"
 SEARCH_GUARDS = (  # each is something the function must keep saying, see the comment of the migration
     "j.status = 'open'",
-    "length(btrim(coalesce(p_query, ''))) >= 3",
-    "to_tsvector('simple', coalesce(j.description, '')) @@ websearch_to_tsquery('simple', left(btrim(p_query), 200))",
-    "order by j.company, j.job_id limit 3000",
+    "coalesce(p_query, '') ~ '[^[:space:]]{3}'",
+    "to_tsvector('simple', coalesce(j.description, '')) @@ plainto_tsquery('simple', left(p_query, 200))",
+)
+SEARCH_WHERE = (  # the whole clause, so nothing can be added to it or after it
+    "where j.status = 'open' and coalesce(p_query, '') ~ '[^[:space:]]{3}' "
+    "and to_tsvector('simple', coalesce(j.description, '')) "
+    "@@ plainto_tsquery('simple', left(p_query, 200)) order by j.company, j.job_id limit 3000 ) found"
 )
 
 
@@ -510,8 +514,9 @@ def search_problems(m: re.Match[str]) -> list[str]:
     found += [f"function {SEARCH_NAME} may return only the two keys"] * (
         SEARCH_SELECTS not in body or SEARCH_RETURNS not in body or body.count("description") != 1
     )  # the one use is in the where clause
-    found += [f"function {SEARCH_NAME} must use websearch_to_tsquery only"] * bool(
-        re.search(r"(?<!websearch_)(?<!plain)(?<!phrase)to_tsquery|ts_headline|ts_rank|ts_stat", body)
+    found += [f"function {SEARCH_NAME} has another where clause"] * (SEARCH_WHERE not in body)
+    found += [f"function {SEARCH_NAME} must use plainto_tsquery only, on description only"] * bool(
+        re.search(r"(?<!plain)to_tsquery|websearch_|phraseto_|ts_headline|ts_rank|ts_stat|details|snippet", body)
     )
     return found
 
@@ -1071,11 +1076,18 @@ def test_the_search_returns_keys_only_from_open_jobs_with_a_minimum_a_maximum_an
         ("(p_query text)\nreturns", "(p_query text, p_all boolean)\nreturns"),
         ("security definer\n", ""),
         ("where j.status = 'open'", "where true"),
-        ("length(btrim(coalesce(p_query, ''))) >= 3", "length(btrim(coalesce(p_query, ''))) >= 0"),
+        ("coalesce(p_query, '') ~ '[^[:space:]]{3}'", "coalesce(p_query, '') ~ '[^[:space:]]{1}'"),
+        ("where j.status = 'open'", "where j.status = 'open' or true"),
+        ("limit 3000", "limit 30000"),
+        ("plainto_tsquery('simple', left(p_query, 200))", "websearch_to_tsquery('simple', left(p_query, 200))"),
+        (
+            "@@ plainto_tsquery",
+            "and to_tsvector('simple', j.details) @@ plainto_tsquery('x') @@ plainto_tsquery",
+        ),
         ("limit 3000", ""),
         ("order by j.company, j.job_id", "order by j.company"),
-        ("left(btrim(p_query), 200)", "btrim(p_query)"),
-        ("websearch_to_tsquery('simple'", "to_tsquery('simple'"),
+        ("left(p_query, 200)", "p_query"),
+        ("plainto_tsquery('simple'", "to_tsquery('simple'"),
         ("jsonb_build_array(found.company, found.job_id)", "jsonb_build_array(found.company, found.job_id, found.d)"),
         ("select j.company, j.job_id\n", "select j.company, j.job_id, j.description\n"),
         ("from public.jobs j\n", "from public.jobs j, public.user_jobs u\n"),

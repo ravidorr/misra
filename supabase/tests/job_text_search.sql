@@ -50,6 +50,8 @@ do $$
 begin
   assert pg_temp.keys('anon', 'ru') = '[]', 'two characters searched';
   assert pg_temp.keys('anon', '  ru  ') = '[]', 'two characters and spaces searched';
+  assert pg_temp.keys('anon', '"a"') = '[]' and pg_temp.keys('anon', 'a a') = '[]', 'a short word probe searched';
+  assert pg_temp.keys('anon', 'a b') = '[]', 'two short words searched';
   assert pg_temp.keys('anon', '') = '[]', 'the empty query searched';
   assert pg_temp.keys('anon', null) = '[]', 'null searched';
   assert pg_temp.keys('anon', 'rust ' || repeat('x', 5000)) = '[]', 'a long query errored or matched';
@@ -62,10 +64,11 @@ begin
   foreach q in array array['rust & | !', '"rust rockets"', 'rust -rockets', '(rust', 'rust)))', '''', 'rust:*', 'a b c <-> d'] loop
     perform pg_temp.keys('anon', q);
   end loop;
-  assert pg_temp.keys('anon', '"rockets with rust"') = '[["Acme", "k1"]]', 'a quoted phrase does not match';
-  assert pg_temp.keys('anon', '"rust rockets"') = '[]', 'a quoted phrase matched words that are not next to each other';
-  assert pg_temp.keys('anon', 'rust -rockets') = '[["Beta", "k5"]]', 'a minus sign does not exclude';
-  assert pg_temp.keys('anon', 'figma or typography or hebrewonly') = '[["Acme", "k2"]]', 'or does not work';
+  -- no operator works: a phrase, a minus sign and "or" are words, so they cannot ask for order or for the jobs without a word
+  assert pg_temp.keys('anon', '"rust rockets"') = pg_temp.keys('anon', 'rust rockets'), 'a quoted phrase is an operator';
+  assert pg_temp.keys('anon', '-rockets') = pg_temp.keys('anon', 'rockets'), 'a minus sign is a negation';
+  assert pg_temp.keys('anon', 'rust -rockets') = pg_temp.keys('anon', 'rust rockets'), 'a minus sign excludes';
+  assert pg_temp.keys('anon', 'figma or rust') = '[]', 'or is an operator';
 end $$;
 
 -- The function is the only way in: it is a definer function with a pinned search path that returns jsonb, the two roles
