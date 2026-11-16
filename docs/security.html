@@ -22,6 +22,7 @@
 </header>
 <main class="legal">
 <h1 id="security-policy">Security Policy</h1>
+<p>Last updated: 2026-11-16</p>
 <h2 id="supported-versions">Supported versions</h2>
 <table>
 <thead>
@@ -51,8 +52,8 @@ are the rules that protect the data.</p>
 <h3 id="what-the-database-holds">What the database holds</h3>
 <ul>
 <li>The email address of each person who signs in with Google, their stars, their &quot;Not for me&quot; choices and their saved
-filters. When the daily email exists: the address it goes to, the filters copied for it, daily or weekly, and a
-consent log (when it was turned on, confirmed and unsubscribed).</li>
+filters. For job alerts: the address they go to, the filters copied for them, daily or weekly, the jobs already
+emailed, and a consent log (when they were turned on, confirmed and unsubscribed).</li>
 <li>Never a CV, a phone number, a postal address or a password. Google's name and photo sit only in Supabase's own
 sign-in record until the account is deleted. The jobs data is public job postings.</li>
 <li>Where it lives: Supabase (EU, Ireland) for the database, sign-in and Edge Functions; Resend (Ireland) for email;
@@ -65,7 +66,7 @@ Google for sign-in; GitHub for the repository, the dashboard and the daily job, 
 and the public (anon) key can read open jobs only. The policy tests are in <code>supabase/tests/</code>.</li>
 <li><strong>Secrets:</strong> the service-role key lives only in Supabase's function settings and in GitHub Actions secrets, never in
 the browser or the repository. Other secrets by name: <code>RESEND_API_KEY</code> (limited to sending from <code>send.avidor.org</code>),
-<code>REPORT_TO_EMAIL</code>, <code>IP_HASH_SECRET</code>, the GitHub deploy key and <code>BACKUP_DEPLOY_KEY</code> (a write deploy key of the private
+<code>REPORT_TO_EMAIL</code>, <code>IP_HASH_SECRET</code>, <code>UNSUBSCRIBE_SECRET</code> (the key that signs the unsubscribe links), the GitHub deploy key and <code>BACKUP_DEPLOY_KEY</code> (a write deploy key of the private
 backup repository only, used by the backup step of the daily job and nothing else). Values are typed into the
 providers' own pages.</li>
 <li><strong>Backups:</strong> every daily run copies the account tables, as JSON files, to the private repository
@@ -118,8 +119,10 @@ run the workflow once, then delete the old key in that repository's deploy keys.
 <p>Reviews done: none yet.</p>
 <h3 id="if-there-is-a-breach">If there is a breach</h3>
 <ol>
-<li><strong>Contain it:</strong> rotate the service-role key, <code>BACKUP_DEPLOY_KEY</code> and any exposed secret, disable the affected Edge Function or sign-in
-provider, and fix the hole.</li>
+<li><strong>Contain it:</strong> rotate the service-role key, <code>BACKUP_DEPLOY_KEY</code>, <code>UNSUBSCRIBE_SECRET</code> (the key that signs the unsubscribe links) and any
+exposed secret, disable the affected Edge Function or sign-in provider, and fix the hole. Changing <code>UNSUBSCRIBE_SECRET</code>
+stops the unsubscribe links in emails already sent; people can still turn the email off on the dashboard or reply
+&quot;Remove&quot;.</li>
 <li><strong>Find out what was exposed:</strong> which tables, which people, since when (use the provider logs).</li>
 <li><strong>Tell the affected people</strong> by a short, plain email: what was exposed (their email address and saved choices, for
 example), what was done, and how to delete their account. No report to the regulator is required at this level, but

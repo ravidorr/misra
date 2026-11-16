@@ -16,11 +16,11 @@ const back = document.getElementById('back');
 
 const NOT_VALID = [
   'This link is no longer valid',
-  'It may have already been used, expired, or been replaced by a newer link. To manage your email settings or delete your account, sign in on the Misra dashboard.',
+  'It may have expired (confirmation links work for 7 days), been replaced by a newer link, or belong to job alerts that were turned off. To manage your job alerts or delete your account, sign in on the Misra dashboard.',
 ];
 const UNSUBSCRIBED = [
   'You have been unsubscribed',
-  'We stopped your job alerts and deleted your alert filters and history of emailed jobs. Your Misra account (stars, "Not for me" choices, and dashboard filters) is unchanged. To delete your entire account and all stored data, sign in on the dashboard and choose "Delete my account".',
+  'Your job alerts are stopped. We deleted the filters saved for them and the list of jobs we already emailed you. We keep your address and the times you turned the email on, confirmed it and unsubscribed, as a record of your consent. Your Misra account (stars, "Not for me" choices, and dashboard filters) is unchanged. To delete your entire account and all stored data, sign in on the dashboard and choose "Delete my account".',
 ];
 const WORDS = {
   unsubscribed: UNSUBSCRIBED,
@@ -39,7 +39,7 @@ function confirmed(schedule) {
   const which = schedule === 'daily' || schedule === 'weekly' ? `a ${schedule} email` : 'a daily or weekly email, as you chose,';
   return [
     'Your job alerts are confirmed',
-    `You now get ${which} when new roles match your saved filters. Your first email includes only roles posted from now on, and you can unsubscribe in one click from any email.`,
+    `You now get ${which} when new roles match your saved filters. Your first email includes only roles Misra finds from now on, and you can unsubscribe in one click from any email.`,
   ];
 }
 
