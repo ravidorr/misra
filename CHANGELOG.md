@@ -4,12 +4,6 @@ All notable changes are documented here. Format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
-## [0.41.0] - 2026-11-16
-
-### Changed
-
-- The lawyer's round of 2026-11-16 is applied: the email feature has one name, "job alerts". The dashboard button and dialog title read "Job alerts" (was "Daily email"). The confirmation email says "turned on {{schedule}} job alerts" and "your first email will include", the digest footer says "this {{schedule}} email", and the confirm page, the confirmed page title, the unsubscribed page, the note after sign-up and the delete-account dialog use "job alerts" instead of "digest" (the rest of the delete-account dialog is unchanged). The confirmed page is in the present tense ("You now get a daily email ...", "Your first email includes ..."). The consent helper reads "We first send a confirmation link to ...". `PRIVACY.md` names the feature "job alerts" in the same places; the subjects, the consent line, the addresses, the links and the headers are unchanged. `supabase/email-texts.md`, `handler.ts` and `send_digests.py` stay identical line for line. The Edge Function `email-settings` must be redeployed to send the new confirmation email.
-
 ## [0.42.0] - 2026-11-16
 
 ### Changed
@@ -22,6 +16,12 @@ All notable changes are documented here. Format follows [Keep a Changelog](https
 ### Removed
 
 - The TODO item and its screenshot.
+
+## [0.41.0] - 2026-11-16
+
+### Changed
+
+- The lawyer's round of 2026-11-16 is applied: the email feature has one name, "job alerts". The dashboard button and dialog title read "Job alerts" (was "Daily email"). The confirmation email says "turned on {{schedule}} job alerts" and "your first email will include", the digest footer says "this {{schedule}} email", and the confirm page, the confirmed page title, the unsubscribed page, the note after sign-up and the delete-account dialog use "job alerts" instead of "digest" (the rest of the delete-account dialog is unchanged). The confirmed page is in the present tense ("You now get a daily email ...", "Your first email includes ..."). The consent helper reads "We first send a confirmation link to ...". `PRIVACY.md` names the feature "job alerts" in the same places; the subjects, the consent line, the addresses, the links and the headers are unchanged. `supabase/email-texts.md`, `handler.ts` and `send_digests.py` stay identical line for line. The Edge Function `email-settings` must be redeployed to send the new confirmation email.
 
 ## [0.40.0] - 2026-11-16
 
