@@ -209,8 +209,8 @@ starting with the ones that matter most to users.
 - AC: The address is confirmed before the first email, and every email has an unsubscribe link that works in one click.
 - AC: The emails come from a project address, not a personal one (Resend, from `send.avidor.org`). A problem sending to
   one user never stops the others.
-- AC: The email carries job listings only. Crawl problems are not in it; they stay on the coverage gap card (FR-5) and
-  in a separate email to the maintainer, sent only when something new breaks.
+- AC: The email carries job listings only. Crawl problems are not in it; they stay on the coverage gap card (FR-5)
+  and, for the maintainer, in one line of counts and company names in the daily job log.
 - AC: The maintainer's own failure alerts keep working, and the maintainer receives the job digest as a normal
   subscriber, with filters chosen like anyone else's.
 - AC: A consent log is kept for each subscriber: when the email was turned on, when it was confirmed and when the user

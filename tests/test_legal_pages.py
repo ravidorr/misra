@@ -154,7 +154,7 @@ def test_links_on_the_page_work_on_the_site_and_the_outside_ones_open_in_a_new_t
 def test_the_words_of_the_markdown_are_never_read_as_a_placeholder_of_the_template(workdir: Path) -> None:
     prepare(workdir)
     (workdir / "PRIVACY.md").write_text(
-        "# Privacy\n\nWords: `__TITLE__`, `__SOURCE__`, `__SRI_THEME_JS__`.\n", encoding="utf-8"
+        "# Privacy\n\nWords: `__TITLE__`, `__OUTPUT__`, `__SRI_THEME_JS__`.\n", encoding="utf-8"
     )
     html = build_dashboard.render_legal(build_dashboard.LEGAL_PAGES[0])
     assert "<title>Privacy notice - Misra</title>" in html
@@ -354,19 +354,30 @@ def test_the_page_carries_the_date_line_of_the_document_word_for_word(source: st
 
 
 @pytest.mark.parametrize(("source", "output"), DOCUMENTS)
-def test_the_page_is_framed_by_the_template_and_says_where_it_comes_from(source: str, output: str) -> None:
+def test_the_page_is_framed_by_the_template(source: str, output: str) -> None:
     page = BY_OUTPUT[output]
     html = build_dashboard.render_legal(page, REPO)
     assert f"<title>{page.title}</title>" in html
     assert f'<meta name="description" content="{page.description}">' in html
     assert f'<link rel="canonical" href="https://ravidorr.github.io/misra/{output}">' in html
-    assert f"This page is built from {source} (" in html
-    assert f'<a href="{BLOB}/{source}" target="_blank"' in html
-    assert f'<a href="https://github.com/ravidorr/misra/commits/main/{source}" target="_blank"' in html
     assert 'href="./">Open Misra dashboard</a>' in html
     assert '<a class="wordmark" href="./">misra</a>' in html
     assert "noindex" not in html  # these pages are meant to be found
     assert not re.search(r"__(?!SRI_)[A-Z_]+__", html)  # every placeholder but the integrity hashes is filled in
+
+
+@pytest.mark.parametrize(("source", "output"), DOCUMENTS)
+def test_the_page_has_no_built_from_line_and_no_link_to_its_source_or_history(source: str, output: str) -> None:
+    html = build_dashboard.render_legal(BY_OUTPUT[output], REPO)
+    footer = html.split('<footer class="legal-foot">')[1]
+    assert "built from" not in footer.lower()
+    assert "legal-source" not in html
+    assert "github.com" not in footer  # the footer leads to the other pages of the site only
+    assert f"{BLOB}/{source}" not in html  # no link to the page's own Markdown file
+    assert f"github.com/ravidorr/misra/commits/main/{source}" not in html  # nor to its history
+    for target in ("privacy.html", "terms.html", "security.html"):  # the footer navigation is still there
+        assert f'<a href="{target}">' in html
+    assert 'aria-label="Legal and security"' in html
 
 
 def test_the_template_has_no_words_of_its_own_to_drift_from_the_markdown() -> None:
@@ -533,16 +544,13 @@ async def test_the_links_of_the_footer_and_the_header_are_big_enough_to_tap(
     await page.set_viewport_size(PHONE)  # type: ignore[arg-type]
     await open_legal(page, site, output)
     links = page.locator("header a, footer a")
-    assert await links.count() >= 7  # noqa: PLR2004  (the wordmark, two source links, three pages, the way back)
+    assert await links.count() >= 5  # noqa: PLR2004  (the wordmark, three pages, the way back)
     for link in await links.all():
         box = await link.bounding_box()
         assert box is not None
         if "wordmark" not in (await link.get_attribute("class") or ""):
             assert box["height"] >= TAP, await link.inner_text()
-            if not await link.evaluate(
-                "e => e.closest('.legal-source')"
-            ):  # a link inside a sentence is as wide as its words
-                assert box["width"] >= TAP, await link.inner_text()
+            assert box["width"] >= TAP, await link.inner_text()
 
 
 async def test_a_link_to_a_section_of_another_page_opens_it_at_that_section(page: Page, site: Path) -> None:
@@ -559,6 +567,4 @@ async def test_the_way_back_and_the_wordmark_lead_to_the_dashboard(page: Page, s
     assert await page.get_by_role("link", name="Open Misra dashboard").get_attribute("href") == "./"
     assert await page.get_by_role("link", name="misra", exact=True).get_attribute("href") == "./"
     external = page.locator("footer a[target=_blank]")
-    assert await external.count() == 2  # noqa: PLR2004  (the source and the history)
-    for link in await external.all():
-        assert "opens in a new tab" in (await link.text_content() or "")
+    assert await external.count() == 0  # the footer only leads to the other pages of the site

@@ -22,6 +22,20 @@ All notable changes are documented here. Format follows [Keep a Changelog](https
 - `tests/test_phone_layout.py`: no horizontal page scroll at 320, 375, 393, 430, 768 and 1650 px in both themes (and landscape, with the sheet open), every control a 44 px target on a phone and on a desktop, the search on the first screen at 375 px, the first role on the first screen of a 393x852 iPhone, "Hiring now" is one line with the rest behind the button at 320, 393 and 1650 px, the count on "Filters", the sheet by keyboard (focus trap, Esc, focus back), and a notice and a card sharing border, radius and shadow.
 - The five finished items (and their screenshots) are gone from `TODO.md`.
 
+## [0.34.0] - 2026-11-15
+
+### Changed
+
+- The maintainer digest email (`send_email.py`, built by `digest.py`) no longer has the "Not crawled properly (N)" section: it holds the new Israel jobs only. It is no longer sent on a day with no new jobs, so the "Job crawl alert: N new" email (a day with only new crawl problems) is gone too. `render` lost its `gaps` argument and the unused `GAP_LABEL` and `GAP_NOTE_MAX` are removed.
+- Crawl problems are not silent: the digest step prints one line to the job log, counts and company names only (for example `coverage gaps: 2 (1 new): failing 1 (Acme); held 1 (Beta)`), and marks the gaps as logged, so "new" still means the first day; a new gap is printed as a `::warning::` annotation of the run. The detection (crawl guards, closing rules, the dashboard's coverage gap card) and the failure alert of `send_alert.py` are unchanged; a broken coverage check still turns the step red.
+- Tests: the digest never contains the section even with failing, held and believed-drop companies in the crawl log; the log line; a gap-only day sends nothing; the subscriber digest already had its own test that it has no coverage content.
+
+## [0.33.0] - 2026-11-15
+
+### Removed
+
+- The "This page is built from ... (source and full history on GitHub)" line at the bottom of the generated `privacy.html`, `terms.html` and `security.html`, and everything that only existed for it: the `__SOURCE__`, `__BLOB_URL__` and `__HISTORY_URL__` placeholders, the `blob_url` and `history_url` properties of `LegalPage`, and the `.legal-source` styles. The footer navigation (Privacy, Terms, Security) stays and the Markdown files stay the source of truth. A test checks the built pages carry no "built from" line and no link to the GitHub blob or commits URLs.
+
 ## [0.32.0] - 2026-11-15
 
 ### Added
