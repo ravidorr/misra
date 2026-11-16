@@ -10,6 +10,7 @@ All notable changes are documented here. Format follows [Keep a Changelog](https
 
 - "Reset filters" is a real button (`btn btn-pill`, the secondary look, below "Show roles" in weight) instead of a link look. Its behavior is unchanged: it resets the filters at once, with no confirmation.
 
+- After "Reset filters" a line "Filters reset." with an "Undo" button shows for 6 seconds (`#resetNote`, `role="status"`, in the filters card's footer) and puts the filters back as they were, the account's saved filters included. Any other change to the filters ends the offer; there is no history and no dialog.
 - "Reset filters" no longer clears the search box: the search words are not a filter (they are not in the "Filters (n)" count), and the box is outside the filters card.
 
 ### Removed

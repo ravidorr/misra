@@ -473,6 +473,19 @@ dialog.sheet[hidden],
   min-width: 0;
 }
 
+/* The message after "Reset filters": the words and "Undo" on one line above the buttons; empty (no room) otherwise. */
+.reset-note {
+  display: flex;
+  flex: 1 1 100%;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.reset-note:empty {
+  display: none;
+}
+
 /* A long company name must not make the sheet wider than the screen: the select takes the width it is given. */
 .sheet-body .field {
   width: 100%;
