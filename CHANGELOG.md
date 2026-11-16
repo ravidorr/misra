@@ -4,7 +4,7 @@ All notable changes are documented here. Format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
-## [0.37.0] - 2026-11-16
+## [0.36.0] - 2026-11-16
 
 ### Added
 
@@ -15,6 +15,16 @@ All notable changes are documented here. Format follows [Keep a Changelog](https
 ### Changed
 
 - `data/unresolved_candidates.csv` loses the four rows; the notes of SQream (its one job card names no place) and Kornit Digital (its own theme, links `/cmcareer/`) say why they are not on the adapter.
+
+## [0.35.0] - 2026-11-15
+
+### Changed
+
+- The Misra logo mark has a lime disc and a violet spark (it was the other way round), which matches the colors of the app. The ink pulse line and ring are unchanged: ink on lime is about 16:1, the violet spark on the lime disc is 4.6:1 and the violet spark on the dark page is 3.5:1 (the ink outline of the spark is 3.6:1 against violet), so no token other than `--mark-disc` and `--mark-spark` changed (they swap values; the dark theme does not redefine them). `design-system/assets/mark.svg`, the new `design-system/assets/apple-touch-icon.png` (180 px, white background, rendered from the SVG) and the design-system README follow.
+
+### Fixed
+
+- `docs/favicon.svg` and `docs/apple-touch-icon.png` were committed by hand and no build produced them, so a logo change could not reach the site through `publish-docs`. `build_dashboard.py` now copies them from `design-system/assets/` (`ICON_FILES`), and the daily workflow stages them. New tests pin the lime disc and violet spark in the tokens, the SVG and the header styles, and check that the built icons are the sources.
 
 ## [0.34.0] - 2026-11-15
 

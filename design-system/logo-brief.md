@@ -56,7 +56,7 @@ Use these exact values. Raw colors live in `design-system/tokens.css`.
 
 Rules:
 
-- Lime is reserved for "new". Use it in the logo only if it carries that meaning.
+- Lime is reserved for "new" in the interface. The current mark is a lime disc with a violet spark (the sparkle marks the daily "something new").
 - Never put white text on lime, or lime text on white.
 - Keep the mark to two colors plus ink. A one-color version is required.
 - The mark must work on cream, white, near-black and violet backgrounds.
