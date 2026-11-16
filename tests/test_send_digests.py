@@ -98,6 +98,8 @@ class FakeBackend:
         self.fail: tuple[str, str] | None = None
         self.raises: tuple[str, str, Exception] | None = None
         self.bad_answer: tuple[str, Any] | None = None
+        self.text_hits: dict[str, list[list[str]]] = {}  # the keys the full-text search finds, by query
+        self.searched: list[str] = []  # the queries it was asked
 
     def request(self, method: str, url: str, **kw: Any) -> FakeHttpResponse:
         self.calls.append({"method": method, "url": url, **kw})
@@ -106,6 +108,12 @@ class FakeBackend:
             raise self.raises[2]
         if self.fail == (method, table):
             return FakeHttpResponse(status_code=500, text='{"message":"secret detail ann@example.test"}')
+        if table == "search_job_keys":  # the database function: one dict in (not rows to insert), keys out
+            assert method == "POST" and set(kw["json"]) == {"p_query"} and "Prefer" not in kw["headers"]
+            self.searched.append(kw["json"]["p_query"])
+            if self.bad_answer and self.bad_answer[0] == table:
+                return FakeHttpResponse(data=self.bad_answer[1], json_error=self.bad_answer[1] is None)
+            return FakeHttpResponse(data=self.text_hits.get(kw["json"]["p_query"], []))
         if method == "POST":
             for row in kw["json"]:
                 if row not in self.emailed:  # resolution=ignore-duplicates
@@ -960,3 +968,112 @@ def test_main_refuses_a_short_unsubscribe_secret(env: Rig, monkeypatch: pytest.M
 def test_running_the_file_as_a_script_runs_main(env: Rig, capsys: pytest.CaptureFixture[str]) -> None:
     runpy.run_module("send_digests", run_name="__main__")
     assert "digests: 0 due" in capsys.readouterr().out
+
+
+# ---- keywords in the full text of the posting (step 7.3) -----------------------------------------
+
+
+def keyword_sub(user_id: str, keywords: str) -> dict[str, Any]:
+    return subscription(user_id, f"{user_id[:1]}@example.test", filters={"keywords": keywords})
+
+
+def test_a_job_whose_full_text_has_the_keywords_is_emailed_though_its_title_does_not(rig: Rig) -> None:
+    rig.db.subscriptions = [keyword_sub(ANN, "Rust  rockets")]
+    rig.db.jobs += [
+        job_row("Acme", "title", "Rust rockets engineer"),  # in the title: no search needed for it
+        job_row("Acme", "text", "Software Engineer"),  # only in the posting
+        job_row("Acme", "no", "Office Dog Trainer"),
+    ]
+    rig.db.text_hits = {"rust rockets": [["Acme", "text"], ["Acme", "gone"]]}  # the words, one space apart
+    summary = rig.go()
+    assert rig.db.searched == ["rust rockets"]
+    assert (summary.sent, summary.jobs_sent, summary.failed) == (1, 2, 0)
+    text = rig.mail.sent[0]["text"]
+    assert "Acme/title\n" in text and "Acme/text\n" in text and "Acme/no\n" not in text
+
+
+def test_the_full_text_keys_do_not_get_past_the_other_filters(rig: Rig) -> None:
+    rig.db.subscriptions = [
+        subscription(
+            ANN,
+            "ann@example.test",
+            filters={"keywords": "rust", "role_types": ["Design"], "regions": ["Tel Aviv area"]},
+        )
+    ]
+    rig.db.jobs += [
+        job_row("Acme", "other-type", "Software Engineer"),
+        job_row("Acme", "abroad", "Product Designer", location="London, UK"),
+        job_row("Acme", "ok", "Product Designer"),
+    ]
+    rig.db.text_hits = {"rust": [["Acme", "other-type"], ["Acme", "abroad"], ["Acme", "ok"]]}
+    rig.go()
+    text = rig.mail.sent[0]["text"]
+    assert "Acme/ok\n" in text and "Acme/other-type" not in text and "Acme/abroad" not in text
+
+
+def test_one_search_per_distinct_keywords_and_none_without_keywords_or_when_nobody_is_due(rig: Rig) -> None:
+    rig.db.subscriptions = [
+        keyword_sub(ANN, "rust"),
+        keyword_sub(BOB, " RUST "),  # the same words
+        keyword_sub(CAROL, ""),  # no keywords: no search
+    ]
+    rig.db.jobs += [job_row("Acme", "new", "Product Manager")]
+    rig.go()
+    assert rig.db.searched == ["rust"]
+    rig.db.subscriptions = [{**keyword_sub(ANN, "rust"), "frequency": "weekly"}]
+    rig.db.searched.clear()
+    assert rig.go(MONDAY).due == 0
+    assert rig.db.searched == []
+
+
+def test_a_failed_search_is_counted_and_the_title_match_still_goes_out_without_logging_the_words(
+    rig: Rig, capsys: pytest.CaptureFixture[str]
+) -> None:
+    rig.db.subscriptions = [keyword_sub(ANN, "secretword")]
+    rig.db.jobs += [job_row("Acme", "title", "Secretword Engineer"), job_row("Acme", "text", "Software Engineer")]
+    rig.db.fail = ("POST", "search_job_keys")
+    summary = rig.go()
+    assert (summary.failed, summary.sent, summary.jobs_sent) == (1, 1, 1)  # the title match only
+    assert summary.failures == [
+        "a keyword search failed: POST rpc/search_job_keys failed: HTTP 404".replace("404", "500")
+    ]
+    assert "secretword" not in " ".join(summary.failures) and "Acme/text" not in rig.mail.sent[0]["text"]
+    rig.db.fail = None
+    rig.db.text_hits = {"secretword": [["Acme", "text"]]}  # the next run (the function is there): it is still new
+    rig.mail.sent.clear()
+    rig.db.emailed.clear()
+    assert rig.go().failed == 0
+    assert "Acme/text\n" in rig.mail.sent[0]["text"]
+
+
+def test_a_search_answer_that_is_not_a_list_of_keys_is_an_error(rig: Rig) -> None:
+    for answer in ({"message": "x"}, [["Acme"]], [["Acme", "a", "b"]], ["Acme"], None):
+        rig.db.bad_answer = ("search_job_keys", answer)
+        with pytest.raises(DigestError, match="not JSON" if answer is None else "other than a list of keys"):
+            rig.client().search_keys("rust")
+    rig.db.bad_answer = None
+    rig.db.raises = (
+        "POST",
+        "search_job_keys",
+        requests.ConnectionError("https://abc.supabase.co?apikey=service-role-key-xyz"),
+    )
+    with pytest.raises(DigestError) as caught:
+        rig.client().search_keys("rust")
+    assert str(caught.value) == "POST rpc/search_job_keys failed: ConnectionError"
+
+
+def test_search_keys_asks_with_the_query_in_the_body_never_the_url_and_returns_keys_only(rig: Rig) -> None:
+    rig.db.text_hits = {"rust": [["Acme", "a"], ["Beta", "b"]]}
+    assert rig.client().search_keys("rust") == {("Acme", "a"), ("Beta", "b")}
+    (call,) = rig.db.calls
+    assert call["url"] == f"{URL}/rest/v1/rpc/search_job_keys" and "rust" not in call["url"]
+    assert call["json"] == {"p_query": "rust"} and call["params"] == {}
+
+
+def test_matches_takes_the_full_text_keys_as_an_alternative_to_the_words_in_the_title() -> None:
+    job = parse_job(job_row("Acme", "x", "Software Engineer"))
+    filters = parse_filters({"keywords": "rust"})
+    assert not matches(job, filters)
+    assert matches(job, filters, frozenset({("Acme", "x")}))
+    assert not matches(job, filters, frozenset({("Acme", "y")}))
+    assert matches(job, parse_filters({"keywords": "engineer"}))

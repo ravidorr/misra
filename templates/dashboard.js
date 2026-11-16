@@ -1033,8 +1033,52 @@ function placeMatches(j, f) {
 const levelMatches = (j, f) => f.levels.length === 0 || f.levels.includes(j.lv);
 const typeMatches = (j, f) => f.types.length === 0 || f.types.some((t) => j.rt.includes(t));
 
+/* Words in the full text of a posting (PLAN.md step 7.3). The text is never sent to the page: a database function
+   (search_job_keys) answers with the keys of the open roles whose text has the words, and a role matches the search when
+   its title, company, team or location has every word, or when its key is in that answer. The answers are kept by query
+   (the words, one space apart), so only the answer for the query being shown counts; a search that fails or is slow
+   leaves the match on title, company, team and location alone. */
+const SEARCH_MIN = 3; /* the function answers nothing for less */
+const SEARCH_DELAY_MS = 400; /* the box changes with every key: ask once typing pauses */
+const SEARCH_KEPT = 30; /* answers kept */
+const textKeys = new Map();
+let searchTimer;
+const searchQuery = (q) => q.trim().toLowerCase().split(/\s+/).filter(Boolean).join(' ');
+
+async function fetchTextKeys(query) {
+  const response = await fetch(`${SUPABASE_URL}/rest/v1/rpc/search_job_keys`, {
+    method: 'POST',
+    headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ p_query: query }),
+    signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+  });
+  if (!response.ok) throw new Error(`search_job_keys: HTTP ${response.status}`);
+  const pairs = await response.json();
+  if (!Array.isArray(pairs)) throw new Error('search_job_keys: not a list');
+  return new Set(pairs.map(([company, id]) => `${company}|${id}`));
+}
+
+/* Ask for the keys of the query in the box once, a moment after the last key; show the list again when they come, if
+   the box still says the same. */
+function searchText() {
+  clearTimeout(searchTimer);
+  const query = searchQuery(F.q);
+  if (query.length < SEARCH_MIN || textKeys.has(query)) return;
+  searchTimer = setTimeout(async () => {
+    try {
+      const keys = await fetchTextKeys(query);
+      if (textKeys.size >= SEARCH_KEPT) textKeys.clear();
+      textKeys.set(query, keys);
+    } catch {
+      return; /* the title match stays; a later keystroke asks again */
+    }
+    if (ready && view === 'roles' && searchQuery(F.q) === query) render();
+  }, SEARCH_DELAY_MS);
+}
+
 function select(f) {
   const terms = f.q.trim().toLowerCase().split(/\s+/).filter(Boolean);
+  const found = textKeys.get(searchQuery(f.q));
   const out = JOBS.filter((j) => {
     if (isDiscarded(key(j)) && !f.showGone) return false;
     if (!inScope(j, f)) return false;
@@ -1044,7 +1088,7 @@ function select(f) {
     if (f.hideStale && j.s) return false;
     if (terms.length > 0) {
       const hay = `${j.c} ${j.t} ${j.m} ${j.l}`.toLowerCase();
-      return terms.every((term) => hay.includes(term));
+      return terms.every((term) => hay.includes(term)) || Boolean(found?.has(key(j)));
     }
     return true;
   });
@@ -1059,6 +1103,7 @@ function select(f) {
 function sync() {
   hideUndo(); /* every change to F, from the reader or from the account, ends the offer of an undo (reset sets it after) */
   $('q').value = F.q;
+  searchText();
   $('company').value = F.company;
   $('loc').value = F.loc;
   $('sort').value = F.sort;

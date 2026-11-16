@@ -129,11 +129,36 @@ class Backend:
         self.rows = rows
         self.mode = mode
         self.requests: list[Any] = []
+        # The full-text search (search_job_keys): the keys it finds by query, the queries it was asked (in the body, as
+        # the page sends them), how long it takes, and how it breaks: error (HTTP 503) or not_a_list.
+        self.text_hits: dict[str, list[list[str]]] = {}
+        self.searches: list[str] = []
+        self.search_mode = "ok"
+        self.search_seconds = 0.0
+
+    async def search(self, route: Route) -> None:
+        request = route.request
+        body = json.loads(request.post_data or "{}")
+        assert set(body) == {"p_query"}
+        query = body["p_query"]
+        self.searches.append(query)
+        assert "?" not in request.url  # the words are in the body, never in the address
+        key = build_dashboard.SUPABASE_ANON_KEY
+        assert request.headers.get("apikey") == key and request.headers.get("authorization") == f"Bearer {key}"
+        await asyncio.sleep(self.search_seconds)
+        if self.search_mode == "error":
+            await route.fulfill(status=503, headers=CORS, body="unavailable")
+            return
+        answer = {"not_a_list": {"keys": []}}.get(self.search_mode, self.text_hits.get(query, []))
+        await route.fulfill(body=json.dumps(answer), content_type="application/json", headers=CORS)
 
     async def handle(self, route: Route) -> None:
         request = route.request
         if request.method == "OPTIONS":
             await route.fulfill(status=204, headers=CORS)
+            return
+        if urlparse(request.url).path.endswith("/rpc/search_job_keys"):
+            await self.search(route)
             return
         self.requests.append(request)
         query = parse_qs(urlparse(request.url).query)
