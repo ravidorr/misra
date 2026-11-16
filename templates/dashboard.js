@@ -1065,6 +1065,18 @@ function sync() {
   }
   for (const box of $('places').querySelectorAll('input')) box.checked = F.places.includes(box.value);
   $('places-title').textContent = F.places.length > 0 ? `Places (${F.places.length} chosen)` : 'Places';
+  const active = activeFilterCount(F);
+  $('filtersOpen').textContent = active > 0 ? `Filters (${active})` : 'Filters';
+}
+
+/* How many filters differ from the defaults, a group of values (levels, role types, regions, places) counting once.
+   The search words are not a filter: the search box shows them. */
+function activeFilterCount(f) {
+  const base = defaults();
+  const groups = ['levels', 'types', 'regions', 'places'].filter((name) => f[name].length > 0);
+  const settings = ['company', 'loc', 'sort'].filter((name) => f[name] !== base[name]);
+  const switches = ['remote', 'onlyNew', 'showGone', 'hideStale'].filter((name) => f[name]);
+  return groups.length + settings.length + switches.length;
 }
 
 /* One chip per value of a filter, after an "All" chip that clears it. */
@@ -1120,7 +1132,46 @@ function renderStories() {
       return h('li', {}, [button]);
     }),
   );
+  layoutStories();
 }
+
+/* "Hiring now" is one line of circles and a button ("Show all 15" / "Show fewer") at its end; the others wait in a
+   wrapping area below until the button opens it. The choice lasts for the page session only. Hidden circles carry the
+   `hidden` attribute, so they are out of the Tab order and away from screen readers, and nothing scrolls sideways. */
+let hiringOpen = false;
+let hiringWidth = 0;
+function layoutStories() {
+  const items = [...$('stories').children];
+  const toggle = $('hiringToggle');
+  const focused = document.activeElement === toggle; /* measuring hides the button for a moment, and that drops the focus */
+  for (const item of items) item.hidden = false;
+  toggle.hidden = true;
+  const overflowing = () => {
+    const top = items[0]?.offsetTop ?? 0;
+    return items.filter((item) => item.offsetTop > top);
+  };
+  if (overflowing().length === 0) {
+    $('stories').dataset.expanded = 'false';
+    return; /* everything fits on one line: no button */
+  }
+  toggle.hidden = false; /* the button takes room from the line */
+  const rest = overflowing();
+  toggle.textContent = hiringOpen ? 'Show fewer' : `Show all ${items.length}`;
+  toggle.setAttribute('aria-expanded', String(hiringOpen));
+  $('stories').dataset.expanded = String(hiringOpen);
+  if (!hiringOpen) for (const item of rest) item.hidden = true;
+  if (focused) toggle.focus();
+}
+$('hiringToggle').addEventListener('click', () => {
+  hiringOpen = !hiringOpen;
+  layoutStories();
+});
+new ResizeObserver(() => {
+  const width = $('hiring').clientWidth;
+  if (width === hiringWidth) return;
+  hiringWidth = width;
+  layoutStories();
+}).observe($('hiring'));
 
 const NEW_TAB = ' (opens in a new tab)';
 const MAX_LOCATION = 80;
@@ -1262,7 +1313,7 @@ function announce(text) {
    type), so they are put away while it shows. */
 function showView() {
   const roles = view === 'roles';
-  for (const id of ['controlsBar', 'moreFilters', 'searchBar']) $(id).hidden = !roles;
+  for (const id of ['controlsBar', 'moreFilters', 'searchBar', 'filtersOpen', 'onlyNew']) $(id).hidden = !roles;
   $('starredView').setAttribute('aria-pressed', String(!roles));
   $('starredView').textContent = `Starred (${starredItems().length})`;
 }
@@ -1293,6 +1344,7 @@ function render(focusIdx) {
     const summary = `Showing ${res.length} of ${scope} open roles ${F.loc === 'il' ? 'in Israel' : 'in all locations'}. ${goneN} discarded.`;
     $('summary').textContent = summary;
     announce(summary);
+    $('filtersDone').textContent = `Show ${res.length} ${res.length === 1 ? 'role' : 'roles'}`;
     renderStories();
   }
   const list = $('list');
@@ -1393,6 +1445,36 @@ $('reset').addEventListener('click', () => {
   for (const item of $('places').children) item.hidden = false;
   update();
 });
+/* The filters are a panel in the page on a wide screen and a bottom sheet on a phone. It is one native <dialog>: open
+   as a panel (show) on a wide screen, and opened modally (showModal) from "Filters" on a narrow one, where the browser
+   traps focus, closes it on Esc and hides the page from screen readers. The media query is the one in sheet.css. */
+const sheet = $('moreFilters');
+const compact = matchMedia('(width < 561px), (height < 500px)');
+
+function openFilters() {
+  sheet.close(); /* the markup opens it as a panel, and showModal() refuses a dialog that is already open */
+  sheet.showModal();
+  $('sheetTitle').focus();
+}
+function closeFilters() {
+  sheet.close();
+}
+sheet.addEventListener('close', () => {
+  if (sheet.matches(':modal')) return; /* the close() that openFilters made, reported after showModal */
+  if (compact.matches) $('filtersOpen').focus();
+  else sheet.show();
+});
+compact.addEventListener('change', () => {
+  if (compact.matches) return;
+  if (sheet.matches(':modal')) sheet.close(); /* its close event shows the panel */
+  else if (!sheet.open) sheet.show();
+});
+sheet.addEventListener('click', (e) => {
+  if (e.target === sheet) closeFilters(); /* the backdrop */
+});
+$('filtersOpen').addEventListener('click', openFilters);
+$('filtersClose').addEventListener('click', closeFilters);
+$('filtersDone').addEventListener('click', closeFilters);
 $('size').addEventListener('change', (e) => {
   F.size = Number(e.target.value);
   update();

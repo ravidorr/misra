@@ -62,8 +62,10 @@ def all_keys(value: object) -> set[str]:
 
 
 async def start_sign_in(page: Page, auth: AuthBackend) -> str:
-    """Click "Sign in" and return the address the browser is sent to (the stand-in for Google's page)."""
+    """Press "Sign in", confirm in the notice, and return the address the browser is sent to (the stand-in for Google's
+    page)."""
     await page.click("#signIn")
+    await page.click("#signInContinue")
     await page.wait_for_url("**/auth/v1/authorize**")
     return page.url
 
@@ -327,6 +329,7 @@ async def test_a_sign_in_that_cannot_start_says_so(page: Page, site: Path, stub:
     await page.add_init_script(STUB + f"window.__auth = {{ {stub} }};")
     problems = await serve(page, site)
     await page.click("#signIn")
+    await page.click("#signInContinue")
     await expect(page.locator("#authMessage")).not_to_have_text("")
     assert (await page.locator("#authMessage").inner_text()).startswith(message)
     assert len(problems) == 1  # logged once
@@ -377,73 +380,132 @@ async def test_blocked_browser_storage_does_not_break_the_page_or_the_sign_in_bu
     assert problems == []
 
 
-# ---- FR-1 AC 7: the notice next to the sign-in button (PLAN.md step 6.6) ----
+# ---- FR-1 AC 7: the notice shown when "Sign in" is pressed (PLAN.md step 6.6) ----
+
+NOTICE_FIRST = 'Sign in to sync your stars, "Not for me" choices, and saved filters across devices.'
+NOTICE_SECOND = (
+    "Signing in is optional. We store only your Google email address and job preferences in our EU database "
+    "(Supabase)\u2014never your CV, password, or tracking cookies. "
+    # accuracy fix: Supabase's own sign-in record also holds the Google name and photo, as PRIVACY.md says
+    "(Supabase's own sign-in record also holds your Google name and photo until you delete your account.) "
+    "By signing in, you agree to the Terms and Privacy Notice."
+)
+DIALOG = "#signInDialog"
 
 
-async def test_fr1_ac7_the_notice_says_what_signing_in_is_for(page: Page, site: Path) -> None:
+async def test_fr1_ac7_the_header_has_no_notice_only_the_buttons(page: Page, site: Path) -> None:
     await serve(page, site)
-    note = page.locator("#signInNote")
-    await expect(note).to_be_visible()
-    paragraphs = [" ".join(t.split()) for t in await note.locator("p").all_text_contents()]
-    first, second, *rest = paragraphs
-    assert first == 'Sign in to sync your stars, "Not for me" choices, and saved filters across devices.'
-    assert rest == []  # two paragraphs, no more
-    assert second == (
-        "Signing in is optional. We store only your Google email address and job preferences in our EU database "
-        "(Supabase)\u2014never your CV, password, or tracking cookies. "
-        # accuracy fix: Supabase's own sign-in record also holds the Google name and photo, as PRIVACY.md says
-        "(Supabase's own sign-in record also holds your Google name and photo until you delete your account.) "
-        "By signing in, you agree to the Terms and Privacy Notice."
-    )
-    privacy = note.get_by_role("link", name="Privacy Notice")
-    assert await privacy.get_attribute("href") == "privacy.html"
-    assert await note.get_by_role("link", name="Terms").get_attribute("href") == "terms.html"
-    for link in await note.locator("a").all():  # the pages are on the site: the same tab, no new-tab words
+    assert await page.locator("#signInNote").count() == 0
+    assert await page.locator(DIALOG).is_hidden()
+    assert await page.locator("main > .sign-in-note").count() == 0
+    top = page.locator("header.top")
+    assert await top.get_by_role("button").count() == len(("Sign in", "Theme"))
+    assert await page.locator("#signIn").get_attribute("aria-haspopup") == "dialog"
+
+
+async def test_fr1_ac7_pressing_sign_in_shows_the_notice_and_does_not_leave_the_page(page: Page, site: Path) -> None:
+    auth = AuthBackend()
+    await serve(page, site, auth=auth)
+    requests = len(auth.requests)
+    await page.click("#signIn")
+    dialog = page.locator(DIALOG)
+    await expect(dialog).to_be_visible()
+    assert await dialog.evaluate("e => e.matches(':modal')")
+    assert await dialog.get_attribute("aria-labelledby") == "signInTitle"
+    assert await dialog.get_attribute("aria-describedby") == "signInText"
+    assert await page.evaluate("document.activeElement.id") == "signInTitle"
+    paragraphs = [" ".join(t.split()) for t in await page.locator("#signInText p").all_text_contents()]
+    assert paragraphs == [NOTICE_FIRST, NOTICE_SECOND]  # the approved text, word for word, and nothing else
+    text = page.locator("#signInText")
+    assert await text.get_by_role("link", name="Privacy Notice").get_attribute("href") == "privacy.html"
+    assert await text.get_by_role("link", name="Terms").get_attribute("href") == "terms.html"
+    for link in await text.locator("a").all():  # the pages are on the site: the same tab, no new-tab words
         assert await link.get_attribute("target") is None
-    # the button points to it, so a screen reader reads the notice with the button
-    assert await page.locator("#signIn").get_attribute("aria-describedby") == "signInNote"
-    # it opens the main region (a notice outside a landmark fails axe), and the links work by keyboard
-    assert await page.evaluate("document.querySelector('main').firstElementChild.id") == "signInNote"
+    await page.wait_for_timeout(300)
+    assert page.url == f"{ORIGIN}/index.html"  # nothing was started by the button
+    assert len(auth.requests) == requests
+    assert await page.evaluate("Object.keys(localStorage).filter(k => k.includes('code-verifier')).length") == 0
+
+
+@pytest.mark.parametrize("closer", ["button", "escape"])
+async def test_fr1_ac7_cancel_and_escape_leave_the_page_signed_out_and_give_the_focus_back(
+    page: Page, site: Path, closer: str
+) -> None:
+    auth = AuthBackend()
+    await serve(page, site, auth=auth)
+    requests = len(auth.requests)
+    await page.click("#signIn")
+    if closer == "button":
+        await page.click("#signInCancel")
+    else:
+        await page.keyboard.press("Escape")
+    await expect(page.locator(DIALOG)).to_be_hidden()
+    assert await page.evaluate("document.activeElement.id") == "signIn"
+    await page.wait_for_timeout(300)
+    assert page.url == f"{ORIGIN}/index.html"
+    assert len(auth.requests) == requests
+    assert await page.locator("#signIn").is_visible()
+    assert await page.locator("#accountUser").is_hidden()
+    assert STORAGE_KEY not in await stored(page)
+
+
+async def test_fr1_ac7_continue_with_google_is_what_starts_the_sign_in(page: Page, site: Path) -> None:
+    auth = AuthBackend()
+    await serve(page, site, auth=auth)
+    await page.click("#signIn")
+    assert await page.get_by_role("button", name="Continue with Google").is_visible()
+    await page.click("#signInContinue")
+    await page.wait_for_url("**/auth/v1/authorize**")
+    assert parse_qs(urlparse(page.url).query)["provider"] == ["google"]
+
+
+async def test_fr1_ac7_the_notice_works_by_keyboard_and_traps_the_focus(page: Page, site: Path) -> None:
+    await serve(page, site)
     await page.focus("#signIn")
-    await page.keyboard.press("Tab")  # the theme button
-    await page.keyboard.press("Tab")  # the Terms link (the Privacy Notice link follows)
-    assert await page.evaluate("document.activeElement.textContent.startsWith('Terms')")
+    await page.keyboard.press("Enter")
+    await expect(page.locator(DIALOG)).to_be_visible()
+    for _ in range(10):
+        await page.keyboard.press("Tab")
+        assert await page.evaluate(
+            "document.activeElement === document.body || document.activeElement.closest('#signInDialog') !== null"
+        )
 
 
-async def test_fr1_ac7_the_notice_goes_when_signed_in_and_returns_when_signed_out(page: Page, site: Path) -> None:
+async def test_fr1_ac7_the_signed_in_controls_are_unchanged(page: Page, site: Path) -> None:
     await sign_in(page, site)
-    await expect(page.locator("#signInNote")).to_be_hidden()
+    await expect(page.locator("#signIn")).to_be_hidden()
+    assert await page.locator("#signInDialog").is_hidden()
+    for control in ("#accountEmail", "#signOut", "#deleteAccount"):
+        await expect(page.locator(control)).to_be_visible()
     await page.click("#signOut")
-    await expect(page.locator("#signInNote")).to_be_visible()
+    await expect(page.locator("#signIn")).to_be_visible()
+    assert await page.locator("#signInDialog").is_hidden()
 
 
-async def test_fr1_ac7_without_the_sign_in_script_there_is_no_notice(page: Page, site: Path) -> None:
+async def test_fr1_ac7_without_the_sign_in_script_there_is_no_button(page: Page, site: Path) -> None:
     (site / "supabase.js").unlink()
     await serve(page, site)
-    await expect(page.locator("#signInNote")).to_be_hidden()
     await expect(page.locator("#signIn")).to_be_hidden()
 
 
-async def test_fr1_ac7_the_notice_shows_with_the_button_before_the_service_has_answered(page: Page, site: Path) -> None:
-    """With a service that never reports a session (the quiet stub) the button shows, so the notice must too."""
-    await page.add_init_script(STUB)
-    await serve(page, site)
-    await expect(page.locator("#signIn")).to_be_visible()
-    await expect(page.locator("#signInNote")).to_be_visible()
-
-
-async def test_fr1_ac7_the_notice_reads_well_on_a_phone(page: Page, site: Path) -> None:
+async def test_fr1_ac7_the_notice_reads_well_on_a_phone_in_both_themes(page: Page, site: Path) -> None:
     await page.set_viewport_size(PHONE)
-    await serve(page, site)
-    assert await page.evaluate("document.documentElement.scrollWidth <= document.documentElement.clientWidth")
-    box = await page.locator("#signInNote").bounding_box()
-    assert box is not None
-    assert 0 <= box["x"] <= box["x"] + box["width"] <= PHONE["width"]
-    for link in await page.locator("#signInNote a").all():  # the consent links are 44px targets too
-        target = await link.bounding_box()
-        assert target is not None
-        assert target["height"] >= TAP
-        assert target["width"] >= TAP
+    for scheme in ("light", "dark"):
+        await page.emulate_media(color_scheme=scheme)  # type: ignore[arg-type]
+        await serve(page, site)
+        await page.click("#signIn")
+        assert await page.evaluate("document.documentElement.scrollWidth <= document.documentElement.clientWidth")
+        box = await page.locator(DIALOG).bounding_box()
+        assert box is not None
+        assert 0 <= box["x"] <= box["x"] + box["width"] <= PHONE["width"]
+        for selector in ("#signInText a", "#signInCancel", "#signInContinue"):  # the consent links are 44px targets too
+            for target in await page.locator(selector).all():
+                size = await target.bounding_box()
+                assert size is not None
+                assert size["height"] >= TAP
+                assert size["width"] >= TAP
+        await page.evaluate(AXE.read_text(encoding="utf-8"))
+        assert await page.evaluate("axe.run().then(r => r.violations.map(v => v.id))") == []
 
 
 # ---- The footer: links to the privacy notice, the terms and the contact ----

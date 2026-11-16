@@ -310,7 +310,7 @@ outcome, in short:
   only, keep those timestamps and clear the filters. On account deletion, remove everything.
 - The footer of every email names Misra, the site and the contact.
 - A short as-is disclaimer goes in `TERMS.md`.
-- A notice next to the sign-in button says signing in is voluntary, what it is for, and links to the privacy notice.
+- A notice shown when the sign-in button is pressed (in a dialog, before the Google redirect starts) says signing in is voluntary, what it is for, and links to the privacy notice.
 - The privacy notice names the database controller (Raanan Avidor, a private individual) and the rights to inspect,
   correct and delete. The contact for the project and for privacy requests is `raanan@avidor.org`.
 - No database registration and no data protection officer is required.
@@ -321,7 +321,7 @@ outcome, in short:
 
 The wording changes this asks for are in FR-1, FR-4 and FR-8, and `PLAN.md` step 6.6 stays the gate: nothing sends to a
 real user, and the sign-up control stays hidden, until the wording is in the emails (footer), `PRIVACY.md`, `TERMS.md` and
-the notice next to the sign-in button. The review is answered; the gate closes when that wording is in.
+the notice shown when the sign-in button is pressed. The review is answered; the gate closes when that wording is in.
 
 ## Proposed order (the plan in `PLAN.md` differs, and is the one followed)
 

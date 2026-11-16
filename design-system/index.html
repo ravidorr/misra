@@ -16,6 +16,7 @@
 @import "components/story.css";
 @import "components/field.css";
 @import "components/dialog.css";
+@import "components/sheet.css";
 @import "showcase.css";
 </style>
 </head>
@@ -97,6 +98,22 @@
       <div class="field-group">
         <label for="demo-why">Why it matters</label>
         <textarea class="field" id="demo-why" rows="4"></textarea>
+      </div>
+    </div>
+  </section>
+
+  <section aria-labelledby="sheet-h">
+    <h2 id="sheet-h">Sheet</h2>
+    <div class="panel">
+      <div class="sheet" role="group" aria-labelledby="sheet-demo-title">
+        <div class="sheet-head"><h3 class="sheet-title" id="sheet-demo-title">Filters</h3></div>
+        <div class="sheet-body">
+          <div class="row">
+            <button type="button" class="chip" aria-pressed="true">All</button>
+            <button type="button" class="chip" aria-pressed="false">Product</button>
+          </div>
+        </div>
+        <div class="sheet-foot"><button type="button" class="btn btn-link">Reset filters</button></div>
       </div>
     </div>
   </section>

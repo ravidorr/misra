@@ -7,6 +7,7 @@
  * Do not use aria-label here: the visible text (badge letter and name) must be part of the accessible name.
  */
 .story {
+  position: relative; /* the hidden count (.sr-only) is absolute: without a positioned parent it sits off the page and widens it */
   flex: 0 0 auto;
   width: 72px;
   padding: 0;

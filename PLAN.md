@@ -247,10 +247,10 @@ Decisions made in planning (they change the PRD's wording, so update the PRD in 
 - [ ] 6.6 GATE: the lawyer review from "Before launch" and the addendum, with written answers (answered 2026-11-15; the
   outcome is in the PRD's "Before launch"; the gate stays until its wording is in). Nothing sends to a real
   user, and the sign-up control stays hidden behind a flag, until the answers are in and any required wording is added
-  to the emails, `PRIVACY.md`, a new `TERMS.md` (as-is disclaimer) and the notice next to the sign-in button (FR-1 AC 7). Done when: the answers are filed, those four are in, and the flag is switched on (both switches of step 6.2: the constant in `build_dashboard.py` and the function secret).
+  to the emails, `PRIVACY.md`, a new `TERMS.md` (as-is disclaimer) and the notice shown when the sign-in button is pressed (FR-1 AC 7). Done when: the answers are filed, those four are in, and the flag is switched on (both switches of step 6.2: the constant in `build_dashboard.py` and the function secret).
   Progress: the wording is in for `PRIVACY.md` (controller, why and voluntary, providers and countries, rights under
-  Sections 13 and 14, contact), `TERMS.md` (linked from the site footer and the sign-in notice), the notice next to the
-  sign-in button (FR-1 AC 7, with links to both) and the footer links on the page. The email footer text is written in
+  Sections 13 and 14, contact), `TERMS.md` (linked from the site footer and the sign-in notice), the notice shown when the
+  sign-in button is pressed (FR-1 AC 7, with links to both) and the footer links on the page. The email footer text is written in
   step 6.3 above and is built there. Crawler politeness is in (v0.23.0): one honest User-Agent
   (`Misra/<version> (+site; contact)`), a per-host delay for the browser crawl equal to the adapters', the `robots.txt`
   check (enforced: `ROBOTS_ENFORCED` in `common.py`; the published ATS APIs are not treated as pages, but SmartRecruiters'
