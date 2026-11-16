@@ -9,22 +9,32 @@
 <meta name="robots" content="noindex, nofollow">
 <title>Misra - your email</title>
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="dashboard.css" integrity="sha384-OcfxQHOdGdE9pC847IuCMgR2LtBMBs7FswU7SgOpX00/CUCodgL0Ds8Awp9wxYQK">
+<link rel="stylesheet" href="dashboard.css" integrity="sha384-RVIqhzG+Eu4uvuhh0xrEa/R1k/9UWju6InyPF2iClBcPJJtmDUgVJetQ3er5JyYX">
 <script src="theme.js" integrity="sha384-HYg7XFf1IJXOEgRXtXu8PaIF1+Z+LZWtoEMko63nPxbGA1OeTRN0ULcwPM+r2ONB"></script>
 <script type="module" src="email.js" integrity="sha384-DhX8U/vMnPOxC1AjRkxw2Ofa4ei6I6PmdrUyAtZ9ieBzdw8taGriKj+tgkCdyGs4"></script>
 </head>
 <body>
 <div class="page">
 <header class="top">
+  <svg class="top-mark" aria-hidden="true" viewBox="0 0 64 64"><circle class="mark-disc" cx="32" cy="32" r="29.5" stroke-width="5"/><path class="mark-pulse" d="M9 35h12l5-15 8 28 6-19 3 6h12" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
   <span class="top-name"><a class="wordmark" href="./">misra</a></span>
 </header>
 <main>
-  <h1 class="hero"><span class="highlight" id="heading">Your email</span></h1>
-  <p class="sub" id="message">Checking your link…</p>
-  <p id="actions" hidden><button type="button" class="btn btn-pill btn-primary" id="confirm">Confirm my email</button></p>
-  <p class="sr-only" id="status" role="status"></p>
-  <p><a class="btn btn-pill" href="./" id="back" hidden>Open Misra dashboard</a></p>
+  <section class="card email-card">
+    <h1 class="hero"><span class="highlight" id="heading">Your email</span></h1>
+    <p class="sub" id="message">Checking your link…</p>
+    <div class="card-actions" id="actions" hidden><button type="button" class="btn btn-pill btn-primary" id="confirm">Confirm my email</button></div>
+    <p class="sr-only" id="status" role="status"></p>
+    <a class="btn btn-pill" href="./" id="back" hidden>Open Misra dashboard</a>
+  </section>
 </main>
+<footer class="foot">
+  <nav class="foot-links" aria-label="About Misra">
+    <a href="privacy.html">Privacy</a>
+    <a href="terms.html">Terms</a>
+    <a href="mailto:raanan@avidor.org">Contact</a>
+  </nav>
+</footer>
 </div>
 </body>
 </html>
