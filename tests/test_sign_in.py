@@ -27,6 +27,8 @@ from tests.test_dashboard_page import (
     TAP,
     USER_ID,
     AuthBackend,
+    account_action,
+    account_action_by_keyboard,
     serve,
     site,  # noqa: F401  (a fixture)
 )
@@ -35,6 +37,7 @@ AXE_RUN = "axe.run().then(r => r.violations.map(v => v.id + ': ' + v.nodes.map(n
 STORAGE_KEY = "misra-auth"
 FOOTER_LINKS = 3
 RETRIES = 50
+HEADER_GAP = 8
 POLL_SECONDS = 0.1
 CANCELLED = "The sign-in was cancelled."
 NOT_FINISHED = "The sign-in did not finish."
@@ -174,8 +177,9 @@ async def test_fr1_ac2_the_sign_in_button_sends_the_browser_to_google_through_su
 
 async def test_fr1_ac2_the_way_back_from_google_signs_the_user_in_and_shows_the_email(page: Page, site: Path) -> None:
     auth = await sign_in(page, site)
-    assert await page.locator("#accountEmail").inner_text() == EMAIL
+    assert await page.locator("#accountEmail").text_content() == EMAIL
     assert await page.locator("#signIn").is_hidden()
+    await page.click("#accountMenuButton")
     assert await page.get_by_role("button", name="Sign out").is_visible()
     exchange = next(r for r in auth.requests if r.url.split("?")[0].endswith("/token"))
     assert "grant_type=pkce" in exchange.url
@@ -191,13 +195,13 @@ async def test_fr1_ac2_a_signed_in_user_stays_signed_in_after_a_reload(page: Pag
     requests = len(auth.requests)
     await page.reload()
     await page.wait_for_selector("#accountUser:not([hidden])")
-    assert await page.locator("#accountEmail").inner_text() == EMAIL
+    assert await page.locator("#accountEmail").text_content() == EMAIL
     assert len(auth.requests) == requests  # the saved session is enough: no new request
 
 
 async def test_fr1_ac2_a_user_can_sign_out(page: Page, site: Path) -> None:
     auth = await sign_in(page, site)
-    await page.click("#signOut")
+    await account_action(page, "#signOut")
     await page.wait_for_selector("#accountUser", state="hidden")
     assert await page.locator("#signIn").is_visible()
     assert await page.locator("#accountEmail").inner_text() == ""
@@ -340,7 +344,7 @@ async def test_a_sign_out_the_service_cannot_finish_still_signs_out_here_and_say
     await sign_in(page, site, auth)
     problems: list[str] = []
     page.on("console", lambda m: problems.append(m.text) if m.type == "error" else None)
-    await page.click("#signOut")
+    await account_action(page, "#signOut")
     await expect(page.locator("#authMessage")).not_to_have_text("")
     assert (await page.locator("#authMessage").inner_text()).startswith("You are signed out here")
     assert await page.locator("#signIn").is_visible()  # the saved session is gone from this browser
@@ -472,15 +476,94 @@ async def test_fr1_ac7_the_notice_works_by_keyboard_and_traps_the_focus(page: Pa
         )
 
 
-async def test_fr1_ac7_the_signed_in_controls_are_unchanged(page: Page, site: Path) -> None:
+async def test_fr1_ac7_the_signed_in_header_is_one_profile_button_and_a_menu(page: Page, site: Path) -> None:
     await sign_in(page, site)
     await expect(page.locator("#signIn")).to_be_hidden()
     assert await page.locator("#signInDialog").is_hidden()
+    button = page.locator("#accountMenuButton")
+    await expect(button).to_be_visible()
+    assert await button.get_attribute("aria-label") == "Account"
+    assert await button.get_attribute("aria-expanded") == "false"
+    assert await button.get_attribute("aria-haspopup") is None  # a disclosure, not an ARIA menu
+    assert await button.inner_text() == ""  # an icon, no words
+    assert await page.evaluate("document.querySelector('#accountMenuButton svg').getAttribute('aria-hidden')") == "true"
+    assert await page.locator("header img").count() == 0  # never a photo
     for control in ("#accountEmail", "#signOut", "#deleteAccount"):
-        await expect(page.locator(control)).to_be_visible()
+        await expect(page.locator(control)).to_be_hidden()  # in the closed menu, not in the header
+    await button.click()
+    assert await button.get_attribute("aria-expanded") == "true"
+    assert await page.locator("#accountEmail").text_content() == EMAIL
+    assert await page.locator("#accountMenu .account-item").all_inner_texts() == ["Sign out", "Delete my account"]
     await page.click("#signOut")
     await expect(page.locator("#signIn")).to_be_visible()
     assert await page.locator("#signInDialog").is_hidden()
+    assert await page.evaluate("document.activeElement.id") == "signIn"  # the focus does not fall to the page
+
+
+async def test_the_menu_closes_on_escape_an_outside_click_and_a_choice(page: Page, site: Path) -> None:
+    await sign_in(page, site)
+    button = page.locator("#accountMenuButton")
+    menu = page.locator("#accountMenu")
+    await button.click()
+    await expect(menu).to_be_visible()
+    await button.click()  # the button toggles
+    await expect(menu).to_be_hidden()
+    await button.click()
+    await page.keyboard.press("Escape")
+    await expect(menu).to_be_hidden()
+    assert await button.get_attribute("aria-expanded") == "false"
+    assert await page.evaluate("document.activeElement.id") == "accountMenuButton"
+    await button.click()
+    await page.click("#heroTop")  # a click elsewhere
+    await expect(menu).to_be_hidden()
+    assert await button.get_attribute("aria-expanded") == "false"
+    await button.click()
+    await page.focus("#theme")  # the Tab key moving on
+    await expect(menu).to_be_hidden()
+    assert await button.get_attribute("aria-expanded") == "false"
+    await button.click()
+    await page.focus("#signOut")
+    await page.keyboard.press("Escape")  # Escape from an item
+    await expect(menu).to_be_hidden()
+    assert await page.evaluate("document.activeElement.id") == "accountMenuButton"
+    await button.click()
+    await page.click("#deleteAccount")  # a choice closes it and the focus goes to the button
+    await expect(menu).to_be_hidden()
+    await expect(page.locator("#deleteDialog")).to_be_visible()
+    await page.keyboard.press("Escape")
+    assert await page.evaluate("document.activeElement.id") == "accountMenuButton"
+
+
+async def test_a_token_refresh_does_not_close_the_open_menu(page: Page, site: Path) -> None:
+    await sign_in(page, site)
+    await page.click("#accountMenuButton")
+    await page.focus("#signOut")
+    await page.evaluate("globalThis.misraAccount.client.auth.refreshSession()")  # an auth event with the same session
+    await expect(page.locator("#accountMenu")).to_be_visible()
+
+
+async def test_sign_out_works_from_the_keyboard_and_the_focus_lands_on_sign_in(page: Page, site: Path) -> None:
+    await sign_in(page, site)
+    await account_action_by_keyboard(page, "#signOut")
+    await expect(page.locator("#signIn")).to_be_visible()
+    assert await page.evaluate("document.activeElement.id") == "signIn"
+
+
+async def test_the_menu_opens_from_the_keyboard_and_tab_walks_through_it(page: Page, site: Path) -> None:
+    await sign_in(page, site)
+    await page.focus("#accountMenuButton")
+    await page.keyboard.press("Enter")
+    await expect(page.locator("#accountMenu")).to_be_visible()
+    assert await page.evaluate("document.activeElement.id") == "accountMenuButton"  # the focus stays on the button
+    await page.keyboard.press("Tab")
+    assert await page.evaluate("document.activeElement.id") == "signOut"
+    await page.keyboard.press("Tab")
+    assert await page.evaluate("document.activeElement.id") == "deleteAccount"
+    await page.keyboard.press("Tab")  # on to the theme button: the menu closes
+    await expect(page.locator("#accountMenu")).to_be_hidden()
+    await page.focus("#accountMenuButton")
+    await page.keyboard.press("Space")
+    await expect(page.locator("#accountMenu")).to_be_visible()
 
 
 async def test_fr1_ac7_without_the_sign_in_script_there_is_no_button(page: Page, site: Path) -> None:
@@ -563,6 +646,7 @@ async def test_the_header_reads_well_on_a_phone(page: Page, site: Path, signed_i
         await page.evaluate(
             "document.getElementById('accountEmail').textContent = 'a.very.long.address.indeed@subdomain.example.org'"
         )
+        await page.click("#accountMenuButton")
     else:
         await serve(page, site)
     assert await page.evaluate("document.documentElement.scrollWidth <= document.documentElement.clientWidth")
@@ -574,12 +658,48 @@ async def test_the_header_reads_well_on_a_phone(page: Page, site: Path, signed_i
         assert 0 <= box["x"] <= box["x"] + box["width"] <= PHONE["width"]
     if signed_in:
         email = await page.locator("#accountEmail").bounding_box()
+        menu = await page.locator("#accountMenu").bounding_box()
         assert email is not None
-        assert email["x"] >= 0
-        assert email["x"] + email["width"] <= PHONE["width"]
+        assert menu is not None
+        assert 0 <= menu["x"] <= menu["x"] + menu["width"] <= PHONE["width"]  # inside the screen
+        assert (
+            menu["x"] <= email["x"] and email["x"] + email["width"] <= menu["x"] + menu["width"]
+        )  # and the email in it
         assert await page.locator("#accountEmail").evaluate(
-            "e => e.scrollWidth > e.clientWidth"
-        )  # cut, with an ellipsis
+            "e => e.scrollWidth <= e.clientWidth"
+        )  # wrapped, never cut: the whole address is readable
+
+
+@pytest.mark.parametrize("width", [320, 393])
+async def test_the_open_menu_does_not_overflow_the_screen(page: Page, site: Path, width: int) -> None:
+    await page.set_viewport_size({"width": width, "height": 800})
+    await sign_in(page, site)
+    await page.evaluate("document.getElementById('accountEmail').textContent = 'a'.repeat(60) + '@example.org'")
+    await page.click("#accountMenuButton")
+    assert await page.evaluate("document.documentElement.scrollWidth <= document.documentElement.clientWidth")
+    menu = await page.locator("#accountMenu").bounding_box()
+    profile = await page.locator("#accountMenuButton").bounding_box()
+    theme = await page.locator("#theme").bounding_box()
+    assert menu is not None
+    assert profile is not None
+    assert theme is not None
+    assert 0 <= menu["x"] <= menu["x"] + menu["width"] <= width
+    assert profile["width"] == theme["width"] == TAP
+    assert profile["height"] == theme["height"] == TAP
+    assert theme["x"] - (profile["x"] + profile["width"]) >= HEADER_GAP  # a gap between the two header buttons
+    for item in await page.locator("#accountMenu .account-item").all():
+        box = await item.bounding_box()
+        assert box is not None
+        assert box["height"] >= TAP
+
+
+@pytest.mark.parametrize("scheme", ["light", "dark"])
+async def test_the_open_menu_has_no_axe_violations(page: Page, site: Path, scheme: str) -> None:
+    await page.emulate_media(color_scheme=scheme)  # type: ignore[arg-type]
+    await sign_in(page, site)
+    await page.click("#accountMenuButton")
+    await page.evaluate(AXE.read_text(encoding="utf-8"))
+    assert await page.evaluate(AXE_RUN) == []
 
 
 async def test_a_session_that_cannot_be_written_is_read_back_from_memory_not_from_the_stale_copy(
@@ -598,8 +718,8 @@ async def test_a_session_that_cannot_be_written_is_read_back_from_memory_not_fro
     )
     await page.reload()
     await page.wait_for_selector("#accountUser:not([hidden])")
-    assert await page.locator("#accountEmail").inner_text() == EMAIL
+    assert await page.locator("#accountEmail").text_content() == EMAIL
     assert json.loads((await stored(page))[STORAGE_KEY])["expires_at"] == 1  # the write failed: the old copy remains
-    await page.click("#signOut")  # and the session in memory is the one that signs out and clears both
+    await account_action(page, "#signOut")  # and the session in memory is the one that signs out and clears both
     await page.wait_for_selector("#signIn")
     assert STORAGE_KEY not in await stored(page)
