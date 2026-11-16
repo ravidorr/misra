@@ -1,5 +1,5 @@
 /* The "Job alerts" settings (PLAN.md step 6.2, PRD FR-8 AC 1 to 3), for signed-in users only. A native dialog opened by the
-   "Job alerts" button next to "Sign out". It is a separate module on purpose, like report.js: the roles never wait for
+   "Job alerts" item of the account menu. It is a separate module on purpose, like report.js: the roles never wait for
    it, and a failure here cannot stop them. The build leaves it out of the page entirely while the signup switch is off
    (DIGEST_SIGNUP_ENABLED in build_dashboard.py).
 

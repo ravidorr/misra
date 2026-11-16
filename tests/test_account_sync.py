@@ -21,6 +21,7 @@ from tests.test_dashboard_page import (
     AuthBackend,
     ChoicesBackend,
     PrefsBackend,
+    account_action,
     serve,
     site,  # noqa: F401  (a fixture)
 )
@@ -393,7 +394,7 @@ async def test_fr2_ac6_declining_the_filters_keeps_the_account_ones_and_the_brow
     assert prefs.writes == []
     assert (await stored_json(page, FILTERS))["q"] == "Manager"  # the browser's own are left alone
     await expect(page.locator("#syncNote .notice")).to_have_text("Your filters were restored from your account.")
-    await page.click("#signOut")
+    await account_action(page, "#signOut")
     await page.wait_for_selector("#signIn")
     assert await page.input_value("#q") == "Manager"  # back to the browser's own filters
     assert await page.input_value("#sort") == "new"
@@ -614,7 +615,7 @@ async def test_signing_out_ends_the_offer_to_undo_a_reset(page: Page, site: Path
     await page.click(".chip[data-group=levels][data-value=Junior]")
     await page.click("#reset")
     await expect(page.locator("#undoReset")).to_have_count(1)
-    await page.click("#signOut")
+    await account_action(page, "#signOut")
     await page.wait_for_selector("#signIn")
     await expect(page.locator("#undoReset")).to_have_count(0)  # it would put the account's filters in this browser
 
@@ -626,7 +627,7 @@ async def test_signing_out_with_an_unsent_filter_change_says_so_and_keeps_it(pag
     prefs.mode = "down"
     await page.fill("#q", "mine")
     await expect(page.locator("#syncNote .notice")).to_be_visible()
-    await page.click("#signOut")
+    await account_action(page, "#signOut")
     await page.wait_for_selector("#signIn")
     await expect(page.locator("#syncNote .notice")).to_have_text(
         "1 change made while you were signed in could not be saved to your account. "

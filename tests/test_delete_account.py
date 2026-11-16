@@ -22,6 +22,8 @@ from tests.test_dashboard_page import (
     WEBMCP,
     AuthBackend,
     ChoicesBackend,
+    account_action,
+    account_action_by_keyboard,
     serve,
     site,  # noqa: F401  (a fixture)
 )
@@ -87,7 +89,7 @@ async def signed_in(
 
 
 async def open_dialog(page: Page) -> None:
-    await page.click("#deleteAccount")
+    await account_action(page, "#deleteAccount")
     await expect(page.locator(DIALOG)).to_be_visible()
 
 
@@ -95,6 +97,7 @@ async def test_the_control_is_there_only_when_signed_in(page: Page, site: Path) 
     await serve(page, site)
     assert await page.locator("#deleteAccount").is_hidden()
     await signed_in(page, site)
+    await page.click("#accountMenuButton")
     assert await page.locator("#deleteAccount").is_visible()
     assert await page.locator("#deleteAccount").inner_text() == "Delete my account"
 
@@ -148,7 +151,9 @@ async def test_keeping_the_account_closes_the_dialog_and_sends_nothing(page: Pag
     await open_dialog(page)
     await page.click("#deleteCancel")
     await expect(page.locator(DIALOG)).to_be_hidden()
-    assert await page.evaluate("document.activeElement.id") == "deleteAccount"  # focus goes back to the trigger
+    assert (
+        await page.evaluate("document.activeElement.id") == "accountMenuButton"
+    )  # focus goes back to the profile button
     await open_dialog(page)
     await page.keyboard.press("Escape")
     await expect(page.locator(DIALOG)).to_be_hidden()
@@ -158,8 +163,7 @@ async def test_keeping_the_account_closes_the_dialog_and_sends_nothing(page: Pag
 
 async def test_the_keyboard_alone_can_open_move_through_and_confirm(page: Page, site: Path) -> None:
     _, deleter = await signed_in(page, site)
-    await page.focus("#deleteAccount")
-    await page.keyboard.press("Enter")
+    await account_action_by_keyboard(page, "#deleteAccount")
     await expect(page.locator(DIALOG)).to_be_visible()
     assert await page.evaluate("document.activeElement.id") == "deleteCancel"
     await page.keyboard.press("Tab")  # to the dangerous button: the focus stays inside the dialog
