@@ -374,6 +374,9 @@ class PrefsBackend:
             await route.fulfill(status=201, headers=ROWS_CORS)
 
 
+UNDO_TAP = 44  # the smallest target the design system allows
+
+
 async def serve(  # noqa: PLR0913  (each stand-in is optional, and a test names the ones it wants)
     page: Page,
     docs: Path,
@@ -1251,6 +1254,50 @@ async def test_a_saved_choice_of_the_wrong_type_or_a_company_that_is_gone_is_dro
     await serve_filters(page, site)
     assert await shown(page) == ISRAEL_IDS
     assert await page.locator("#company").input_value() == ""
+
+
+async def test_reset_keeps_the_search_words(page: Page, site: Path) -> None:
+    await serve_filters(page, site)
+    await page.fill("#q", "product")
+    await page.click(".chip[data-group=levels][data-value=Junior]")
+    await page.click("#reset")
+    assert await page.input_value("#q") == "product"
+    assert await page.locator("#levels .chip[aria-pressed=true]").all_text_contents() == ["All"]
+    assert json.loads(await page.evaluate("localStorage.getItem('il-jobs-filters-v3')"))["q"] == "product"
+
+
+async def test_reset_can_be_undone_for_a_few_seconds(page: Page, site: Path) -> None:
+    await serve_filters(page, site)
+    await page.fill("#q", "product")
+    await page.click(".chip[data-group=levels][data-value=Junior]")
+    await page.click("#reset")
+    note = page.locator("#resetNote")
+    assert await note.get_attribute("role") == "status"
+    await expect(note).to_contain_text("Filters reset.")
+    undo = page.locator("#undoReset")
+    box = await undo.bounding_box()
+    assert box is not None
+    assert box["height"] >= UNDO_TAP
+    await page.fill("#q", "product manager")  # typed while the offer shows: the search words stay what they are now
+    assert await note.inner_text() == ""  # any other change ends the offer: it would restore stale state
+    await page.click(".chip[data-group=levels][data-value=Junior]")
+    await page.click("#reset")
+    await page.click("#undoReset")
+    assert await page.locator("#levels .chip[aria-pressed=true]").all_text_contents() == ["Junior"]
+    assert await page.input_value("#q") == "product manager"
+    assert await note.inner_text() == ""
+    assert await page.evaluate("document.activeElement.id") == "reset"  # the focus goes back, never to the page
+    saved = json.loads(await page.evaluate("localStorage.getItem('il-jobs-filters-v3')"))
+    assert saved["levels"] == ["Junior"]
+
+
+async def test_the_reset_offer_goes_away_by_itself(page: Page, site: Path) -> None:
+    await serve_filters(page, site)
+    await page.click(".chip[data-group=levels][data-value=Junior]")
+    await page.click("#reset")
+    await expect(page.locator("#undoReset")).to_have_count(1)
+    await expect(page.locator("#resetNote")).to_be_empty(timeout=9000)
+    assert await page.locator("#levels .chip[aria-pressed=true]").all_text_contents() == ["All"]
 
 
 async def test_reset_clears_the_place_search(page: Page, site: Path) -> None:

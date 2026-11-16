@@ -477,7 +477,10 @@ async def test_fr2_ac5_a_filter_change_is_saved_to_the_account_once_typing_pause
     assert await stored_json(page, FILTERS) is None  # signed in, the browser's own filters are left alone
     await page.click("#reset")
     await until(lambda: len(prefs.writes) == 2)  # noqa: PLR2004
-    assert saved_filters(prefs) == DEFAULTS
+    assert saved_filters(prefs) == {**DEFAULTS, "q": "prod"}  # the search words are not a filter: reset keeps them
+    await page.click("#undoReset")  # the undo is saved to the account too
+    await until(lambda: len(prefs.writes) == 3)  # noqa: PLR2004
+    assert saved_filters(prefs) == {**DEFAULTS, "q": "prod", "levels": ["Junior"]}
 
 
 async def test_fr2_ac5_the_account_filters_win_over_this_browsers_when_the_page_loads(page: Page, site: Path) -> None:
@@ -604,6 +607,18 @@ async def test_an_explicit_change_after_a_failed_load_is_saved(page: Page, site:
     await expect(page.locator("#syncNote")).to_have_text("")  # the account's filters are known now: what was just saved
 
 
+async def test_signing_out_ends_the_offer_to_undo_a_reset(page: Page, site: Path) -> None:
+    prefs = PrefsBackend({})
+    await sign_in(page, site, ChoicesBackend(), prefs, local={"filters": {**DEFAULTS, "q": "browser"}})
+    await page.click("#importNo")
+    await page.click(".chip[data-group=levels][data-value=Junior]")
+    await page.click("#reset")
+    await expect(page.locator("#undoReset")).to_have_count(1)
+    await page.click("#signOut")
+    await page.wait_for_selector("#signIn")
+    await expect(page.locator("#undoReset")).to_have_count(0)  # it would put the account's filters in this browser
+
+
 async def test_signing_out_with_an_unsent_filter_change_says_so_and_keeps_it(page: Page, site: Path) -> None:
     prefs = PrefsBackend({})
     auth = await sign_in(page, site, ChoicesBackend(), prefs, local={"filters": {**DEFAULTS, "q": "browser"}})
@@ -653,50 +668,6 @@ async def test_fr2_ac7_signed_out_the_filters_stay_in_this_browser_and_nothing_i
     assert await page.locator(BOX).is_hidden()
     assert await page.locator("#list").get_attribute("data-filters") == "browser"
     assert await page.locator("#importResult").inner_text() == ""
-
-
-# ---- Export and import of a discards file, while signed in ----
-
-
-async def test_the_discards_file_works_for_the_account(page: Page, site: Path, tmp_path: Path) -> None:
-    choices = ChoicesBackend([discard_row("Acme", "2"), star_row("1", "Product Manager 1", "Tel Aviv, Israel", "Acme")])
-    await sign_in(page, site, choices)
-    async with page.expect_download() as download:
-        await page.click("#exp")
-    exported_path = await (await download.value).path()
-    assert exported_path is not None
-    exported = json.loads(Path(exported_path).read_text(encoding="utf-8"))
-    assert list(exported) == ["Acme|2"]  # the account's discards, not the browser's, and no stars
-    imported = tmp_path / "discarded-jobs.json"
-    imported.write_text(json.dumps({"Acme|2": "x", "Acme|1": "x", "Acme|7": "x", "Gone|9": "x"}), encoding="utf-8")
-    await page.set_input_files("#file", imported)
-    await until(lambda: choices.state_of("Acme", "7") == "discard")
-    assert choices.state_of("Acme", "1") == "star"  # the account's star is not replaced
-    assert choices.state_of("Gone", "9") is None
-    await expect(page.locator("#importResult .notice")).to_have_text(
-        "Brought over 1 choice from the file. "
-        "3 entries were skipped: already chosen in your account, or not an open role."
-    )
-
-
-async def test_a_discards_file_is_not_imported_before_the_account_choices_are_loaded(
-    page: Page, site: Path, tmp_path: Path
-) -> None:
-    choices = ChoicesBackend(mode="load_down")
-    await sign_in(page, site, choices)
-    imported = tmp_path / "discarded-jobs.json"
-    imported.write_text(json.dumps({"Acme|7": "x"}), encoding="utf-8")
-    await page.set_input_files("#file", imported)
-    await expect(page.locator("#importResult .notice")).to_contain_text("have not loaded")
-    assert choices.writes == []
-
-
-async def test_a_discards_file_with_nothing_new_says_so(page: Page, site: Path, tmp_path: Path) -> None:
-    await sign_in(page, site, ChoicesBackend())
-    imported = tmp_path / "discarded-jobs.json"
-    imported.write_text("{}", encoding="utf-8")
-    await page.set_input_files("#file", imported)
-    await expect(page.locator("#importResult .notice")).to_have_text("Nothing new to bring over from the file.")
 
 
 # ---- Agents ----
@@ -777,17 +748,3 @@ async def test_bringing_filters_over_keeps_a_change_made_while_the_offer_waited(
     await until(lambda: prefs.writes)
     assert saved_filters(prefs)["q"] == "Analyst"
     assert await page.input_value("#q") == "Analyst"
-
-
-async def test_a_choice_pending_for_a_job_is_not_overwritten_by_the_file(
-    page: Page, site: Path, tmp_path: Path
-) -> None:
-    choices = ChoicesBackend([star_row("1", "Product Manager 1", "Tel Aviv, Israel", "Acme")])
-    await sign_in(page, site, choices)
-    choices.mode = "down"
-    await page.click(f"{PM1} [data-act=star]")  # un-star: a removal waits
-    imported = tmp_path / "discarded-jobs.json"
-    imported.write_text(json.dumps({"Acme|1": "x"}), encoding="utf-8")
-    await page.set_input_files("#file", imported)
-    await expect(page.locator("#importResult .notice")).to_contain_text("Nothing new")
-    assert (await pending(page))["Acme|1"]["state"] is None

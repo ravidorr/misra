@@ -7,7 +7,7 @@
  *     <div class="sheet-head"><h2 class="sheet-title" id="t" tabindex="-1">Filters</h2>
  *     <button type="button" class="btn btn-pill sheet-close">Close</button></div>
  *     <div class="sheet-body">Controls</div>
- *     <div class="sheet-foot"><button type="button" class="btn btn-link">Reset</button>
+ *     <div class="sheet-foot"><button type="button" class="btn btn-pill">Reset</button>
  *     <button type="button" class="btn btn-pill btn-primary sheet-done">Show 12 roles</button></div>
  *   </dialog>
  * Without a script the panel is a plain group of controls: a <div class="sheet"> takes the same panel look.

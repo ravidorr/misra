@@ -4,6 +4,19 @@ All notable changes are documented here. Format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
+### Changed
+
+- The "Level" chips (All, Intern, Junior, Not specified) and "New only" moved from under the search into the filters card, as its first controls, so the quick filters sit with the other filters and count in "Filters (n)" as before. Same ids, filter keys and WebMCP arguments, so saved filters, the account filter sync and the first-sign-in import are unchanged. "Starred (n)" stays beside "Filters": it is a view of its own, not a filter, and the starred list puts the filters card away, so the switch back has to stay outside it. On a phone the chips are one tap further away (open "Filters" first).
+
+- "Reset filters" is a real button (`btn btn-pill`, the secondary look, below "Show roles" in weight) instead of a link look. Its behavior is unchanged: it resets the filters at once, with no confirmation.
+
+- After "Reset filters" a line "Filters reset." with an "Undo" button shows for 6 seconds (`#resetNote`, `role="status"`, in the filters card's footer) and puts the filters back as they were, the account's saved filters included. Any other change to the filters ends the offer; there is no history and no dialog.
+- "Reset filters" no longer clears the search box: the search words are not a filter (they are not in the "Filters (n)" count), and the box is outside the filters card.
+
+### Removed
+
+- "Export discards" and "Import discards" on the filters card, the hidden file input behind them and the code that read and wrote the file. Accounts sync discards across devices, and the first sign-in already offers to bring this browser's own choices over (PLAN.md step 4.3), so the file was redundant. A signed-out visitor's discards stay in the browser as before. `PRIVACY.md` no longer says the "Import discards" file is read inside the browser (the sentence about the missing document upload keeps its first half); the lawyer must approve that edit before the merge.
+
 ## [0.49.1] - 2026-11-16
 
 ### Fixed

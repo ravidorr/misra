@@ -154,7 +154,7 @@ async def test_fr2_ac1_the_starred_jobs_can_be_viewed_as_a_list(page: Page, site
     assert await switch.get_attribute("aria-pressed") == "true"
     assert await page.locator("#list article").count() == len(("Acme|1", "Acme|2"))
     assert await summary(page) == "2 starred roles. The filters do not apply to this list."
-    for part in ("#controlsBar", "#moreFilters", "#searchBar", "#hiring"):
+    for part in ("#moreFilters", "#searchBar", "#hiring"):
         assert await page.locator(part).is_hidden()
     await page.click(f"{PM1} [data-act=star]")  # take the star off from the list: the card goes
     assert await page.locator("#list article").count() == 1
@@ -166,7 +166,7 @@ async def test_fr2_ac1_the_starred_jobs_can_be_viewed_as_a_list(page: Page, site
     )
     await switch.click()  # back to the roles, with their filters
     assert await switch.get_attribute("aria-pressed") == "false"
-    assert await page.locator("#controlsBar").is_visible()
+    assert await page.locator("#moreFilters").is_visible()
     assert await summary(page) == f"Showing {ISRAEL_JOBS} of {ISRAEL_JOBS} open roles in Israel. 0 discarded."
 
 
@@ -218,15 +218,9 @@ async def test_fr2_ac2_a_discarded_job_stays_hidden_until_it_is_restored(page: P
     assert json.loads((await stored(page))[DISCARDED]) == {}
 
 
-async def test_an_imported_discard_takes_the_star_of_that_job_away(page: Page, site: Path, tmp_path: Path) -> None:
+async def test_the_filters_card_has_no_discards_file_controls(page: Page, site: Path) -> None:
     await serve(page, site)
-    await page.click(f"{PM1} [data-act=star]")
-    imported = tmp_path / "discarded-jobs.json"
-    imported.write_text(json.dumps({"Acme|1": "2026-11-01", "Gone|9": "2026-11-01"}), encoding="utf-8")
-    await page.set_input_files("#file", imported)
-    await expect(page.locator(PM1)).to_have_count(0)
-    assert await starred_count(page) == "Starred (0)"
-    assert json.loads((await stored(page))[STARRED]) == {}
+    assert await page.locator("#exp, #imp, #file, input[type=file]").count() == 0  # accounts sync discards (step 4.3)
 
 
 async def test_the_page_reads_a_damaged_star_store_as_empty(page: Page, site: Path) -> None:
@@ -654,13 +648,10 @@ async def test_signing_out_returns_to_the_choices_of_this_browser(page: Page, si
     choices = ChoicesBackend([star_row("1", "Product Manager 1", "Tel Aviv, Israel", "Acme")])
     await sign_in(page, site, choices)
     assert await page.locator(PM1).get_attribute("data-starred") == "true"
-    assert await page.locator("#exp").is_visible()  # the discards file works for the account too (step 4.3)
-    assert await page.locator("#imp").is_visible()
     await page.click("#signOut")
     await page.wait_for_selector("#signIn")
     assert await page.locator(PM1).get_attribute("data-starred") == "false"  # the account's stars do not stay on screen
     assert await starred_count(page) == "Starred (0)"
-    assert await page.locator("#exp").is_visible()
     assert await page.locator("#syncNote").inner_text() == ""
     assert (await stored(page)).get(STARRED) is None  # nothing of the account was copied to this browser
 
