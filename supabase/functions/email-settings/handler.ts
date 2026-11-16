@@ -31,6 +31,7 @@
 import { bearerToken, identify } from '../_shared/identity.ts';
 import { ALLOWED_ORIGIN, MAX_BODY_BYTES, PAGE_URL, callDatabase, describe, fail as failShared, loadConfig as loadBase, newToken, readLimited, reply as replyShared } from '../_shared/subscription.ts';
 import type { Config as BaseConfig, Deps as BaseDeps } from '../_shared/subscription.ts';
+import { renderHtml } from './email-html.ts';
 import { validateRequest } from './validate.ts';
 import type { FieldErrors, TurnOn } from './validate.ts';
 
@@ -130,27 +131,25 @@ export async function hashKey(secret: string, day: string, kind: 'user' | 'addre
 // ---- The email -------------------------------------------------------------------------------------------------------
 
 /** The lawyer's wording, verbatim, with {{schedule}}, {{user_email}} and {{confirm_url}} filled in. */
-export function renderEmail(frequency: TurnOn['frequency'], to: string, link: string): { subject: string; text: string } {
-  return {
-    subject: SUBJECT,
-    text: [
-      'Confirm your Misra job alerts',
-      '',
-      `Someone (hopefully you) turned on ${frequency} job alerts for ${to} on Misra.`,
-      '',
-      'Open this link and press "Confirm my email" to start receiving new matching roles:',
-      link,
-      'The link works for 7 days.',
-      '',
-      'No emails will be sent until you press "Confirm my email" on that page. Once confirmed, your first email will include only roles that appear after confirmation.',
-      '',
-      '---',
-      'Misra (https://ravidorr.github.io/misra/) is a free, non-commercial project run by Raanan Avidor (raanan@avidor.org), Ditsa 8, Herzliya 4627825, Israel.',
-      'If you did not ask for this email, ignore it, and nothing will be sent to you.',
-      'Privacy: https://ravidorr.github.io/misra/privacy.html | Terms: https://ravidorr.github.io/misra/terms.html',
-      '',
-    ].join('\n'),
-  };
+export function renderEmail(frequency: TurnOn['frequency'], to: string, link: string): { subject: string; text: string; html: string } {
+  const text = [
+    'Confirm your Misra job alerts',
+    '',
+    `Someone (hopefully you) turned on ${frequency} job alerts for ${to} on Misra.`,
+    '',
+    'Open this link and press "Confirm my email" to start receiving new matching roles:',
+    link,
+    'The link works for 7 days.',
+    '',
+    'No emails will be sent until you press "Confirm my email" on that page. Once confirmed, your first email will include only roles that appear after confirmation.',
+    '',
+    '---',
+    'Misra (https://ravidorr.github.io/misra/) is a free, non-commercial project run by Raanan Avidor (raanan@avidor.org), Ditsa 8, Herzliya 4627825, Israel.',
+    'If you did not ask for this email, ignore it, and nothing will be sent to you.',
+    'Privacy: https://ravidorr.github.io/misra/privacy.html | Terms: https://ravidorr.github.io/misra/terms.html',
+    '',
+  ].join('\n');
+  return { subject: SUBJECT, text, html: renderHtml(SUBJECT, text, link) };
 }
 
 /** Resend did not accept the email. `refused` is a 4xx: the email was definitely not sent, so the place can be given back. */
@@ -163,11 +162,11 @@ class SendFailure extends Error {
   }
 }
 
-async function sendConfirmation(deps: Deps, mail: MailConfig, to: string, content: { subject: string; text: string }): Promise<void> {
+async function sendConfirmation(deps: Deps, mail: MailConfig, to: string, content: { subject: string; text: string; html: string }): Promise<void> {
   const response = await deps.fetch(RESEND_URL, {
     method: 'POST',
     headers: { authorization: `Bearer ${mail.resendApiKey}`, 'content-type': 'application/json' },
-    body: JSON.stringify({ from: mail.from, to: [to], reply_to: mail.replyTo, subject: content.subject, text: content.text }),
+    body: JSON.stringify({ from: mail.from, to: [to], reply_to: mail.replyTo, subject: content.subject, text: content.text, html: content.html }),
     signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
   });
   if (!response.ok) {

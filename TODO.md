@@ -42,6 +42,8 @@ Observations about live sites below come from checks made on 2026-11-14 and may 
     external stylesheet, and a test of the size limit. Render checks: Playwright at 600px and 375px, light and dark;
     send test messages to the maintainer's own address only (never to a subscriber) and look at them in Gmail (web and
     phone) and one other client; list what was checked.
+  - Status: built in the HTML emails PR (layout, tests, screenshots). Left: the maintainer looks at both emails in Gmail
+    (web and phone) and one other client, then this item is removed.
   - Done when: both emails go out as multipart (plain text plus HTML) with the same approved words, the maintainer has
     looked at both in Gmail and one other client, the tests above pass, `npm run lint` and `npm run test:coverage` pass,
     and the PR shows screenshots. A change to `send_digests.py` needs a version bump and a changelog entry.
