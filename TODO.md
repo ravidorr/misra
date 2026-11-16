@@ -26,7 +26,7 @@ Observations about live sites below come from checks made on 2026-11-14 and may 
     that stay readable where the client forces its own), 44px targets, contrast WCAG AA. Two or three layouts, one
     picked with reasons. 2) The `technical-writer` agent: wording stays EXACTLY as in `supabase/email-texts.md`
     (the lawyer approved it; the HTML only changes the layout, never the words, the footer, the postal address, the
-    unsubscribe link or the explanation of why the person got it). A wording change goes to the lawyer first, as always.
+    unsubscribe link or the explanation of why the person got it). No word is changed, added or removed.
     3) The `advisor`, before choosing the approach and before calling it done.
   - Build it for email clients, not browsers: table layout, inline styles (a build step may inline a small stylesheet),
     no JavaScript, no web fonts (system font stack), no background images, `role="presentation"` on layout tables,
