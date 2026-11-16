@@ -82,10 +82,10 @@ are the rules that protect the data.
 
 1. Read Supabase's auth and API logs for odd sign-ins or request patterns.
 2. List who has access to the Supabase organisation, the GitHub repository (collaborators, deploy keys, tokens), the
-   private backup repository `ravidorr/misra-backups` (collaborators and its one deploy key) the Resend team and the cron-job.org
+   private backup repository `ravidorr/misra-backups` (collaborators and its one deploy key), the Resend team and the cron-job.org
    account (and the expiry date of its GitHub token, renewing it before it expires), and remove anyone or anything not
    needed.
-3. Confirm two-factor sign-in is still on for all four providers.
+3. Confirm two-factor sign-in is still on for Supabase, GitHub, Resend and Google (and for cron-job.org, if it offers it).
 4. Rotate the service-role key and the Resend key, and update the secrets. Rotate `BACKUP_DEPLOY_KEY` (a deploy key has
    no expiry date): make a new key, add it to the deploy keys of `ravidorr/misra-backups`, update the Actions secret,
    run the workflow once, then delete the old key in that repository's deploy keys. The first rotation is due by

@@ -2,8 +2,8 @@ name: daily-job-digest
 
 # The title the Actions tab shows, and the only way the guard below tells a run started by cron-job.org from another
 # manual run: the runs API returns neither the inputs nor the actor's reason, but it does return this title. Only the
-# exact source "cron-job.org" is named; any other text typed into the input is never echoed into the title.
-run-name: ${{ github.event_name == 'schedule' && 'daily-job-digest (scheduled)' || inputs.source == 'cron-job.org' && 'daily-job-digest (cron-job.org)' || 'daily-job-digest (manual)' }}
+# exact source "cron-job.org" is named, and a dry run never gets that title (it sends nothing, so it must not count); any other text typed into the input is never echoed into the title.
+run-name: ${{ github.event_name == 'schedule' && 'daily-job-digest (scheduled)' || inputs.source == 'cron-job.org' && !inputs.digest_dry_run && 'daily-job-digest (cron-job.org)' || 'daily-job-digest (manual)' }}
 
 on:
   schedule:
@@ -11,7 +11,7 @@ on:
     # at :30 (it dropped the whole 2026-11-16 run and has started others about 7 hours late). So neither time is on
     # :00 or :30, and there are two: the first is the real one, the second is a later try that the guard job below skips
     # when a scheduled run already finished green that UTC day.
-    # 04:23 UTC = 06:23/07:23 Israel time (winter/summer); 09:53 UTC = 11:53/12:53 Israel time.
+    # A third start comes from cron-job.org (see the source input below). 04:23 UTC = 06:23/07:23 Israel time (winter/summer); 09:53 UTC = 11:53/12:53 Israel time.
     - cron: "23 4 * * *"
     - cron: "53 9 * * *"
   workflow_dispatch:
@@ -40,10 +40,10 @@ jobs:
     # for a scheduled start and for a manual start with source=cron-job.org (the third start, from outside GitHub). Any
     # other manual run skips this job and is never skipped. If the question fails, the answer is "do not skip" (fail
     # open): a double run is harmless (the digest records what it emailed and the crawl is idempotent), a missed day is
-    # not. A run counts if it was scheduled or was started by cron-job.org (its run-name above). Other manual runs never
+    # not. A run counts if it ran on main and was scheduled or was started by cron-job.org (its run-name above). Other manual runs never
     # count: one may have been a dry run that sent nothing. The run job below is skipped, not failed, when this says
     # skip, so the failure alert (a step of that job) does not fire.
-    if: ${{ github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.source == 'cron-job.org') }}
+    if: ${{ github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.source == 'cron-job.org' && !inputs.digest_dry_run) }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
@@ -62,7 +62,7 @@ jobs:
           today="$(date -u +%F)"
           if count="$(gh api -X GET "repos/${GITHUB_REPOSITORY}/actions/workflows/daily.yml/runs" \
               -f status=success -f "created=>=${today}" -f per_page=100 \
-              --jq '[.workflow_runs[] | select(.event == "schedule" or (.event == "workflow_dispatch" and .display_title == "daily-job-digest (cron-job.org)"))] | length')" \
+              --jq '[.workflow_runs[] | select(.head_branch == "main" and (.event == "schedule" or (.event == "workflow_dispatch" and .display_title == "daily-job-digest (cron-job.org)")))] | length')" \
               && [[ "$count" =~ ^[0-9]+$ ]]; then
             if [ "$count" -gt 0 ]; then
               skip=true

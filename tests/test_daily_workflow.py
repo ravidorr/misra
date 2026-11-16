@@ -154,10 +154,17 @@ def test_the_run_name_marks_a_cron_job_org_start_and_never_echoes_the_input() ->
     line = re.search(r"(?m)^run-name: \$\{\{ (.+) \}\}$", FULL)
     assert line
     assert line[1].count("inputs.source") == 1  # compared with the one exact value, never printed
-    assert "inputs.source == 'cron-job.org' && 'daily-job-digest (cron-job.org)'" in line[1]
+    # a dry run sends nothing, so it never gets the title that the guard counts
+    assert "inputs.source == 'cron-job.org' && !inputs.digest_dry_run && 'daily-job-digest (cron-job.org)'" in line[1]
     assert CRON_JOB_ORG_TITLE == "daily-job-digest (cron-job.org)"
     assert "github.event_name == 'schedule' && 'daily-job-digest (scheduled)'" in line[1]
     assert line[1].endswith("|| 'daily-job-digest (manual)'")  # every other start gets a fixed title
+
+
+def test_the_source_input_is_only_compared_in_the_run_name_and_the_guard_condition_never_in_a_script() -> None:
+    lines = [line.strip() for line in FULL.splitlines() if "inputs.source" in line]
+    assert [line.split(":", 1)[0] for line in lines] == ["run-name", "if"]
+    assert "github.event.inputs.source" not in FULL
 
 
 def test_the_guard_job_only_looks_it_holds_no_secret_and_writes_nothing() -> None:
@@ -174,8 +181,8 @@ def test_the_guard_job_only_looks_it_holds_no_secret_and_writes_nothing() -> Non
 
 def test_the_guard_runs_for_a_schedule_and_for_source_cron_job_org_and_counts_only_those_runs_green_today() -> None:
     assert (
-        "    if: ${{ github.event_name == 'schedule' || "
-        "(github.event_name == 'workflow_dispatch' && inputs.source == 'cron-job.org') }}\n"
+        "    if: ${{ github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' "
+        "&& inputs.source == 'cron-job.org' && !inputs.digest_dry_run) }}\n"
     ) in GUARD
     script = GUARD.split("run: |\n", 1)[1]
     assert "actions/workflows/daily.yml/runs" in script
@@ -183,7 +190,8 @@ def test_the_guard_runs_for_a_schedule_and_for_source_cron_job_org_and_counts_on
         assert param in script, param
     assert "event=" not in script  # the filter on the event is in the jq expression: two kinds of run count
     assert 'today="$(date -u +%F)"' in script  # the UTC day, like the commit message
-    assert 'select(.event == "schedule" or (.event == "workflow_dispatch" and .display_title == "' in script
+    assert 'select(.head_branch == "main" and (.event == "schedule" or (.event == "workflow_dispatch" and ' in script
+    assert '.display_title == "' in script
     assert CRON_JOB_ORG_TITLE in script
     assert "outputs:\n      skip: ${{ steps.check.outputs.skip }}\n" in GUARD
 
@@ -198,8 +206,14 @@ def test_the_guard_fails_open_the_skip_output_is_true_only_for_a_positive_count(
     assert script.rstrip().endswith('echo "skip=${skip}" >> "$GITHUB_OUTPUT"')  # one write, after the decision
 
 
-def run(event: str, title: str = "daily-job-digest (manual)") -> dict[str, str]:
-    return {"event": event, "display_title": title, "status": "completed", "conclusion": "success"}
+def run(event: str, title: str = "daily-job-digest (manual)", branch: str = "main") -> dict[str, str]:
+    return {
+        "event": event,
+        "display_title": title,
+        "head_branch": branch,
+        "status": "completed",
+        "conclusion": "success",
+    }
 
 
 SCHEDULED = run("schedule", "daily-job-digest (scheduled)")
@@ -233,13 +247,17 @@ def decide(tmp_path: Path, stub: str) -> str:
         ("echo garbage", "skip=false"),  # an odd answer is not a skip
         ("echo '<html>rate limited</html>'", "skip=false"),
         ("exit 1", "skip=false"),  # the API call failed: fail open, and the step still succeeds
+        ('echo \'{"message":"Bad credentials"}\'; exit 1', "skip=false"),
     ],
 )
 def test_the_guard_script_decides_from_the_count_and_never_fails(tmp_path: Path, stub: str, expected: str) -> None:
     assert decide(tmp_path, stub) == f"{expected}\n"
 
 
-@pytest.mark.skipif(shutil.which("jq") is None, reason="the guard's jq filter is run by the real jq (installed on CI)")
+@pytest.mark.skipif(
+    shutil.which("jq") is None and not os.environ.get("CI"),  # on CI (ubuntu has jq) a missing jq must fail, not skip
+    reason="the guard's jq filter is run by the real jq",
+)
 @pytest.mark.parametrize(
     ("runs", "expected"),
     [
@@ -251,6 +269,9 @@ def test_the_guard_script_decides_from_the_count_and_never_fails(tmp_path: Path,
         ([run("workflow_dispatch", "daily-job-digest")], "skip=false"),  # the title before run-name existed
         ([run("workflow_dispatch", "other (cron-job.org)")], "skip=false"),  # only the exact title counts
         ([run("push", CRON_JOB_ORG_TITLE)], "skip=false"),  # and only for a manual start
+        ([run("workflow_dispatch", CRON_JOB_ORG_TITLE, "feature")], "skip=false"),  # only runs on main count
+        ([run("schedule", branch="feature")], "skip=false"),
+        ([run("workflow_dispatch", "Daily-Job-Digest (Cron-Job.Org)")], "skip=false"),  # the match is exact
         ([PLAIN_MANUAL, CRON_JOB_ORG], "skip=true"),
         ([PLAIN_MANUAL, SCHEDULED, PLAIN_MANUAL], "skip=true"),
     ],
@@ -299,3 +320,13 @@ def test_the_run_job_keeps_its_permissions_group_and_secret_scope_with_the_guard
         "UNSUBSCRIBE_SECRET",
         "BACKUP_DEPLOY_KEY",
     }
+
+
+def test_the_guard_asks_for_green_runs_created_today_and_for_no_one_event(tmp_path: Path) -> None:
+    calls = tmp_path / "calls"
+    decide(tmp_path, f'echo "$@" > {calls}; echo 0')
+    asked = calls.read_text(encoding="utf-8")
+    today = subprocess.run(["date", "-u", "+%F"], capture_output=True, text=True, check=True).stdout.strip()
+    for part in ("-X GET", "status=success", f"created=>={today}", "per_page=100", "/actions/workflows/daily.yml/runs"):
+        assert part in asked, part
+    assert "event=" not in asked
