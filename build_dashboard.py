@@ -37,7 +37,7 @@ STATIC_FILES = (
     "templates/email.html",
     "templates/email.js",
 )
-# The daily-email signup (PLAN.md steps 6.2 and 6.6). While False the page has no "Daily email" button, no settings
+# The daily-email signup (PLAN.md steps 6.2 and 6.6). While False the page has no "Job alerts" button, no settings
 # dialog and no script for them, and docs/digest.js is not built: everything between `<!--digest-->` and
 # `<!--/digest-->` in templates/dashboard.html is cut out. It is True since PLAN.md step 6.6 (the signup is open),
 # together with the function secret DIGEST_SIGNUP_ENABLED=true (supabase/README.md), which the function checks again on

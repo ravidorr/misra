@@ -266,7 +266,7 @@ async def test_fr8_ac1_a_signed_in_user_has_a_daily_email_button_that_opens_the_
     world = World()
     problems = await signed_in(page, digest_site, world)
     button = page.locator("#digestOpen")
-    assert await button.inner_text() == "Daily email"
+    assert await button.inner_text() == "Job alerts"
     assert await button.get_attribute("aria-haspopup") == "dialog"
     assert await button.get_attribute("data-digest") == "open"
     assert await button.get_attribute("data-digest-state") == "off"
@@ -276,7 +276,7 @@ async def test_fr8_ac1_a_signed_in_user_has_a_daily_email_button_that_opens_the_
     await expect(dialog).to_be_visible()
     assert await dialog.get_attribute("aria-labelledby") == "digestTitle"
     assert await dialog.get_attribute("aria-describedby") == "digestIntro"
-    assert await page.locator("#digestTitle").inner_text() == "Daily email"
+    assert await page.locator("#digestTitle").inner_text() == "Job alerts"
     assert await page.evaluate("document.activeElement.id") == "digestTitle"
     await page.wait_for_selector("#digestDialog:not([data-state=loading])")
     assert await state_of(page) == "off"
@@ -924,7 +924,7 @@ async def test_the_lawyers_wording_is_on_the_control_with_big_links(page: Page, 
     await expect(line).to_be_visible()
     text = await line.evaluate("el => el.textContent")
     assert text == (
-        f"We will first send a confirmation link to {EMAIL}. Nothing is sent until you confirm, and you get an email "
+        f"We first send a confirmation link to {EMAIL}. Nothing is sent until you confirm, and you get an email "
         "only when there are new matches. One-click unsubscribe is in every email. By turning this on you agree to "
         "the Terms and the Privacy Notice."
     )
@@ -955,7 +955,7 @@ async def test_after_turning_it_on_the_status_names_the_address_and_the_schedule
     await page.click(f"input[name=digestFrequency][value={word}]")
     await page.click("#digestSend")
     await expect(page.locator("#digestNote")).to_have_text(
-        f"Check {EMAIL} for a confirmation link. Your {word} digest will start only after you click it."
+        f"Check {EMAIL} for a confirmation link. Your {word} job alerts start only after you click it."
     )
 
 
@@ -963,7 +963,7 @@ def test_the_page_built_from_the_repository_as_it_is_has_the_signup_and_keeps_th
     db: sqlite3.Connection, workdir: Path
 ) -> None:
     """No monkeypatch: the constant in build_dashboard.py is on (PLAN.md step 6.6), so the real build carries the
-    Daily email button, the dialog with the agreement line and the script, and the page still has no inline script or
+    Job alerts button, the dialog with the agreement line and the script, and the page still has no inline script or
     style and a hash for every script file."""
     assert build_dashboard.DIGEST_SIGNUP_ENABLED is True
     docs = build_site(db, workdir)

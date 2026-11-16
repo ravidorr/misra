@@ -107,7 +107,7 @@ async def test_the_dialog_says_exactly_what_is_removed_and_that_it_cannot_be_und
     paragraphs = await page.locator("#deleteText p").all_inner_texts()
     assert paragraphs == [
         "This immediately and permanently deletes your account, your email address (ann@test.example), your saved "
-        'filters, your stars, your "Not for me" choices, and any email digest settings or consent logs from our '
+        'filters, your stars, your "Not for me" choices, and any job alerts settings or consent logs from our '
         "database.",
         "Choices saved locally in this browser while you were signed out are not affected. This action cannot be "
         "undone.",
