@@ -14,7 +14,7 @@
 //            | `#already-unsubscribed`, `#unsubscribe-link-not-valid`, `#try-again`), |
 //            | because a function cannot render a page. The token is not in the      |
 //            | Location. A failed link ends on its own word, not `#link-not-valid`    |
-//            | (that is the confirmation failure, and its text is untrue here).      |
+//            | (the page's text for a failed confirmation, untrue for this link).    |
 //   POST     | RFC 8058 one-click (Gmail, Apple Mail): the provider POSTs             | yes
 //            | `List-Unsubscribe=One-Click` to the header URL; the body is ignored,   |
 //            | the token in the URL is the credential. 200 text/plain `Unsubscribed.` |
@@ -68,7 +68,7 @@ export function loadConfig(get: (name: string) => string | undefined): { config:
 
 const ANSWERS = ['unsubscribed', 'already_unsubscribed', 'unknown'] as const;
 
-/** The landing state of a failed unsubscribe link (templates/email.js). Not `link-not-valid`: that text is about confirmation links. */
+/** The landing state of a failed unsubscribe link (templates/email.js). Not `link-not-valid`: that page text is about confirmation links. */
 const LINK_NOT_VALID_WORD = 'unsubscribe-link-not-valid';
 
 const NOT_VALID = 'This link is not valid, or it is no longer active.';

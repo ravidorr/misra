@@ -3,8 +3,9 @@
    POSTs the token to the confirm-email function. The token is read from the fragment (no server ever sees it), removed
    from the address bar at once, and sent in the request body.
    Unsubscribe: the unsubscribe function has already done its work and redirects here with a word in the fragment.
-   A failed confirmation ends on `#link-not-valid`; a failed unsubscribe on `#unsubscribe-link-not-valid` (its text must
-   not mention the 7 days or a newer link: an unsubscribe link never expires and is never replaced). */
+   A failed confirmation shows NOT_VALID (from the confirm-email error codes; `#link-not-valid` is kept only for old
+   redirects); a failed unsubscribe lands on `#unsubscribe-link-not-valid` (its text must not mention the 7 days or a
+   newer link: an unsubscribe link never expires and is never replaced). */
 const FUNCTION_URL = '__SUPABASE_URL__/functions/v1/confirm-email';
 const TOKEN = /^[A-Za-z0-9_-]{43}$/u;
 const TIMEOUT_MS = 15000;

@@ -258,12 +258,11 @@ def test_the_page_knows_every_word_the_functions_send() -> None:
     script = (root / "templates" / "email.js").read_text(encoding="utf-8")
     unsubscribe = (root / "supabase" / "functions" / "unsubscribe" / "handler.ts").read_text(encoding="utf-8")
     confirm = (root / "supabase" / "functions" / "confirm-email" / "handler.ts").read_text(encoding="utf-8")
-    words = set(re.findall(r"redirectToPage\(\s*'([a-z-]+)'", unsubscribe)) | {
-        "unsubscribed",
-        "already-unsubscribed",
-        "link-not-valid",
-        "unsubscribe-link-not-valid",
-    }
+    sent = set(re.findall(r"redirectToPage\(\s*'([a-z-]+)'", unsubscribe))
+    sent |= set(re.findall(r"LINK_NOT_VALID_WORD = '([a-z-]+)'", unsubscribe))
+    words = sent | {"unsubscribed", "already-unsubscribed"}  # the two the handler maps from the database answer
+    assert "unsubscribe-link-not-valid" in sent
+    assert "link-not-valid" not in sent  # the confirmation text is not for an unsubscribe link
     assert words == {w for w in words if f"'{w}'" in script or f"{w}:" in script}
     codes = set(re.findall(r"fail\(origin, 4\d\d, '([a-z_]+)'", confirm)) - {"origin_not_allowed", "method_not_allowed"}
     assert {c for c in codes if c not in {"unsupported_media_type", "payload_too_large", "invalid_request"}} == {
