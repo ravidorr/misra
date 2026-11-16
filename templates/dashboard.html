@@ -70,14 +70,6 @@
   <div class="toolbar">
     <button type="button" class="btn btn-pill filters-open" id="filtersOpen" aria-haspopup="dialog">Filters</button>
     <button type="button" class="chip chip-new" id="starredView" aria-pressed="false">Starred (0)</button>
-    <button type="button" class="chip chip-new" id="onlyNew" aria-pressed="false">New only</button>
-  </div>
-
-  <div class="controls" id="controlsBar">
-    <div class="filter-group">
-      <h2 class="label" id="levels-h">Level</h2>
-      <div class="chip-group" id="levels" role="group" aria-labelledby="levels-h"></div>
-    </div>
   </div>
 
   <dialog class="sheet" id="moreFilters" aria-labelledby="sheetTitle" open>
@@ -86,6 +78,13 @@
       <button type="button" class="btn btn-pill sheet-close" id="filtersClose">Close</button>
     </div>
     <div class="sheet-body">
+      <div class="filter-group">
+        <h3 class="label" id="levels-h">Level</h3>
+        <div class="chip-group" id="levels" role="group" aria-labelledby="levels-h"></div>
+      </div>
+      <div class="filter-group">
+        <button type="button" class="chip chip-new" id="onlyNew" aria-pressed="false">New only</button>
+      </div>
       <div class="filter-group">
         <h3 class="label" id="types-h">Role type</h3>
         <div class="chip-group" id="types" role="group" aria-labelledby="types-h"></div>
@@ -106,12 +105,10 @@
       <label>Sort <select class="field" id="sort"><option value="new">Newest first</option><option value="co">Company A-Z</option><option value="title">Title A-Z</option></select></label>
       <label><input type="checkbox" id="hideStale"> Hide possibly old</label>
       <label><input type="checkbox" id="showGone"> <span>Show discarded (<span id="goneN">0</span>)</span></label>
-      <button type="button" class="btn btn-link" id="exp">Export discards</button>
-      <button type="button" class="btn btn-link" id="imp">Import discards</button>
-      <input type="file" id="file" accept="application/json" hidden>
     </div>
     <div class="sheet-foot">
-      <button type="button" class="btn btn-link" id="reset">Reset filters</button>
+      <div class="reset-note" id="resetNote" role="status"></div>
+      <button type="button" class="btn btn-pill" id="reset">Reset filters</button>
       <button type="button" class="btn btn-pill btn-primary sheet-done" id="filtersDone">Show roles</button>
     </div>
   </dialog>

@@ -46,7 +46,7 @@ Technical records, none of them personal to an account:
 
 ## What we never store
 
-- A CV, or any document you write or upload. The dashboard has no document upload (the "Import discards" file is read inside your browser and goes nowhere).
+- A CV, or any document you write or upload. The dashboard has no document upload.
 - A password. There is none: Google does the sign-in.
 - Your Google name or photo in our own tables.
 - Your IP address in our own tables (see the provider logs above for what the providers keep).
