@@ -33,8 +33,7 @@ import requests
 
 import classify
 import regions
-from common import EXCLUDED_MIN_NAME, MAX_PURGE_COMPANIES, ExclusionError, is_excluded, load_excluded
-from digest import DB
+from common import DB, EXCLUDED_MIN_NAME, MAX_PURGE_COMPANIES, ExclusionError, is_excluded, load_excluded
 
 BATCH = 500  # rows per upsert request
 PAGE = 1000  # rows asked per read; Supabase caps a response at 1,000 rows by default, a project may set less

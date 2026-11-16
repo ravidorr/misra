@@ -8,7 +8,7 @@ from urllib.parse import unquote, urlsplit
 
 import requests
 
-VERSION = "0.46.0"  # equal to the version in package.json and pyproject.toml (a test checks it)
+VERSION = "0.47.0"  # equal to the version in package.json and pyproject.toml (a test checks it)
 SITE_URL = "https://ravidorr.github.io/misra/"
 CONTACT = "raanan@avidor.org"
 ROBOTS_TOKEN = "Misra"  # the product token that robots.txt groups name
@@ -25,6 +25,7 @@ DROP_BELIEVED = f"drop believed after {DROP_HOLD_DAYS} held days"  # note prefix
 
 # robots.txt (the lawyer's answer, PLAN.md step 6.6). One switch: False logs what would be skipped and skips nothing.
 ROBOTS_ENFORCED = True
+DB = "data/jobs.db"  # the SQLite history
 ROBOTS_NOTE = "robots.txt does not allow it"  # crawl log note prefix of a company skipped because of robots.txt
 ROBOTS_CLOSE_DAYS = 7  # a company skipped by robots.txt on every run for this many days gets its open jobs closed
 ROBOTS_TIMEOUT = 10

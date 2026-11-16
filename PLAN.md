@@ -222,23 +222,21 @@ Decisions made in planning (they change the PRD's wording, so update the PRD in 
     is public, so it holds counts only. Exit code 1 after every user was handled when any failed (the workflow's alert fires in 6.4).
   - The digest subject and the list of roles are the project's own wording (the lawyer gave the footer and the headers); they are in
     `supabase/email-texts.md` and pinned. `digest.py` and `send_email.py` are untouched: they keep running as the maintainer's digest
-    until 6.4 makes the maintainer an ordinary subscriber, and that step also removes the selection logic they hold (`select`, `ROLE`, `EXCLUDE` in `digest.py`), which the FR-9 rule replaces.
+    until 6.4 makes the maintainer an ordinary subscriber; that step (v0.47.0) removed both, with the selection logic (`select`, `ROLE`, `EXCLUDE`) that the FR-9 rule replaces.
   Remaining checks, live only: set `UNSUBSCRIBE_SECRET` (function secret and Actions secret, same value), deploy `unsubscribe`
   (`supabase functions deploy unsubscribe --project-ref dncodqeqpoqwcxdctzco`), run the curl checks of `supabase/README.md`
   ("Subscribers: confirm and unsubscribe") with a throwaway row, and run `send_digests.py --dry-run` once with the real secrets.
-- [ ] 6.4 Daily workflow: add the digest step after the sync with the service-role key and Resend key in that step
+- [x] ~~6.4 Daily workflow: add the digest step after the sync with the service-role key and Resend key in that step
   only, keep the failure alert, and make the maintainer an ordinary subscriber. Done when: FR-8 AC 10 holds, and a manual run with a test
-  subscriber delivers one email and a second run delivers none.
-  Built in v0.28.0, in two halves; the step stays open until the second is done.
+  subscriber delivers one email and a second run delivers none.~~
+  Built in v0.28.0 in two halves, both done. Verified live on 2026-11-16: one digest email was delivered to the subscriber (the maintainer), and a second run delivered none.
   - Done: `daily.yml` runs `send_digests.py` after the sync and before the build and the deploy push, only after a good sync; the four secrets are on that
     step only; a failure fails the run, sends the `send_alert.py` email (its step list shows `digests=`) and does not stop the build or the data commit;
     the manual input `digest_dry_run` passes `--dry-run`. `tests/test_daily_workflow.py` pins all of it. No built file was added, so the staging list is unchanged.
-  - Switch, still on until the maintainer subscribes: the old single-recipient digest (`send_email.py`) runs behind the workflow constant
-    `LEGACY_MAINTAINER_DIGEST: "true"`. Nothing of it was deleted, so the maintainer's daily email is unchanged. When the maintainer has subscribed,
-    confirmed and received one digest from `send_digests.py`, one PR sets the constant to `"false"` and deletes `send_email.py` and the selection logic that FR-9
-    replaced in `digest.py` (`select`, `ROLE`, `EXCLUDE`), with the module-list clean-up (`CONTRIBUTING.md`, "The daily digest"). Keep `send_alert.py`.
-  - Live checks left: run the workflow by hand with `digest_dry_run` ticked and read the counts (all four secrets are Actions secrets already), and,
-    now that signups are open (step 6.6), run it with a test subscriber twice: one email, then none.
+  - Switch, done in v0.47.0: the old single-recipient digest (`send_email.py`) and the workflow constant `LEGACY_MAINTAINER_DIGEST` are gone, with the selection logic that FR-9
+    replaced in `digest.py` (`select`, `ROLE`, `EXCLUDE`); `digest.py` is deleted (its `DB` constant moved to `common.py`). The coverage gaps stay in the job log: the workflow step "Log the coverage gaps" (`python run.py --gaps`, `log_coverage_gaps`) prints the
+    `coverage gaps: ...` line and a `::warning::` annotation for a new gap, as `send_email.py` did, so a crawl problem is never silent. A broken check turns that step red, so `send_alert.py` (Gmail, kept) emails it like any failed step.
+  - Live checks, done 2026-11-16: the workflow run with a subscriber delivered one email, and the second run delivered none.
 - [x] ~~6.5 Volume check before opening: count subscribers against the Resend free limit shared with `easy-theory`, write
   the number and the upgrade trigger in `CONTRIBUTING.md`. Done when: the limit and current use are written down.~~
   Done in v0.28.0: `CONTRIBUTING.md`, "Resend volume", states the free limits as Resend's pricing and quotas pages give them on 2026-11-15, the arithmetic, zero real subscribers today, the
@@ -248,7 +246,7 @@ Decisions made in planning (they change the PRD's wording, so update the PRD in 
   outcome is in the PRD's "Before launch"; the gate stays until its wording is in). Nothing sends to a real
   user, and the sign-up control stays hidden behind a flag, until the answers are in and any required wording is added
   to the emails, `PRIVACY.md`, a new `TERMS.md` (as-is disclaimer) and the notice shown when the sign-in button is pressed (FR-1 AC 7). Done when: the answers are filed, those four are in, and the flag is switched on (both switches of step 6.2: the constant in `build_dashboard.py` and the function secret).~~
-  Done in v0.31.0: both switches are on, signups are open and the maintainer is the first subscriber (`CONTRIBUTING.md`, "Resend volume").
+  Closed: the wording is in, the constant is `True` (v0.31.0), and the function secret is set (signups are open, and the maintainer subscribed, confirmed and received a digest on 2026-11-16).
   Progress: the wording is in for `PRIVACY.md` (controller, why and voluntary, providers and countries, rights under
   Sections 13 and 14, contact), `TERMS.md` (linked from the site footer and the sign-in notice), the notice shown when the
   sign-in button is pressed (FR-1 AC 7, with links to both) and the footer links on the page. The email footer text is written in
@@ -280,9 +278,9 @@ Decisions made in planning (they change the PRD's wording, so update the PRD in 
   after `report_site_cleanup`); `SECURITY.md` scopes `BACKUP_DEPLOY_KEY` to `ravidorr/misra-backups` only, adds its rotation to the yearly review (by 2027-11-15) and the
   rule to delete any local clone of the backup repository at once; and the restore without `--create-auth-users` skips every user id no longer in `auth.users` (never resurrects a
   deleted account; `CONTRIBUTING.md`, "Restore", with a second rehearsal). No encryption of our own is claimed anywhere.
-  Opening day, in this order (signups are open since v0.31.0): apply the two cleanup migrations (before merging, or the next daily sync fails), merge, wait for `publish-docs`, run the signed-in checks that need the
+  Opening day, the order the maintainer followed (signups are open now: the maintainer's turn-on, confirmation and a delivered digest on 2026-11-16 show the function secret is set; that the signed-in checks with the secret unset were run is not recorded here): apply the two cleanup migrations (before merging, or the next daily sync fails), merge, wait for `publish-docs`, run the signed-in checks that need the
   secret unset (`supabase/README.md`, "Check it live"), then `supabase secrets set DIGEST_SIGNUP_ENABLED=true --project-ref dncodqeqpoqwcxdctzco`, then the maintainer's own turn-on flow
-  and `send_digests.py` twice with a test subscriber. The legacy maintainer digest stays until one digest from `send_digests.py` has reached the maintainer (step 6.4).
+  and `send_digests.py` twice with a test subscriber. The legacy maintainer digest was removed in v0.47.0, after one digest from `send_digests.py` reached the maintainer (step 6.4).
 
 ## FR-4 (richer job data)
 

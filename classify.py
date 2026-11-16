@@ -2,8 +2,8 @@
 
 The two are separate. `level()` gives Intern, Junior or Not specified. `role_types()` gives every type the title fits,
 or Other when none. Both are driven by data (the patterns below), so a new role type is one entry in `ROLE_TYPES` and a
-new keyword is one more string in a type's tuple. `INTERN`, `JUNIOR` and `PM_CORE` are the patterns the digest and the
-dashboard used before this module existed; they live here now, unchanged.
+new keyword is one more string in a type's tuple. `INTERN`, `JUNIOR` and `PM_CORE` are the patterns the old digest
+and the dashboard used before this module existed; they live here now, unchanged.
 """
 
 import re

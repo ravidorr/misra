@@ -17,7 +17,7 @@ Do not edit anything until you have read, in this order:
 2. `design-system/README.md`: the product's voice, labels and component rules.
 3. Every text source, so you know each message in context:
    - `templates/dashboard.html`, `templates/dashboard.js`, `templates/auth.js`, `templates/report.js`, `templates/email.html`, `templates/email.js`
-   - `build_dashboard.py` (`REASONS`, the coverage gap card), `digest.py`, `send_email.py`, `send_alert.py`
+   - `build_dashboard.py` (`REASONS`, the coverage gap card), `send_digests.py`, `send_alert.py`
    - `supabase/functions/**` (responses and emails)
    - `data/unresolved_candidates.csv` (`note` column, shown on the dashboard)
    - the docs: `CONTRIBUTING.md`, `SECURITY.md`, `SUPPORT.md`, `llms.txt`

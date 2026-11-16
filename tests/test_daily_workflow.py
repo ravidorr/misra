@@ -1,5 +1,5 @@
 """The daily workflow's digest step (PLAN.md step 6.4): where it sits, which secrets it sees, the dry-run input and
-the legacy maintainer digest switch. The workflow is read as text (no YAML parser is a dependency): steps start at
+that the legacy maintainer digest is gone. The workflow is read as text (no YAML parser is a dependency): steps start at
 `      - ` with two-space steps indentation under `    steps:`."""
 
 import os
@@ -86,25 +86,36 @@ def test_a_failed_digest_still_builds_and_commits_and_triggers_the_alert() -> No
     alert = next(step for name, step in all_steps.items() if name.startswith("Email an alert"))
     assert "failure() || cancelled()" in alert
     assert "digests=${{ steps.digests.outcome }}" in alert
-    assert "digest=${{ steps.digest.outcome }}" in alert
+    assert "digest=${{ steps.digest.outcome }}" not in alert  # the legacy step is gone
     assert "python3 send_alert.py" in alert
 
 
-def test_the_maintainer_digest_stays_behind_one_named_switch_that_is_on() -> None:
-    switch = re.search(r'(?m)^env:\n(?:  #.*\n)*  LEGACY_MAINTAINER_DIGEST: "(true|false)"$', WORKFLOW)
-    assert switch, "the switch is a workflow-level env constant"
-    assert switch[1] == "true", "the maintainer flips it when subscribed, not before (PLAN.md step 6.4)"
-    legacy = steps()["digest"]
-    assert "if: ${{ success() && env.LEGACY_MAINTAINER_DIGEST == 'true' }}" in legacy
-    assert "run: python send_email.py" in legacy
-    assert "success()" in legacy  # still skipped when the crawl failed, as before
+def test_the_legacy_maintainer_digest_is_gone() -> None:
+    assert "LEGACY_MAINTAINER_DIGEST" not in WORKFLOW
+    assert "send_email" not in WORKFLOW
+    assert "digest" not in steps()  # no step of that id; the subscriber digests are "digests"
+    assert "\nenv:" not in WORKFLOW  # no workflow-level constants (and never a secret)
 
 
 @pytest.mark.parametrize("secret", ["GMAIL_USER", "GMAIL_APP_PASSWORD", "DIGEST_TO"])
-def test_the_legacy_digest_and_the_alert_keep_their_gmail_secrets(secret: str) -> None:
-    assert f"{secret}: ${{{{ secrets.{secret} }}}}" in steps()["digest"]
-    alert = next(step for name, step in steps().items() if name.startswith("Email an alert"))
-    assert f"{secret}: ${{{{ secrets.{secret} }}}}" in alert
+def test_only_the_failure_alert_holds_the_gmail_secrets(secret: str) -> None:
+    holders = [name for name, step in steps().items() if f"secrets.{secret}" in step]
+    assert [name for name in holders if name.startswith("Email an alert")] == holders
+    assert len(holders) == 1
+
+
+def test_the_gaps_step_follows_the_crawl_runs_after_it_and_fails_the_run_without_stopping_the_sync() -> None:
+    ids = order()
+    assert ids.index("crawl") + 1 == ids.index("gaps") < ids.index("sync")
+    step = steps()["gaps"]
+    assert "if: ${{ always() && steps.crawl.outcome == 'success' }}" in step
+    assert "run: python run.py --gaps\n" in step
+    assert re.search(r"timeout-minutes: \d+", step)
+    assert "secrets." not in step  # it reads the committed database and needs nothing secret
+    assert "gaps=${{ steps.gaps.outcome }}" in next(s for n, s in steps().items() if n.startswith("Email an alert"))
+    assert "continue-on-error" not in step
+    for name, other in steps().items():  # a broken check never blocks the sync, the digests, the build or the commit
+        assert name in ("gaps",) or name.startswith("Email an alert") or "steps.gaps" not in other, name
 
 
 # ---- The schedule and the guard (a scheduled run that never starts, a second try, and when it is skipped) ----

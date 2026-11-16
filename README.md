@@ -7,9 +7,6 @@
 ```bash
 python3 discover.py        # data/seed_companies.csv -> data/companies.json (careers URL + ATS)
 python3 run.py             # crawl, diff into data/jobs.db
-python3 digest.py          # preview the maintainer digest (data/digest.html)
-python3 digest.py --commit # only after sending by hand; send_email.py does this itself
-python3 send_email.py      # send the maintainer digest (add --dry-run to preview)
 ```
 
 Adapters: Greenhouse, Lever, Ashby, Workable, SmartRecruiters, Comeet (public hosted pages), Comeet plugin pages (a WordPress career page whose job links `/co/<place>/<uid>/<title>` are drawn on the server; the slug is the page address), Workday (the public job search, Israel only; slug `tenant/wdN/site`), JazzHR (the board page of `<slug>.applytojob.com`), BambooHR (the `/careers/list` JSON of `<slug>.bamboohr.com`), Oracle Fusion HCM (the public requisition search, Israel only; slug `host/site`), Amazon (the search JSON of amazon.jobs for one country; slug `ISR`), Phenom career sites (the search widget filtered to Israel; slug `host/country/lang`), and a generic
@@ -19,15 +16,15 @@ Eightfold career sites (the page's own search results, paged with "Next jobs"); 
 `data/overrides.json` pins a company to an ATS/slug or to a career page URL (`"ats": "browser"`).
 Add `"israel_only": true` to an override to keep only jobs located in Israel; use it for large multinational boards.
 `survey.py` is a dev tool that sniffs which ATS a custom career page uses.
-A company seen for the first time is baselined silently, so adding companies never floods the maintainer digest or job alerts.
+A company seen for the first time is baselined silently, so adding companies never floods the job alerts.
 The dashboard lists roles from every company whose career page the daily crawl reads, with the live count in its footer; the rest are listed on its Coverage gaps card.
 
 ## Daily run (GitHub Actions)
 
-`.github/workflows/daily.yml` runs at 04:23 UTC, with a second try at 09:53 UTC that does nothing when the first one already finished green that day (CONTRIBUTING.md, "The daily digest"): crawl, email the maintainer digest, sync the jobs to Supabase, send the job alerts, build the dashboard, commit `data/jobs.db` and `docs/` straight to `main`, then back up the account tables.
-Repo secrets: `GMAIL_USER`, `GMAIL_APP_PASSWORD` (Gmail app password), `DIGEST_TO` (optional recipient), `DEPLOY_KEY` (private half of a write deploy key; it must be the deploy-key bypass actor of the `protect-main` ruleset, see AGENTS.md). The service and backup secrets are in CONTRIBUTING.md ("The daily digest" and "Backups of the account tables").
-The maintainer digest holds the new jobs only and is not sent on a day with none. Crawl problems (a company failing, held after a sharp drop, or closed after a believed sharp drop) are not in it: they are on the dashboard's coverage gap card, and `send_email.py` prints one line of counts and company names to the job log ("coverage gaps: ...").
-If a step fails or the run is cancelled, a last step emails a short alert listing the step outcomes with a link to the run (`send_alert.py`, standard library only). It uses the same Gmail account as the maintainer digest, so a Gmail outage is not reported that way; GitHub's failed-run notice is then the only signal.
+`.github/workflows/daily.yml` runs at 04:23 UTC, with a second try at 09:53 UTC that does nothing when the first one already finished green that day (CONTRIBUTING.md, "The daily digest"): crawl, log the coverage gaps, sync the jobs to Supabase, send the job alerts (`send_digests.py`), build the dashboard, commit `data/jobs.db` and `docs/` straight to `main`, then back up the account tables.
+Repo secrets: `GMAIL_USER`, `GMAIL_APP_PASSWORD` (Gmail app password) and `DIGEST_TO` (optional recipient), used by the failure alert only; `DEPLOY_KEY` (private half of a write deploy key; it must be the deploy-key bypass actor of the `protect-main` ruleset, see AGENTS.md). The service and backup secrets are in CONTRIBUTING.md ("The daily digest" and "Backups of the account tables").
+A job alert holds the new jobs only and is not sent on a day with none. Crawl problems (a company failing, held after a sharp drop, or closed after a believed sharp drop) are not in it: they are on the dashboard's coverage gap card, and the "Log the coverage gaps" step (`python run.py --gaps`) prints one line of counts and company names to the job log ("coverage gaps: ..."), as a `::warning::` annotation when a gap is new.
+If a step fails or the run is cancelled, a last step emails a short alert listing the step outcomes with a link to the run (`send_alert.py`, standard library only). It uses the maintainer's Gmail account, so a Gmail outage is not reported that way; GitHub's failed-run notice is then the only signal.
 Manual run: Actions tab, "daily-job-digest", Run workflow.
 
 ## Dashboard
