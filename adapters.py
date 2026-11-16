@@ -4,9 +4,10 @@
 import html
 import json
 import re
-from collections.abc import Callable, Iterator
+from collections import Counter
+from collections.abc import Callable, Iterable, Iterator
 from typing import Any
-from urllib.parse import urljoin, urlparse
+from urllib.parse import parse_qsl, urljoin, urlparse
 
 from common import ISRAEL, get, post
 
@@ -139,8 +140,58 @@ def smartrecruiters(slug: str) -> list[Job] | None:
             return out
 
 
+# Query parameters that track a visit or a share instead of naming a page: they differ per link, not per job.
+_COMEET_NOISE = frozenset(
+    {"t", "ref", "src", "share", "employee", "employeeshare", "gh_src", "from_app", "iscomingfromapp", "gclid", "_gl"}
+)
+_COMEET_NOISE_PREFIXES = ("utm_", "hsa_", "trakkr_", "gtm_")
+_COMEET_LISTING = frozenset(  # what a company calls the page that lists its jobs
+    {"career", "careers", "jobs", "openings", "open-positions", "job-openings", "positions", "vacancies"}
+)
+PageKey = tuple[str, str, tuple[tuple[str, str], ...]]
+
+
+def _page_key(url: str) -> PageKey:
+    """Where a link points, without what only tracks the visit: host, path without its end slash, and the query pairs
+    that are not tracking. Two links with one key are one page."""
+    u = urlparse(url)
+    query = sorted(
+        (k.strip().lower(), v)
+        for k, v in parse_qsl(u.query, keep_blank_values=True)
+        if k.strip()
+        and k.strip().lower() not in _COMEET_NOISE
+        and not k.strip().lower().startswith(_COMEET_NOISE_PREFIXES)
+    )
+    return u.netloc.lower(), u.path.rstrip("/"), tuple(query)
+
+
+def _is_above(key: PageKey, others: Iterable[PageKey]) -> bool:
+    return any(o[0] == key[0] and o[1].startswith(key[1] + "/") for o in others)
+
+
+def _generic_pages(pages: list[str]) -> set[PageKey]:
+    """The links, among a company's `url_active_page`s, that are not the page of one job: a page that more than one job
+    points to (a company's "careers" page, or one job's page that its other locations share), the site's home page,
+    a page without a query that is above the page of another job (`/careers` above `/careers/co/boston/AB.123/`), and
+    one that is named as the list of jobs (`/careers`), which is all there is to go by when a company has one job. The
+    pages that carry a job in the path or the query (`?job=AB.123`) differ per job and are kept."""
+    keys = [_page_key(p) for p in pages if p]
+    seen = Counter(keys)
+    return {
+        k
+        for k in seen
+        if seen[k] > 1
+        or (not k[2] and (not k[1] or _is_above(k, seen) or k[1].rsplit("/", 1)[-1].lower() in _COMEET_LISTING))
+    }
+
+
 def comeet(slug: str) -> list[Job] | None:
-    """slug is '<name>/<uid>' taken from comeet.com/jobs/<name>/<uid>. Job data is embedded in the page."""
+    """slug is '<name>/<uid>' taken from comeet.com/jobs/<name>/<uid>. Job data is embedded in the page.
+
+    A job's link is the page of the company's own site (`url_active_page`) when that page is the job's, and the page of
+    the job on Comeet (`url_comeet_hosted_page`, `/jobs/<name>/<uid>/<title>/<position uid>`) when it is not: some
+    companies fill `url_active_page` with their general careers page for some or all of their jobs. The job's id is its
+    Comeet uid in both cases, so a changed link never makes a job new."""
     r = get(f"https://www.comeet.com/jobs/{slug}")
     if r is None or r.status_code != HTTP_OK or "COMPANY_POSITIONS_DATA" not in r.text:
         return None
@@ -151,15 +202,18 @@ def comeet(slug: str) -> list[Job] | None:
         data = json.loads(m.group(1))
     except ValueError:
         return None
+    generic = _generic_pages([j.get("url_active_page") or "" for j in data])
     out: list[Job] = []
     for j in data:
         loc = j.get("location") or {}
+        own, hosted = j.get("url_active_page"), j.get("url_comeet_hosted_page")
+        url = hosted if own and _page_key(own) in generic else own
         out.append(
             _job(
                 j.get("uid"),
                 j.get("name"),
                 ", ".join(x for x in (loc.get("city"), loc.get("country")) if x),
-                j.get("url_active_page") or j.get("url_comeet_hosted_page"),
+                url or hosted or own,
                 team=j.get("department"),
                 posted=j.get("time_updated", ""),
             )

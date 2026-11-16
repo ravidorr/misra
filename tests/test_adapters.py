@@ -1,11 +1,13 @@
 import json
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlparse
 
 import pytest
 
 import adapters
 import discover
+from tests.conftest import COMEET_FEEDS
 from tests.fakes import FakeHttpResponse
 
 
@@ -157,6 +159,143 @@ def test_comeet(monkeypatch: pytest.MonkeyPatch) -> None:
     jobs = adapters.comeet("n/uid")
     assert jobs is not None
     assert [(j["job_id"], j["location"], j["url"]) for j in jobs] == [("u1", "TLV, IL", "a"), ("u2", "", "b")]
+
+
+COMEET_HOSTED = "https://www.comeet.com/jobs/"
+
+
+def comeet_feed(monkeypatch: pytest.MonkeyPatch, positions: list[dict[str, Any]]) -> list[adapters.Job]:
+    fake_get(monkeypatch, FakeHttpResponse(text=f"var COMPANY_POSITIONS_DATA = {json.dumps(positions)};"))
+    jobs = adapters.comeet("n/uid")
+    assert jobs is not None
+    return jobs
+
+
+def position(uid: str, active: str | None) -> dict[str, Any]:
+    return {"uid": uid, "name": uid, "url_active_page": active, "url_comeet_hosted_page": f"{COMEET_HOSTED}n/x/{uid}"}
+
+
+def test_comeet_keeps_the_company_page_of_a_job_when_it_is_the_jobs_own(monkeypatch: pytest.MonkeyPatch) -> None:
+    positions = COMEET_FEEDS["Claroty"]["positions"]
+    jobs = {j["job_id"]: j["url"] for j in comeet_feed(monkeypatch, positions)}
+    assert jobs["CE.079"] == "https://claroty.com/open-positions/CE.079"
+    assert jobs["EE.471"] == "https://claroty.com/open-positions/EE.471?Share&employee"  # a share query is kept as is
+
+
+def test_comeet_gives_a_job_whose_company_page_is_the_list_of_jobs_its_own_comeet_page(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    claroty = {j["job_id"]: j["url"] for j in comeet_feed(monkeypatch, COMEET_FEEDS["Claroty"]["positions"])}
+    assert claroty["25.57D"] == "https://www.comeet.com/jobs/Claroty/F2.004/tech-lead-platform-software-engineer/25.57D"
+    qodo = {j["job_id"]: j["url"] for j in comeet_feed(monkeypatch, COMEET_FEEDS["Qodo"]["positions"])}
+    assert qodo["55.57C"] == "https://www.comeet.com/jobs/qodo/B8.00B/bookkeeper/55.57C"
+    assert qodo["CE.A69"] == "https://www.qodo.ai/careers/co/boston/CE.A69/forward-deployed-engineer/all/"
+
+
+@pytest.mark.parametrize("company", ["Bizzabo", "Checkmarx"])
+def test_comeet_a_page_that_several_jobs_share_is_not_any_ones_link(
+    monkeypatch: pytest.MonkeyPatch, company: str
+) -> None:
+    positions = COMEET_FEEDS[company]["positions"]
+    jobs = comeet_feed(monkeypatch, positions)
+    assert [j["url"] for j in jobs] == [p["url_comeet_hosted_page"] for p in positions]
+
+
+def test_comeet_a_job_page_that_carries_the_job_in_its_query_is_kept(monkeypatch: pytest.MonkeyPatch) -> None:
+    positions = COMEET_FEEDS["Sunbit"]["positions"]
+    jobs = comeet_feed(monkeypatch, positions)
+    assert [j["url"] for j in jobs] == [p["url_active_page"] for p in positions]
+
+
+@pytest.mark.parametrize("company", sorted(COMEET_FEEDS))
+def test_comeet_no_two_jobs_of_a_company_share_a_link_and_none_is_the_list_of_jobs(
+    monkeypatch: pytest.MonkeyPatch, company: str
+) -> None:
+    """The audit of the stored jobs, on a real shape of each: a company whose feed has a link for every job must not
+    end up with one link for them all."""
+    jobs = comeet_feed(monkeypatch, COMEET_FEEDS[company]["positions"])
+    urls = [j["url"] for j in jobs]
+    assert len(set(urls)) == len(urls)
+    names = {"career", "careers", "jobs", "open-positions", "positions"}
+    listings = [u for u in urls if not urlparse(u).query and urlparse(u).path.rstrip("/").rsplit("/", 1)[-1] in names]
+    assert listings == []
+
+
+def test_comeet_a_changed_link_is_the_same_job(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Only the link changes: the id (the Comeet uid), the title and the place are what they were."""
+    first = comeet_feed(monkeypatch, [position("25.57D", "https://claroty.com/open-positions/25.57D")])[0]
+    both = [
+        position("25.57D", "https://claroty.com/open-positions"),
+        position("CE.079", "https://claroty.com/open-positions/CE.079"),
+    ]
+    second = comeet_feed(monkeypatch, both)[0]
+    assert second["job_id"] == first["job_id"] == "25.57D"
+    assert second["url"] != first["url"]
+    assert {k: v for k, v in second.items() if k != "url"} == {k: v for k, v in first.items() if k != "url"}
+
+
+@pytest.mark.parametrize(
+    ("active", "generic"),
+    [
+        ("https://x.test/careers/", True),  # the list of jobs, one job in the feed
+        ("https://x.test", True),  # the home page
+        ("https://x.test/", True),
+        ("https://x.test/careers?t=1794790605932", True),  # a tracking query does not make it a job's page
+        ("https://x.test/Careers?utm_source=a&ref=b", True),
+        ("https://x.test/careers/?job=AB.123", False),  # the job is in the query
+        ("https://x.test/jobs", True),
+        ("https://x.test/openings/", True),
+        ("https://x.test/open-positions", True),
+        ("https://x.test/job-openings", True),
+        ("https://x.test/positions", True),
+        ("https://x.test/vacancies", True),
+        ("https://x.test/p?trakkr_fresh=1&gtm_latency=2&gclid=3&src=4&_gl=5", False),  # a page named p, tracking only
+        ("https://x.test/careers-il/", False),  # not a listing name
+        ("https://x.test/jobs/36-475?t=1", False),
+        ("https://x.test/comeetitem/8b071/", False),  # the company's own id for the job
+    ],
+)
+def test_comeet_which_company_pages_are_the_list_of_jobs(
+    monkeypatch: pytest.MonkeyPatch, active: str, generic: bool
+) -> None:
+    (job,) = comeet_feed(monkeypatch, [position("AB.123", active)])
+    assert job["url"] == (f"{COMEET_HOSTED}n/x/AB.123" if generic else active)
+
+
+def test_comeet_the_same_page_with_other_tracking_is_one_page(monkeypatch: pytest.MonkeyPatch) -> None:
+    jobs = comeet_feed(
+        monkeypatch, [position("A", "https://x.test/p/?t=1&hsa_cam=2"), position("B", "https://x.test/p?utm_x=1#top")]
+    )
+    assert [j["url"] for j in jobs] == [f"{COMEET_HOSTED}n/x/A", f"{COMEET_HOSTED}n/x/B"]
+
+
+def test_comeet_a_page_above_the_page_of_another_job_is_not_a_job_page(monkeypatch: pytest.MonkeyPatch) -> None:
+    """`/company/work` is not named as a list of jobs: only the page of another job below it says it is one."""
+    jobs = comeet_feed(
+        monkeypatch,
+        [
+            position("A", "https://x.test/company/work?trakkr_fresh=1&gtm_latency=2&gclid=3&src=4&_gl=5"),
+            position("B", "https://x.test/company/work/B"),
+        ],
+    )
+    assert [j["url"] for j in jobs] == [f"{COMEET_HOSTED}n/x/A", "https://x.test/company/work/B"]
+
+
+def test_comeet_a_page_on_another_host_is_not_below_a_listing(monkeypatch: pytest.MonkeyPatch) -> None:
+    jobs = comeet_feed(monkeypatch, [position("A", "https://a.test/open/AB.123"), position("B", "https://b.test/open")])
+    assert [j["url"] for j in jobs] == ["https://a.test/open/AB.123", "https://b.test/open"]
+
+
+def test_comeet_without_a_comeet_page_the_company_page_stays_and_without_either_there_is_no_link(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    positions = [
+        {"uid": "A", "name": "A", "url_active_page": "https://x.test/careers"},
+        {"uid": "B", "name": "B"},
+        {"uid": "C", "name": "C", "url_active_page": "", "url_comeet_hosted_page": f"{COMEET_HOSTED}c"},
+    ]
+    urls = [j["url"] for j in comeet_feed(monkeypatch, positions)]
+    assert urls == ["https://x.test/careers", None, f"{COMEET_HOSTED}c"]
 
 
 @pytest.mark.parametrize(
