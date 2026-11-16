@@ -409,7 +409,7 @@ def test_weekly_is_one_summary_on_sunday_and_daily_every_day(rig: Rig) -> None:
     assert (summary.due, summary.not_due, summary.sent) == (2, 0, 2)
     weekly = [email for email in rig.mail.sent if email["to"] == ["weekly@example.test"]]
     assert len(weekly) == 1 and weekly[0]["subject"].startswith("Misra weekly: ")
-    assert "this weekly digest because" in weekly[0]["text"]
+    assert "this weekly email because" in weekly[0]["text"]
 
 
 def test_a_weekly_summary_gathers_what_appeared_during_the_week_and_is_empty_on_a_quiet_week(rig: Rig) -> None:
@@ -623,7 +623,7 @@ def test_every_email_has_the_one_click_headers_the_reply_to_the_project_from_and
         assert "html" not in email  # plain text
         assert email["text"].endswith(send_digests.render_footer(frequency, url))
         assert f"Unsubscribe in one click (no sign-in needed):\n{url}\n" in email["text"]
-        assert f"this {frequency} digest because you confirmed" in email["text"]
+        assert f"this {frequency} email because you confirmed" in email["text"]
 
 
 def test_the_email_has_job_listings_only_never_coverage_gaps(rig: Rig) -> None:

@@ -61,7 +61,7 @@ JOB_COLUMNS = "company,job_id,title,team,location,url,status,first_seen,level,ro
 # The digest footer of supabase/email-texts.md, line for line. {{schedule}} and {{unsubscribe_url}} are filled in.
 FOOTER = (
     "---\n"
-    "You are receiving this {{schedule}} digest because you confirmed job alerts on Misra "
+    "You are receiving this {{schedule}} email because you confirmed job alerts on Misra "
     "(https://ravidorr.github.io/misra/).\n"
     "Misra is a free, non-commercial project run by Raanan Avidor (raanan@avidor.org), Ditsa 8, Herzliya 4627825, "
     "Israel. Job listings are collected automatically from public career pages and are provided as-is without "

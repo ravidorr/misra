@@ -13,7 +13,7 @@ MAX_TERMS_BULLETS = 6
 PROMISED_DAYS = 30
 FOOTERS = 2  # the confirmation email and the digest
 DIGEST_FOOTER = (
-    "You are receiving this {{schedule}} digest because you confirmed job alerts on Misra "
+    "You are receiving this {{schedule}} email because you confirmed job alerts on Misra "
     "(https://ravidorr.github.io/misra/). Misra is a free, non-commercial project run by Raanan Avidor "
     "(raanan@avidor.org), Ditsa 8, Herzliya 4627825, Israel. Job listings are collected automatically "
     "from public career pages and are provided as-is without guarantee that they are complete or "
@@ -60,7 +60,7 @@ def test_the_privacy_notice_says_why_the_data_is_collected_and_that_it_is_volunt
     assert "cannot save your choices across devices" in body
     assert "cannot get the email" in body
     assert (
-        "If you turn on the email digest, your email address is also used to send you the job alerts you asked for, "
+        "If you turn on job alerts, your email address is also used to send you the job alerts you asked for, "
         "and for nothing else."
     ) in body  # the lawyer's sentence, true since the signup opened
 
@@ -73,8 +73,8 @@ def test_the_privacy_notice_names_the_providers_and_where_they_are() -> None:
     assert "your account is stored at Supabase in the EU" in body
     assert "standard data processing agreement" in body
     assert (
-        "**Resend** (Ireland): sends the site-report email to the maintainer and, if you turn on the email digest, "
-        "processes your email address and the matched job links to deliver your confirmation and digest emails."
+        "**Resend** (Ireland): sends the site-report email to the maintainer and, if you turn on job alerts, "
+        "processes your email address and the matched job links to deliver your confirmation and job alert emails."
     ) in body
 
 
@@ -146,7 +146,7 @@ def test_the_digest_is_described_in_the_present_tense_as_it_is_built() -> None:
     assert not stale, stale
     settings = next(line for line in text.splitlines() if line.startswith("- **Email settings**"))
     for phrase in (
-        'The "Daily email" button on the dashboard, for signed-in users, turns the digest on and off.',
+        'The "Job alerts" button on the dashboard, for signed-in users, turns job alerts on and off.',
         "the address it goes to (your Google email, or another one you type)",
         "the filters you copied for it",
         "whether you want it daily or weekly",
@@ -162,7 +162,7 @@ def test_the_digest_is_described_in_the_present_tense_as_it_is_built() -> None:
         "Deleting your account removes all of it, including that record.",
     ):
         assert phrase in settings, phrase
-    assert 'we keep its settings (see "What we store")' in sections(text)["The short version"]
+    assert 'we keep their settings (see "What we store")' in sections(text)["The short version"]
 
 
 def test_the_signup_is_open_so_the_privacy_notice_must_describe_a_live_digest() -> None:
@@ -172,8 +172,8 @@ def test_the_signup_is_open_so_the_privacy_notice_must_describe_a_live_digest() 
     assert build_dashboard.DIGEST_SIGNUP_ENABLED is True
     text = read("PRIVACY.md")
     assert not [phrase for phrase in ("not live", "no real subscription exists") if phrase in text]
-    assert "If you turn on the email digest" in text
-    assert "if you turn on the email digest, processes your email address" in text
+    assert "If you turn on job alerts" in text
+    assert "if you turn on job alerts, processes your email address" in text
 
 
 def test_the_agreement_line_sits_next_to_the_email_control_and_is_in_the_dialog_that_the_switch_builds() -> None:
@@ -232,7 +232,7 @@ def test_the_email_texts_are_kept_exactly_in_one_file_for_the_steps_that_build_t
     assert DIGEST_FOOTER in flat
     assert CONFIRM_FOOTER in flat
     assert "Subject: `Confirm your Misra job alerts`" in texts
-    assert "Someone (hopefully you) turned on the {{schedule}} job digest for {{user_email}} on Misra." in texts
+    assert "Someone (hopefully you) turned on {{schedule}} job alerts for {{user_email}} on Misra." in texts
     assert "Unsubscribe in one click (no sign-in needed):\n{{unsubscribe_url}}" in texts
     assert "Reply-To: raanan@avidor.org" in texts
     for needle in UNSUBSCRIBE_HEADERS:

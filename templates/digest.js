@@ -1,5 +1,5 @@
-/* The "Daily email" settings (PLAN.md step 6.2, PRD FR-8 AC 1 to 3), for signed-in users only. A native dialog opened by the
-   "Daily email" button next to "Sign out". It is a separate module on purpose, like report.js: the roles never wait for
+/* The "Job alerts" settings (PLAN.md step 6.2, PRD FR-8 AC 1 to 3), for signed-in users only. A native dialog opened by the
+   "Job alerts" button next to "Sign out". It is a separate module on purpose, like report.js: the roles never wait for
    it, and a failure here cannot stop them. The build leaves it out of the page entirely while the signup switch is off
    (DIGEST_SIGNUP_ENABLED in build_dashboard.py).
 
@@ -323,7 +323,7 @@ if (open && dialog) {
         success: (answer) =>
           answer.state === 'on'
             ? 'The email was already on for this address, so nothing was changed and nothing was sent.'
-            : `Check ${sentTo} for a confirmation link. Your ${running() ? view.row.frequency : view.draft.frequency} digest will start only after you click it.${state === 'on' ? ' The email stays paused until then.' : ''}`,
+            : `Check ${sentTo} for a confirmation link. Your ${running() ? view.row.frequency : view.draft.frequency} job alerts start only after you click it.${state === 'on' ? ' The email stays paused until then.' : ''}`,
       },
     );
   }

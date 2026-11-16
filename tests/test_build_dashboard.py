@@ -492,7 +492,7 @@ DIGEST_PARTS = 3
 DIGEST_PAGE = (
     '<head><script integrity="__SRI_AUTH_JS__"></script>'
     '<!--digest--><script integrity="__SRI_DIGEST_JS__" src="digest.js"></script><!--/digest--></head>'
-    '<body>a<!--digest--><button id="digestOpen">Daily email</button><!--/digest-->b'
+    '<body>a<!--digest--><button id="digestOpen">Job alerts</button><!--/digest-->b'
     '<!--digest-->\n<dialog id="digestDialog"></dialog>\n<!--/digest-->c</body>'
 )
 
@@ -516,7 +516,7 @@ def test_with_the_signup_switch_off_the_page_has_no_daily_email_control_script_o
     docs = build_with_digest_page(db, workdir)
     html = (docs / "index.html").read_text(encoding="utf-8")
     assert "digest" not in html.lower()
-    assert "Daily email" not in html
+    assert "Job alerts" not in html
     assert html.startswith('<head><script integrity="sha384-')
     assert html.endswith("</head><body>abc</body>")
     assert not (docs / "digest.js").exists()  # not built, and an old one does not outlive the switch
@@ -531,7 +531,7 @@ def test_with_the_signup_switch_on_the_page_has_the_control_the_script_and_its_i
     digest = (docs / "digest.js").read_bytes()
     integrity = "sha384-" + base64.b64encode(hashlib.sha384(digest).digest()).decode()
     assert f'<script integrity="{integrity}" src="digest.js"></script>' in html
-    assert '<button id="digestOpen">Daily email</button>' in html
+    assert '<button id="digestOpen">Job alerts</button>' in html
     assert '<dialog id="digestDialog"></dialog>' in html
     assert "<!--digest-->" not in html
     assert "<!--/digest-->" not in html
@@ -555,7 +555,7 @@ def test_removing_the_daily_email_control_leaves_no_whitespace_only_line(
     """The indented control sits on its own line; html-validate rejects the blank, indented line it would leave."""
     monkeypatch.setattr(build_dashboard, "DIGEST_SIGNUP_ENABLED", False)
     template = (
-        "<div>\n  <span>a</span>\n  <!--digest--><button>Daily email</button><!--/digest-->\n  <span>b</span>\n</div>\n"
+        "<div>\n  <span>a</span>\n  <!--digest--><button>Job alerts</button><!--/digest-->\n  <span>b</span>\n</div>\n"
     )
     write_css(workdir)
     write_static(workdir)

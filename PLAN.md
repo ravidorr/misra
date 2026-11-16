@@ -176,16 +176,16 @@ Decisions made in planning (they change the PRD's wording, so update the PRD in 
   my email" copying regions, levels, role types and keywords only. Sends the confirmation email through Resend.
   Done when: FR-8 AC 1 to 3 hold.~~
   The confirmation email is plain text, subject "Confirm your Misra job alerts", with `Reply-To` `raanan@avidor.org`, the
-  lawyer's body ("Someone (hopefully you) turned on the {{schedule}} job digest for {{user_email}} on Misra." and the
+  lawyer's body ("Someone (hopefully you) turned on {{schedule}} job alerts for {{user_email}} on Misra." and the
   rest) and this footer: `Misra (https://ravidorr.github.io/misra/) is a free, non-commercial project run by Raanan Avidor (raanan@avidor.org). If you did not ask for this email, ignore it, and nothing will be sent to you.` then the privacy and terms links.
   It does not carry the digest's "you signed up" sentence, because its reader may be someone who did not ask.
   Built as the Edge Function `email-settings` (turn on, turn off; the user id only from the verified token; limits of 3
   confirmation emails per user, 3 per address and 30 in all per day, counted in the database; the same unsubscribe
-  clean-up as the link), the migration `20261118100000_digest_signup_and_limits.sql` and the "Daily email" dialog
+  clean-up as the link), the migration `20261118100000_digest_signup_and_limits.sql` and the "Job alerts" dialog
   (`templates/digest.js`). The whole signup is behind two switches, both off: `DIGEST_SIGNUP_ENABLED = False` in
   `build_dashboard.py` (the page has no button, dialog or script; on since v0.31.0) and the function secret `DIGEST_SIGNUP_ENABLED` (the
   function refuses to create a subscription unless it is `true`). Step 6.6 switches them on (`supabase/README.md`,
-  "Daily email"): set `DIGEST_SIGNUP_ENABLED = True` in `build_dashboard.py` and run
+  "Job alerts"): set `DIGEST_SIGNUP_ENABLED = True` in `build_dashboard.py` and run
   `supabase secrets set DIGEST_SIGNUP_ENABLED=true --project-ref dncodqeqpoqwcxdctzco`. The control carries the lawyer's wording (label "Email me new matching roles", Daily or Weekly, helper text with the
   address and links to the Terms and the Privacy Notice, and "Check ADDRESS for a confirmation link..." after turning on);
   the confirmation email is his text verbatim. To close signups again, unset the secret; never set the build constant back

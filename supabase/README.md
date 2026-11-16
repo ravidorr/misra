@@ -524,7 +524,7 @@ GET unsubscribes that person. GET and POST are one click with no second button, 
 cannot be told from the person. HEAD never acts, so a scanner that only probes the link changes nothing. The user can turn the
 email on again; confirming, in contrast, can never happen from a GET.
 
-The page `email.html` says, for an unsubscribe: your digest stopped, your digest filters and history of emailed jobs were
+The page `email.html` says, for an unsubscribe: your job alerts stopped, your alert filters and history of emailed jobs were
 deleted, your Misra account (stars, "Not for me" choices, dashboard filters) is unchanged. That matches the SQL: the
 function clears `filters`, `frequency`, the confirmation token and the user's `emailed` rows, and touches no account table.
 The audit record (address, consent timestamps, the unsubscribe hash) is kept on purpose (the consent log).
@@ -608,7 +608,7 @@ rows cascade. In a browser open `https://ravidorr.github.io/misra/email.html#tok
 the Confirm button, and the row stays unconfirmed until it is pressed. That a 303 from a function reaches the browser on the
 default domain is assumed: the GET above confirms it.
 
-## Daily email: turn it on and off (Edge Function `email-settings`)
+## Job alerts: turn them on and off (Edge Function `email-settings`)
 
 PLAN.md step 6.2, PRD FR-8 AC 1 to 3: a signed-in user turns the personalised email on or off, chooses the address (their
 Google email by default), daily or weekly, and copies four dashboard filters for it. This step delivers the dashboard
@@ -618,7 +618,7 @@ switches on, the only email that ever leaves is the confirmation email.
 Files: `supabase/migrations/20261118100000_digest_signup_and_limits.sql`, `supabase/functions/email-settings/`
 (`index.ts` starts the server, `handler.ts` holds the logic, `validate.ts` the input checks),
 `supabase/functions/_shared/identity.ts` (who the token belongs to), `supabase/config.toml` (`verify_jwt = true`),
-`templates/digest.js` and the marked parts of `templates/dashboard.html` (the "Daily email" button and dialog),
+`templates/digest.js` and the marked parts of `templates/dashboard.html` (the "Job alerts" button and dialog),
 `build_dashboard.py` (the switch).
 
 ### The two switches (the constant is on since v0.31.0; the secret is set on opening day)
@@ -631,7 +631,7 @@ the agreement line (a press in between is answered "not open yet", 403 `signup_c
 **Opening day, in this order** (nothing here is done by the pull request): (1) BEFORE merging, apply the migrations
 `20261119100000_report_site_cleanup.sql` and `20261120100000_confirm_counters_cleanup.sql` if they are not applied yet (the daily
 sync of the merged code calls both cleanups and fails on a missing function; they only add functions, so applying them early is
-safe); (2) merge the v0.31.0 pull request and wait for the `publish-docs` run to publish the page with the "Daily email" button
+safe); (2) merge the v0.31.0 pull request and wait for the `publish-docs` run to publish the page with the "Job alerts" button
 and `digest.js`; (3) `supabase secrets set --project-ref dncodqeqpoqwcxdctzco
 DIGEST_SIGNUP_ENABLED=true`; (4) the signed-in live checks that waited for this day, listed under "Check it live" below: turning on
 with the secret unset is 403 `signup_closed` (do it BEFORE step 3 if you want that check), turning off with no row is a 200, and the
@@ -686,9 +686,9 @@ the stateless unsubscribe token (see "Tokens").
 
 The confirmation email is plain text from `Misra <digest@send.avidor.org>` with `Reply-To: raanan@avidor.org` (the sending address
 cannot receive mail), subject "Confirm your Misra job alerts". The body is the lawyer's wording, verbatim: "Someone (hopefully
-you) turned on the daily (or weekly) job digest for ADDRESS on Misra", the link
+you) turned on daily (or weekly) job alerts for ADDRESS on Misra", the link
 `https://ravidorr.github.io/misra/email.html#token=<token>` (the token in the fragment, as step 6.1 designed), that nothing is sent
-unless the link is clicked and that the first digest holds only roles that appear after confirmation, and a footer naming Misra and
+unless the link is clicked and that the first email holds only roles that appear after confirmation, and a footer naming Misra and
 Raanan Avidor, saying to ignore the email if it was not asked for, with links to the privacy notice and the terms
 (`renderEmail` in `handler.ts`; `test/email-settings.test.ts` pins the whole text). The raw token exists only
 in that email and in the one request to Resend, and is never logged or returned.

@@ -12,12 +12,12 @@ Subject: `Confirm your Misra job alerts`
 ```text
 Confirm your Misra job alerts
 
-Someone (hopefully you) turned on the {{schedule}} job digest for {{user_email}} on Misra.
+Someone (hopefully you) turned on {{schedule}} job alerts for {{user_email}} on Misra.
 
 Click this link to confirm and start receiving new matching roles:
 {{confirm_url}}
 
-No emails will be sent unless you click the link above. Once confirmed, your first digest will include only roles that appear after confirmation.
+No emails will be sent unless you click the link above. Once confirmed, your first email will include only roles that appear after confirmation.
 
 ---
 Misra (https://ravidorr.github.io/misra/) is a free, non-commercial project run by Raanan Avidor (raanan@avidor.org), Ditsa 8, Herzliya 4627825, Israel.
@@ -49,7 +49,7 @@ This footer ends every digest email, after the list of roles.
 
 ```text
 ---
-You are receiving this {{schedule}} digest because you confirmed job alerts on Misra (https://ravidorr.github.io/misra/).
+You are receiving this {{schedule}} email because you confirmed job alerts on Misra (https://ravidorr.github.io/misra/).
 Misra is a free, non-commercial project run by Raanan Avidor (raanan@avidor.org), Ditsa 8, Herzliya 4627825, Israel. Job listings are collected automatically from public career pages and are provided as-is without guarantee that they are complete or still open.
 
 Unsubscribe in one click (no sign-in needed):

@@ -20,7 +20,7 @@ const NOT_VALID = [
 ];
 const UNSUBSCRIBED = [
   'You have been unsubscribed',
-  'We have stopped your email digest at once and deleted your digest filters and history of emailed jobs. Your Misra account (stars, "Not for me" choices, and dashboard filters) is unchanged. To delete your entire account and all stored data, sign in on the dashboard and choose "Delete my account".',
+  'We stopped your job alerts and deleted your alert filters and history of emailed jobs. Your Misra account (stars, "Not for me" choices, and dashboard filters) is unchanged. To delete your entire account and all stored data, sign in on the dashboard and choose "Delete my account".',
 ];
 const WORDS = {
   unsubscribed: UNSUBSCRIBED,
@@ -38,8 +38,8 @@ const CONFIRM_ERRORS = {
 function confirmed(schedule) {
   const which = schedule === 'daily' || schedule === 'weekly' ? `a ${schedule} email` : 'a daily or weekly email, as you chose,';
   return [
-    'Your job digest is confirmed',
-    `You will now receive ${which} when new roles match your saved filters. Your first digest will include only roles posted from now on, and you can unsubscribe in one click from any email.`,
+    'Your job alerts are confirmed',
+    `You now get ${which} when new roles match your saved filters. Your first email includes only roles posted from now on, and you can unsubscribe in one click from any email.`,
   ];
 }
 
@@ -91,7 +91,7 @@ async function confirm(token) {
 const fragment = readFragment();
 const token = fragment.startsWith('token=') ? fragment.slice('token='.length) : '';
 if (TOKEN.test(token)) {
-  show(['Confirm your email', 'Press the button to start your Misra job digest by email. Nothing is sent until you do.'], { done: false });
+  show(['Confirm your email', 'Press the button to start your Misra job alerts. Nothing is sent until you do.'], { done: false });
   actions.hidden = false;
   button.addEventListener('click', () => {
     void confirm(token);
