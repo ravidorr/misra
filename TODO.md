@@ -169,6 +169,15 @@ Observations about live sites below come from checks made on 2026-11-14 and may 
       Robotics' list shows "No items found"; Guesty's page is a Next.js app that shows no uid even on a job page. Guessing
       the Greenhouse, Lever, Ashby and Workable slugs of the 21 companies without a careers URL found only an unrelated
       company (`air` on Greenhouse). Western Digital's board is on SmartRecruiters, which robots.txt skips.
+    - Checked on 2026-11-16 (second batch, do not repeat): no adapter for iCIMS (AMD, Keysight: robots.txt of
+      `careers-amd.icims.com` and `careers-keysight.icims.com` is `Disallow: /`) or Avature (Synopsys alone: the
+      robots.txt of `generalmotors.avature.net` disallows `/careers`) or SuccessFactors (Stratasys alone) or Pinpoint
+      (Align Technology alone). Cloudflare's Greenhouse offices (`?content=true`) list no Israel or Tel Aviv office, so
+      reading them would find no job. Pliops and Ericsson are unchanged. The homepages of Gilat (307 without a
+      redirect target), Silicom (redirects to `silicom-usa.com`), Sight Diagnostics, Tevel, Watergen, AIR and X-Globe
+      show no careers link and `/careers`, `/career`, `/jobs` answer 404; Upsolver answers 403 (bot protection);
+      Brainsway's careers page is its LinkedIn page; Teramount, Q Factor, EarlySign and Converge Bio do not answer.
+      A scan of the careers pages and their job links for ATS markers found only Nano Dimension (done above).
     - Dead or unusable: Jelly Button Games, Kahun, Nucleai and Quantum Art (domain parked at GoDaddy), Satixfy (now an
       MDA Space page), Line 5 (needs a login), lakeFS and Quantum Art (403 or "Access Denied": bot protection), Radware
       and Camtek (an empty page), Elbit Systems (timeout on the news page; its careers site `elbitsystemscareer.com` is a
