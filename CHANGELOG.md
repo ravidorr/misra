@@ -10,6 +10,18 @@ All notable changes are documented here. Format follows [Keep a Changelog](https
 
 - The dashboard says how many companies it covers: the companies with a working feed (status `ok` in `data/companies.json`; a few of them can be failing today and are then also on the coverage card, so the page never adds the two counts). The count is computed by `build_dashboard.py` at build time (`covered` in `jobs.json` and in the page data), never typed. It shows as the search placeholder ("Search N companies", with the same fact in the field's screen-reader label), so the first screen gains no height at 320 px or on a desktop, and in a footer sentence with the number of companies on the coverage card next to it and a "Coverage gaps" link (a 44 px target) that opens the card. Agents read `data-companies-covered` on the footer sentence. The placeholder no longer lists "roles, companies, cities"; the label still names title, company or city. The digest email is unchanged. README and `llms.txt` say where the live count is, without a number.
 
+## [0.37.0] - 2026-11-16
+
+### Added
+
+- The `comeet_page` adapter reads a WordPress careers page that shows the Comeet plugin's jobs, drawn on the server, for companies whose Comeet account answers 400 so the `comeet` adapter cannot read them. The slug is the page address. A job is a link `/co/<place>/<uid>/<title>` (the uid is the job id, with two parts for a job in a second place); the title comes from a heading or from the plugin's `comeet-position-name`, the department from a `department` or `position` span, the place from a `location` span, else from the place in the link. The plugin's commented copy of each link is ignored. It returns `None` for a failed request, a redirect to another host, a card with no title, a job link that no card yielded (a changed layout) and a page with no job and no "don't have any open positions" notice of the plugin; that notice gives `[]`.
+- Pinned on it, `israel_only` (they list worldwide jobs): REE Automotive, Gauzy, Guesty and Apester.
+- Tests: the plugin cards of ree.auto and gauzy.com, the Next.js cards of guesty.com, the notice of apester.com (fixtures trimmed from the real pages), and each case that must return `None`.
+
+### Changed
+
+- `data/unresolved_candidates.csv` loses the four rows; the notes of SQream (its one job card names no place) and Kornit Digital (its own theme, links `/cmcareer/`) say why they are not on the adapter.
+
 ## [0.36.0] - 2026-11-16
 
 ### Changed

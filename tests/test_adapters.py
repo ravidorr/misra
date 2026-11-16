@@ -1218,3 +1218,135 @@ def test_phenom_a_failure_after_the_first_page_is_a_failure(monkeypatch: pytest.
 
 def test_phenom_is_registered() -> None:
     assert adapters.ADAPTERS["phenom"] is adapters.phenom
+
+
+# Trimmed from the real pages fetched on 2026-11-16: the plugin's own card (ree.auto, gauzy.com), a Next.js card
+# (guesty.com) and the plugin's notice for no job (apester.com).
+COMEET_REE = """<div class="comeet-outer-wrapper"><div id="d" class="comeet-groups-list">
+<div class="comeet-g-r"><div class="comeet-list comeet-group-name"><a href="https://ree.test/careers-2/co/other/all">Other</a></div>
+<ul class="comeet-positions-list"><li>
+<a class="comeet-position" href="//ree.test/careers-2/co/israel-glil-yam/66.A56/motion-control-sw-engineer/all">
+<div class="comeet-position-name">
+<!--<a href="//ree.test/careers-2/co/israel-glil-yam/66.A56/motion-control-sw-engineer/all">Motion Control</a> -->
+Motion Control SW Engineer </div>
+<div class="comeet-position-meta">Israel, Glil Yam </div></a></li></ul></div></div></div>"""
+COMEET_GAUZY = """<div class="comeet-outer-wrapper"><ul class="comeet-positions-list"><li>
+<a class="comeet-position" href="//gauzy.test/gauzy-careers/co/lyon-france/D7.761/comptable-client-h-f/all">
+<div class="comeet-position-name">
+<!--<a href="//gauzy.test/gauzy-careers/co/lyon-france/D7.761/comptable-client-h-f/all">Comptable Client H/F</a> -->
+Comptable Client H/F <br><span class="position">Finance &amp; Legal</span> </div>
+<div class="comeet-position-meta"><br />A short description. &middot; Full-time </div></a></li></ul></div>"""
+COMEET_GUESTY = (
+    '<p aria-live="polite">2 open positions</p><ul class="Block_grid"><li>'
+    '<a class="Block_card" href="/careers-open-positions/co/israel/D2.374/senior-ai-platform-engineer/">'
+    '<span class="Block_department">Engineering</span><h3>Senior AI Platform Engineer</h3>'
+    '<span class="Block_location"><svg><path d="M1 1"></path></svg>Tel Aviv, Israel</span></a></li>'
+    '<li><a class="Block_card" href="/careers-open-positions/co/london-uk/3C.37D-3E.502/staff-product-manager/">'
+    '<span class="Block_department">Product</span><h3>Staff Product Manager</h3>'
+    '<span class="Block_location">London, UK</span></a></li></ul>'
+)
+COMEET_NONE = (
+    '<div class="comeet-outer-wrapper">We don&#8217;t have any open positions at this time. Please visit again soon.'
+    "<!-- Plugin version data --></div>"
+)
+COMEET_URL = "https://ree.test/careers/"
+
+
+@pytest.mark.parametrize("resp", [None, FakeHttpResponse(status_code=500)])
+def test_comeet_page_failure_returns_none(monkeypatch: pytest.MonkeyPatch, resp: FakeHttpResponse | None) -> None:
+    fake_get(monkeypatch, resp)
+    assert adapters.comeet_page(COMEET_URL) is None
+
+
+def test_comeet_page_reads_the_plugin_cards(monkeypatch: pytest.MonkeyPatch) -> None:
+    urls = fake_get(monkeypatch, FakeHttpResponse(text=COMEET_REE, url=COMEET_URL))
+    assert adapters.comeet_page(COMEET_URL) == [
+        {
+            "job_id": "66.A56",
+            "title": "Motion Control SW Engineer",  # the commented copy of the link does not end the card early
+            "location": "israel glil yam",
+            "url": "https://ree.test/careers-2/co/israel-glil-yam/66.A56/motion-control-sw-engineer/all",
+            "team": "",
+            "posted": "",
+        }
+    ]
+    assert urls == [COMEET_URL]
+
+
+def test_comeet_page_reads_the_department_and_the_place_of_the_link(monkeypatch: pytest.MonkeyPatch) -> None:
+    fake_get(monkeypatch, FakeHttpResponse(text=COMEET_GAUZY, url="https://gauzy.test/careers/"))
+    jobs = adapters.comeet_page("https://gauzy.test/careers/")
+    assert jobs is not None
+    assert [(j["job_id"], j["title"], j["team"], j["location"]) for j in jobs] == [
+        ("D7.761", "Comptable Client H/F", "Finance & Legal", "lyon france")
+    ]
+    assert jobs[0]["url"].startswith("https://gauzy.test/gauzy-careers/co/lyon-france/")
+
+
+def test_comeet_page_an_empty_location_span_falls_back_to_the_place_of_the_link(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    page = COMEET_GUESTY.replace(
+        '<span class="Block_location">London, UK</span>', '<span class="Block_location"></span>'
+    )
+    fake_get(monkeypatch, FakeHttpResponse(text=page, url="https://guesty.test/careers/"))
+    jobs = adapters.comeet_page("https://guesty.test/careers/")
+    assert jobs is not None
+    assert jobs[1]["location"] == "london uk"
+
+
+def test_comeet_page_a_slug_without_a_host_fails() -> None:
+    assert adapters.comeet_page("not a url") is None
+
+
+def test_comeet_page_reads_heading_cards_with_a_place_in_the_card(monkeypatch: pytest.MonkeyPatch) -> None:
+    fake_get(monkeypatch, FakeHttpResponse(text=COMEET_GUESTY, url="https://guesty.test/careers/"))
+    jobs = adapters.comeet_page("https://guesty.test/careers/")
+    assert jobs is not None
+    assert [(j["job_id"], j["title"], j["team"], j["location"], j["url"]) for j in jobs] == [
+        (
+            "D2.374",
+            "Senior AI Platform Engineer",
+            "Engineering",
+            "Tel Aviv, Israel",
+            "https://guesty.test/careers-open-positions/co/israel/D2.374/senior-ai-platform-engineer/",
+        ),
+        (
+            "3C.37D-3E.502",  # a job in a second place has a two-part id
+            "Staff Product Manager",
+            "Product",
+            "London, UK",
+            "https://guesty.test/careers-open-positions/co/london-uk/3C.37D-3E.502/staff-product-manager/",
+        ),
+    ]
+
+
+def test_comeet_page_a_page_that_says_no_open_position_is_empty(monkeypatch: pytest.MonkeyPatch) -> None:
+    fake_get(monkeypatch, FakeHttpResponse(text=COMEET_NONE, url=COMEET_URL))
+    assert adapters.comeet_page(COMEET_URL) == []
+
+
+@pytest.mark.parametrize(
+    ("text", "url"),
+    [
+        ("<main>Careers</main>", COMEET_URL),  # no job and no notice: not a page we understand
+        (COMEET_NONE.replace("comeet-outer-wrapper", "other"), COMEET_URL),  # a notice, but not the plugin's
+        (COMEET_REE, "https://parked.test/careers/"),  # redirected to another site
+        (COMEET_REE.replace("comeet-position-name", "title"), COMEET_URL),  # changed card: no title to read
+        (COMEET_GUESTY.replace("<h3>Staff Product Manager</h3>", "<h3> </h3>"), COMEET_URL),  # an empty heading
+        # a job link outside any card we read (the markup changed) makes the list partial
+        (COMEET_REE + '<script>{"href":"/co/israel/AA.111/lost-job/"}</script>', COMEET_URL),
+        (COMEET_REE.replace("/co/israel-glil-yam/", "/co/Tel-Aviv/") + "<p>/co/israel/FF.666/lost/</p>", COMEET_URL),
+        (COMEET_REE.replace("motion-control-sw-engineer", "%D7%9E%D7%94"), COMEET_URL),  # a slug the card regex skips
+        (
+            COMEET_NONE.replace("We don", "<script>We don").replace("soon.", "soon.</script>"),
+            COMEET_URL,
+        ),  # notice in a script
+        (COMEET_REE.replace("<a class", "<span class").replace("</a></li>", "</span></li>"), COMEET_URL),
+    ],
+)
+def test_comeet_page_a_page_it_cannot_read_is_a_failure_not_an_empty_board(
+    monkeypatch: pytest.MonkeyPatch, text: str, url: str
+) -> None:
+    fake_get(monkeypatch, FakeHttpResponse(text=text, url=url))
+    assert adapters.comeet_page(COMEET_URL) is None
