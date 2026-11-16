@@ -137,7 +137,7 @@ function showLoadError(error) {
     h('section', { class: 'notice load-error', id: 'load-error', role: 'alert' }, [
       h('h2', { text: 'The roles could not be loaded' }),
       h('p', {
-        text: 'The service that holds the roles did not answer. Check your connection and try again. If it keeps failing, the service may be down.',
+        text: 'The service that holds the roles did not give a usable answer. Check your connection and try again. If it keeps failing, the service may be down.',
       }),
       retry,
     ]),

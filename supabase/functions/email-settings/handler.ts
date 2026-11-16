@@ -220,7 +220,7 @@ interface Who {
 async function turnOn(origin: string | null, deps: Deps, config: Config, who: Who, request: TurnOn): Promise<Response> {
   const { mail } = config;
   if (!config.signupEnabled) {
-    return fail(origin, 403, 'signup_closed', 'The email is not open yet, so nothing was turned on.');
+    return fail(origin, 403, 'signup_closed', 'Signups for the email are not open yet, so nothing was turned on.');
   }
   if (!mail) {
     console.error('email-settings: the mail secrets are missing or malformed (see the log at start-up for their names)');
