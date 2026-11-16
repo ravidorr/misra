@@ -86,6 +86,10 @@ REAL_TITLES: list[tuple[str, str, list[str]]] = [
     ("Senior Mobile-Cross-Platform Engineer", NOT_SPECIFIED, ["R&D"]),
     ("Senior FC Verification & Simulation Infrastructure Engineer", NOT_SPECIFIED, ["R&D"]),
     ("Cloud Security Engineer", NOT_SPECIFIED, ["R&D"]),
+    ("IT Infra Engineer", NOT_SPECIFIED, ["R&D", "IT"]),  # synthetic
+    ("Cross Platform Engineer", NOT_SPECIFIED, ["R&D"]),  # synthetic
+    ("Multicloud Engineer", NOT_SPECIFIED, ["R&D"]),  # synthetic: a prefix inside a word counts for neither type
+    ("Senior Site-Reliability Engineer", NOT_SPECIFIED, [DEVOPS]),  # synthetic
     ("Senior Presales Engineer, Cloud", NOT_SPECIFIED, ["Sales & BD"]),
     ("Senior QA Automation Engineer - Platform", NOT_SPECIFIED, ["R&D"]),
 ]

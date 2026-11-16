@@ -8,7 +8,7 @@ All notable changes are documented here. Format follows [Keep a Changelog](https
 
 ### Added
 
-- A "DevOps & SRE" role type, right after R&D in `ROLE_TYPES` (`classify.py`). It matches DevOps, DevSecOps, SRE, site reliability, CI/CD, and "platform", "infrastructure", "cloud", "release", "build", "kubernetes" and "production" right before "engineer" ("Data Platform Engineer", "IT Infrastructure Engineer" and "Mobile-Cross-Platform Engineer" do not). "platform", "cloud" and "infrastructure" alone do not match ("Cloud Solutions Architect", "Customer Platform Manager"). The dashboard filters, quick chips and Filters sheet, the `search_jobs` and `list_filters` assistant tools, the `data-role-types` hooks and the digest filter all read `ROLE_TYPE_NAMES`, so they list it with no other change.
+- A "DevOps & SRE" role type, right after R&D in `ROLE_TYPES` (`classify.py`). It matches DevOps, DevSecOps, SRE, site reliability, CI/CD, and "platform", "infrastructure" (or "infra"), "cloud", "release", "build", "kubernetes" (or "k8s") and "production" right before "engineer" ("Data Platform Engineer", "IT Infrastructure Engineer" and "Cross-Platform Engineer" do not; neither does a prefix inside a longer word). "platform", "cloud" and "infrastructure" alone do not match ("Cloud Solutions Architect", "Customer Platform Manager"). The dashboard filters, quick chips and Filters sheet, the `search_jobs` and `list_filters` assistant tools, the `data-role-types` hooks and the digest filter all read `ROLE_TYPE_NAMES`, so they list it with no other change.
 
 ### Changed
 

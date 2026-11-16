@@ -32,9 +32,10 @@ _DEVOPS_ENGINEER_PREFIXES: dict[str, tuple[str, ...]] = {
     "devsecops": (),
     "sre": (),
     "site reliability": (),
-    "platform": ("data ", "-"),
+    "site-reliability": (),
+    "platform": ("data ", "cross ", "-"),
     "infrastructure": ("data ", "it ", "simulation "),
-    "infra": (),
+    "infra": ("data ", "it ", "simulation "),
     "cloud": (),
     "release": (),
     "build": (),
@@ -45,17 +46,20 @@ _DEVOPS_ENGINEER_PREFIXES: dict[str, tuple[str, ...]] = {
 }
 
 
+_WORD_START = "(?<![a-z])"  # the prefix starts a word, in both builders: "Multicloud Engineer" is neither type's match
+
+
 def _not_before(table: dict[str, tuple[str, ...]]) -> str:
     """Lookbehinds that stop a pattern from matching right after one of the prefixes (unless an exception word is
     before it): "(?<!(?<!data )platform )(?<!devops )" and so on."""
-    parts = ("".join(f"(?<!{other})" for other in others) + prefix for prefix, others in table.items())
+    parts = (_WORD_START + "".join(f"(?<!{other})" for other in others) + prefix for prefix, others in table.items())
     return "".join(f"(?<!{part} )" for part in parts)
 
 
 def _devops_engineer(table: dict[str, tuple[str, ...]]) -> str:
     """One alternation: "<prefix> engineer" for every prefix, minus the exception words."""
     parts = (
-        "".join(f"(?<!{other})" for other in others) + rf"\b{re.escape(prefix)} engineer"
+        _WORD_START + "".join(f"(?<!{other})" for other in others) + rf"{re.escape(prefix)} engineer"
         for prefix, others in table.items()
     )
     return "|".join(parts)
