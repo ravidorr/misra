@@ -4,6 +4,12 @@ All notable changes are documented here. Format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
+## [0.39.0] - 2026-11-16
+
+### Changed
+
+- Copy pass by the technical writer agent over the dashboard, the report and email dialogs, the error messages, the docs and the design-system showcase: no "Please" in errors (what happened, then what to do), "career page" and "open roles" everywhere users read them, "maintainer" for the person who gets reports, "service" for the backend, a next step in every error, and docs lists that match the real labels and WebMCP tools. The `REASONS` label for `no_careers_url` now reads "No career page found" (key unchanged). The lawyer-approved texts (`PRIVACY.md`, `TERMS.md`, `SECURITY.md`, `supabase/email-texts.md`, the sign-in, Daily email consent and delete-account dialogs, the report privacy line, the email landing states) are unchanged. The `report-site` function message changed: it needs a redeploy to show.
+
 ## [0.38.0] - 2026-11-16
 
 ### Added

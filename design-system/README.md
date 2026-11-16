@@ -62,6 +62,7 @@ The dashboard registers tools on `navigator.modelContext` when the browser suppo
 - `list_new_jobs(limit)`
 - `get_job(id)`
 - `star_job(id)`, `unstar_job(id)` and `list_starred_jobs()`; `discard_job(id)` and `restore_job(id)`. A job is starred, discarded or neither, never both, so `star_job` takes a discard away and `discard_job` a star. Each answers with `saved`: true when the choice is kept (in the browser, or in the account when the user is signed in), false when it is only held on the device until the service answers
+- `get_sync_status()` (where the choices and filters are saved, and what the first-sign-in offer would bring over) and `import_browser_choices(filters)` (answers that offer)
 - `list_coverage_gaps()`
 
 There is deliberately no tool that deletes an account (that needs a person to read the warning and confirm in the dialog) and none that sends a site report (a report is an email to the maintainer, so only a person who has read the form may send it) or turns the daily email on or off (that emails a person). Agents find the report action through `data-report` hooks (`card`, `open`, `dialog`, `form`, `done`) and `data-state` on the dialog (`idle`, `sending`, `sent`).

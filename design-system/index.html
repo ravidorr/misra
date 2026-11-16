@@ -61,12 +61,12 @@
     <div class="panel">
       <div class="row">
         <a class="btn btn-primary" href="#buttons">Apply ↗</a>
-        <button type="button" class="btn btn-pill">Show 8 more</button>
+        <button type="button" class="btn btn-pill">Show all 15</button>
         <button type="button" class="btn btn-link">Not for me</button>
         <button type="button" class="btn btn-pill btn-danger">Delete my account permanently</button>
       </div>
       <div class="row">
-        <button type="button" class="chip" aria-pressed="true">Everything</button>
+        <button type="button" class="chip" aria-pressed="true">All</button>
         <button type="button" class="chip" aria-pressed="false">Product</button>
         <button type="button" class="chip chip-new" aria-pressed="true">New only</button>
       </div>
@@ -88,7 +88,7 @@
         <button type="button" class="story story-new" aria-pressed="false"><span class="story-badge" aria-hidden="true">A</span><span class="story-name">Acme</span><span class="sr-only">, 2 new roles</span></button>
         <button type="button" class="story" aria-pressed="true"><span class="story-badge" aria-hidden="true">L</span><span class="story-name">Lumen</span><span class="sr-only">, 1 role</span></button>
       </div>
-      <p class="notice" role="note">Heads up: 2 companies could not be checked today, so their roles may be old.</p>
+      <p class="notice" role="note">2 companies could not be crawled today, so their roles may be old.</p>
       <div class="field-group">
         <label for="demo-company">Company</label>
         <input class="field" id="demo-company" type="text" aria-required="true" aria-invalid="true" aria-describedby="demo-company-hint demo-company-error">
@@ -144,10 +144,12 @@
     <p>The page a person scans is one an agent can read and drive. Cards are <code>article</code> elements with <code>data-job-id</code>, <code>data-company</code>, <code>data-level</code>, <code>data-role-types</code>, <code>data-regions</code>, <code>data-new</code>, <code>data-stale</code>, <code>data-discarded</code> and <code>data-starred</code>. Every open role is in a schema.org JobPosting JSON-LD block. The dashboard registers these WebMCP tools on <code>navigator.modelContext</code> when the browser offers it:</p>
     <ul class="tool-list">
       <li>search_jobs(query, levels, roleTypes, regions, locations, includeRemoteNotSaid, company, newOnly, includeDiscarded, allLocations, sort, limit)</li>
+      <li>list_filters()</li>
       <li>list_new_jobs(limit)</li>
       <li>get_job(id)</li>
       <li>star_job(id), unstar_job(id), list_starred_jobs()</li>
       <li>discard_job(id), restore_job(id)</li>
+      <li>get_sync_status(), import_browser_choices(filters)</li>
       <li>list_coverage_gaps()</li>
     </ul>
     <p>There is deliberately no tool that deletes an account: that needs a person to read the warning and confirm.</p>

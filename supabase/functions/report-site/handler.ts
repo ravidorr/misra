@@ -362,7 +362,7 @@ export async function handleReport(request: Request, deps: Deps): Promise<Respon
         origin,
         429,
         'rate_limited',
-        'You have sent the most reports allowed for today. Please try again tomorrow.',
+        'You have sent the most reports allowed for today. Try again tomorrow.',
         {},
         { 'retry-after': secondsUntilTomorrow(now) },
       );
@@ -372,7 +372,7 @@ export async function handleReport(request: Request, deps: Deps): Promise<Respon
         origin,
         503,
         'daily_cap_reached',
-        'Too many reports came in today. Please try again tomorrow.',
+        'Too many reports came in today. Try again tomorrow.',
         {},
         { 'retry-after': secondsUntilTomorrow(now) },
       );
@@ -384,11 +384,11 @@ export async function handleReport(request: Request, deps: Deps): Promise<Respon
       console.error('report-site: sending failed', error instanceof Error ? error.message : 'unknown');
       // Keep the place when the outcome is unknown (timeout, network error, 5xx): the cap is the stricter side.
       if (error instanceof SendRefused) await release(deps, config, day, ipHash);
-      return fail(origin, 502, 'send_failed', 'The report could not be sent. Please try again later.');
+      return fail(origin, 502, 'send_failed', 'The report could not be sent. Try again later.');
     }
     return reply(origin, 200, { ok: true });
   } catch (error) {
     console.error('report-site: failed', error instanceof Error ? error.message : 'unknown');
-    return fail(origin, 500, 'server_error', 'Something went wrong. Please try again later.');
+    return fail(origin, 500, 'server_error', 'Something went wrong. Try again later.');
   }
 }

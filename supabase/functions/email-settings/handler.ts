@@ -251,13 +251,13 @@ async function turnOn(origin: string | null, deps: Deps, config: Config, who: Wh
     RESERVATIONS,
   );
   if (reservation === 'user_limit') {
-    return fail(origin, 429, 'rate_limited', `You have asked for ${String(USER_DAILY_LIMIT)} confirmation emails today, the most allowed. Please try again tomorrow.`, retryAfter);
+    return fail(origin, 429, 'rate_limited', `You have asked for ${String(USER_DAILY_LIMIT)} confirmation emails today, the most allowed. Try again tomorrow.`, retryAfter);
   }
   if (reservation === 'address_limit') {
-    return fail(origin, 429, 'address_limited', 'That address has already been sent as many confirmation emails as are allowed today. Please try again tomorrow.', retryAfter);
+    return fail(origin, 429, 'address_limited', 'That address has already been sent as many confirmation emails as are allowed today. Try again tomorrow.', retryAfter);
   }
   if (reservation === 'daily_cap') {
-    return fail(origin, 503, 'daily_cap_reached', 'Too many confirmation emails were sent today. Please try again tomorrow.', retryAfter);
+    return fail(origin, 503, 'daily_cap_reached', 'Too many confirmation emails were sent today. Try again tomorrow.', retryAfter);
   }
 
   /** Gives the place back. Losing a place only means a limit is reached a little earlier today, so a failure is logged and goes on. */
@@ -307,7 +307,7 @@ async function turnOn(origin: string | null, deps: Deps, config: Config, who: Wh
     console.error('email-settings: sending failed', error instanceof SendFailure ? error.message : describe(error));
     if (error instanceof SendFailure && error.refused) {
       await giveBack();
-      return fail(origin, 502, 'send_failed', 'The confirmation email could not be sent. Please try again later.');
+      return fail(origin, 502, 'send_failed', 'The confirmation email could not be sent. Try again later.');
     }
     // The outcome is unknown (timeout, network error, 5xx): the place stays used, and the answer says so.
     return fail(origin, 502, 'send_unconfirmed', 'We could not confirm that the email was sent. Wait a few minutes, check your inbox, and ask again only if it did not come.');
@@ -348,7 +348,7 @@ export async function handleEmailSettings(request: Request, deps: Deps): Promise
     if (body === 'not_an_object') return fail(origin, 400, 'invalid_request', 'Send a JSON object with an action.');
     const who = await identify(deps, config, token, 'email-settings');
     if (who === 'down') {
-      return fail(origin, 503, 'service_unavailable', 'The sign-in service did not answer, so nothing was changed. Please try again.');
+      return fail(origin, 503, 'service_unavailable', 'The sign-in service did not answer, so nothing was changed. Try again.');
     }
     if (who === 'refused') {
       return fail(origin, 401, 'not_signed_in', 'Your sign-in was not accepted, so nothing was changed. Sign in again and retry.');

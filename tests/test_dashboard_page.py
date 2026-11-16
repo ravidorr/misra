@@ -915,7 +915,7 @@ async def test_fr9_ac8_a_job_must_fit_both_the_levels_and_the_role_types(page: P
     await choose(page, "levels", "Junior")
     await choose(page, "types", "Finance")
     assert await shown(page) == set()  # a Junior job of the Finance type: there is none
-    assert await page.locator("#list").inner_text() == "No roles match these filters."
+    assert await page.locator("#list").inner_text() == "No roles match. Change the search or the filters."
     await choose(page, "levels", "Intern")
     assert await shown(page) == {"fin"}
 
