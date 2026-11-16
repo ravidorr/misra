@@ -8,24 +8,6 @@ Observations about live sites below come from checks made on 2026-11-14 and may 
 
 ## Web app fixes
 
-- [ ] **Show how many companies we cover.** Trigger: nothing on the dashboard says how many companies Misra crawls
-  each day, which is the main reason to trust it. As of 2026-11-15 `data/companies.json` has 253 companies, 234 with
-  status `ok`; the number must come from the data, not from text typed into the page.
-  - Where: the count is already in the build data (`build_dashboard.py`, `docs/jobs.json`); the page is
-    `templates/dashboard.html`, drawn by `templates/dashboard.js`.
-  - How: do three consults before writing code, and record the answers in the PR.
-    1. Claude Designer and a UI/UX expert (`design-super-agent`, `ui-design-review`): where it goes (the page header,
-       next to the "Hiring now" row, above the search, or the footer), how loud it is (a quiet line or a stat tile),
-       and how it behaves on a phone, in light and dark. It must not push the search or the jobs further down.
-    2. The `technical-writer` agent (`.claude/agents/technical-writer.md`): the exact words, short and true. Decide
-       what the number counts (companies with a working feed, not every company we tried) and whether to add the
-       coverage gap count next to it, so the claim stays honest. No fluff, no superlatives.
-    3. Decide whether the same line also belongs in the digest email, the README and `llms.txt`.
-  - Build it from the templates, never `docs/`. Use tokens only, with the number as one `data-*` hook so agents can
-    read it. A new count means a test that the number matches `data/companies.json`.
-  - Done when: a visitor sees the count without scrolling at 375px and at desktop width, the number is computed at
-    build time, and a test pins it to the data.
-
 - [ ] **Run the technical writer agent over all the text in the app.** Trigger: when you are ready for a copy pass;
   nothing blocks it.
   - Where: the agent is `.claude/agents/technical-writer.md`. It reads the docs and every text source, then tightens

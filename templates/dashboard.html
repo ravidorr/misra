@@ -63,8 +63,8 @@
     </p>
   </section>
   <search class="search" id="searchBar">
-    <label class="sr-only" for="q">Search roles, companies and cities</label>
-    <input class="field" type="search" id="q" placeholder="Search roles, companies, cities" autocomplete="off" enterkeyhint="search">
+    <label class="sr-only" for="q">Search roles at __COMPANIES__ by title, company or city</label>
+    <input class="field" type="search" id="q" placeholder="Search __COMPANIES__" autocomplete="off" enterkeyhint="search">
   </search>
 
   <div class="toolbar">
@@ -143,6 +143,7 @@
   </details>
 </main>
 <footer class="foot">
+  <p class="foot-coverage" id="coverage" data-companies-covered="__COVERED__">Roles from __COMPANIES__ whose career pages we read daily.__COVERAGE_GAPS__</p>
   <p class="foot-note"><span id="saveNote">Stars and discards are saved in this browser only.</span> Data updated <time id="upd"></time>.</p>
   <nav class="foot-links" aria-label="About Misra">
     <a href="privacy.html">Privacy</a>

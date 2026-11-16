@@ -3,6 +3,7 @@ scrolls sideways, every control is a 44px target, the search is on the first scr
 rest behind a button, and the filters are a bottom sheet on a phone that the keyboard can use and a panel in the page
 on a wide screen."""
 
+import json
 import sqlite3
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -11,7 +12,7 @@ import pytest
 from playwright.async_api import Page, expect
 
 import build_dashboard
-from tests.conftest import add_job
+from tests.conftest import add_job, write_json
 from tests.test_dashboard_page import AXE, TAP, build_site, serve
 
 HIRING_COMPANIES = 15  # the row shows up to 15
@@ -44,6 +45,24 @@ def crowd(db: sqlite3.Connection, workdir: Path, monkeypatch: pytest.MonkeyPatch
     """The page built over 15 hiring companies, the daily-email signup off like the `site` fixture."""
     monkeypatch.setattr(build_dashboard, "DIGEST_SIGNUP_ENABLED", False)
     return build_site(db, workdir, add_companies)
+
+
+MANY_COMPANIES = 1234  # the widest the count can be for a long time: four digits and a plural
+
+
+@pytest.fixture
+def many(db: sqlite3.Connection, workdir: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """The page built over a companies.json of MANY_COMPANIES working feeds, for the longest placeholder."""
+
+    def fill(conn: sqlite3.Connection) -> None:
+        add_companies(conn)
+        write_json(
+            workdir / "data" / "companies.json",
+            [{"name": f"Company {n}", "status": "ok"} for n in range(MANY_COMPANIES)],
+        )
+
+    monkeypatch.setattr(build_dashboard, "DIGEST_SIGNUP_ENABLED", False)
+    return build_site(db, workdir, fill)
 
 
 async def open_page(page: Page, crowd: Path, width: int, height: int = 800, scheme: str = "light") -> None:
@@ -265,8 +284,84 @@ async def test_the_search_is_on_the_first_screen_without_opening_anything(
     assert box is not None
     assert box["y"] + box["height"] <= height  # no scrolling
     assert await page.locator("#moreFilters details[open], #gaps[open]").count() == 0  # nothing opened first
-    assert await page.locator("#q").get_attribute("placeholder") == "Search roles, companies, cities"
-    assert await page.locator("label[for=q]").inner_text() == "Search roles, companies and cities"
+    words = count_words(await covered_count(page))
+    assert await page.locator("#q").get_attribute("placeholder") == f"Search {words}"
+    label = await page.locator("label[for=q]").inner_text()
+    assert label == f"Search roles at {words} by title, company or city"
+
+
+def count_words(n: int) -> str:
+    return build_dashboard.coverage_words(n, 0)["__COMPANIES__"]
+
+
+async def covered_count(page: Page) -> int:
+    """The number the page says it covers, read from the footer's hook; it must be the one of the page data."""
+    hook = await page.locator("#coverage").get_attribute("data-companies-covered")
+    assert hook is not None
+    data = json.loads(await page.locator("#page-data").text_content() or "{}")
+    assert data["covered"] == int(hook)
+    return int(hook)
+
+
+MEASURE_PLACEHOLDER = """() => {
+  const q = document.getElementById('q');
+  const style = getComputedStyle(q);
+  const probe = document.createElement('span');
+  probe.style.cssText = 'position:absolute;visibility:hidden;white-space:nowrap';
+  probe.style.font = style.font;
+  probe.style.letterSpacing = style.letterSpacing;
+  probe.textContent = q.placeholder;
+  document.body.append(probe);
+  const text = probe.getBoundingClientRect().width;
+  probe.remove();
+  const room = q.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight);
+  return { text, room };
+}"""
+
+
+@pytest.mark.parametrize("scheme", ["light", "dark"])
+@pytest.mark.parametrize("size", [(320, 640), (375, 667), (393, 852), (1650, 900)])
+async def test_the_company_count_is_in_view_without_scrolling_and_fits_its_line(
+    page: Page, many: Path, size: tuple[int, int], scheme: str
+) -> None:
+    """The count of companies is the search field's placeholder: on the first screen, at no height, on one line, even
+    with four digits."""
+    width, height = size
+    await open_page(page, many, width, height=height, scheme=scheme)
+    search = page.locator("#q")
+    box = await search.bounding_box()
+    assert box is not None
+    assert box["x"] >= 0
+    assert box["x"] + box["width"] <= width
+    assert box["y"] + box["height"] <= height  # in view, nothing scrolled
+    assert await page.evaluate("window.scrollY") == 0
+    assert await covered_count(page) == MANY_COMPANIES
+    assert await search.get_attribute("placeholder") == f"Search {count_words(MANY_COMPANIES)}"
+    assert await search.evaluate("e => getComputedStyle(e, '::placeholder').color") != "rgba(0, 0, 0, 0)"
+    measured = await page.evaluate(MEASURE_PLACEHOLDER)
+    assert measured["text"] <= measured["room"]  # one line, not cut off
+    assert await page.evaluate(NO_SIDEWAYS)
+
+
+async def test_the_footer_sentence_and_its_link_open_the_coverage_gaps(page: Page, crowd: Path) -> None:
+    await open_page(page, crowd, 375)
+    sentence = page.locator("#coverage")
+    covered = await covered_count(page)
+    gaps = json.loads(await page.locator("#page-data").text_content() or "{}")["gaps"]["total"]
+    assert gaps > 0
+    assert await sentence.inner_text() == (
+        f"Roles from {count_words(covered)} whose career pages we read daily. "
+        f"Coverage gaps lists {count_words(gaps)} whose roles may be missing or old."
+    )
+    link = sentence.locator("a")
+    box = await link.bounding_box()
+    assert box is not None
+    assert box["height"] >= TAP
+    assert box["width"] >= TAP
+    assert await page.locator("#gaps").get_attribute("open") is None
+    await link.click()
+    assert await page.locator("#gaps").get_attribute("open") is not None  # the closed card is opened for the jump
+    assert await page.evaluate(NO_SIDEWAYS)
 
 
 async def test_the_search_and_the_first_job_are_on_the_first_screen_of_an_iphone(page: Page, crowd: Path) -> None:
