@@ -27,7 +27,7 @@ Jelly Button Games,jellybuttongames.com,https://www.jellybuttongames.com/careers
 Optibus,optibus.com,https://optibus.com/company/careers/,biz_software,no_feed_found,No feed in its page or network requests
 Ceva,ceva-ip.com,,deeptech,no_careers_url,
 Camtek,camtek.com,https://www.camtek.com/careers/,deeptech,site_unusable,The page is empty
-Speedata,speedata.io,,deeptech,no_careers_url,
+Speedata,speedata.io,,deeptech,no_careers_url,Jobs are on Viola Group's Getro board; its own page is a Wix site with no feed
 NeuReality,neureality.ai,https://www.neureality.ai/careers/,deeptech,no_openings,The Comeet board lists no open position
 Teramount,teramount.com,,deeptech,no_careers_url,
 X-Globe,x-globe.com,,deeptech,no_careers_url,
@@ -35,7 +35,7 @@ Q Factor,qfactor.ai,,deeptech,no_careers_url,
 Cognata,cognata.com,https://www.cognata.com,deeptech,no_feed_found,"No ATS link, feed or job link found"
 REE Automotive,ree.auto,https://ree.auto/careers/,deeptech,needs_reader,Comeet plugin page: the jobs are only in the page markup
 Gilat,gilat.com,,deeptech,no_careers_url,
-Siklu,siklu.com,,deeptech,no_careers_url,
+Siklu,siklu.com,,deeptech,no_careers_url,"Now part of Ceragon; the Comeet board on ceragon.com is Ceragon's, not Siklu's"
 Satixfy,satixfy.com,https://satixfy.com,deeptech,site_unusable,The page is now an MDA Space page
 Silicom,silicom.co.il,,deeptech,no_careers_url,
 Elbit Systems,elbitsystems.com,https://www.elbitsystems.com,deeptech,site_unusable,Timeout; its careers site is a Hebrew custom site with no feed seen
@@ -47,13 +47,13 @@ ReWalk,rewalk.com,https://golifeward.com/,deeptech,no_openings,"The list is US j
 EarlySign,earlysign.com,,deeptech,no_careers_url,
 Kahun,kahun.com,https://www.kahun.com/careers,deeptech,site_unusable,Domain parked at GoDaddy
 Tyto Care,tytocare.com,https://www.tytocare.com/careers/,deeptech,needs_reader,A list or CV form with no job link
-Diagnostic Robotics,diagnosticrobotics.com,,deeptech,no_careers_url,
+Diagnostic Robotics,diagnosticrobotics.com,,deeptech,no_careers_url,The careers page is a script list that shows no items
 Aleph Farms,aleph-farms.com,https://aleph-farms.com/careers/,deeptech,no_feed_found,"No ATS link, feed or job link found"
 Tevel Aerobotics,tevel-tech.com,,deeptech,no_careers_url,
 Evogene,evogene.com,https://evogene.com/careers/,deeptech,no_feed_found,"No ATS link, feed or job link found"
 Remilk,remilk.com,https://www.remilk.com/careers,deeptech,no_feed_found,"No ATS link, feed or job link found"
 Redefine Meat,redefinemeat.com,https://www.redefinemeat.com/company/,deeptech,no_feed_found,"No ATS link, feed or job link found"
-CytoReason,cytoreason.com,,deeptech,no_careers_url,
+CytoReason,cytoreason.com,,deeptech,no_careers_url,The old Comeet plugin page (/career/) answers 404; no new board found
 Nucleai,nucleai.com,https://www.nucleai.com/careers,deeptech,site_unusable,Domain parked at GoDaddy
 Converge Bio,convergebio.com,,deeptech,no_careers_url,
 StoreDot,store-dot.com,https://store-dot.com/careers,deeptech,needs_reader,A list or CV form with no job link
@@ -62,7 +62,7 @@ SolarEdge,solaredge.com,,deeptech,no_careers_url,
 H2Pro,h2pro.co,https://www.h2pro.co/careers,deeptech,no_openings,No open positions
 Watergen,watergen.com,,deeptech,no_careers_url,
 Nano Dimension,nano-di.com,https://www.nano-di.com/careers,deeptech,no_feed_found,"No ATS link, feed or job link found"
-Stratasys,stratasys.com,,deeptech,no_careers_url,
+Stratasys,stratasys.com,,deeptech,no_careers_url,"Careers site is SuccessFactors (careers.stratasys.com), no adapter"
 Kornit Digital,kornit.com,https://careers.kornit.com/,deeptech,needs_reader,Comeet plugin page: the jobs are only in the page markup
 Landa,landanano.com,https://www.landa-corporation.com/,deeptech,no_feed_found,"No ATS link, feed or job link found"
 AIR,air.one,,deeptech,no_careers_url,
