@@ -829,5 +829,9 @@
  "DarioHealth": {
   "ats": "comeet",
   "slug": "Dario.Health/34.006"
+ },
+ "OX Security": {
+  "ats": "comeet",
+  "slug": "ox_security/F8.006"
  }
 }

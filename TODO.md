@@ -1,8 +1,8 @@
 # TODO
 
 Open work, as of 2026-11-14. Each item says what triggers it, how to do it and when it is done. When one is finished,
-delete it and update the counts in the others: the 93 and the four segment counts in the research item (a pin removes
-one row from one segment), its "(30)" if the company had no careers URL, else its "(63 today)".
+delete it and update the counts in the others: the 92 and the four segment counts in the research item (a pin removes
+one row from one segment), its "(29)" if the company had no careers URL, else its "(63 today)".
 An item with a screenshot in `todo-images/` goes with it: delete the image file in the same PR.
 Observations about live sites below come from checks made on 2026-11-14 and may have changed.
 
@@ -78,12 +78,12 @@ Observations about live sites below come from checks made on 2026-11-14 and may 
 
 ## Research the remaining unresolved companies
 
-- [ ] `data/unresolved_candidates.csv` lists 93 researched companies with no usable job feed (as of 2026-11-14: 24
-  multinational, 42 deeptech, 13 cyber_infra, 14 biz_software). Each needs
+- [ ] `data/unresolved_candidates.csv` lists 92 researched companies with no usable job feed (as of 2026-11-14: 24
+  multinational, 42 deeptech, 12 cyber_infra, 14 biz_software). Each needs
   its own research; there is no batch fix left. Every observation about a live site below is from the checks of
   2026-11-14, a crawl of the 105 rows that had a careers URL that day (63 today) and a scan of their rendered pages. The
   remaining work falls into these groups:
-  - **No careers URL (30).** Status `not_found` in `data/new/*_companies.json`: OX Security, Upsolver, Ceva, Speedata,
+  - **No careers URL (29).** Status `not_found` in `data/new/*_companies.json`: Upsolver, Ceva, Speedata,
     Teramount, X-Globe, Q Factor, Gilat, Siklu, Silicom, Sight Diagnostics, Brainsway, EarlySign, Diagnostic Robotics,
     Tevel Aerobotics, CytoReason, Converge Bio, SolarEdge, Watergen, Stratasys, AIR, Intel, SAP, eBay,
     Autodesk, Akamai, Ford, Ericsson, Uber, Keysight. Find the real
@@ -154,7 +154,8 @@ Observations about live sites below come from checks made on 2026-11-14 and may 
     the uid is also in a vacancy page), and three boards with no job today, pinned with `israel_only` so the first Israel job
     reaches the digest: Foretellix (`Foretellix/84.007`), XM Cyber (`xmcyber/15.005`) and Dataloop (`dataloop/B5.00A`); Sunbit (`sunbit/37.001`, 40 jobs, 8 in Israel; the uid is in the
     source of a `?job=` page) and Firefly (`firefly/39.000`, `israel_only`: the board holds one "Future Opportunities" entry
-    with no place), and DarioHealth (`Dario.Health/34.006`, 2 jobs, both in India today).
+    with no place), and DarioHealth (`Dario.Health/34.006`, 2 jobs, both in India today), and OX Security (`ox_security/F8.006`, 36 jobs,
+    7 in Israel; the uid is in the careers page source, the board name `ox_security` in the careers-api answer).
     Not done, and why (all checked on 2026-11-14, do not repeat):
     - Comeet plugin pages whose account answers 400 ("Account uid or token are not valid") and whose hosted board has no
       data, but whose WordPress page still lists jobs drawn server-side: REE Automotive (uid D3.00B, 2 jobs, one in
