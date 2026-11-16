@@ -18,22 +18,6 @@ Observations about live sites below come from checks made on 2026-11-14 and may 
   - Done when: the PR is merged, `npm run lint` and `npm run test:coverage` pass, and you have decided on the legal
     wording it left for you.
 
-- [ ] **Redesign the Coverage gaps card.** Trigger: when you are ready for a design pass; nothing blocks it. Screenshots, open and collapsed:
-  ![The Coverage gaps card open, with eight reason groups](todo-images/coverage-gaps-open.png)
-  ![The Coverage gaps card collapsed, with no Report a site button](todo-images/coverage-gaps-collapsed.png)
-  - Problems seen:
-    - The reader does not care why a company's roles are missing. The eight reason groups (failing crawl, blocks
-      automated access, no careers page and so on) are internal detail. Show one list of companies, or at most a
-      coarse split the reader can act on.
-    - "Report a site" is hidden while the card is collapsed. It should stay visible.
-    - Maybe each company should look more like a position card.
-  - How: use Claude Design and a UI/UX expert (the `ux-web-review` and `ui-design-review` skills, or the
-    `design-super-agent` skill) for the design. Follow `design-system/README.md`. Keep the `data-*` hooks and the
-    `REASONS` keys in `build_dashboard.py` (the reasons can stay in the data and the CSV even if the page stops
-    showing them). Edit `templates/` and rebuild `docs/`.
-  - Done when: the PR is merged, `npm run lint` and `npm run test:coverage` pass, and the card works collapsed, open,
-    in light and dark, and on a phone.
-
 - [ ] **Redesign the footer and rewrite its text.** Trigger: when you are ready for a design pass; nothing blocks it.
   Screenshot:
   ![The footer: a note about local storage, the data date, and Privacy, Terms and Contact links](todo-images/footer.png)

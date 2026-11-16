@@ -104,8 +104,7 @@ async def ready(page: Page, site: Path, mode: str = "ok") -> ReportBackend:
 
 
 async def open_form(page: Page) -> None:
-    await page.locator("#gaps-title").click()  # the card is a <details>
-    await page.click("#reportOpen")
+    await page.click("#reportOpen")  # visible with the list closed
     await expect(page.locator(DIALOG)).to_be_visible()
 
 
@@ -130,7 +129,7 @@ async def send_good(page: Page, **values: str) -> None:
 
 async def test_fr7_ac1_the_gap_card_has_a_report_a_site_action_that_opens_the_form(page: Page, site: Path) -> None:
     await ready(page, site)
-    button = page.locator("#gaps #reportOpen")
+    button = page.locator("#gapsCard #reportOpen")
     await page.locator("#gaps-title").click()
     assert await button.inner_text() == "Report a site"
     assert await button.get_attribute("data-report") == "open"
@@ -200,8 +199,9 @@ async def test_the_card_offers_the_action_even_when_no_company_is_known_to_be_mi
     (site.parent / "data" / "companies.json").write_text('[{"name": "Acme", "status": "ok"}]', encoding="utf-8")
     build_dashboard.main()
     await ready(page, site)
-    assert await page.locator("#gaps-title").inner_text() == "Is a company missing? Report a site"
-    assert await page.locator("#gaps details.gap-group").count() == 0
+    await expect(page.locator("#gaps")).to_be_hidden()  # no list to show, only the report row
+    assert await page.locator("#gaps .gap-part").count() == 0
+    await expect(page.locator("#gapsCard #reportOpen")).to_be_visible()
     await open_form(page)
     await expect(page.locator("#reportCompany")).to_be_focused()
 
@@ -630,8 +630,7 @@ async def test_the_form_reads_well_on_a_phone(page: Page, site: Path) -> None:
 async def test_the_card_action_is_big_enough_on_a_phone(page: Page, site: Path) -> None:
     await page.set_viewport_size(PHONE)
     await ready(page, site)
-    await page.locator("#gaps-title").click()
-    box = await page.locator("#reportOpen").bounding_box()
+    box = await page.locator("#reportOpen").bounding_box()  # with the list closed
     assert box is not None
     assert box["height"] >= TAP
     assert 0 <= box["x"] <= box["x"] + box["width"] <= PHONE["width"]

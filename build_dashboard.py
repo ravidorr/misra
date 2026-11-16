@@ -467,6 +467,7 @@ def main() -> None:
         "untracked": untracked,
         "total": sum(g["count"] for g in groups),
         "groups": groups,
+        "closeDays": ROBOTS_CLOSE_DAYS,
     }
     first = dict(c.execute("SELECT company, MIN(substr(first_seen,1,10)) FROM jobs GROUP BY company"))
     jobs: list[dict[str, Any]] = []
