@@ -31,7 +31,8 @@ describe('the confirmation email as HTML', () => {
     const { html } = renderEmail('daily', 'ann@example.test', LINK);
     expect(html).not.toContain('<button');
     expect(html).toContain('mso-padding-alt');
-    expect(html).toMatch(new RegExp(`<a dir="ltr" href="${LINK}"[^>]*>${LINK}</a>`, 'u'));
+    expect(html).toContain(`<a dir="ltr" href="${LINK}" style=`); /* the link is the button... */
+    expect(html).toContain(`>${LINK}</a></td></tr></table>`); /* ...and its label is the address */
     expect(html).toContain('lang="en" dir="ltr"');
     expect(html).toContain('role="presentation"');
     expect(html).toContain('prefers-color-scheme:dark');
