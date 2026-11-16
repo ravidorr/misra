@@ -405,12 +405,14 @@ def count_words(n: int) -> str:
 
 def coverage_words(covered: int, gaps: int) -> dict[str, str]:
     """The values of the `__COVERED__`, `__COMPANIES__` and `__COVERAGE_GAPS__` placeholders of the page: the count, the
-    count in words, and the sentence that points at the coverage card (nothing when the card has no company)."""
-    link = '<a class="foot-gaps" href="#gaps">Coverage gaps</a>'
+    count in words, and the sentence that points at the coverage card (nothing when the card has no company). The
+    whole sentence is the link, so it is one 44px block of its own and never a box inside a line of text."""
+    words = f"Coverage gaps lists {count_words(gaps)} whose roles may be missing or old."
+    link = f'<a class="foot-gaps" href="#gaps">{words}</a>'
     return {
         "__COVERED__": str(covered),
         "__COMPANIES__": count_words(covered),
-        "__COVERAGE_GAPS__": f" {link} lists {count_words(gaps)} whose roles may be missing or old." if gaps else "",
+        "__COVERAGE_GAPS__": f" {link}" if gaps else "",
     }
 
 
