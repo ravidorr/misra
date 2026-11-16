@@ -585,7 +585,7 @@ async def test_the_footer_fits_has_44px_links_and_says_where_choices_are_saved(
         assert link_box["width"] >= TAP
         assert box["x"] <= link_box["x"] <= link_box["x"] + link_box["width"] <= box["x"] + box["width"]
         names.append(await link.inner_text())
-    assert names == ["Privacy", "Terms", "Security", "Contact"]
+    assert names == ["Privacy", "Terms", "Contact"]
     links = await foot.locator("nav").bounding_box()
     text = await foot.locator(".foot-info").bounding_box()
     assert links is not None

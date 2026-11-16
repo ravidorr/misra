@@ -33,7 +33,7 @@ from tests.test_dashboard_page import (
 
 AXE_RUN = "axe.run().then(r => r.violations.map(v => v.id + ': ' + v.nodes.map(n => n.html).join(' | ')))"
 STORAGE_KEY = "misra-auth"
-FOOTER_LINKS = 4
+FOOTER_LINKS = 3
 RETRIES = 50
 POLL_SECONDS = 0.1
 CANCELLED = "The sign-in was cancelled."
@@ -519,7 +519,6 @@ async def test_the_footer_links_to_the_privacy_notice_the_terms_and_the_contact(
     privacy = nav.get_by_role("link", name="Privacy")
     assert await privacy.get_attribute("href") == "privacy.html"
     assert await nav.get_by_role("link", name="Terms").get_attribute("href") == "terms.html"
-    assert await nav.get_by_role("link", name="Security").get_attribute("href") == "security.html"
     assert await nav.get_by_role("link", name="Contact").get_attribute("href") == "mailto:raanan@avidor.org"
     for link in await links.all():
         box = await link.bounding_box()
