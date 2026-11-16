@@ -88,8 +88,6 @@ def build_site(db: sqlite3.Connection, workdir: Path) -> Path:
     write_json(workdir / "rows.json", list(sync_supabase.open_rows(db)))
     db.close()
     build_dashboard.main()
-    for icon in ("favicon.svg", "apple-touch-icon.png"):  # committed in docs/, not built
-        shutil.copy(REPO / "docs" / icon, workdir / "docs" / icon)
     return workdir / "docs"
 
 
