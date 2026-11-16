@@ -71,11 +71,6 @@ a {
   stroke: var(--mark-ink);
 }
 
-.mark-spark {
-  fill: var(--mark-spark);
-  stroke: var(--mark-ink);
-}
-
 .wordmark {
   display: inline-block;
   padding: 0 var(--space-2);
@@ -677,7 +672,6 @@ html:has(.sheet:modal) {
   gap: var(--space-1);
 }
 
-.foot-note,
 .foot-coverage,
 .foot-updated {
   margin: 0;
@@ -687,13 +681,12 @@ html:has(.sheet:modal) {
   font-variant-numeric: tabular-nums;
 }
 
-/* The link to the coverage gaps card sits in a sentence but is a 44px target like the footer links: a real box of its
-   own, so it never covers the text around it. */
+/* The coverage gaps sentence is a link and a 44px target: a block of its own under the first sentence (a box inside
+   a line of text would make that line 44px tall and the paragraph uneven), so it never covers the text around it. */
 .foot-gaps {
-  display: inline-flex;
+  display: flex;
   align-items: center;
   justify-content: center;
-  min-width: var(--tap);
   min-height: var(--tap);
 }
 
@@ -721,6 +714,10 @@ html:has(.sheet:modal) {
 
   .foot-links {
     justify-content: flex-end;
+  }
+
+  .foot-gaps {
+    justify-content: flex-start;
   }
 }
 
