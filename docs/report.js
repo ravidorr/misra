@@ -13,7 +13,7 @@
 const $ = (id) => document.getElementById(id);
 const ENDPOINT = 'https://dncodqeqpoqwcxdctzco.supabase.co/functions/v1/report-site';
 const TIMEOUT_MS = 35000; /* longer than the function's own worst case: 10 s for its database plus 10 s for the email service */
-const LIMITS = { company: 100, link: 500, whyMin: 3, why: 1000 };
+const LIMITS = { company: 100, link: 500, why: 1000 };
 const STATUS = { badRequest: 400, forbidden: 403, tooLarge: 413, limited: 429, unavailable: 503, failed: 502 };
 const FIELDS = ['company', 'link', 'why'];
 const MESSAGES = {
@@ -59,7 +59,6 @@ const UNSAFE = /(?![\t\n])[\p{Cc}\p{Zl}\p{Zp}\p{Bidi_Control}]/gu;
 const clean = (value) => value.normalize('NFC').replace(/\r\n?/g, '\n').replace(UNSAFE, '');
 function checkCompany(value) {
   const text = clean(value).replace(/\s+/gu, ' ').trim();
-  if (!text) return 'Enter the company name.';
   if (text.length > LIMITS.company) return `The name can be at most ${LIMITS.company} characters.`;
   return '';
 }
@@ -83,8 +82,6 @@ function checkLink(value) {
 
 function checkWhy(value) {
   const text = clean(value).replace(/[^\S\n]+\n/gu, '\n').replace(/\n{3,}/gu, '\n\n').trim();
-  if (!text) return 'Tell us why this company matters.';
-  if (text.length < LIMITS.whyMin) return 'Write a few words on why this company matters.';
   if (text.length > LIMITS.why) return `The reason can be at most ${LIMITS.why} characters.`;
   return '';
 }
