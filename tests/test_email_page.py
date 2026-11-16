@@ -23,6 +23,11 @@ CORS = {"access-control-allow-origin": "*", "access-control-allow-headers": "*"}
 CONFIRMED = "Your job alerts are confirmed"
 NOT_VALID = "This link is no longer valid"
 UNSUBSCRIBED = "You have been unsubscribed"
+UNSUBSCRIBE_NOT_VALID = "This unsubscribe link no longer works"
+UNSUBSCRIBE_NOT_VALID_TEXT = (
+    "Your account may have been deleted, or we may have replaced the key that signs these links. To stop job alerts, "
+    "sign in on the Misra dashboard and turn them off, or write to raanan@avidor.org and we will stop them for you."
+)
 KEEP = (
     "It may have expired (confirmation links work for 7 days), been replaced by a newer link, "
     "or belong to job alerts that were turned off."
@@ -156,6 +161,7 @@ async def test_a_failure_leaves_the_button_to_try_again(page: Page, site: Path, 
         ("#unsubscribed", UNSUBSCRIBED),
         ("#already-unsubscribed", UNSUBSCRIBED),
         ("#link-not-valid", NOT_VALID),
+        ("#unsubscribe-link-not-valid", UNSUBSCRIBE_NOT_VALID),
         ("#try-again", "Something went wrong"),
         ("", "This link is incomplete"),
         ("#token=short", "This link is incomplete"),
@@ -174,7 +180,9 @@ async def test_the_landing_for_the_unsubscribe_and_for_a_broken_link(
 
 
 @pytest.mark.parametrize("scheme", ["light", "dark"])
-@pytest.mark.parametrize("fragment", [f"#token={TOKEN}", "#unsubscribed", "#link-not-valid", "#try-again"])
+@pytest.mark.parametrize(
+    "fragment", [f"#token={TOKEN}", "#unsubscribed", "#link-not-valid", "#unsubscribe-link-not-valid", "#try-again"]
+)
 async def test_the_page_is_accessible_in_light_and_dark_on_a_phone(
     page: Page, site: Path, scheme: str, fragment: str
 ) -> None:
@@ -203,6 +211,25 @@ async def test_the_unsubscribed_text_says_what_was_deleted_and_what_was_not(page
     )
     assert await page.locator("#status").inner_text() == f"{UNSUBSCRIBED}. {message}"
     await expect(page.locator("#back")).to_have_text("Open Misra dashboard")
+
+
+async def test_a_failed_unsubscribe_link_says_what_is_true_for_it(page: Page, site: Path) -> None:
+    await open_page(page, site, "#unsubscribe-link-not-valid")
+    await expect(page.locator("#heading")).to_have_text(UNSUBSCRIBE_NOT_VALID)
+    message = await page.locator("#message").inner_text()
+    assert message == UNSUBSCRIBE_NOT_VALID_TEXT
+    assert "7 days" not in message
+    assert "newer link" not in message
+    assert await page.locator("#status").inner_text() == f"{UNSUBSCRIBE_NOT_VALID}. {message}"
+    await expect(page.locator("#status")).to_have_attribute("role", "status")
+
+
+async def test_a_failed_confirmation_link_keeps_its_text(page: Page, site: Path) -> None:
+    await open_page(page, site, "#link-not-valid")
+    await expect(page.locator("#heading")).to_have_text(NOT_VALID)
+    assert await page.locator("#message").inner_text() == (
+        f"{KEEP} To manage your job alerts or delete your account, sign in on the Misra dashboard."
+    )
 
 
 async def test_the_button_works_from_the_keyboard(page: Page, site: Path) -> None:
@@ -235,6 +262,7 @@ def test_the_page_knows_every_word_the_functions_send() -> None:
         "unsubscribed",
         "already-unsubscribed",
         "link-not-valid",
+        "unsubscribe-link-not-valid",
     }
     assert words == {w for w in words if f"'{w}'" in script or f"{w}:" in script}
     codes = set(re.findall(r"fail\(origin, 4\d\d, '([a-z_]+)'", confirm)) - {"origin_not_allowed", "method_not_allowed"}

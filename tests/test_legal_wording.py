@@ -378,6 +378,12 @@ def test_the_screens_carry_the_lawyers_round_of_2026_11_16_editorial_wording() -
         "It may have expired (confirmation links work for 7 days), been replaced by a newer link, or belong to job"
         in email
     )
+    assert "This unsubscribe link no longer works" in email
+    assert (
+        "Your account may have been deleted, or we may have replaced the key that signs these links. To stop job "
+        "alerts, sign in on the Misra dashboard and turn them off, or write to raanan@avidor.org and we will stop "
+        "them for you."
+    ) in email
     assert (
         "Your job alerts are stopped. We deleted the filters saved for them and the list of jobs we already "
         "emailed you." in email

@@ -4,6 +4,14 @@ All notable changes are documented here. Format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
+## [0.45.0] - 2026-11-16
+
+### Changed
+
+- A failed unsubscribe link (a bad or missing token, a bad signature, an account that no longer exists) now ends on its own page state, `email.html#unsubscribe-link-not-valid`, with the text the lawyer approved on 2026-11-16: "This unsubscribe link no longer works" and "Your account may have been deleted, or we may have replaced the key that signs these links. To stop job alerts, sign in on the Misra dashboard and turn them off, or write to raanan@avidor.org and we will stop them for you." (the lawyer's first sentence repeats the heading, so the body starts at the second one). It used to share `#link-not-valid` with a failed confirmation link, whose text (expired after 7 days, replaced by a newer link) is untrue for an unsubscribe link. The failed confirmation link keeps its text.
+- The `unsubscribe` Edge Function's POST (RFC 8058 one-click: 404 JSON `link_not_valid`) and HEAD (200, no database) are unchanged.
+- The `unsubscribe` Edge Function must be redeployed.
+
 ## [0.43.0] - 2026-11-16
 
 ### Changed

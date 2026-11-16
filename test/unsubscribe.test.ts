@@ -85,13 +85,13 @@ describe('a click on the link in the email (GET)', () => {
     for (const token of [unknown.token, ann.confirmToken]) {
       const response = await handleUnsubscribe(get(token), w.deps);
       expect(response.status).toBe(303);
-      expect(response.headers.get('location')).toBe(`${PAGE_URL}#link-not-valid`);
+      expect(response.headers.get('location')).toBe(`${PAGE_URL}#unsubscribe-link-not-valid`);
     }
     expect(ann.row.unsubscribedAt).toBeNull();
     const calls = w.fakeFetch.mock.calls.length;
     for (const token of [null, '', 'short', `${'a'.repeat(42)}!`, 'a'.repeat(100)]) {
       const response = await handleUnsubscribe(get(token), w.deps);
-      expect(response.headers.get('location')).toBe(`${PAGE_URL}#link-not-valid`);
+      expect(response.headers.get('location')).toBe(`${PAGE_URL}#unsubscribe-link-not-valid`);
     }
     expect(w.fakeFetch.mock.calls.length).toBe(calls); // a malformed token never reaches the database
   });
@@ -202,7 +202,7 @@ describe('the stateless token (<subscription id>.<HMAC-SHA256(UNSUBSCRIBE_SECRET
     expect(await verifyUnsubscribeToken(UNSUBSCRIBE_SECRET, undefined)).toBeUndefined();
     const w = world([ann]);
     for (const token of bad) {
-      expect((await handleUnsubscribe(get(token), w.deps)).headers.get('location'), token).toBe(`${PAGE_URL}#link-not-valid`);
+      expect((await handleUnsubscribe(get(token), w.deps)).headers.get('location'), token).toBe(`${PAGE_URL}#unsubscribe-link-not-valid`);
       expect((await handleUnsubscribe(oneClick(token), w.deps)).status, token).toBe(404);
     }
     expect(w.fakeFetch).not.toHaveBeenCalled();
@@ -213,7 +213,7 @@ describe('the stateless token (<subscription id>.<HMAC-SHA256(UNSUBSCRIBE_SECRET
     const ann = await subscriber();
     const ghost = await makeUnsubscribeToken(UNSUBSCRIBE_SECRET, crypto.randomUUID());
     const w = world([ann]);
-    expect((await handleUnsubscribe(get(ghost), w.deps)).headers.get('location')).toBe(`${PAGE_URL}#link-not-valid`);
+    expect((await handleUnsubscribe(get(ghost), w.deps)).headers.get('location')).toBe(`${PAGE_URL}#unsubscribe-link-not-valid`);
     expect((await handleUnsubscribe(oneClick(ghost), w.deps)).status).toBe(404);
     expect(w.fakeFetch).toHaveBeenCalledTimes(2);
     expect(ann.row.unsubscribedAt).toBeNull();
