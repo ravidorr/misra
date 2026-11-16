@@ -25,9 +25,12 @@ The descriptions (PLAN.md step 7.1) are a second pass. The full text of a postin
 committed to a public repository: the crawl leaves it in a work file outside the checkout (descriptions.py) and this
 step reads that file. Only the jobs that are open, not excluded and given a text by today's crawl get `description` and
 `details`, in batches of their own (a batch needs the same columns in every row, and a job without a text must keep the
-one it has). A hash of the text, kept in `details`, tells a posting that did not change: it is not sent again. A job
-that closes keeps its text, and the removal of an excluded company deletes the whole row, text included. A failure in
-this pass is a warning, never a failed step: the jobs are already stored and the day's update goes on."""
+one it has). A hash of the text, kept in `details`, tells a posting that did not change: it is not sent again. The
+snippet (descriptions.snippet: the first 255 characters at a word boundary, the only part of the text the public API
+can read) is written with it, and refreshed when the stored one is not the one computed. A job that closes keeps its
+text until `jobs_text_trim` sets description, details and snippet to null 30 days after the job closed (called after
+this pass); the removal of an excluded company deletes the whole row, text included. A failure in this pass or in the
+trim is a warning, never a failed step: the jobs are already stored and the day's update goes on."""
 
 import os
 import sqlite3
@@ -150,12 +153,12 @@ class Client:
     def open_keys(self) -> set[tuple[str, str]]:
         return set(self.open_text_hashes("company,job_id"))
 
-    def text_hashes(self) -> dict[tuple[str, str], str | None]:
-        """The fingerprint of the stored description of every open job (None when it has none)."""
-        return self.open_text_hashes("company,job_id,hash:details->>" + descriptions.HASH_KEY)
+    def stored_texts(self) -> dict[tuple[str, str], tuple[str | None, str | None]]:
+        """The fingerprint of the stored description and the stored snippet of every open job (None when none)."""
+        return self.open_text_hashes("company,job_id,snippet,hash:details->>" + descriptions.HASH_KEY)
 
-    def open_text_hashes(self, select: str) -> dict[tuple[str, str], str | None]:
-        keys: dict[tuple[str, str], str | None] = {}
+    def open_text_hashes(self, select: str) -> dict[tuple[str, str], tuple[str | None, str | None]]:
+        keys: dict[tuple[str, str], tuple[str | None, str | None]] = {}
         offset = 0
         while True:
             params: dict[str, str | int] = {
@@ -170,7 +173,7 @@ class Client:
                 raise SyncError("GET jobs returned something other than a list")
             if not page:  # a server may cap a response below PAGE, so only an empty page ends the read
                 return keys
-            keys.update(((row["company"], row["job_id"]), row.get("hash")) for row in page)
+            keys.update(((row["company"], row["job_id"]), (row.get("hash"), row.get("snippet"))) for row in page)
             offset += len(page)
 
 
@@ -236,7 +239,7 @@ def push_texts(
             print(f"::warning::{len(texts)} descriptions were left by the crawl and none is for an open job")
         return 0, 0, 0
     try:
-        stored = client.text_hashes()
+        stored = client.stored_texts()
     except (
         SyncError,
         ValueError,
@@ -248,13 +251,14 @@ def push_texts(
     fresh: list[dict[str, Any]] = []
     for company, job_id in wanted:
         text, details = texts[(company, job_id)]
-        digest = descriptions.fingerprint(text, details)
-        if stored.get((company, job_id)) != digest:
+        digest, short = descriptions.fingerprint(text, details), descriptions.snippet(text)
+        if stored.get((company, job_id)) != (digest, short):  # a text, its details or its snippet is not stored as is
             fresh.append(
                 {
                     "company": company,
                     "job_id": job_id,
                     "description": text,
+                    "snippet": short,
                     "details": {**details, descriptions.HASH_KEY: digest},
                 }
             )
@@ -288,6 +292,22 @@ def cleanup(client: Client, today: date) -> int:
     return total
 
 
+def trim_texts(client: Client, today: date) -> int:
+    """Deletes the text of the jobs that closed more than 30 days ago (description, details, snippet) through the
+    database function `jobs_text_trim` and returns how many jobs lost text. Counts only, nothing is read. Never
+    fails the step: a failure (the migration not applied yet, a bad answer) is a warning and 0; the next run retries."""
+    try:
+        trimmed = client.call(
+            "POST", {}, {"p_day": today.isoformat()}, table="rpc/jobs_text_trim", prefer="return=representation"
+        ).json()
+        if not isinstance(trimmed, int) or isinstance(trimmed, bool):
+            raise SyncError("rpc/jobs_text_trim returned something other than a count")
+    except (SyncError, ValueError) as exc:
+        print(f"::warning::the text of closed jobs could not be trimmed: {exc}")
+        return 0
+    return trimmed
+
+
 def quality_report(conn: sqlite3.Connection) -> str:
     """The share of Israeli jobs in a region and of jobs not in Other, for the daily log."""
     jobs = conn.execute("SELECT title, location FROM jobs WHERE status='open'").fetchall()
@@ -314,6 +334,8 @@ def main() -> None:
         print(f"Supabase: {result.upserted} open jobs upserted, {result.closed} closed, {result.purged} rows purged")
         done = f"{result.texts} written, {result.texts_same} unchanged, {result.texts_failed} failed"
         print(f"Supabase: descriptions {done}")
+        trimmed = trim_texts(client, datetime.now(UTC).date())
+        print(f"Supabase: {trimmed} closed jobs lost their text (30 days after closing)")
         print(f"Supabase: {cleanup(client, datetime.now(UTC).date())} spam-guard counter rows deleted")
         print(quality_report(conn))
     except (SyncError, ExclusionError) as exc:

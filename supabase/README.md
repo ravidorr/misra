@@ -25,11 +25,11 @@ a request to `crawl_log`, and any `POST`, `PATCH` or `DELETE` with the anon key,
 ## Access model
 
 - `jobs`: anonymous and signed-in users read rows whose `status` is `open`, by column: `description` (the full text of a
-  posting) and `details` are not readable by them (migration `20261121100000_jobs_text_not_public.sql`), so a request that
-  names them, or `select=*`, is refused with a permission error. The grant is per column, so a column added later stays closed
-  until a migration grants it. Step 7.3 (the dashboard drill-down) and step 8.1 (`get_job`) will expose the text, with a
-  new migration, only after the lawyer has approved storing other companies' full postings. Nobody but the service role
-  writes, and the service role reads and writes everything.
+  posting) and `details` are never readable by them (migration `20261121100000_jobs_text_not_public.sql`; the lawyer's
+  decision of 2026-11-16: the text is for search and the assistant), so a request that names them, or `select=*`, is
+  refused with a permission error. `snippet`, the first 255 characters of the description at a word boundary, is
+  readable (migration `20261122100000_jobs_snippet.sql`). The grant is per column, so a column added later stays closed
+  until a migration grants it. Nobody but the service role writes, and the service role reads and writes everything.
 - `crawl_log`: no policy, so only the service role reads or writes it.
 - `profiles` (user id, email): a signed-in user reads their own row. Nobody writes it but the trigger below and the
   service role.
@@ -206,6 +206,20 @@ policy and no grant for `anon` or `authenticated`; the two functions that change
 `supabase/tests/report_limits.sql` tests the counting against a database, the same way as the other SQL tests
 (`psql "$TEST_DATABASE_URL" -v ON_ERROR_STOP=1 -f supabase/tests/report_limits.sql`, ending in
 `all report limit checks passed`).
+
+### Daily trim of closed jobs' text
+
+Migration `20261123100000_jobs_text_trim.sql` adds `jobs_text_trim(p_day date)`: it sets `description`, `details` and `snippet` to
+null for the jobs with `status = 'closed'` whose `last_seen` is more than 30 days before `p_day`, and returns how many jobs it
+changed (a second call the same day returns 0). The table has no closed-at column, so `last_seen` is the close time: the sync marks
+a job closed without touching it, so it is the last crawl that saw the job open. A closed job with no `last_seen` is trimmed too.
+The row stays (title, company, link and dates). `details` is nulled whole, which removes `text_sha256`: a job that reopens has no
+stored fingerprint, so the next sync writes its text and snippet again. An invoker function, executable by the service role only
+(`revoke all ... from public, anon, authenticated`), like the counter cleanups; `p_day` null or after today is refused with
+`22023`. `sync_supabase.py` calls it after the descriptions pass and logs the count only; a failure (for example the migration
+not applied yet) is a `::warning::` and never fails the step. `supabase/tests/job_snippet_and_trim.sql` tests it against a
+database (29 and 30 days kept, 31 trimmed, open jobs untouched, anon and authenticated cannot run it).
+Apply `20261122100000_jobs_snippet.sql`, then `20261123100000_jobs_text_trim.sql`, before the first daily run that includes them: without the first, the sync reads `snippet`, that read fails and no description is written that day (one `::warning::`); without the second, only the trim warns. The trim is early at worst, never late: `last_seen` is never after the real close, so a company whose crawl failed, was held or skipped before its jobs closed has them trimmed sooner than 30 days after the close. Unlike the counter cleanups, a failed trim does not fail the step, so a `::warning::` that repeats day after day is the only signal that the 30-day promise has lapsed.
 
 ### Daily cleanup of the counters
 

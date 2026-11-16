@@ -172,6 +172,13 @@ TRIGGER = re.compile(
     r"(?: of \w+)? on (?P<table>(?:public|auth)\.\w+) for each row "
     r"(?:when \([^)]*\) )?execute function public\.(?P<function>\w+)\(\)"
 )
+# Step 7.2: the one column added to `jobs` after the first migration, and the daily trim of the text of closed jobs.
+ADD_JOBS_COLUMN = re.compile(r"alter table public\.jobs add column (?P<column>\w+) text")
+JOBS_TRIM_FUNCTION = re.compile(
+    r"create function public\.jobs_text_trim\((?P<args>[a-z_0-9 ,]*)\) returns integer language plpgsql "
+    r"set search_path = '' as \$\$(?P<body>.*)\$\$"
+)
+GRANT_JOBS_TRIM_FUNCTION = re.compile(r"grant execute on function public\.jobs_text_trim\(date\) to service_role")
 DOLLAR_QUOTE = re.compile(r"\$\w*\$")
 CASCADE = "references auth.users (id) on delete cascade"
 
@@ -250,10 +257,11 @@ def grant_problem(s: str) -> str | None:
 
 
 # The columns of `jobs` that the public roles may read: all but the text of a posting and its details, which stay closed
-# until the lawyer has seen them (migration 20261121100000_jobs_text_not_public.sql, PLAN.md steps 7.3 and 8.1).
+# (migration 20261121100000_jobs_text_not_public.sql, the lawyer's answers of 2026-11-16). `snippet`, the first 255
+# characters of the text, is the public part (migration 20261122100000_jobs_snippet.sql).
 JOBS_PUBLIC_COLUMNS = {
     "company", "job_id", "title", "team", "location", "url", "posted", "first_seen", "last_seen", "status",
-    "level", "role_types", "regions", "locations",
+    "level", "role_types", "regions", "locations", "snippet",
 }  # fmt: skip
 JOBS_CLOSED_COLUMNS = {"description", "details"}
 
@@ -265,7 +273,7 @@ def column_grant_problem(grant: re.Match[str], s: str) -> str | None:
         right = (
             grant["priv"] == "select"
             and words(grant["roles"]) == {"anon", "authenticated"}
-            and words(grant["columns"]) == JOBS_PUBLIC_COLUMNS
+            and words(grant["columns"]) <= JOBS_PUBLIC_COLUMNS  # the migrations grant the list in two parts
         )
         return (
             None
@@ -392,6 +400,9 @@ def problems(stmts: list[str]) -> list[str]:
             found.extend(function[2])
         elif m := REVOKE_FUNCTION.fullmatch(s):
             closed |= {(m["name"], role) for role in words(m["roles"])}
+        elif m := JOBS_TRIM_FUNCTION.fullmatch(s):
+            functions[JOBS_TRIM_NAME] = False
+            found.extend(jobs_trim_problems(m))
         elif m := TRIGGER.fullmatch(s):
             triggers.append((m["table"], m["function"]))
         elif not (
@@ -399,6 +410,8 @@ def problems(stmts: list[str]) -> list[str]:
             or GRANT.fullmatch(s)
             or COLUMN_GRANT.fullmatch(s)
             or GRANT_REPORT_FUNCTION.fullmatch(s)
+            or GRANT_JOBS_TRIM_FUNCTION.fullmatch(s)
+            or ADD_JOBS_COLUMN.fullmatch(s)
             or GRANT_SUBSCRIPTION_FUNCTION.fullmatch(s)
             or GRANT_SUBSCRIBE_FUNCTION.fullmatch(s)
             or s in HOOK_GRANTS
@@ -425,6 +438,30 @@ def problems(stmts: list[str]) -> list[str]:
         if (name, role) not in closed
     )
     found.extend(trigger_problems(triggers, functions))
+    return found
+
+
+JOBS_TRIM_NAME = "jobs_text_trim"
+JOBS_TRIM_NULLS = ("description", "details", "snippet")  # all the trim may write, to null
+
+
+def jobs_trim_problems(m: re.Match[str]) -> list[str]:
+    """The trim runs as the caller (the service role), has one signature, touches only `jobs` and nulls only the
+    posting's text columns of closed jobs."""
+    body = m["body"]
+    touched = set(re.findall(r"public\.(\w+)", body)) - {"jobs"}
+    found = [] if m["args"] == "p_day date" else [f"function {JOBS_TRIM_NAME} has another signature"]
+    found += [f"function {JOBS_TRIM_NAME} may touch only jobs, not {sorted(touched)}"] * bool(touched)
+    found += [f"function {JOBS_TRIM_NAME} reaches outside public"] * bool(
+        re.search(r"\b(?:auth|storage|vault)\.", body)
+    )
+    found += [f"function {JOBS_TRIM_NAME} must delete nothing and update only closed jobs"] * bool(
+        "delete" in body or "status = 'closed'" not in body
+    )
+    assigned = re.findall(r"\bset (.+?) where", body, re.S)
+    found += [f"function {JOBS_TRIM_NAME} may set only {sorted(JOBS_TRIM_NULLS)}"] * bool(
+        [" ".join(a.split()) for a in assigned] != [", ".join(f"{c} = null" for c in JOBS_TRIM_NULLS)]
+    )
     return found
 
 
@@ -770,6 +807,7 @@ def test_the_report_counters_have_no_policy_and_no_grant_for_anyone_but_the_serv
         and not GRANT_REPORT_FUNCTION.fullmatch(s)
         and not GRANT_SUBSCRIPTION_FUNCTION.fullmatch(s)
         and not GRANT_SUBSCRIBE_FUNCTION.fullmatch(s)
+        and not GRANT_JOBS_TRIM_FUNCTION.fullmatch(s)
         and s not in HOOK_GRANTS
     ]
 
@@ -866,15 +904,21 @@ def test_the_lint_rejects_a_weakened_report_limits_migration(old: str, new: str)
 def test_the_text_of_a_posting_is_closed_to_the_public_roles_and_every_other_column_is_granted() -> None:
     stmts = statements()
     created = next(columns_of(m["body"]) for s in stmts if (m := CREATE_TABLE.fullmatch(s)) and m["table"] == "jobs")
-    assert set(created) == JOBS_PUBLIC_COLUMNS | JOBS_CLOSED_COLUMNS  # a new column must be sorted into one of the two
+    added = {m["column"] for s in stmts if (m := ADD_JOBS_COLUMN.fullmatch(s))}
+    assert (
+        set(created) | added == JOBS_PUBLIC_COLUMNS | JOBS_CLOSED_COLUMNS
+    )  # a new column must be sorted into one of the two
     assert not JOBS_PUBLIC_COLUMNS & JOBS_CLOSED_COLUMNS
     # the table-level grant of the first migration is taken back, after it, and only the column grant follows
     table_level = stmts.index("grant select on public.jobs to anon, authenticated")
     revoke = stmts.index("revoke select on public.jobs from anon, authenticated")
     assert table_level < revoke
     column_grants = [m for s in stmts[revoke:] if (m := COLUMN_GRANT.fullmatch(s)) and m["table"] == "jobs"]
-    assert len(column_grants) == 1
-    assert words(column_grants[0]["columns"]) == JOBS_PUBLIC_COLUMNS
+    assert [words(g["columns"]) for g in column_grants][-1] == {
+        "snippet"
+    }  # the snippet is granted by its own migration
+    assert set().union(*(words(g["columns"]) for g in column_grants)) == JOBS_PUBLIC_COLUMNS
+    assert not any(words(g["columns"]) & JOBS_CLOSED_COLUMNS for g in column_grants)
     assert not [s for s in stmts[revoke:] if GRANT.fullmatch(s) and "public.jobs" in s]  # no table-level grant again
 
 
@@ -883,3 +927,64 @@ def test_a_grant_of_the_posting_text_to_the_public_roles_is_refused() -> None:
         s = f"grant select ({columns}) on public.jobs to anon, authenticated"
         assert grant_problem(s)
     assert grant_problem("grant select (company) on public.jobs to anon")  # both roles, the whole list
+
+
+TRIM_FILE = MIGRATION_DIR / "20261123100000_jobs_text_trim.sql"
+TRIM_GRANT = "grant execute on function public.jobs_text_trim(date) to service_role;"
+TRIM_CLOSE = "revoke all on function public.jobs_text_trim(date) from public, anon, authenticated;"
+
+
+def trim_body() -> str:
+    (trim,) = [m for s in statements() if (m := JOBS_TRIM_FUNCTION.fullmatch(s))]
+    return trim["body"]
+
+
+def test_the_trim_nulls_the_text_columns_of_closed_jobs_after_30_days_and_refuses_a_wrong_day() -> None:
+    body = trim_body()
+    assert (
+        "set description = null, details = null, snippet = null" in body
+    )  # the text, its details (and hash), its snippet
+    assert "where status = 'closed'" in body  # an open job is never touched
+    assert "to_char(p_day - 30, 'yyyy-mm-dd')" in body  # more than 30 days after the last day the job was seen open
+    assert "p_day is null or p_day > current_date" in body  # a wrong date can never trim early
+    assert body.count("update public.jobs") == 1
+    assert "delete" not in body  # the row stays: title, company, link and dates
+
+
+def test_the_trim_is_an_invoker_function_executable_by_the_service_role_alone() -> None:
+    text = TRIM_FILE.read_text(encoding="utf-8")
+    assert TRIM_GRANT in text
+    assert TRIM_CLOSE in text
+    assert "security definer" not in text.split("create function", 1)[1].split("$$", 1)[0]
+    assert problems(statements()) == []
+
+
+@pytest.mark.parametrize(
+    ("old", "new"),
+    [
+        (TRIM_CLOSE, TRIM_CLOSE.replace("public, anon, authenticated", "public, anon")),
+        (TRIM_CLOSE, ""),
+        (TRIM_GRANT, TRIM_GRANT.replace("service_role", "service_role, anon")),
+        (
+            "create function public.jobs_text_trim(p_day date)",
+            "create function public.jobs_text_trim(p_day date, p_x text)",
+        ),
+        ("where status = 'closed'", "where status = 'open'"),
+        ("   set description = null,", "   set description = null, title = null,"),
+        (
+            "  get diagnostics trimmed = row_count;",
+            "  delete from public.user_jobs;\n  get diagnostics trimmed = row_count;",
+        ),
+        ("  get diagnostics trimmed = row_count;", "  delete from auth.users;\n  get diagnostics trimmed = row_count;"),
+    ],
+)
+def test_a_weakened_trim_is_refused(old: str, new: str) -> None:
+    text = TRIM_FILE.read_text(encoding="utf-8")
+    assert old in text, old
+    weakened = text.replace(old, new)
+    assert problems(statements_of(f"{REAL.replace(text, '')}\n{weakened}")), old
+
+
+@pytest.mark.parametrize("column", ["description", "details"])
+def test_the_snippet_migration_cannot_grant_the_text(column: str) -> None:
+    assert grant_problem(f"grant select (snippet, {column}) on public.jobs to anon, authenticated")

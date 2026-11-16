@@ -3,6 +3,7 @@ then through sync_supabase.py to Supabase, and never into data/jobs.db, docs/ or
 
 import re
 import sqlite3
+from datetime import date
 from pathlib import Path
 from typing import Any
 
@@ -153,8 +154,9 @@ def test_the_sync_writes_the_description_and_details_with_a_hash_in_their_own_re
     assert ("Beta", "old") not in fake.table  # a job that is not open is never sent
     posts = [c["json"] for c in fake.calls if c["method"] == "POST"]
     assert {frozenset(r) for batch in posts for r in batch if "description" in r} == {
-        frozenset({"company", "job_id", "description", "details"})
+        frozenset({"company", "job_id", "description", "snippet", "details"})
     }
+    assert one["snippet"] == "Text one"  # short enough to be shown whole
     assert all(r.get("description") is not None for batch in posts for r in batch if "description" in r)  # never null
 
 
@@ -241,7 +243,7 @@ def test_the_hash_read_pages_through_every_open_job() -> None:
     fake = FakeSupabase(page=2)
     for n in range(5):
         fake.table[("Acme", str(n))] = {"status": "open", "details": {HASH_KEY: f"h{n}"} if n % 2 else None}
-    assert client(fake).text_hashes() == {("Acme", str(n)): (f"h{n}" if n % 2 else None) for n in range(5)}
+    assert client(fake).stored_texts() == {("Acme", str(n)): ((f"h{n}" if n % 2 else None), None) for n in range(5)}
 
 
 def test_an_excluded_company_loses_its_text_with_its_jobs(seeded: sqlite3.Connection) -> None:
@@ -355,3 +357,173 @@ def test_texts_that_match_no_open_job_are_a_warning(
     work({("Nobody", "1"): "Text"})
     sync(seeded, client(FakeSupabase()))
     assert "1 descriptions were left by the crawl and none is for an open job" in capsys.readouterr().out
+
+
+# ---- the snippet and the 30-day trim (PLAN.md steps 7.2 and 7.4) ----
+
+WORDS = "word " * 80  # 400 characters of five-character words
+
+
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [
+        (None, None),
+        ("", None),
+        ("   \n ", None),
+        ("Short text.", "Short text."),  # a text that fits is kept whole, with its final period
+        ("  \n Leading space.", "Leading space."),
+        ("a" * 255, "a" * 255),  # exactly the limit: whole, not cut
+        ("a" * 254 + " b", "a" * 254),  # the 255th character is the space: nothing is cut off a word
+        ("a" * 250 + " bbbbbbbbb", "a" * 250),  # the cut falls inside a word: back to the space before it
+        ("a" * 256, None),  # one word longer than the limit has no honest cut
+        ("a" * 10 + "\n" + "b" * 300, "a" * 10),  # a line break is a boundary too
+        ("word " * 51 + "end", "word " * 50 + "word"),  # 255 characters end on a space
+        (f"{'x' * 250}, yyyyyyyy", "x" * 250),  # the cut word goes, and the comma before it
+        (f"{'x' * 250} - yyyyyyyy", "x" * 250),  # a dangling dash goes
+        (f"{'x' * 250}. Yyyyyyyy", "x" * 250),  # no full stop on a cut text: no sentence ended here
+        (f"{'x' * 248} C# yyyyyyyy", "x" * 248 + " C#"),  # `#` can belong to the word
+        ("שלום " * 80, "שלום " * 50 + "שלום"),  # Hebrew: characters, not bytes
+        (f"{'ש' * 250} אבגדהוזחטי", "ש" * 250),
+        ("- " * 200, None),  # nothing but punctuation is no snippet
+    ],
+)
+def test_the_snippet_is_the_first_255_characters_cut_at_a_word_boundary(text: str | None, expected: str | None) -> None:
+    result = descriptions.snippet(text)
+    assert result == expected
+    if result:
+        assert len(result) <= descriptions.SNIPPET_CHARS
+        assert text is not None and text.strip().startswith(result)
+
+
+def test_a_cut_snippet_never_ends_inside_a_word_or_on_punctuation() -> None:
+    for length in range(240, 300):
+        text = ("Build things, ship them; learn (fast) - repeat: " * 10)[:length]
+        result = descriptions.snippet(text)
+        assert result is not None
+        assert result[-1].isalnum() or length <= descriptions.SNIPPET_CHARS
+        assert result in text and text.startswith(result)
+
+
+def stored(fake: FakeSupabase, key: tuple[str, str]) -> dict[str, Any]:
+    return fake.table[key]
+
+
+def test_the_sync_writes_the_snippet_with_the_text_and_nothing_else_of_it(seeded: sqlite3.Connection) -> None:
+    long_text = "Build it. " * 60
+    work({("Acme", "1"): long_text})
+    fake = FakeSupabase()
+    sync(seeded, client(fake))
+    row = stored(fake, ("Acme", "1"))
+    assert row["description"] == long_text
+    assert row["snippet"] == descriptions.snippet(long_text)
+    assert len(row["snippet"]) <= descriptions.SNIPPET_CHARS
+    assert "snippet" not in stored(fake, ("Beta", "9"))  # no text today: nothing sent, nothing erased
+
+
+def test_a_stored_text_without_a_snippet_gets_one_on_the_next_sync_and_then_is_left_alone(
+    seeded: sqlite3.Connection,
+) -> None:
+    work({("Acme", "1"): "Text one"})
+    fake = FakeSupabase()
+    sync(seeded, client(fake))
+    del fake.table[("Acme", "1")]["snippet"]  # a text stored before the snippet existed
+    assert sync(seeded, client(fake)).texts == 1
+    assert stored(fake, ("Acme", "1"))["snippet"] == "Text one"
+    assert sync(seeded, client(fake)).texts == 0  # the hash and the snippet agree: not written again
+
+
+def test_a_text_with_no_snippet_is_not_rewritten_every_day(seeded: sqlite3.Connection) -> None:
+    work({("Acme", "1"): "a" * 400})  # one long word: the text is stored, the snippet is null
+    fake = FakeSupabase()
+    assert sync(seeded, client(fake)).texts == 1
+    assert stored(fake, ("Acme", "1"))["snippet"] is None
+    assert sync(seeded, client(fake)).texts == 0
+
+
+def test_the_snippet_follows_an_edited_text(seeded: sqlite3.Connection) -> None:
+    work({("Acme", "1"): "First text"})
+    fake = FakeSupabase()
+    sync(seeded, client(fake))
+    work({("Acme", "1"): "Second text"})
+    sync(seeded, client(fake))
+    assert stored(fake, ("Acme", "1"))["snippet"] == "Second text"
+
+
+def test_a_job_that_closes_keeps_its_text_and_snippet_until_the_trim(seeded: sqlite3.Connection) -> None:
+    work({("Acme", "1"): "Text one", ("Acme", "2"): "Text two"})
+    fake = FakeSupabase()
+    sync(seeded, client(fake))
+    seeded.execute("UPDATE jobs SET status='closed' WHERE company='Acme' AND job_id='1'")
+    work({("Acme", "2"): "Text two"})
+    sync(seeded, client(fake))
+    closed = stored(fake, ("Acme", "1"))
+    assert closed["status"] == "closed"
+    assert (closed["description"], closed["snippet"]) == ("Text one", "Text one")
+
+
+def test_a_trimmed_job_that_reopens_gets_its_text_and_snippet_back(seeded: sqlite3.Connection) -> None:
+    work({("Acme", "1"): "Text one"})
+    fake = FakeSupabase()
+    sync(seeded, client(fake))
+    # what jobs_text_trim leaves of a closed job: the text, its details (the hash with them) and the snippet are null
+    fake.table[("Acme", "1")].update(status="closed", description=None, details=None, snippet=None)
+    result = sync(seeded, client(fake))  # the crawl sees the job again: it is open and has a text
+    assert (result.texts, result.texts_same) == (1, 0)
+    row = stored(fake, ("Acme", "1"))
+    assert row["status"] == "open"
+    assert (row["description"], row["snippet"]) == ("Text one", "Text one")
+    assert row["details"][HASH_KEY] == fingerprint("Text one", {"employment_type": "Full-time"})
+
+
+def test_the_trim_calls_the_function_with_today_and_logs_the_count(capsys: pytest.CaptureFixture[str]) -> None:
+    fake = FakeSupabase(rpc_answer=3)
+    assert sync_supabase.trim_texts(client(fake), date(2026, 11, 16)) == THREE_JOBS
+    (call,) = fake.calls
+    assert (call["method"], call["url"]) == ("POST", f"{URL}/rest/v1/rpc/jobs_text_trim")
+    assert call["json"] == {"p_day": "2026-11-16"}
+    assert capsys.readouterr().out == ""  # nothing here prints: main logs the count only
+
+
+@pytest.mark.parametrize("answer", ["x", None, True, [1], {"a": 1}])
+def test_a_trim_answer_that_is_not_a_count_is_a_warning_not_a_failure(
+    answer: Any, capsys: pytest.CaptureFixture[str]
+) -> None:
+    assert sync_supabase.trim_texts(client(FakeSupabase(rpc_answer=answer)), date(2026, 11, 16)) == 0
+    assert (
+        "::warning::the text of closed jobs could not be trimmed: rpc/jobs_text_trim returned"
+        in capsys.readouterr().out
+    )
+
+
+def test_a_trim_that_cannot_reach_the_server_is_a_warning_not_a_failure(capsys: pytest.CaptureFixture[str]) -> None:
+    fake = FakeSupabase(error=sync_supabase.requests.ConnectionError("down"))
+    assert sync_supabase.trim_texts(client(fake), date(2026, 11, 16)) == 0
+    assert (
+        "::warning::the text of closed jobs could not be trimmed: POST rpc/jobs_text_trim failed"
+        in capsys.readouterr().out
+    )
+
+
+def test_a_failing_trim_is_a_warning_not_a_failure(capsys: pytest.CaptureFixture[str]) -> None:
+    assert sync_supabase.trim_texts(client(FakeSupabase(fail_on="POST")), date(2026, 11, 16)) == 0
+    out = capsys.readouterr().out
+    assert "::warning::the text of closed jobs could not be trimmed: POST rpc/jobs_text_trim failed" in out
+
+
+def test_main_trims_after_the_descriptions_and_logs_the_count_only(
+    seeded: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    seeded.commit()
+    work({("Acme", "1"): SENTINEL})
+    fake = FakeSupabase(rpc_answer=5)
+    monkeypatch.setenv("SUPABASE_URL", URL)
+    monkeypatch.setenv("SUPABASE_SERVICE_ROLE_KEY", "k")
+    monkeypatch.setattr(sync_supabase.requests, "Session", lambda: fake)
+    sync_supabase.main()
+    urls = [c["url"] for c in fake.calls]
+    trim = urls.index(f"{URL}/rest/v1/rpc/jobs_text_trim")
+    assert trim > max(i for i, c in enumerate(fake.calls) if c["method"] == "POST" and "description" in str(c["json"]))
+    assert trim < urls.index(f"{URL}/rest/v1/rpc/report_site_cleanup")
+    out = capsys.readouterr().out
+    assert "Supabase: 5 closed jobs lost their text" in out
+    assert SENTINEL not in out

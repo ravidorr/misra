@@ -358,8 +358,8 @@ def test_main_cleans_the_counters_after_the_sync_and_logs_the_count(
     sync_supabase.main()
     rpc = [c for c in fake.calls if "/rpc/" in c["url"]]
     assert (
-        len(rpc) == len(sync_supabase.CLEANUP_FUNCTIONS) and fake.calls[-len(rpc) :] == rpc
-    )  # one call per counter family, after the sync
+        len(rpc) == 1 + len(sync_supabase.CLEANUP_FUNCTIONS) and fake.calls[-len(rpc) :] == rpc
+    )  # the text trim, then one call per counter family, after the sync
     assert all(call["json"] == {"p_day": datetime.now(UTC).date().isoformat()} for call in rpc)
     assert "Supabase: 14 spam-guard counter rows deleted" in capsys.readouterr().out
 
