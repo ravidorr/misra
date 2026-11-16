@@ -6,6 +6,7 @@ from urllib.parse import urlparse
 import pytest
 
 import adapters
+import descriptions
 import discover
 from tests.conftest import COMEET_FEEDS
 from tests.fakes import FakeHttpResponse
@@ -1489,3 +1490,214 @@ def test_comeet_page_a_page_it_cannot_read_is_a_failure_not_an_empty_board(
 ) -> None:
     fake_get(monkeypatch, FakeHttpResponse(text=text, url=url))
     assert adapters.comeet_page(COMEET_URL) is None
+
+
+# --- descriptions (PLAN.md step 7.1): the text a site already gives in the list it is read from ---------------------
+
+
+def test_greenhouse_asks_for_the_content_in_the_same_request_and_reads_the_escaped_text(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    data = {
+        "jobs": [
+            {
+                "id": 1,
+                "title": "A",
+                "location": {"name": "Tel Aviv"},
+                "absolute_url": "u1",
+                "content": "&lt;p&gt;Build things.&lt;/p&gt;&lt;ul&gt;&lt;li&gt;Python&lt;/li&gt;&lt;/ul&gt;"
+                "&lt;script&gt;x()&lt;/script&gt;",
+                "departments": [{"id": 4, "name": "R&D", "child_ids": []}, {"name": ""}, "junk"],
+                "offices": [{"name": "Tel Aviv", "location": "Israel"}],
+                "metadata": [{"name": "Internal", "value": "secret"}],
+                "data_compliance": [{"type": "gdpr"}],
+            },
+            {"id": 2, "title": "B", "location": None, "absolute_url": "u2", "content": None},
+            {"id": 3, "title": "C", "location": None, "absolute_url": "u3", "content": 5, "departments": "x"},
+        ]
+    }
+    urls = fake_get(monkeypatch, FakeHttpResponse(data=data))
+    jobs = adapters.greenhouse("acme")
+    assert urls == ["https://boards-api.greenhouse.io/v1/boards/acme/jobs?content=true"]  # one request, as before
+    assert jobs is not None
+    assert jobs[0]["description"] == "Build things.\n\n- Python"
+    assert jobs[0]["details"] == {"departments": ["R&D"], "offices": ["Tel Aviv"]}  # not the metadata or compliance
+    assert "secret" not in json.dumps(jobs)
+    # a job whose content is missing or not text is exactly the job of before: no description, no details
+    assert "description" not in jobs[1]
+    assert "details" not in jobs[1]
+    assert jobs[2] == adapters._job(3, "C", None, "u3")
+
+
+def test_greenhouse_url_reads_the_content_when_the_proxy_gives_it(monkeypatch: pytest.MonkeyPatch) -> None:
+    data = {"jobs": [{"id": 1, "title": "A", "absolute_url": "u", "content": "&lt;p&gt;Hi&lt;/p&gt;"}]}
+    fake_get(monkeypatch, FakeHttpResponse(data=data))
+    jobs = adapters.greenhouse_url("https://x.example/jobs.json")
+    assert jobs is not None
+    assert jobs[0]["description"] == "Hi"
+
+
+def test_lever_joins_the_description_the_lists_and_the_closing_text(monkeypatch: pytest.MonkeyPatch) -> None:
+    data = [
+        {
+            "id": "a",
+            "text": "Engineer",
+            "hostedUrl": "u",
+            "categories": {"location": "Tel Aviv", "commitment": "Full-time", "department": "R&D", "team": "Core"},
+            "descriptionPlain": "We build.",
+            "lists": [
+                {"text": "What you will do", "content": "<li>Ship</li><li>Learn</li>"},
+                {"text": "", "content": "<li>Only items</li>"},
+                "junk",
+            ],
+            "additionalPlain": "Equal opportunity.",
+            "workplaceType": "hybrid",
+            "country": "IL",
+        },
+        {"id": "b", "text": "No text", "hostedUrl": "u", "categories": None, "lists": "not a list"},
+    ]
+    fake_get(monkeypatch, FakeHttpResponse(data=data))
+    jobs = adapters.lever("acme")
+    assert jobs is not None
+    assert (
+        jobs[0]["description"] == "We build.\n\nWhat you will do\n- Ship\n- Learn\n\n- Only items\n\nEqual opportunity."
+    )
+    assert jobs[0]["details"] == {
+        "employment_type": "Full-time",
+        "department": "R&D",
+        "workplace_type": "hybrid",
+        "country": "IL",
+    }
+    assert jobs[1] == adapters._job("b", "No text", "", "u")
+
+
+def test_ashby_takes_the_plain_text_or_reads_the_html(monkeypatch: pytest.MonkeyPatch) -> None:
+    data = {
+        "jobs": [
+            {
+                "id": "1",
+                "title": "A",
+                "jobUrl": "u",
+                "descriptionPlain": "Plain  text",
+                "descriptionHtml": "<p>Ignored</p>",
+                "employmentType": "FullTime",
+                "department": "Eng",
+                "workplaceType": None,
+                "isRemote": False,
+            },
+            {"id": "2", "title": "B", "jobUrl": "u", "descriptionHtml": "<p>From <i>html</i></p>"},
+            {"id": "3", "title": "C", "jobUrl": "u"},
+        ]
+    }
+    fake_get(monkeypatch, FakeHttpResponse(data=data))
+    jobs = adapters.ashby("acme")
+    assert jobs is not None
+    assert (jobs[0]["description"], jobs[1]["description"]) == ("Plain text", "From html")
+    assert jobs[0]["details"] == {"employment_type": "FullTime", "department": "Eng", "is_remote": False}
+    assert "details" not in jobs[1]
+    assert jobs[2] == adapters._job("3", "C", None, "u")
+
+
+def test_workable_asks_for_the_details_in_the_same_request(monkeypatch: pytest.MonkeyPatch) -> None:
+    data = {
+        "jobs": [
+            {
+                "shortcode": "S1",
+                "title": "A",
+                "url": "u",
+                "city": "Tel Aviv",
+                "country": "Israel",
+                "description": "<p>Do <b>it</b></p>",
+                "employment_type": "Full-time",
+                "function": "Engineering",
+                "industry": None,
+                "experience": "Mid",
+                "education": None,
+                "telecommuting": False,
+            },
+            {"shortcode": "S2", "title": "B", "url": "u"},
+        ]
+    }
+    urls = fake_get(monkeypatch, FakeHttpResponse(data=data))
+    jobs = adapters.workable("acme")
+    assert urls == ["https://apply.workable.com/api/v1/widget/accounts/acme?details=true"]
+    assert jobs is not None
+    assert jobs[0]["description"] == "Do it"
+    assert jobs[0]["details"] == {
+        "employment_type": "Full-time",
+        "function": "Engineering",
+        "experience": "Mid",
+        "telecommuting": False,
+    }
+    assert jobs[1] == adapters._job("S2", "B", "", "u")
+
+
+def comeet_page_with(positions: list[dict[str, Any]]) -> FakeHttpResponse:
+    body = "<script>COMPANY_POSITIONS_DATA = " + json.dumps(positions) + ";</script>"
+    return FakeHttpResponse(text=body)
+
+
+def test_comeet_reads_the_parts_of_the_posting_in_their_order(monkeypatch: pytest.MonkeyPatch) -> None:
+    base = {"url_active_page": "https://c.example/a", "url_comeet_hosted_page": "h", "location": {"city": "Tel Aviv"}}
+    positions = [
+        {
+            **base,
+            "uid": "01.A01",
+            "name": "Dev",
+            "employment_type": "Full-time",
+            "experience_level": "Senior",
+            "workplace_type": "Hybrid",
+            "custom_fields": {
+                "details": [
+                    {"name": "Requirements", "order": 2, "value": "<ul><li>Python</li></ul>"},
+                    {"name": "Description", "order": 1, "value": "<p>Build.</p>"},
+                    {"name": "Empty", "order": 3, "value": ""},
+                    {"name": "Odd order", "order": "x", "value": None},
+                    "junk",
+                ],
+                "categories": [],
+            },
+        },
+        {**base, "uid": "01.A02", "name": "Plain", "custom_fields": {"details": "not a list"}},
+        {**base, "uid": "01.A03", "name": "None", "custom_fields": None},
+        {**base, "uid": "01.A04", "name": "Missing"},
+    ]
+    fake_get(monkeypatch, comeet_page_with(positions))
+    jobs = adapters.comeet("c/01.001")
+    assert jobs is not None
+    assert jobs[0]["description"] == "Description\nBuild.\n\nRequirements\n- Python"
+    assert jobs[0]["details"] == {
+        "employment_type": "Full-time",
+        "experience_level": "Senior",
+        "workplace_type": "Hybrid",
+    }
+    assert all("description" not in j and "details" not in j for j in jobs[1:])
+
+
+def test_amazon_keeps_the_description_and_the_qualifications_it_lists(monkeypatch: pytest.MonkeyPatch) -> None:
+    job = amz_job("1")
+    job.update(
+        description="Build<br/>things",
+        basic_qualifications="<li>3 years</li>",
+        preferred_qualifications="<li>Go</li>",
+        job_family="Software",
+        job_schedule_type="full-time",
+    )
+    bare = amz_job("2", path="/en/jobs/2/y")
+    fake_amz(monkeypatch, amz_answer([job, bare]))
+    jobs = adapters.amazon("ISR")
+    assert jobs is not None
+    assert (
+        jobs[0]["description"] == "Build\nthings\n\nBasic qualifications\n- 3 years\n\nPreferred qualifications\n- Go"
+    )
+    assert jobs[0]["details"] == {"job_family": "Software", "employment_type": "full-time"}
+    assert "description" not in jobs[1]
+
+
+def test_a_description_over_the_cap_is_cut_and_recorded(monkeypatch: pytest.MonkeyPatch) -> None:
+    data = [{"id": "a", "text": "T", "hostedUrl": "u", "descriptionPlain": "word " * 10_000}]
+    fake_get(monkeypatch, FakeHttpResponse(data=data))
+    jobs = adapters.lever("acme")
+    assert jobs is not None
+    assert len(jobs[0]["description"]) <= descriptions.MAX_CHARS
+    assert jobs[0]["details"] == {"description_truncated": True}

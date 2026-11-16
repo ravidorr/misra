@@ -10,6 +10,7 @@ from typing import Any
 from urllib.parse import parse_qsl, urljoin, urlparse
 
 from common import ISRAEL, get, post
+from descriptions import attach, html_to_text, plain_text, sections
 
 HTTP_OK = 200
 Job = dict[str, Any]
@@ -43,20 +44,27 @@ def _job(  # noqa: PLR0913, PLR0917
     }
 
 
+def _names(items: Any) -> list[str]:
+    """The `name` of each dict in a list a site gives (departments, offices), whatever else the entries hold."""
+    return [str(i["name"]) for i in items if isinstance(i, dict) and i.get("name")] if isinstance(items, list) else []
+
+
+def _greenhouse_job(j: dict[str, Any]) -> Job:
+    """A job of a Greenhouse board JSON: the content is the posting as escaped HTML. Of what else the board gives only
+    the departments and offices are kept (`metadata` and the compliance fields are the company's own and may hold
+    anything)."""
+    job = _job(
+        j["id"], j["title"], (j.get("location") or {}).get("name"), j["absolute_url"], posted=j.get("updated_at", "")
+    )
+    details = {"departments": _names(j.get("departments")), "offices": _names(j.get("offices"))}
+    return attach(job, html_to_text(j.get("content")), details)
+
+
 def greenhouse(slug: str) -> list[Job] | None:
-    r = get(f"https://boards-api.greenhouse.io/v1/boards/{slug}/jobs")
+    r = get(f"https://boards-api.greenhouse.io/v1/boards/{slug}/jobs?content=true")  # the same list, with the text
     if r is None or r.status_code != HTTP_OK:
         return None
-    return [
-        _job(
-            j["id"],
-            j["title"],
-            (j.get("location") or {}).get("name"),
-            j["absolute_url"],
-            posted=j.get("updated_at", ""),
-        )
-        for j in r.json().get("jobs", [])
-    ]
+    return [_greenhouse_job(j) for j in r.json().get("jobs", [])]
 
 
 def lever(slug: str) -> list[Job] | None:
@@ -69,16 +77,24 @@ def lever(slug: str) -> list[Job] | None:
     out: list[Job] = []
     for j in r.json():
         c = j.get("categories") or {}
-        out.append(
-            _job(
-                j["id"],
-                j["text"],
-                c.get("location") or ", ".join(c.get("allLocations") or []),
-                j["hostedUrl"],
-                team=c.get("team"),
-                posted=str(j.get("createdAt", "")),
-            )
+        job = _job(
+            j["id"],
+            j["text"],
+            c.get("location") or ", ".join(c.get("allLocations") or []),
+            j["hostedUrl"],
+            team=c.get("team"),
+            posted=str(j.get("createdAt", "")),
         )
+        items = j.get("lists") if isinstance(j.get("lists"), list) else []
+        lists = [(plain_text(x.get("text")), html_to_text(x.get("content"))) for x in items if isinstance(x, dict)]
+        text = sections(("", plain_text(j.get("descriptionPlain"))), *lists, ("", plain_text(j.get("additionalPlain"))))
+        details = {
+            "employment_type": c.get("commitment"),
+            "department": c.get("department"),
+            "workplace_type": j.get("workplaceType"),
+            "country": j.get("country"),
+        }
+        out.append(attach(job, text, details))
     return out
 
 
@@ -86,32 +102,48 @@ def ashby(slug: str) -> list[Job] | None:
     r = get(f"https://api.ashbyhq.com/posting-api/job-board/{slug}")
     if r is None or r.status_code != HTTP_OK:
         return None
-    return [
-        _job(
+    out: list[Job] = []
+    for j in r.json().get("jobs", []):
+        if not j.get("isListed", True):
+            continue
+        job = _job(
             j["id"], j["title"], j.get("location"), j.get("jobUrl"), team=j.get("team"), posted=j.get("publishedAt", "")
         )
-        for j in r.json().get("jobs", [])
-        if j.get("isListed", True)
-    ]
+        text = plain_text(j.get("descriptionPlain")) or html_to_text(j.get("descriptionHtml"))
+        details = {
+            "employment_type": j.get("employmentType"),
+            "department": j.get("department"),
+            "workplace_type": j.get("workplaceType"),
+            "is_remote": j.get("isRemote"),
+        }
+        out.append(attach(job, text, details))
+    return out
 
 
 def workable(slug: str) -> list[Job] | None:
-    r = get(f"https://apply.workable.com/api/v1/widget/accounts/{slug}")
+    r = get(f"https://apply.workable.com/api/v1/widget/accounts/{slug}?details=true")  # the same list, with the text
     if r is None or r.status_code != HTTP_OK:
         return None
     out: list[Job] = []
     for j in r.json().get("jobs", []):
         loc = ", ".join(x for x in (j.get("city"), j.get("country")) if x)
-        out.append(
-            _job(
-                j["shortcode"],
-                j["title"],
-                loc,
-                j.get("url") or j.get("application_url"),
-                team=j.get("department"),
-                posted=j.get("published_on", ""),
-            )
+        job = _job(
+            j["shortcode"],
+            j["title"],
+            loc,
+            j.get("url") or j.get("application_url"),
+            team=j.get("department"),
+            posted=j.get("published_on", ""),
         )
+        details = {
+            "employment_type": j.get("employment_type"),
+            "function": j.get("function"),
+            "industry": j.get("industry"),
+            "experience": j.get("experience"),
+            "education": j.get("education"),
+            "telecommuting": j.get("telecommuting"),
+        }
+        out.append(attach(job, html_to_text(j.get("description")), details))
     return out
 
 
@@ -208,17 +240,31 @@ def comeet(slug: str) -> list[Job] | None:
         loc = j.get("location") or {}
         own, hosted = j.get("url_active_page"), j.get("url_comeet_hosted_page")
         url = hosted if own and _page_key(own) in generic else own
-        out.append(
-            _job(
-                j.get("uid"),
-                j.get("name"),
-                ", ".join(x for x in (loc.get("city"), loc.get("country")) if x),
-                url or hosted or own,
-                team=j.get("department"),
-                posted=j.get("time_updated", ""),
-            )
+        job = _job(
+            j.get("uid"),
+            j.get("name"),
+            ", ".join(x for x in (loc.get("city"), loc.get("country")) if x),
+            url or hosted or own,
+            team=j.get("department"),
+            posted=j.get("time_updated", ""),
         )
+        details = {
+            "employment_type": j.get("employment_type"),
+            "experience_level": j.get("experience_level"),
+            "workplace_type": j.get("workplace_type"),
+        }
+        out.append(attach(job, _comeet_text(j), details))
     return out
+
+
+def _comeet_text(j: dict[str, Any]) -> str:
+    """The posting a Comeet page embeds with each position: `custom_fields.details` is a list of named parts
+    (Description, Requirements and so on) in the order the company set, each an HTML text."""
+    fields = j.get("custom_fields")
+    parts = fields.get("details") if isinstance(fields, dict) else None
+    named = [p for p in parts if isinstance(p, dict)] if isinstance(parts, list) else []
+    named.sort(key=lambda p: p["order"] if _is_number(p.get("order")) else 0)
+    return sections(*((plain_text(p.get("name")), html_to_text(p.get("value"))) for p in named))
 
 
 _JAZZHR_ITEM = '<li class="list-group-item">'
@@ -363,16 +409,7 @@ def greenhouse_url(url: str) -> list[Job] | None:
         jobs = r.json().get("jobs", [])
     except ValueError:
         return None
-    return [
-        _job(
-            j["id"],
-            j["title"],
-            (j.get("location") or {}).get("name"),
-            j["absolute_url"],
-            posted=j.get("updated_at", ""),
-        )
-        for j in jobs
-    ]
+    return [_greenhouse_job(j) for j in jobs]
 
 
 def _workday_page(base: str, applied: dict[str, list[str]], text: str, offset: int) -> dict[str, Any] | None:
@@ -600,7 +637,14 @@ def _amazon_page(slug: str, offset: int) -> tuple[int, list[Job]] | None:
             return None
         where = j.get("normalized_location") or j.get("location")
         url = f"https://www.amazon.jobs{j['job_path']}"
-        out.append(_job(j["id_icims"], j["title"], where, url, team=j.get("job_category"), posted=j.get("posted_date")))
+        job = _job(j["id_icims"], j["title"], where, url, team=j.get("job_category"), posted=j.get("posted_date"))
+        text = sections(
+            ("", html_to_text(j.get("description"))),
+            ("Basic qualifications", html_to_text(j.get("basic_qualifications"))),
+            ("Preferred qualifications", html_to_text(j.get("preferred_qualifications"))),
+        )
+        details = {"job_family": j.get("job_family"), "employment_type": j.get("job_schedule_type")}
+        out.append(attach(job, text, details))
     return hits, out
 
 

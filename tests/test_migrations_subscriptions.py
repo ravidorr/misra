@@ -44,7 +44,7 @@ UNSUBSCRIBE_HEAD = CONFIRM_HEAD.replace("confirm_token_hash", "unsubscribe_token
 
 def test_the_signed_in_role_gets_subscriptions_by_column_and_never_a_token_hash() -> None:
     stmts = statements()
-    grants = [m for s in stmts if (m := COLUMN_GRANT.fullmatch(s))]
+    grants = [m for s in stmts if (m := COLUMN_GRANT.fullmatch(s)) and m["table"] == "subscriptions"]
     assert {(g["priv"], g["table"], g["roles"]) for g in grants} == {
         ("select", "subscriptions", "authenticated"),
         ("update", "subscriptions", "authenticated"),

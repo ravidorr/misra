@@ -27,6 +27,12 @@ def no_inherited_git_repository(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 @pytest.fixture(autouse=True)
+def private_work_directory(tmp_path_factory: pytest.TempPathFactory, monkeypatch: pytest.MonkeyPatch) -> None:
+    """The descriptions work file lives in the runner's temporary directory: a test never touches the real one."""
+    monkeypatch.setenv("RUNNER_TEMP", str(tmp_path_factory.mktemp("runner_temp")))
+
+
+@pytest.fixture(autouse=True)
 def close_connections(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     """The pipeline's main() functions never close their sqlite connections; close them at teardown."""
     opened: list[sqlite3.Connection] = []
