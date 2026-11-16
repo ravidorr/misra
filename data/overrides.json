@@ -853,5 +853,15 @@
   "ats": "comeet_page",
   "slug": "https://apester.com/careers/",
   "israel_only": true
+ },
+ "NeuReality": {
+  "ats": "comeet_page",
+  "slug": "https://www.neureality.ai/careers/",
+  "israel_only": true
+ },
+ "Ceva": {
+  "ats": "comeet",
+  "slug": "ceva/76.005",
+  "israel_only": true
  }
 }

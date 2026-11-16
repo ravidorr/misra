@@ -17,6 +17,17 @@ All notable changes are documented here. Format follows [Keep a Changelog](https
 - The `DB` path constant moved to `common.py`; `build_dashboard.py` and `sync_supabase.py` read it there.
 - `CONTRIBUTING.md`, `PLAN.md` (steps 6.4 and 6.6 are done), `README.md` and `AGENTS.md` describe the one remaining sender.
 
+## [0.46.0] - 2026-11-16
+
+### Added
+
+- A "DevOps & SRE" role type, right after R&D in `ROLE_TYPES` (`classify.py`). It matches DevOps, DevSecOps, SRE, site reliability, CI/CD, and "platform", "infrastructure" (or "infra"), "cloud", "release", "build", "kubernetes" (or "k8s") and "production" right before "engineer" ("Data Platform Engineer", "IT Infrastructure Engineer" and "Cross-Platform Engineer" do not; neither does a prefix inside a longer word). "platform", "cloud" and "infrastructure" alone do not match ("Cloud Solutions Architect", "Customer Platform Manager"). The dashboard filters, quick chips and Filters sheet, the `search_jobs` and `list_filters` assistant tools, the `data-role-types` hooks and the digest filter all read `ROLE_TYPE_NAMES`, so they list it with no other change.
+
+### Changed
+
+- DevOps and SRE titles move out of R&D: `devops|sre|site reliability` left the R&D patterns, and R&D's generic "engineer" pattern skips the titles above. A title another R&D pattern also matches (a developer, a tech lead, back end) keeps both types. On the 6,758 open jobs of 2026-11-16, 116 moved out of R&D; 134 are now DevOps & SRE (17 of them also R&D); R&D went from 2,373 to 2,257; the share of jobs not in Other went from 75.48% to 75.50%.
+- A saved filter or email alert that lists "R&D" no longer matches the DevOps roles: add "DevOps & SRE" to it. Only one real account exists today. No migration: `jobs.role_types` is `text[]` and the daily sync rewrites every open job, so the live Supabase rows change at the next sync.
+
 ## [0.45.0] - 2026-11-16
 
 ### Changed
