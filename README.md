@@ -24,7 +24,7 @@ The dashboard lists roles from every company whose career page the daily crawl r
 
 ## Daily run (GitHub Actions)
 
-`.github/workflows/daily.yml` runs at 04:30 UTC: crawl, email new jobs, commit `data/jobs.db` and the built dashboard in `docs/` straight to `main`.
+`.github/workflows/daily.yml` runs at 04:23 UTC, with a second try at 09:53 UTC that does nothing when the first one already finished green that day (CONTRIBUTING.md, "The daily digest"): crawl, email new jobs, commit `data/jobs.db` and the built dashboard in `docs/` straight to `main`.
 Repo secrets: `GMAIL_USER`, `GMAIL_APP_PASSWORD` (Gmail app password), `DIGEST_TO` (optional recipient), `DEPLOY_KEY` (private half of a write deploy key; it must be the deploy-key bypass actor of the `protect-main` ruleset, see AGENTS.md).
 The digest holds the new jobs only and is not sent on a day with none. Crawl problems (a company failing, held after a sharp drop, or closed after a believed sharp drop) are not in it: they are on the dashboard's coverage gap card, and `send_email.py` prints one line of counts and company names to the job log ("coverage gaps: ...").
 If a step fails or the run is cancelled, a last step emails a short alert listing the step outcomes with a link to the run (`send_alert.py`, standard library only). It uses the same Gmail account as the digest, so a Gmail outage is not reported that way; GitHub's failed-run notice is then the only signal.
