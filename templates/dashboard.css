@@ -150,7 +150,7 @@ a {
   margin: 0 0 var(--space-4);
 }
 
-/* The line about saving stars and discards (a status region: empty when all is well), and the switch to the starred list. */
+/* The line about saving stars and discards (a status region: empty when all is well). */
 .sync-note:not(:empty) {
   display: flex;
   flex-wrap: wrap;
@@ -260,7 +260,7 @@ a {
   font-weight: 400;
 }
 
-/* The row under the search: "Filters" (a phone only) and the switch to the starred list. */
+/* The row under the search: "Filters" (a phone only), the switch to the starred list and "New only". */
 .toolbar {
   display: flex;
   flex-wrap: wrap;
@@ -269,7 +269,7 @@ a {
   margin: 0 0 var(--space-3);
 }
 
-/* On a wide screen the filters are already in the page, so only the starred switch is left in the row. */
+/* On a wide screen the filters are already in the page, so only the starred switch and "New only" are left in the row. */
 .filters-open {
   display: none;
 }
@@ -381,7 +381,7 @@ dialog.sheet[hidden],
   margin-bottom: var(--space-3);
 }
 
-/* The level chips sit under the search and name themselves ("All", "Intern"): the heading is for screen readers. */
+/* The level chips sit under the search row and name themselves ("All", "Intern"): the heading is for screen readers. */
 .controls .label {
   position: absolute;
   width: 1px;

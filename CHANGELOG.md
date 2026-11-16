@@ -15,7 +15,7 @@ All notable changes are documented here. Format follows [Keep a Changelog](https
 
 ### Fixed
 
-- The whole page scrolled sideways at every width: the hidden count in each "Hiring now" circle (`.sr-only`, absolute) had no positioned parent. `.story` is now `position: relative`.
+- The whole page scrolled sideways (seen at 1650 px, 87 px too wide): the hidden count in each "Hiring now" circle (`.sr-only`, absolute) had no positioned parent. `.story` is now `position: relative`.
 
 ### Added
 

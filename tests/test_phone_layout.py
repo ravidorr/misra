@@ -1,13 +1,14 @@
-"""The dashboard on a phone and on a desktop (the TODO item "Make the web app work well on a phone"): no screen scrolls
-sideways, every control is a 44px target, the search is on the first screen, "Hiring now" wraps, and the filters are a
-bottom sheet on a phone that the keyboard can use and a panel in the page on a wide screen."""
+"""The dashboard on a phone and on a desktop (the TODO item "Make the web app work well on a phone"): no screen
+scrolls sideways, every control is a 44px target, the search is on the first screen, "Hiring now" is one line with the
+rest behind a button, and the filters are a bottom sheet on a phone that the keyboard can use and a panel in the page
+on a wide screen."""
 
 import sqlite3
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
-from playwright.async_api import Page
+from playwright.async_api import Page, expect
 
 import build_dashboard
 from tests.conftest import add_job
@@ -112,7 +113,6 @@ async def visible_controls(page: Page, root: str) -> list[tuple[str, dict[str, f
 async def test_the_page_never_scrolls_sideways(page: Page, crowd: Path, width: int, scheme: str) -> None:
     await open_page(page, crowd, width, scheme=scheme)
     assert await page.evaluate(NO_SIDEWAYS)
-    assert await page.evaluate(NO_SIDEWAYS)  # the row as one line
     await open_hiring(page)  # and opened, at every width
     assert await page.evaluate(NO_SIDEWAYS)
     await page.locator("#gaps-title").click()
@@ -126,6 +126,10 @@ async def test_the_page_does_not_scroll_sideways_in_landscape_or_with_the_sheet_
     page: Page, crowd: Path, width: int
 ) -> None:
     await open_page(page, crowd, 852, height=width)  # a phone turned sideways
+    assert await page.evaluate(NO_SIDEWAYS)
+    assert await page.locator("#filtersOpen").is_visible()  # a short screen gets the sheet too
+    assert await page.locator(SHEET).is_hidden()
+    await open_sheet(page)
     assert await page.evaluate(NO_SIDEWAYS)
     await open_page(page, crowd, width, height=640)
     await open_sheet(page)
@@ -307,7 +311,7 @@ async def test_the_sheet_works_by_keyboard(page: Page, crowd: Path) -> None:
             assert await page.evaluate(IN_SHEET_OR_BROWSER)
     await page.keyboard.press("Escape")
     assert not await sheet.evaluate("e => e.open")
-    assert await page.evaluate("document.activeElement.id") == "filtersOpen"  # the focus is back where it was
+    await expect(page.locator("#filtersOpen")).to_be_focused()  # the focus is back where it was
     await page.keyboard.press("Space")  # and it opens again
     assert await sheet.evaluate("e => e.matches(':modal')")
 
@@ -322,7 +326,7 @@ async def test_the_sheet_closes_and_gives_the_focus_back(page: Page, crowd: Path
         await page.click(closer)
     assert not await page.locator(SHEET).evaluate("e => e.open")
     assert await page.locator(SHEET).is_hidden()
-    assert await page.evaluate("document.activeElement.id") == "filtersOpen"
+    await expect(page.locator("#filtersOpen")).to_be_focused()
     assert await page.evaluate(NO_SIDEWAYS)
 
 
