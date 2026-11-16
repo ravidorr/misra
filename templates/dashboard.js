@@ -99,7 +99,7 @@ function remoteNotSaid(location) {
 /* A row of the jobs table as the page uses it: c company, i id, t title, m team, l location as written, u url,
    f first seen, lv level, rt role types, rg regions, lo places in Israel without a region, il in Israel, ru remote
    with no country given, n not on the company's first day of listings, s company's crawl is failing, sn the snippet:
-   the first 255 characters of the posting as written ('' when the job has no text). */
+   the start of the posting as written, up to 255 characters ('' when the job has no text). */
 function toJob(row, failing, firstDay) {
   /* A row without the classification columns is a backend fault (sync lag, a missing migration), not a role that is
      "Not specified" and "Other": fail loudly instead of showing every role as unclassified. */
@@ -1271,8 +1271,9 @@ function closedCardEl(e) {
   return h('li', {}, [art]);
 }
 
-/* The snippet is cut at 255 characters with no ellipsis in the data (and the cut drops trailing punctuation), so a text
-   of 200 or more that does not end a sentence was cut: the page adds the ellipsis, hidden from screen readers. */
+/* A heuristic: the data does not say whether a snippet was cut. A cut never ends in `.`, `!` or `?` (the sync trims
+   them), so a text of 200 or more characters that does not is treated as cut and gets the ellipsis, hidden from screen
+   readers; a whole text of that length that ends in a quote or a bracket gets a false one. */
 const cutMark = (text) => text.length >= 200 && !/[.!?]$/.test(text) && h('span', { 'aria-hidden': 'true', text: '…' });
 
 function cardEl(j) {
