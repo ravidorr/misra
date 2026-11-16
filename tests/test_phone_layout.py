@@ -515,6 +515,7 @@ async def test_the_level_chips_and_new_only_are_the_first_filters_in_the_sheet(p
     for control in ("#levels", "#onlyNew"):
         assert await page.locator(f"{SHEET} .sheet-body {control}").count() == 1, control
     assert await page.locator(f"{SHEET} .sheet-body > .filter-group:first-child #levels").count() == 1
+    assert await page.locator(f"{SHEET} .sheet-body > .filter-group:nth-child(2) #onlyNew").count() == 1
     assert await page.locator(f"{SHEET} #levels-h").evaluate("e => e.tagName") == "H3"
     assert await page.locator(".toolbar #starredView").count() == 1  # a view, not a filter: it stays outside the sheet
     assert await page.locator(".toolbar #onlyNew, .toolbar #levels").count() == 0
@@ -526,6 +527,15 @@ async def test_the_level_chips_and_new_only_are_the_first_filters_in_the_sheet(p
     await page.locator(SHEET).wait_for(state="visible")
     assert await page.locator("#levels").is_visible()
     assert await page.locator("#onlyNew").is_visible()
+
+
+async def test_new_only_in_the_open_sheet_narrows_the_list_on_a_phone(page: Page, crowd: Path) -> None:
+    await open_page(page, crowd, 375)
+    before = await page.locator("#summary").inner_text()
+    await open_sheet(page)
+    await page.click("#onlyNew")
+    await expect(page.locator("#summary")).not_to_have_text(before)  # the moved chip is still wired to the list
+    assert await page.locator("#filtersOpen").inner_text() == "Filters (1)"
 
 
 @pytest.mark.parametrize("width", PHONE_WIDTHS)
@@ -547,7 +557,7 @@ async def test_reset_filters_is_a_secondary_button_beside_the_primary_one(page: 
 async def test_the_starred_list_puts_the_filter_controls_away(page: Page, crowd: Path) -> None:
     await open_page(page, crowd, 375)
     await page.click("#starredView")
-    for part in ("#filtersOpen", "#onlyNew", "#levels", "#searchBar", SHEET):
+    for part in ("#filtersOpen", "#searchBar", SHEET):
         assert await page.locator(part).is_hidden(), part
     await page.click("#starredView")
     for part in ("#filtersOpen", "#searchBar"):
