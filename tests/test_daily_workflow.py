@@ -2,8 +2,10 @@
 that the legacy maintainer digest is gone. The workflow is read as text (no YAML parser is a dependency): steps start at
 `      - ` with two-space steps indentation under `    steps:`."""
 
+import json
 import os
 import re
+import shutil
 import stat
 import subprocess
 import textwrap
@@ -17,6 +19,7 @@ FULL = (Path(__file__).resolve().parents[1] / ".github" / "workflows" / "daily.y
 GUARD = FULL[FULL.index("  guard:\n") : FULL.index("  run:\n")]
 WORKFLOW = FULL.replace(GUARD, "")
 DIGEST_SECRETS = ("SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY", "RESEND_API_KEY", "UNSUBSCRIBE_SECRET")
+CRON_JOB_ORG_TITLE = "daily-job-digest (cron-job.org)"  # the run-name of a start with source=cron-job.org
 SECRET_REF = re.compile(r"\$\{\{\s*secrets\.(\w+)\s*\}\}")
 
 
@@ -136,8 +139,25 @@ def test_there_are_two_scheduled_runs_a_few_hours_apart_and_neither_is_on_a_crow
     assert "UTC" in FULL.split("on:\n", 1)[1].split("workflow_dispatch", 1)[0]  # the Israel-time comment is kept
 
 
-def test_the_manual_start_and_its_dry_run_input_are_unchanged() -> None:
+def test_the_manual_start_keeps_its_dry_run_input_and_has_an_optional_source_input_for_cron_job_org() -> None:
     assert re.search(r"(?m)^  workflow_dispatch:\n    inputs:\n      digest_dry_run:\n", FULL)
+    # GitHub refuses a dispatch that carries an input the workflow does not declare, and cron-job.org sends this one
+    source = re.search(r"(?m)^      source:\n((?:        .+\n)+)", FULL)
+    assert source
+    assert "        type: string\n" in source[1]
+    assert "        required: false\n" in source[1]
+    assert '        default: ""\n' in source[1]
+    assert FULL.index("      digest_dry_run:") < FULL.index("      source:") < FULL.index("\nconcurrency:")
+
+
+def test_the_run_name_marks_a_cron_job_org_start_and_never_echoes_the_input() -> None:
+    line = re.search(r"(?m)^run-name: \$\{\{ (.+) \}\}$", FULL)
+    assert line
+    assert line[1].count("inputs.source") == 1  # compared with the one exact value, never printed
+    assert "inputs.source == 'cron-job.org' && 'daily-job-digest (cron-job.org)'" in line[1]
+    assert CRON_JOB_ORG_TITLE == "daily-job-digest (cron-job.org)"
+    assert "github.event_name == 'schedule' && 'daily-job-digest (scheduled)'" in line[1]
+    assert line[1].endswith("|| 'daily-job-digest (manual)'")  # every other start gets a fixed title
 
 
 def test_the_guard_job_only_looks_it_holds_no_secret_and_writes_nothing() -> None:
@@ -152,13 +172,19 @@ def test_the_guard_job_only_looks_it_holds_no_secret_and_writes_nothing() -> Non
     assert "continue-on-error" not in FULL
 
 
-def test_the_guard_runs_on_a_schedule_only_and_counts_only_green_scheduled_runs_of_this_workflow_today() -> None:
-    assert "    if: ${{ github.event_name == 'schedule' }}\n" in GUARD
+def test_the_guard_runs_for_a_schedule_and_for_source_cron_job_org_and_counts_only_those_runs_green_today() -> None:
+    assert (
+        "    if: ${{ github.event_name == 'schedule' || "
+        "(github.event_name == 'workflow_dispatch' && inputs.source == 'cron-job.org') }}\n"
+    ) in GUARD
     script = GUARD.split("run: |\n", 1)[1]
     assert "actions/workflows/daily.yml/runs" in script
-    for param in ("event=schedule", "status=success", "created=>=${today}", "--jq .total_count"):
+    for param in ("status=success", "created=>=${today}", "per_page=100"):
         assert param in script, param
+    assert "event=" not in script  # the filter on the event is in the jq expression: two kinds of run count
     assert 'today="$(date -u +%F)"' in script  # the UTC day, like the commit message
+    assert 'select(.event == "schedule" or (.event == "workflow_dispatch" and .display_title == "' in script
+    assert CRON_JOB_ORG_TITLE in script
     assert "outputs:\n      skip: ${{ steps.check.outputs.skip }}\n" in GUARD
 
 
@@ -170,6 +196,32 @@ def test_the_guard_fails_open_the_skip_output_is_true_only_for_a_positive_count(
     assert "could not read the earlier runs; running the job anyway" in script
     assert script.count("skip=true") == 1
     assert script.rstrip().endswith('echo "skip=${skip}" >> "$GITHUB_OUTPUT"')  # one write, after the decision
+
+
+def run(event: str, title: str = "daily-job-digest (manual)") -> dict[str, str]:
+    return {"event": event, "display_title": title, "status": "completed", "conclusion": "success"}
+
+
+SCHEDULED = run("schedule", "daily-job-digest (scheduled)")
+CRON_JOB_ORG = run("workflow_dispatch", CRON_JOB_ORG_TITLE)
+PLAIN_MANUAL = run("workflow_dispatch")
+
+
+def decide(tmp_path: Path, stub: str) -> str:
+    """Runs the guard's script with a stubbed gh in bash and returns what it wrote to GITHUB_OUTPUT."""
+    script = textwrap.dedent(GUARD.split("run: |\n", 1)[1])
+    fake_gh = tmp_path / "gh"
+    fake_gh.write_text(f"#!/bin/bash\n{stub}\n", encoding="utf-8")
+    fake_gh.chmod(fake_gh.stat().st_mode | stat.S_IEXEC)
+    output = tmp_path / "output"
+    env = {
+        "PATH": f"{tmp_path}:{os.environ['PATH']}",
+        "GITHUB_OUTPUT": str(output),
+        "GITHUB_REPOSITORY": "owner/repo",
+    }
+    done = subprocess.run(["bash", "-c", script], env=env, capture_output=True, text=True, check=False)
+    assert done.returncode == 0, done.stderr  # the step never fails, whatever the API says
+    return output.read_text(encoding="utf-8")
 
 
 @pytest.mark.parametrize(
@@ -184,29 +236,44 @@ def test_the_guard_fails_open_the_skip_output_is_true_only_for_a_positive_count(
     ],
 )
 def test_the_guard_script_decides_from_the_count_and_never_fails(tmp_path: Path, stub: str, expected: str) -> None:
-    script = textwrap.dedent(GUARD.split("run: |\n", 1)[1])
-    fake_gh = tmp_path / "gh"
-    fake_gh.write_text(f"#!/bin/bash\n{stub}\n", encoding="utf-8")
-    fake_gh.chmod(fake_gh.stat().st_mode | stat.S_IEXEC)
-    output = tmp_path / "output"
-    env = {
-        "PATH": f"{tmp_path}:{os.environ['PATH']}",
-        "GITHUB_OUTPUT": str(output),
-        "GITHUB_REPOSITORY": "owner/repo",
-    }
-    done = subprocess.run(["bash", "-c", script], env=env, capture_output=True, text=True, check=False)
-    assert done.returncode == 0, done.stderr
-    assert output.read_text(encoding="utf-8") == f"{expected}\n"
+    assert decide(tmp_path, stub) == f"{expected}\n"
 
 
-def test_the_run_job_needs_the_guard_and_is_skipped_only_on_a_schedule_when_the_guard_said_skip() -> None:
+@pytest.mark.skipif(shutil.which("jq") is None, reason="the guard's jq filter is run by the real jq (installed on CI)")
+@pytest.mark.parametrize(
+    ("runs", "expected"),
+    [
+        ([], "skip=false"),
+        ([SCHEDULED], "skip=true"),
+        ([CRON_JOB_ORG], "skip=true"),
+        ([PLAIN_MANUAL], "skip=false"),  # a manual run may have been a dry run: never counted
+        ([PLAIN_MANUAL, PLAIN_MANUAL], "skip=false"),
+        ([run("workflow_dispatch", "daily-job-digest")], "skip=false"),  # the title before run-name existed
+        ([run("workflow_dispatch", "other (cron-job.org)")], "skip=false"),  # only the exact title counts
+        ([run("push", CRON_JOB_ORG_TITLE)], "skip=false"),  # and only for a manual start
+        ([PLAIN_MANUAL, CRON_JOB_ORG], "skip=true"),
+        ([PLAIN_MANUAL, SCHEDULED, PLAIN_MANUAL], "skip=true"),
+    ],
+)
+def test_the_guard_counts_scheduled_and_cron_job_org_runs_and_never_a_plain_manual_run(
+    tmp_path: Path, runs: list[dict[str, str]], expected: str
+) -> None:
+    (tmp_path / "runs.json").write_text(json.dumps({"total_count": len(runs), "workflow_runs": runs}), encoding="utf-8")
+    # gh's --jq runs the filter on the response: the stub hands the saved response to the real jq with the same filter
+    stub = f'while [ $# -gt 0 ]; do [ "$1" = "--jq" ] && filter="$2"; shift; done; jq -r "$filter" {tmp_path}/runs.json'
+    assert decide(tmp_path, stub) == f"{expected}\n"
+
+
+def test_the_run_job_needs_the_guard_and_is_skipped_only_when_the_guard_said_skip() -> None:
     header = WORKFLOW.split("    steps:\n", 1)[0]
     assert "    needs: guard\n" in header
     expression = re.search(r"(?m)^    if: \$\{\{ (.+) \}\}$", header)
     assert expression
-    assert expression[1] == "!cancelled() && (github.event_name != 'schedule' || needs.guard.outputs.skip != 'true')"
-    # a manual run is never skipped, a failed or empty guard does not skip (fail open), only the string 'true' does
+    assert expression[1] == "!cancelled() && needs.guard.outputs.skip != 'true'"
+    # a plain manual run (the guard is skipped, so it has no output), a failed guard and an empty answer all run (fail
+    # open): only the string 'true' skips, and only the guard (a scheduled or cron-job.org start) can write it
     assert "needs.guard.result" not in expression[1]
+    assert "github.event_name" not in expression[1]
 
 
 def test_the_failure_alert_belongs_to_the_run_job_so_a_skipped_run_sends_nothing() -> None:

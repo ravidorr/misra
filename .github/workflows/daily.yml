@@ -1,5 +1,10 @@
 name: daily-job-digest
 
+# The title the Actions tab shows, and the only way the guard below tells a run started by cron-job.org from another
+# manual run: the runs API returns neither the inputs nor the actor's reason, but it does return this title. Only the
+# exact source "cron-job.org" is named; any other text typed into the input is never echoed into the title.
+run-name: ${{ github.event_name == 'schedule' && 'daily-job-digest (scheduled)' || inputs.source == 'cron-job.org' && 'daily-job-digest (cron-job.org)' || 'daily-job-digest (manual)' }}
+
 on:
   schedule:
     # GitHub delays or drops scheduled runs when many workflows start at once, which happens at the top of the hour and
@@ -15,6 +20,11 @@ on:
         description: "Digest step only: pass --dry-run (counts in the log, nothing sent, nothing recorded)"
         type: boolean
         default: false
+      source:
+        description: "Leave empty. cron-job.org sends source=cron-job.org: the guard then skips the start if a scheduled or cron-job.org run already succeeded today"
+        type: string
+        required: false
+        default: ""
 
 concurrency:
   group: daily-job-digest
@@ -25,13 +35,15 @@ permissions:
 
 jobs:
   guard:
-    # Decides whether a scheduled run has anything to do. It holds no secret, checks nothing out and writes nothing: it
-    # only asks the Actions API whether a scheduled run of this workflow already finished green today (UTC). A manual
-    # run skips this job and is never skipped. If the question fails, the answer is "do not skip" (fail open): a double
-    # run is harmless (the digest records what it emailed and the crawl is idempotent), a missed day is not.
-    # Only scheduled runs count: a manual run may have been a dry run that sent nothing. The run job below is skipped,
-    # not failed, when this says skip, so the failure alert (a step of that job) does not fire.
-    if: ${{ github.event_name == 'schedule' }}
+    # Decides whether a start that is only a backup has anything to do. It holds no secret, checks nothing out and
+    # writes nothing: it only asks the Actions API whether a run that counts already finished green today (UTC). It runs
+    # for a scheduled start and for a manual start with source=cron-job.org (the third start, from outside GitHub). Any
+    # other manual run skips this job and is never skipped. If the question fails, the answer is "do not skip" (fail
+    # open): a double run is harmless (the digest records what it emailed and the crawl is idempotent), a missed day is
+    # not. A run counts if it was scheduled or was started by cron-job.org (its run-name above). Other manual runs never
+    # count: one may have been a dry run that sent nothing. The run job below is skipped, not failed, when this says
+    # skip, so the failure alert (a step of that job) does not fire.
+    if: ${{ github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.source == 'cron-job.org') }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
@@ -40,7 +52,7 @@ jobs:
     outputs:
       skip: ${{ steps.check.outputs.skip }}
     steps:
-      - name: Look for a green scheduled run today
+      - name: Look for a green scheduled or cron-job.org run today
         id: check
         env:
           GH_TOKEN: ${{ github.token }}
@@ -49,21 +61,23 @@ jobs:
           skip=false
           today="$(date -u +%F)"
           if count="$(gh api -X GET "repos/${GITHUB_REPOSITORY}/actions/workflows/daily.yml/runs" \
-              -f event=schedule -f status=success -f "created=>=${today}" -f per_page=1 --jq .total_count)" \
+              -f status=success -f "created=>=${today}" -f per_page=100 \
+              --jq '[.workflow_runs[] | select(.event == "schedule" or (.event == "workflow_dispatch" and .display_title == "daily-job-digest (cron-job.org)"))] | length')" \
               && [[ "$count" =~ ^[0-9]+$ ]]; then
             if [ "$count" -gt 0 ]; then
               skip=true
             fi
-            echo "green scheduled runs on ${today} (UTC): ${count}; skip=${skip}"
+            echo "green scheduled or cron-job.org runs on ${today} (UTC): ${count}; skip=${skip}"
           else
             echo "::warning::could not read the earlier runs; running the job anyway"
           fi
           echo "skip=${skip}" >> "$GITHUB_OUTPUT"
   run:
     needs: guard
-    # Runs on a manual start always. On a scheduled start it runs unless the guard said skip. !cancelled() and the
-    # "!= 'true'" test keep it running if the guard failed or produced nothing (fail open).
-    if: ${{ !cancelled() && (github.event_name != 'schedule' || needs.guard.outputs.skip != 'true') }}
+    # Runs on any other manual start always (the guard is skipped then and has no output). On a scheduled or cron-job.org
+    # start it runs unless the guard said skip. !cancelled() and the "!= 'true'" test keep it running if the guard
+    # failed or produced nothing (fail open).
+    if: ${{ !cancelled() && needs.guard.outputs.skip != 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:

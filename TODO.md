@@ -30,12 +30,17 @@ Observations about live sites below come from checks made on 2026-11-14 and may 
        `Authorization: Bearer <token>`, `Accept: application/vnd.github+json` and `X-GitHub-Api-Version: 2022-11-28`,
        body `{"ref":"main","inputs":{"source":"cron-job.org"}}`, at about 10:30 UTC (after the second try at 09:53),
        with "notify me when the job fails" on. A success answer is 204.
-    3. Add a `source` input to `workflow_dispatch` in `daily.yml`. Change the guard so that a start with
-       `source=cron-job.org` is skipped when a scheduled run or an earlier cron-job.org run already succeeded that day,
-       and so that the guard counts those runs too. Other manual runs are never skipped and never counted (a manual run
-       may have been a dry run). Keep the guard failing open. The run job's secrets stay scoped as they are.
-    4. Say in `SECURITY.md` that cron-job.org holds a token that can start, cancel and disable this repository's
-       workflows (it cannot read secrets or change code) and that this risk is accepted, list the service and the token's expiry in the yearly review, and add both to the next note to the lawyer.
+    3. Done (workflow side): `daily.yml` has a `source` input on `workflow_dispatch`, a `run-name` that titles a start with
+       `source=cron-job.org` as `daily-job-digest (cron-job.org)`, and a guard that also runs for that start and skips it
+       when a scheduled run or an earlier cron-job.org run already succeeded that UTC day (it finds those runs by the
+       title, because the runs API does not return inputs). Other manual runs are never skipped and never counted. The
+       guard still fails open and the run job's secrets are as before. Pinned in `tests/test_daily_workflow.py`.
+    4. Done (docs side): `SECURITY.md` names the service and the token and the accepted risk, and the yearly review lists
+       both; `CONTRIBUTING.md` ("The daily digest") says how a run from cron-job.org looks in the Actions tab. Still to
+       do: add the service and the token's expiry to the next note to the lawyer.
+  - What remains is the maintainer's: steps 1 and 2 (the token and the cron-job.org job; the guide is
+    `misra-cron-job-org-setup.md` on the maintainer's Desktop) and the end-to-end test below (also check there that the run is titled `daily-job-digest (cron-job.org)` in the
+    Actions tab and that the next guard log counts it: the title is what the guard matches, and it was not dispatched live).
   - Done when: with the first two starts disabled, the cron-job.org call starts a full run that sends the digests once;
     on a normal day the call is skipped by the guard; a failed call (try a wrong token once) emails the maintainer; a
     test pins the input, the guard's rule and the secret scope; and `SECURITY.md` names the service.
