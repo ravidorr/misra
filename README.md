@@ -17,7 +17,7 @@ Eightfold career sites (the page's own search results, paged with "Next jobs"); 
 Add `"israel_only": true` to an override to keep only jobs located in Israel; use it for large multinational boards.
 `survey.py` is a dev tool that sniffs which ATS a custom career page uses.
 A company seen for the first time is baselined silently, so adding companies never floods the job alerts.
-The dashboard lists roles from every company whose career page the daily crawl reads, with the live count in its footer; the rest are listed on its Coverage gaps card.
+The dashboard lists roles from every company whose career page the daily crawl reads, with the live count in its search field; the rest are listed on its Coverage gaps card.
 
 ## Daily run (GitHub Actions)
 

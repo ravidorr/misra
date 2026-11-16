@@ -633,7 +633,9 @@ async def test_the_footer_fits_and_has_44px_links(page: Page, crowd: Path, width
     assert text is not None
     assert links["y"] >= text["y"] + text["height"]  # the links are a line of their own below the text, at every width
     if width >= WIDE:
-        assert abs(links["x"] - text["x"]) < 1  # both start at the left
+        first = await foot.locator("nav a").first.bounding_box()
+        assert first is not None
+        assert abs(first["x"] - text["x"]) < 1  # both start at the left
         assert await foot.evaluate("e => getComputedStyle(e).textAlign") in ("start", "left")
     else:
         assert await foot.evaluate("e => getComputedStyle(e).textAlign") == "center"
