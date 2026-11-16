@@ -19,7 +19,7 @@
 <script src="supabase.js" integrity="sha384-TcHRA3zBbn+Lexh5n+Oil4guNPOS3rjNDpGRAN46u/s/mB2IZ50ceC6TYDU2yvgK" defer></script>
 <script type="module" src="auth.js" integrity="sha384-yN+H2aPfjJLBzmfWFzAIPYX4HlUNrmVfWUIZwdnppmqdvPrH+w9f2xdbWmtbOkiz"></script>
 <script type="module" src="report.js" integrity="sha384-hzxmY3oC4CV+Ngw5tA+7BjpQvaLJHXKwAeO+6gbOEU1H4iqIjxMDUGMI6z4+mpZ8"></script>
-<script type="module" src="digest.js" integrity="sha384-z2CKhdexFJtrv30QkGtKBUYozec934GOi8hX8mJngS/OCnNVHnGOI8ZAWj/cWZ0o"></script>
+<script type="module" src="digest.js" integrity="sha384-xuUIoNA7kvln7BJ0ocJDrAKAvMzY7leUTjGXN3WyXQu5qRnajN0oU8iW3Taloi8c"></script>
 <link rel="alternate" type="application/json" href="jobs.json" title="Open roles as JSON">
 <link rel="alternate" type="application/ld+json" href="jobs.jsonld" title="Open roles as schema.org JSON-LD">
 <script type="application/ld+json">{"@context":"https://schema.org","@type":"Dataset","name":"Misra: open entry-level, student and product roles in Israel","description":"Every open role, refreshed daily. Each role has a title, company, location and the date it was first seen.","isAccessibleForFree":true,"distribution":[{"@type":"DataDownload","encodingFormat":"application/json","contentUrl":"jobs.json"},{"@type":"DataDownload","encodingFormat":"application/ld+json","contentUrl":"jobs.jsonld"}]}</script>
@@ -34,7 +34,7 @@
     <button type="button" class="btn btn-pill" id="signIn" aria-haspopup="dialog">Sign in<span class="sr-only"> with Google</span></button>
     <div class="account-user" id="accountUser" hidden>
       <span class="account-email" id="accountEmail"></span>
-      <button type="button" class="btn btn-pill" id="digestOpen" aria-haspopup="dialog" data-digest="open" data-digest-state="loading">Daily email</button>
+      <button type="button" class="btn btn-pill" id="digestOpen" aria-haspopup="dialog" data-digest="open" data-digest-state="loading">Job alerts</button>
       <button type="button" class="btn btn-pill" id="signOut">Sign out</button>
       <button type="button" class="btn btn-pill" id="deleteAccount" aria-haspopup="dialog">Delete my account</button>
     </div>
@@ -169,7 +169,7 @@
 <dialog class="dialog" id="deleteDialog" aria-labelledby="deleteTitle" aria-describedby="deleteText">
   <h2 class="dialog-title" id="deleteTitle" tabindex="-1">Delete your Misra account?</h2>
   <div id="deleteText">
-    <p>This immediately and permanently deletes your account, your email address<span id="deleteEmailPart" hidden> (<span class="delete-email" id="deleteEmail"></span>)</span>, your saved filters, your stars, your "Not for me" choices, and any email digest settings or consent logs from our database.</p>
+    <p>This immediately and permanently deletes your account, your email address<span id="deleteEmailPart" hidden> (<span class="delete-email" id="deleteEmail"></span>)</span>, your saved filters, your stars, your "Not for me" choices, and any job alerts settings or consent logs from our database.</p>
     <p>Choices saved locally in this browser while you were signed out are not affected. This action cannot be undone.</p>
   </div>
   <p class="notice" id="deleteError" role="alert" hidden></p>
@@ -180,7 +180,7 @@
 </dialog>
 
 <dialog class="dialog" id="digestDialog" aria-labelledby="digestTitle" aria-describedby="digestIntro" data-digest="dialog" data-state="loading">
-  <h2 class="dialog-title" id="digestTitle" tabindex="-1">Daily email</h2>
+  <h2 class="dialog-title" id="digestTitle" tabindex="-1">Job alerts</h2>
   <p id="digestIntro">Get the new roles that match your filters by email. Nothing is sent until you confirm your address with a link we email you, and every email has a link that turns it off in one click.</p>
   <p class="notice" id="digestState" role="status" data-digest="state">Checking your email settings…</p>
   <p class="digest-note" id="digestNote" role="status" tabindex="-1" hidden></p>
@@ -194,7 +194,7 @@
       <p class="field-error" id="digestAddressError" hidden></p>
     </div>
     <h3 class="digest-label" id="digestToggleLabel">Email me new matching roles</h3>
-    <p class="digest-consent" id="digestConsent">We will first send a confirmation link to <span id="digestConsentTo"></span>. Nothing is sent until you confirm, and you get an email only when there are new matches. One-click unsubscribe is in every email. By turning this on you agree to the <a href="https://ravidorr.github.io/misra/terms.html">Terms</a> and the <a href="https://ravidorr.github.io/misra/privacy.html">Privacy Notice</a>.</p>
+    <p class="digest-consent" id="digestConsent">We first send a confirmation link to <span id="digestConsentTo"></span>. Nothing is sent until you confirm, and you get an email only when there are new matches. One-click unsubscribe is in every email. By turning this on you agree to the <a href="https://ravidorr.github.io/misra/terms.html">Terms</a> and the <a href="https://ravidorr.github.io/misra/privacy.html">Privacy Notice</a>.</p>
     <fieldset class="digest-frequency">
       <legend>How often</legend>
       <label><input type="radio" name="digestFrequency" value="daily" checked> Daily</label>
