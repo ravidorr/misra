@@ -282,8 +282,6 @@ const SYNC_MESSAGES = {
   filtersRefused: 'The service did not accept your filters, so they were not saved to your account.',
   filtersRestored: 'Your filters were restored from your account.',
 };
-const savedHere = 'Your stars, "Not for me" choices and filters stay in this browser and are sent nowhere.';
-const savedThere = 'Your stars, "Not for me" choices and filters are saved to your account and follow you to your other devices.';
 
 const fates = new WeakMap(); /* what became of each change sent: 'saved', 'limit' or 'refused' (none yet: still pending) */
 let account = null; /* the signed-in user's choices, or null */
@@ -674,7 +672,6 @@ function renderSyncNote() {
 /* What depends on who is signed in: where choices are saved. */
 function renderAccount() {
   $('list').dataset.choices ||= 'browser'; /* where the choices live: browser, or the account while loading, loaded, failed */
-  $('saveNote').textContent = account ? savedThere : savedHere;
   $('importBox').hidden = true;
   renderSyncNote();
 }
