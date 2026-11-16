@@ -151,17 +151,24 @@ starting with the ones that matter most to users.
 - AC: A job whose site gives only a title and a link keeps working everywhere as it does today, without a description.
 - AC: The share of jobs with a full description is reported, so we can see which sites to improve first.
 - AC: Each card shows a short description of the role: the first 255 characters of the posting's description. It is
-  taken as written, with no AI involved, and nothing more is forced onto the card.
-- AC: A user can drill down from a card to see the fuller details without leaving the dashboard.
-- AC: Search finds jobs by words in the full posting text, not only in the title and company.
+  taken as written, with no AI involved, and nothing more is forced onto the card. It is stored in a public `snippet`
+  column.
+- AC: A user can open a detail view from a card. It shows the same short description (the snippet) and a prominent link
+  "Read full description & apply on `<Company>`" to the employer's page. The full text is not shown on the dashboard.
+- AC: Search finds jobs by words in the full posting text, not only in the title and company. It runs through a
+  database function that returns matching job keys only, never the text.
 - AC: An AI assistant can read all of the collected data for a job (FR-6).
 - AC: The short description never cuts a word in half, and a job with no description shows none.
 - AC: A site that gives no description does not stop the daily update.
 - AC: The cost of storage stays within the free budget.
 - AC: If users tell us the short description is not good enough, we revisit it, and an AI-written summary is the
   option to consider then. Until we get that feedback, we do not use AI for it.
-- AC: Other companies' postings are treated with care. Facts, links and short snippets are fine; the full text is a grey
-  area and needs care. A company's postings are removed when it asks, and each site's `robots.txt` is respected.
+- AC: Other companies' postings are treated with care (lawyer's answer, 2026-11-16). The full text is stored in Supabase
+  (EU) only, for search and the user's AI assistant: it is not readable through the public API, not shown on the
+  dashboard, and no function returns the text of jobs in bulk. The dashboard shows only the snippet, with the link to the
+  employer's page. The full text of a closed job is deleted (set to NULL) 30 days after the job closes. A company's
+  postings are removed when it asks (the exclusion list deletes the whole row, text included), and each site's
+  `robots.txt` is respected.
 
 ### FR-5: A complete coverage gap card
 
@@ -175,8 +182,10 @@ starting with the ones that matter most to users.
 - AC: Anyone can connect their AI assistant, without signing in, and ask it to search jobs by region, level and
   keyword. The first version offers public job search only.
 - AC: The assistant can get one job with everything we collected (FR-4), enough to draft a cover letter (title, company,
-  region, link and the full posting).
-- AC: The assistant can search by words in the full posting text, the same as the dashboard search.
+  region, link and the full posting). `get_job` returns the full text to the assistant, rate limited. This is the
+  lawyer-approved exposure of the text to assistants (2026-11-16).
+- AC: The assistant can search by words in the full posting text, the same as the dashboard search. `search_jobs`
+  returns keys, titles and snippets, never the full text.
 - AC: The assistant does not see anyone's stars, discards or preferences in this version.
 - AC: The dashboard has a "Connect your assistant" page with plain, step-by-step instructions. Someone with no
   technical skills can connect their assistant in a couple of minutes by following it.
@@ -317,8 +326,9 @@ outcome, in short:
 - No database registration and no data protection officer is required.
 - Accept the providers' standard data processing terms: they apply automatically through their terms of service.
 - Two-factor sign-in is on for the providers (done).
-- Full-text job descriptions are a grey area. Facts, links and short snippets are fine; full text needs care; remove a
-  company on request; respect `robots.txt`.
+- Full-text job descriptions: answered 2026-11-16 (see the decisions log). The full text stays in Supabase (EU) and is
+  not shown on the dashboard; the dashboard shows a snippet and a link to the employer; a closed job's text is deleted
+  after 30 days; a company is removed on request; respect `robots.txt`.
 
 The wording changes this asks for are in FR-1, FR-4 and FR-8, and `PLAN.md` step 6.6 was the gate: nothing was sent to a
 real user, and the sign-up control stayed hidden, until the wording was in the emails (footer), `PRIVACY.md`, `TERMS.md` and
@@ -343,7 +353,7 @@ Technical direction agreed so far. These are inputs to the step plan, not requir
   writes there directly.
 - Get there in steps. Today every open job (not only the Israeli ones, so the signed-out dashboard stays whole) is copied
   from SQLite into Supabase after each daily run, and the dashboard reads them from there. Descriptions are not collected
-  yet; when they are, the drill-down, search and assistant read them from that copy. Move the crawl itself over once that
+  yet; when they are, search and the assistant read them from that copy (the dashboard shows only the snippet). Move the crawl itself over once that
   works.
 - Before SQLite is retired, keep a regular export of the data into the repository, so the history and a restore path
   are not lost.
@@ -444,7 +454,7 @@ Recorded 2026-11-15, one line per decision, newest last. The first lines were ma
 - 2026-11-15: The lawyer review is answered: the digest is not "advertising" but double opt-in and one-click
   unsubscribe stay; keep a consent log; the footer, the `TERMS.md` disclaimer, the sign-in notice and the privacy notice
   wording are required; no registration or data protection officer; providers' standard terms accepted; two-factor
-  sign-in done; full-text descriptions are a grey area (Before launch, FR-1, FR-4, FR-8). `PLAN.md` step 6.6 stays the
+  sign-in done; full-text descriptions are a grey area, answered 2026-11-16 below (Before launch, FR-1, FR-4, FR-8). `PLAN.md` step 6.6 stays the
   gate.
 - 2026-11-16: "DevOps & SRE" is a role type, right after R&D. DevOps, DevSecOps, SRE, site reliability, platform,
   infrastructure, cloud, release, build, CI/CD, Kubernetes and production engineer titles leave R&D and belong to it (a
@@ -452,5 +462,14 @@ Recorded 2026-11-15, one line per decision, newest last. The first lines were ma
   email alert that lists "R&D" no longer matches the DevOps roles; the person has to add "DevOps & SRE" (FR-9).
 - 2026-11-16: The full text of a posting lives in Supabase only, never in `data/jobs.db` or any other committed file: the
   daily commit would grow, and other companies' full postings would be published on GitHub. The crawl hands the text to the
-  sync step through a work file outside the checkout (FR-4, `PLAN.md` step 7.1). The short description (step 7.2) is a
-  separate, later decision.
+  sync step through a work file outside the checkout (FR-4, `PLAN.md` step 7.1). The short description (step 7.2) is
+  decided in the entry below (2026-11-16, lawyer's answer).
+- 2026-11-16: The lawyer answered on job descriptions (FR-4, FR-6; `PLAN.md` steps 7.2 to 7.4 and 8.1). The full text is
+  stored in Supabase (EU) for search and the user's AI assistant; the dashboard shows only a short excerpt (the same
+  255-character snippet on the card and in the detail view, taken as written) and a prominent link
+  "Read full description & apply on `<Company>`" to the employer's page. The full text is not shown on the dashboard and is not
+  readable through the public API; search and `get_job` use it behind functions that never return the text of jobs in
+  bulk. It is exposed to assistants and search only after steps 7.3 and 8.1, as the lawyer approved. The full text of a
+  closed job is deleted (set to NULL) 30 days after the job closes, and at once when a company asks for removal (the
+  exclusion list deletes the whole row). After the 30-day trim, title, company, place, link, dates and the snippet stay. `PRIVACY.md` and `TERMS.md` carry
+  his wording.
