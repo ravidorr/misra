@@ -44,9 +44,9 @@
   --warn-bg: #ffe3b3;
 
   /* The logo keeps its colors in both themes. */
-  --mark-disc: #6c47ff;
+  --mark-disc: #d4ff4f;
   --mark-ink: #111;
-  --mark-spark: #d4ff4f;
+  --mark-spark: #6c47ff;
 }
 
 @media (prefers-color-scheme: dark) {
