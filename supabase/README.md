@@ -159,8 +159,9 @@ and `supabase/config.toml` (`verify_jwt = false`: the page calls the function wi
 `POST <project url>/functions/v1/report-site` with `Content-Type: application/json` and the body
 `{"company": "...", "link": "https://...", "why": "...", "website": ""}`. `website` is the honeypot: the page must
 render it as a text input a person never sees (off-screen, `tabindex="-1"`, `autocomplete="off"`, `aria-hidden="true"`,
-not `display: none`) and send it empty. Limits: company 1 to 100 characters, link an http or https address of at most
-500 characters with a host name and no user name or password, why 3 to 1,000 characters, the whole body 8 KB.
+not `display: none`) and send it empty. Limits: link (the only required field) an http or https address of at most
+500 characters with a host name and no user name or password, company at most 100 characters, why at most 1,000
+characters (company and why may be left out), the whole body 8 KB.
 
 Every answer is JSON, `{"ok": true}` or `{"ok": false, "error": {"code", "message", ...}}`:
 
@@ -178,7 +179,7 @@ Every answer is JSON, `{"ok": true}` or `{"ok": false, "error": {"code", "messag
 1. CORS: only `https://ravidorr.github.io` is answered with `Access-Control-Allow-Origin`, and a browser request from any
    other origin gets 403. A request with no `Origin` header (curl, a script) is allowed, since the next three checks
    hold for it too.
-2. The honeypot, then validation, before anything is counted. The email is plain text; only the company name, as one
+2. The honeypot, then validation, before anything is counted. The email is plain text; only the company name (the link when there is none), as one
    line, reaches a header (the subject), so a visitor cannot inject markup or a header.
 3. At most 3 reports per visitor per day. The visitor is the `cf-connecting-ip` header (Cloudflare sets it in front of
    Supabase and replaces what the caller sent), else the last entry of `x-forwarded-for` (a caller can only write the

@@ -185,7 +185,7 @@ def check_spelling(c: sqlite3.Connection, known: list[str], excluded: list[str])
 GAP_KINDS = ("failing", "held", "closed")  # the order gap_summary lists them in
 FAILING_RUNS = 2  # a company is failing when its last two crawls failed, as in the dashboard (one-offs do not count)
 GAP_STALE_DAYS = 7  # a company not crawled for this long before the newest crawl is no longer one of ours
-GAP_NEW_DAYS = 1  # a gap is new when it began on the newest crawl day or this many days before it
+GAP_NEW_DAYS = 2  # a gap is new when it began on the newest crawl day or this many days before it (a lost run fits)
 
 
 def _outage_start(seq: list[tuple[int, str, str]]) -> str:
@@ -205,10 +205,11 @@ def coverage_gaps(c: sqlite3.Connection) -> list[dict[str, Any]]:
     held back as a sharp drop: nothing closed) or "closed" (a crawl believed a sharp drop and closed the jobs it no
     longer saw; this is an event, listed only while it is new). `since` identifies the gap: the start of the outage,
     or the believed crawl. A company whose last crawl was skipped because of robots.txt is none of these: it is on the
-    dashboard's coverage card, and nobody has to act. `new` is True when `since` is on the newest crawl day or the day
-    before it (a company is failing from its second failed crawl, so an outage is new on the crawl that finds it; a
-    held crawl is listed as new the next day too). The history is rebuilt from Supabase on every run, so nothing
-    remembers which gaps were logged. Companies not crawled in the last GAP_STALE_DAYS days are skipped."""
+    dashboard's coverage card, and nobody has to act. `new` is True when `since` is on the newest crawl day or up to
+    GAP_NEW_DAYS days before it (a company is failing from its second failed crawl, so an outage is new on the crawl
+    that finds it and for two days after, and one lost daily run does not hide it). The history is rebuilt from
+    Supabase on every run, so nothing remembers which gaps were logged. Companies not crawled in the last
+    GAP_STALE_DAYS days are skipped."""
     history: dict[str, list[tuple[int, str, str]]] = {}
     query = "SELECT company, ts, ok, COALESCE(note, '') FROM crawl_log WHERE company IS NOT NULL ORDER BY ts, rowid"
     for company, ts, ok, note in c.execute(query):

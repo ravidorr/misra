@@ -38,10 +38,10 @@ def test_coverage_gaps_ignore_healthy_and_one_off_failures(db: sqlite3.Connectio
     ("rows", "since_day", "new"),
     [
         ([(1, ""), (1, ""), (0, FAIL), (0, FAIL)], 3, True),  # the outage starts at its first failed crawl
-        ([(1, ""), (0, FAIL), (0, FAIL), (0, FAIL)], 2, False),  # failing for two crawl days already: no longer new
+        ([(1, ""), (0, FAIL), (0, FAIL), (0, FAIL)], 2, True),  # still inside the window of a lost run
         ([(0, FAIL)], 1, True),  # a company whose first crawl failed
         ([(0, FAIL), (0, FAIL)], 1, True),
-        ([(1, ""), (0, HELD), (0, FAIL), (0, FAIL)], 2, False),  # held rows are failed crawls: one outage
+        ([(1, ""), (0, HELD), (0, FAIL), (0, FAIL), (0, FAIL)], 2, False),  # held rows are failed crawls: one outage
     ],
 )
 def test_a_failing_company_is_one_gap_since_its_outage_began(
@@ -57,11 +57,13 @@ def test_a_gap_is_new_on_the_crawl_that_finds_it_and_a_new_outage_is_new_again(d
     it began on the newest crawl day or the day before it."""
     add_crawls(db, "Blocked", [(1, ""), (0, FAIL), (0, FAIL)])  # failing from its second failed crawl, day 3
     assert only_gap(db, "Blocked")["new"] is True
-    add_crawls(db, "Blocked", [(0, FAIL)], start_day=4)  # the same outage, a day later: no longer new
+    add_crawls(db, "Blocked", [(0, FAIL)], start_day=4)  # a day later (a lost run fits): still new
+    assert only_gap(db, "Blocked")["new"] is True
+    add_crawls(db, "Blocked", [(0, FAIL)], start_day=5)  # two days after it was found: no longer new
     assert only_gap(db, "Blocked")["new"] is False
-    add_crawls(db, "Blocked", [(1, ""), (0, FAIL), (0, FAIL)], start_day=5)  # recovered, then blocked again
+    add_crawls(db, "Blocked", [(1, ""), (0, FAIL), (0, FAIL)], start_day=6)  # recovered, then blocked again
     gap = only_gap(db, "Blocked")
-    assert (gap["since"], gap["new"]) == (DAY.format(6), True)
+    assert (gap["since"], gap["new"]) == (DAY.format(7), True)
 
 
 @pytest.mark.parametrize(
@@ -70,7 +72,7 @@ def test_a_gap_is_new_on_the_crawl_that_finds_it_and_a_new_outage_is_new_again(d
         ([(1, ""), (0, HELD)], 2, True),
         ([(0, HELD)], 1, True),
         ([(1, ""), (0, HELD), (0, HELD)], 2, True),
-        ([(0, FAIL), (0, FAIL), (0, HELD)], 1, False),  # already failing when it was held: the same outage
+        ([(0, FAIL), (0, FAIL), (0, HELD), (0, HELD)], 1, False),  # already failing when it was held: the same outage
     ],
 )
 def test_a_held_crawl_is_its_own_kind(
@@ -101,9 +103,9 @@ def test_a_believed_drop_is_an_event_listed_on_its_crawl_and_the_day_after(db: s
     add_crawls(db, "Small", [(0, HELD)] * 3 + [(1, note)])
     gap = only_gap(db, "Small")
     assert (gap["kind"], gap["note"], gap["since"], gap["new"]) == ("closed", note, DAY.format(4), True)
-    add_crawls(db, "Small", [(1, "")], start_day=5)  # healthy since, and still listed once more
+    add_crawls(db, "Small", [(1, ""), (1, "")], start_day=5)  # healthy since, and still listed (a lost run fits)
     assert only_gap(db, "Small")["kind"] == "closed"
-    add_crawls(db, "Small", [(1, "")], start_day=6)
+    add_crawls(db, "Small", [(1, "")], start_day=7)
     assert gaps_of(db, "Small") == []  # gone for good
 
 

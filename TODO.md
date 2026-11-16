@@ -295,7 +295,7 @@ Observations about live sites below come from checks made on 2026-11-14 and may 
 
 ## Step 9.1 live checks
 
-Added when the history moved to Supabase (v0.51.0; `CONTRIBUTING.md`, "The history lives in Supabase"). What the rehearsal
+Added when the history moved to Supabase (v0.52.0; `CONTRIBUTING.md`, "The history lives in Supabase"). What the rehearsal
 could not prove: a real PostgREST, a real Supabase project and a real Actions run.
 
 - [ ] **Check the first daily runs after the move.** Trigger: the PR of step 9.1 is merged and the one-time copy of the

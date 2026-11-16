@@ -651,3 +651,31 @@ def test_the_pull_marks_its_file_and_the_sync_refuses_any_other(
     with pytest.raises(SystemExit, match=r"data/jobs\.db was not written by --pull"):
         sync_supabase.main([])
     assert not fake.calls  # nothing was sent
+
+
+FIRST_BATCH, SECOND, REST, TOTAL = 2, 2, 3, 5
+
+
+def test_a_crawl_log_that_fails_half_way_is_finished_by_the_next_sync_without_a_duplicate(
+    jobs: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(sync_supabase, "BATCH", 2)
+    add_log(jobs, *(log_row(f"2026-11-16T04:3{n}:00") for n in range(5)))
+    fake = FakeSupabase()
+    real = fake.request
+    posts = {"n": 0}
+
+    def second_fails(method: str, url: str, **kw: Any) -> FakeHttpResponse:
+        if method == "POST" and url.endswith("/crawl_log"):
+            posts["n"] += 1
+            if posts["n"] == SECOND:
+                return FakeHttpResponse(status_code=500, text="boom")
+        return real(method, url, **kw)
+
+    fake.request = second_fails  # type: ignore[method-assign]
+    with pytest.raises(SyncError, match="POST crawl_log failed"):
+        sync(jobs, client(fake))
+    assert len(fake.others["crawl_log"]) == FIRST_BATCH  # the first batch went and is marked
+    fake.request = real  # type: ignore[method-assign]
+    assert sync(jobs, client(fake)).logged == REST
+    assert len(fake.others["crawl_log"]) == TOTAL

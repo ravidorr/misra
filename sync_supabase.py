@@ -274,18 +274,22 @@ def pull(source: Source, path: str = DB) -> tuple[int, int]:
 
 def push_crawl_log(conn: sqlite3.Connection, client: Client) -> int:
     """Write the crawl log rows of this run: the ones with no Supabase id yet (the pull gave every older row its id).
-    They are marked as written afterwards, so a second sync of the same file writes nothing. Returns how many went."""
-    rows = [
-        dict(zip(LOG_COLUMNS, values, strict=True))
-        for values in conn.execute(
-            f"SELECT {', '.join(LOG_COLUMNS)} FROM crawl_log WHERE id IS NULL ORDER BY ts, rowid"
+    Each batch is marked as written as soon as it went, so a second sync of the same file (after a failure half way)
+    writes only the rest and never a row twice. Returns how many went."""
+    rows = conn.execute(f"SELECT rowid, {', '.join(LOG_COLUMNS)} FROM crawl_log WHERE id IS NULL ORDER BY ts, rowid")
+    pending = rows.fetchall()
+    for start in range(0, len(pending), BATCH):
+        batch = pending[start : start + BATCH]
+        client.call(
+            "POST",
+            {},
+            [dict(zip(LOG_COLUMNS, values[1:], strict=True)) for values in batch],
+            table="crawl_log",
+            prefer="return=minimal",
         )
-    ]
-    for start in range(0, len(rows), BATCH):
-        client.call("POST", {}, rows[start : start + BATCH], table="crawl_log", prefer="return=minimal")
-    conn.execute("UPDATE crawl_log SET id=0 WHERE id IS NULL")
-    conn.commit()
-    return len(rows)
+        conn.executemany("UPDATE crawl_log SET id=0 WHERE rowid=?", [(values[0],) for values in batch])
+        conn.commit()
+    return len(pending)
 
 
 def trim_crawl_log(client: Client, today: date) -> None:

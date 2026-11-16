@@ -172,6 +172,7 @@
  *     <span class="sticker card-flag">New</span>
  *     <p class="card-company">Acme</p>
  *     <h3 class="card-title"><a href="...">Role</a></h3>
+ *     <p class="card-snippet" dir="auto">Start of the posting, up to 255 characters, as written</p>
  *     <p class="card-tags"><span class="pill">Tel Aviv</span></p>
  *     <p class="card-actions"><a class="btn btn-primary" href="...">Apply ↗</a></p>
  *   </article>
@@ -218,6 +219,28 @@
 @media (hover: hover) {
   .card-title a:hover {
     color: var(--accent);
+  }
+}
+
+/* The start of the posting (third-party text, shown as text): muted, two lines on a phone and three from 561px, with the
+   browser's own ellipsis where it is cut. It is a preview; the whole snippet stays in the page for a screen reader. */
+.card-snippet {
+  display: -webkit-box;
+  margin: 0 0 var(--space-3);
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  color: var(--muted);
+  font-size: var(--text-sm);
+  line-height: 1.5;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+}
+
+@media (width >= 561px) {
+  .card-snippet {
+    -webkit-line-clamp: 3;
+    line-clamp: 3;
   }
 }
 

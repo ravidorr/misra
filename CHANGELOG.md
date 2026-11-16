@@ -4,7 +4,11 @@ All notable changes are documented here. Format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
-## [0.51.0] - 2026-11-17
+## [0.52.0] - 2026-11-17
+
+### Added
+
+- Each job card shows the start of the posting under the title (PLAN.md step 7.2, the card half): the public `snippet` column, the start of the posting as written (up to 255 characters), in a muted paragraph with `dir="auto"` (a Hebrew posting reads right to left), shown as text and never as markup. It is clamped to two lines on a phone and three from 561px. The data has no ellipsis, so the page adds one (hidden from screen readers) to a snippet of 200 characters or more that does not end in `.`, `!` or `?` (a cut never does). It is a heuristic: a whole text of that length that ends in a quote or a bracket gets a false ellipsis. A job with no text shows nothing. The dashboard reads `snippet` with the other named columns (never `description` or `details`), and the WebMCP tools that return an open role (`search_jobs`, `list_new_jobs`, `get_job` and the others) carry it as `snippet` (`null` when there is none). `jobs.json` and `jobs.jsonld` are unchanged. The detail view with the link to the employer is step 7.3.
 
 ### Changed
 
@@ -13,7 +17,7 @@ All notable changes are documented here. Format follows [Keep a Changelog](https
 - The exclusion list also deletes a company's `crawl_log` rows in Supabase (`PURGE_TABLES`), and the scratch file's purge no longer vacuums it (the file is not published any more).
 - The backup now also holds the job history: `export_accounts.py` exports `jobs` (open and closed, every column except `description`, `details` and `snippet`, which are never read) and `crawl_log` beside the five account tables; `publish_backup.py` publishes the seven files and its shrink guard covers them; `restore_accounts.py` restores them (no `auth.users` check, since they hold no user; a log row keeps its `id`, the sequence moves past it, a second run changes nothing). The `Table` rows of the export carry `account`; `orphans` and the "profiles is empty" check look at the account tables only; the key of a table sorts as the database gives it (`crawl_log.id` as a number).
 - `publish-docs` pulls the history before it builds (its pull step is the only one in it with the Supabase key), so a rebuild is never made from an empty history. The dashboard lists the open jobs by company and job id, so a rebuild over the same data is byte-identical to the daily build.
-- The coverage gaps log (`python run.py --gaps`) and the robots.txt closing no longer need tables of their own: a gap is "new" when it began on the newest crawl day or the day before (an outage is new on the crawl that finds it; nothing remembers what was logged), and the streak of a robots.txt skip is read from `crawl_log` (the latest crawls with that note, from the first of them).
+- The coverage gaps log (`python run.py --gaps`) and the robots.txt closing no longer need tables of their own: a gap is "new" when it began on the newest crawl day or up to two days before (so a lost daily run does not hide it; nothing remembers what was logged), and the streak of a robots.txt skip is read from `crawl_log` (the latest crawls with that note, from the first of them).
 - `AGENTS.md`, `README.md`, `CONTRIBUTING.md` ("The history lives in Supabase", with the one-time copy of the old history and the rehearsal of 2026-11-17; "Backups of the account tables and the job history"), `PLAN.md` (step 9.1 done), `TODO.md` ("Step 9.1 live checks"), `PRD.md` and `SECURITY.md` describe it. `PRIVACY.md` is not changed: the old commits of `data/jobs.db` stay in the public repository, so what it says about the job history there is still true.
 
 - The "Level" chips (All, Intern, Junior, Not specified) and "New only" moved from under the search into the filters card, as its first controls, so the quick filters sit with the other filters and count in "Filters (n)" as before. Same ids, filter keys and WebMCP arguments, so saved filters, the account filter sync and the first-sign-in import are unchanged. "Starred (n)" stays beside "Filters": it is a view of its own, not a filter, and the starred list puts the filters card away, so the switch back has to stay outside it. On a phone the chips are one tap further away (open "Filters" first).

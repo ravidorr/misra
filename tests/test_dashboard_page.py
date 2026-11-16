@@ -116,6 +116,7 @@ def table_rows(count: int) -> list[dict[str, Any]]:
             "role_types": ["Other"],
             "regions": ["Haifa and the north"],
             "locations": [],
+            "snippet": None,
         }
         for n in range(count)
     ]
@@ -566,7 +567,9 @@ async def test_every_request_asks_for_open_jobs_in_a_stable_order_page_by_page(p
         assert query["limit"] == [str(REST_PAGE)]
         columns = set(query["select"][0].split(","))
         assert {"level", "role_types", "regions", "locations", "first_seen"} <= columns
+        assert "snippet" in columns
         assert "description" not in columns
+        assert "details" not in columns
 
 
 def row(company: str, job_id: str, title: str | None, first_seen: str, **kw: Any) -> dict[str, Any]:
@@ -1331,3 +1334,60 @@ async def test_the_remote_option_is_remembered_and_changes_what_is_shown(page: P
     await page.reload()
     await page.wait_for_selector("#list article")
     assert await shown(page) == {"rem", "bare"}
+
+
+CUT = "A text of two hundred characters or more that was cut at a word boundary and so does not end a sentence " * 2
+WHOLE = "A short posting that ends here."
+HTML = "<script>window.pwned = 1</script><b>bold</b> text"
+
+
+async def test_a_card_shows_its_snippet_as_text_and_none_when_there_is_none(page: Page, site: Path) -> None:
+    rows = [
+        job("cut", "Cut", "Haifa, Israel", snippet=CUT.strip()),
+        job("whole", "Whole", "Haifa, Israel", snippet=WHOLE),
+        job("html", "Html", "Haifa, Israel", snippet=HTML),
+        job("none", "None", "Haifa, Israel", snippet=None),
+        job("blank", "Blank", "Haifa, Israel", snippet="  "),
+        job("hebrew", "Hebrew", "Haifa, Israel", snippet="משרה בחיפה"),
+    ]
+    problems = await serve(page, site, backend=Backend(rows))
+    assert problems == []
+
+    def snippet(job_id: str) -> Any:
+        return page.locator(f"article[data-job-id='Acme|{job_id}'] .card-snippet")
+
+    assert await snippet("whole").text_content() == WHOLE  # whole text: no ellipsis
+    assert await snippet("cut").text_content() == CUT.strip() + "…"  # a cut text gets the page's ellipsis
+    assert await snippet("cut").locator("[aria-hidden=true]").text_content() == "…"  # which a screen reader skips
+    assert await snippet("html").text_content() == HTML  # text, never markup
+    assert await snippet("html").locator("*").count() == 0
+    assert await page.evaluate("window.pwned") is None
+    assert await snippet("hebrew").get_attribute("dir") == "auto"
+    for none in ("none", "blank"):
+        assert await snippet(none).count() == 0  # nothing is shown, not even an empty line
+    title = page.locator("article[data-job-id='Acme|whole'] .card-title")
+    assert await title.evaluate("e => e.nextElementSibling.className") == "card-snippet"  # read right after the title
+
+
+async def test_an_assistant_gets_the_snippet_and_null_when_a_role_has_none(page: Page, site: Path) -> None:
+    await page.add_init_script(WEBMCP)
+    rows = [job("a", "A", "Haifa, Israel", snippet=WHOLE), job("b", "B", "Haifa, Israel")]
+    await serve(page, site, backend=Backend(rows))
+    jobs = {j["id"]: j for j in (await ask(page, "search_jobs", {"limit": 10}))["jobs"]}
+    assert jobs["Acme|a"]["snippet"] == WHOLE
+    assert jobs["Acme|b"]["snippet"] is None
+
+
+async def test_the_ellipsis_starts_at_200_characters_and_never_follows_a_sentence_end(page: Page, site: Path) -> None:
+    unpunctuated = {"s199": "a" * 199, "s200": "a" * 200}
+    sentences = {f"end{ch}": "a" * 199 + ch for ch in ".!?"}
+    rows = [
+        job(job_id, job_id, "Haifa, Israel", snippet=text) for job_id, text in {**unpunctuated, **sentences}.items()
+    ]
+    assert await serve(page, site, backend=Backend(rows)) == []
+
+    async def ellipses(job_id: str) -> int:
+        return await page.locator(f"article[data-job-id='Acme|{job_id}'] .card-snippet [aria-hidden=true]").count()
+
+    assert [await ellipses(j) for j in unpunctuated] == [0, 1]  # a short text is whole; 200 or more was cut
+    assert [await ellipses(j) for j in sentences] == [0, 0, 0]  # a cut never ends a sentence, so this one is whole
