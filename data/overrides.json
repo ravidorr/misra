@@ -853,5 +853,10 @@
   "ats": "comeet_page",
   "slug": "https://apester.com/careers/",
   "israel_only": true
+ },
+ "NeuReality": {
+  "ats": "comeet_page",
+  "slug": "https://www.neureality.ai/careers/",
+  "israel_only": true
  }
 }

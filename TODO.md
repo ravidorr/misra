@@ -1,40 +1,10 @@
 # TODO
 
 Open work, as of 2026-11-14. Each item says what triggers it, how to do it and when it is done. When one is finished,
-delete it and update the counts in the others: the 88 and the four segment counts in the research item (a pin removes
-one row from one segment), its "(29)" if the company had no careers URL, else its "(59 today)".
+delete it and update the counts in the others: the 87 and the four segment counts in the research item (a pin removes
+one row from one segment), its "(29)" if the company had no careers URL, else its "(58 today)".
 An item with a screenshot in `todo-images/` goes with it: delete the image file in the same PR.
 Observations about live sites below come from checks made on 2026-11-14 and may have changed.
-
-## Web app fixes
-
-- [ ] **Run the technical writer agent over all the text in the app.** Trigger: when you are ready for a copy pass;
-  nothing blocks it.
-  - Where: the agent is `.claude/agents/technical-writer.md`. It reads the docs and every text source, then tightens
-    the wording (short, exact, no fluff) and keeps identifiers, `data-*` hooks and `REASONS` keys unchanged.
-  - How: ask Claude Code to run the `technical-writer` agent. It edits `templates/` and the sources, rebuilds `docs/`,
-    and runs lint and tests. It lists proposed edits to `PRIVACY.md` and the lawyer-approved wording instead of making
-    them: review that list. A change to a listed Python module needs a version bump and a changelog entry.
-  - Done when: the PR is merged, `npm run lint` and `npm run test:coverage` pass, and you have decided on the legal
-    wording it left for you.
-
-- [ ] **Add a "DevOps & SRE" role type.** Trigger: DevOps, SRE, platform and infrastructure engineers sit inside
-  "R&D" today (`classify.py` matches `devops|\bsre\b|site reliability` under R&D), so nobody can filter for them or get
-  them in a job alert on their own.
-  - Where: `ROLE_TYPES` in `classify.py` (a data table in display order: a new type is one entry, and `ROLE_TYPE_NAMES`
-    and the dashboard filter list follow from it); the classifier tests in `tests/` (the fixture of real titles); the
-    role-type lists in `PRD.md` (FR-9 and the decisions log) and `PLAN.md` ("Decisions made in planning"). The names
-    reach the Supabase `jobs.role_types` column through `sync_supabase.py` and the job alerts filter in
-    `send_digests.py`; no migration is needed (the column is `text[]` and the daily sync rewrites every open job).
-  - How: add "DevOps & SRE" after "R&D" with patterns for DevOps, SRE, site reliability, platform engineer,
-    infrastructure engineer, cloud engineer, release or build engineer and DevSecOps. Decide whether those titles stay
-    in R&D as well (a job may have several types) or move out of it; say which in the PR. Keep names with `&` in the
-    style of "Data & AI" and "Sales & BD". Check that a saved filter or alert that lists "R&D" still behaves as the
-    owner expects, and that the Filters sheet, the quick chips and the job alerts list the new type. Report the share of
-    jobs not in "Other" before and after (`classify.py` prints it).
-  - Done when: titles such as "DevOps Engineer", "Senior SRE" and "Platform Engineer" are "DevOps & SRE", the
-    dashboard filter and a job alert can select it, the share in "Other" does not rise, and `npm run lint` and
-    `npm run test:coverage` pass. A change to `classify.py` needs a version bump and a changelog entry.
 
 ## Yearly security review
 
@@ -78,10 +48,10 @@ Observations about live sites below come from checks made on 2026-11-14 and may 
 
 ## Research the remaining unresolved companies
 
-- [ ] `data/unresolved_candidates.csv` lists 88 researched companies with no usable job feed (as of 2026-11-14: 24
-  multinational, 40 deeptech, 12 cyber_infra, 12 biz_software). Each needs
+- [ ] `data/unresolved_candidates.csv` lists 87 researched companies with no usable job feed (as of 2026-11-14: 24
+  multinational, 39 deeptech, 12 cyber_infra, 12 biz_software). Each needs
   its own research; there is no batch fix left. Every observation about a live site below is from the checks of
-  2026-11-14, a crawl of the 105 rows that had a careers URL that day (59 today) and a scan of their rendered pages. The
+  2026-11-14, a crawl of the 105 rows that had a careers URL that day (58 today) and a scan of their rendered pages. The
   remaining work falls into these groups:
   - **No careers URL (29).** Status `not_found` in `data/new/*_companies.json`: Upsolver, Ceva, Speedata,
     Teramount, X-Globe, Q Factor, Gilat, Siklu, Silicom, Sight Diagnostics, Brainsway, EarlySign, Diagnostic Robotics,
@@ -101,7 +71,7 @@ Observations about live sites below come from checks made on 2026-11-14 and may 
     an entry in `ADAPTERS`, tests with the fakes in `tests/test_adapters.py`, a version bump and a changelog entry.
   - **A board was found but its address is wrong or dead.**
     - Pliops: on 2026-11-14 the Comeet page for `pliops/05.004` said "This Spark Hire Recruit account has been
-      deactivated", and it still does, but `pliops.com/careers` still links to that page, so the company has published no
+      deactivated", and it still did on 2026-11-16, but `pliops.com/careers` still links to that page, so the company has published no
       new board. A Workable account `pliops` exists (`adapters.workable("pliops")` answers with no job) but nothing links
       to it, so it is not pinned: pin it, or the board the career page ends up linking to, once it lists a job.
     - Western Digital: the SmartRecruiters board (`WesternDigital`, 325 jobs) has no Israel job today, so there is
@@ -168,8 +138,9 @@ Observations about live sites below come from checks made on 2026-11-14 and may 
       (`careers.kornit.com/all-positions/` lists 11 jobs with its own theme and `/cmcareer/<id>/` links, not the
       plugin's, so it needs its own parser, for one company).
     - Comeet account valid but not the company's own board: Magic Software (19.00F is Matrix IFS, 23 jobs, none in
-      Israel). NeuReality (89.002) answers no job and says there are no open positions: pin it once it lists one (the
-      hosted page is not served, so the `comeet` adapter returns None for it).
+      Israel). NeuReality (89.002) answers no job through the `comeet` adapter (its hosted page is not served), but its
+      careers page is a Comeet plugin page that the `comeet_page` adapter reads: pinned on 2026-11-16, `israel_only`,
+      "We don't have any open positions" today, so the first Israel job reaches the digest.
     - No openings at all, no feed to pin: Mitiga ("We don't have any openings right now"), Applitools ("No openings
       available"), H2Pro and Madgicx (no open positions; Madgicx takes CVs through a ClickUp form).
     - Own-site pages the crawler's link pattern does not match, no ATS behind them: Pillar Security
