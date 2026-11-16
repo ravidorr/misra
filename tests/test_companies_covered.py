@@ -13,7 +13,10 @@ from tests.conftest import write_json
 from tests.test_build_dashboard import log, prepare, read_payload
 
 REPO = Path(__file__).resolve().parents[1]
-LINK = '<a class="foot-gaps" href="#gaps">Coverage gaps</a>'
+
+
+def link(gaps: str) -> str:
+    return f'<a class="foot-gaps" href="#gaps">Coverage gaps lists {gaps} whose roles may be missing or old.</a>'
 
 
 def test_companies_covered_counts_the_working_feeds() -> None:
@@ -30,8 +33,8 @@ def test_companies_covered_counts_the_working_feeds() -> None:
 @pytest.mark.parametrize(
     ("covered", "gaps", "companies", "sentence"),
     [
-        (224, 122, "224 companies", f" {LINK} lists 122 companies whose roles may be missing or old."),
-        (1, 1, "1 company", f" {LINK} lists 1 company whose roles may be missing or old."),
+        (224, 122, "224 companies", f" {link('122 companies')}"),
+        (1, 1, "1 company", f" {link('1 company')}"),
         (5, 0, "5 companies", ""),  # the card is hidden when it is empty, so nothing points at it
     ],
 )
@@ -70,7 +73,7 @@ def test_the_count_of_companies_reaches_the_page_and_the_data(db: sqlite3.Connec
     assert payload["covered"] == len(["Zed", "Down"])  # Down is failing today and also on the card; Alpha has no feed
     assert payload["gaps"]["total"] == len(["Down", "Alpha", "Beta"])  # Beta is the researched company
     page = (workdir / "docs" / "index.html").read_text(encoding="utf-8")
-    assert page.startswith(f'<main data-companies-covered="2">2 companies| {LINK} lists 3 companies whose roles ')
+    assert page.startswith(f'<main data-companies-covered="2">2 companies| {link("3 companies")}|')
     assert json.loads(page.split("|")[2].removesuffix("</main>"))["covered"] == payload["covered"]
 
 

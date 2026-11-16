@@ -17,13 +17,19 @@ All notable changes are documented here. Format follows [Keep a Changelog](https
 
 - "Export discards" and "Import discards" on the filters card, the hidden file input behind them and the code that read and wrote the file. Accounts sync discards across devices, and the first sign-in already offers to bring this browser's own choices over (PLAN.md step 4.3), so the file was redundant. A signed-out visitor's discards stay in the browser as before. `PRIVACY.md` no longer says the "Import discards" file is read inside the browser (the sentence about the missing document upload keeps its first half); the lawyer must approve that edit before the merge.
 
-## [0.49.3] - 2026-11-16
+## [0.49.2] - 2026-11-16
 
 ### Added
 
 - The two emails people receive are now designed HTML documents as well as plain text (multipart: the plain text stays, with the headers unchanged, and is sent together with the HTML). The confirmation email (Edge Function `email-settings`, `email-html.ts`) and the digest (`send_digests.py`, `render_digest_html`) use one 600px column on the page colour, a lime band, the product's colours (fixed values in `supabase/functions/_shared/email-colors.json`, kept equal to `design-system/tokens.css` by a test), a light and a dark version (`prefers-color-scheme`), table layout, inline styles, system fonts, no image, no script, no remote stylesheet. The confirmation link is a button (a link with a background and padding; a padded cell for Outlook). Not one word changed: the text of each HTML email equals its plain text, which a test checks for both emails.
 - Gmail clips a message near 102 KB and would hide the footer with the unsubscribe link, so a digest whose HTML would pass 90,000 bytes (about 150 roles with the average 68-character address, 125 with 122-character ones) is sent as plain text only, the same words. The digest has no cap on the number of roles, and this adds none.
 - The Edge Function `email-settings` must be redeployed after the merge for the confirmation email to carry the HTML.
+
+## [0.49.1] - 2026-11-16
+
+### Fixed
+
+- The first footer sentence is no longer taller on one line. The "Coverage gaps" link was a 44px box inside the sentence, which made its line 44px tall and left a gap in the paragraph. The whole second sentence ("Coverage gaps lists N companies whose roles may be missing or old.") is now the link, a 44px block under the first sentence; the words are the same. The footer sentence about where the choices are saved (`#saveNote`, `savedHere`, `savedThere`) is removed: the sign-in dialog and PRIVACY.md say it, and the dialog and the privacy notice are unchanged. A browser test pins even lines at 320, 375 and 1480 px in light and dark.
 
 ## [0.49.0] - 2026-11-16
 

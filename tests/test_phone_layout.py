@@ -1,7 +1,7 @@
 """The dashboard on a phone and on a desktop (the TODO item "Make the web app work well on a phone"): no screen
-scrolls sideways, every control is a 44px target, the search is on the first screen, "Hiring now" is one line with the
-rest behind a button, and the filters are a bottom sheet on a phone that the keyboard can use and a panel in the page
-on a wide screen."""
+scrolls sideways, every control is a 44px target, the search is on the first screen, "New this week" is one line with
+the rest behind a button, and the filters are a bottom sheet on a phone that the keyboard can use and a panel in the
+page on a wide screen."""
 
 import json
 import re
@@ -33,7 +33,7 @@ IN_SHEET_OR_BROWSER = (
 
 
 def add_companies(db: sqlite3.Connection) -> None:
-    """15 companies, each with an old role and a new one, so "Hiring now" is full (the row shows up to 15)."""
+    """15 companies, each with an old role and a new one, so "New this week" is full (the row shows up to 15)."""
     old = (datetime.now(UTC) - timedelta(days=30)).strftime("%Y-%m-%dT00:00:00")
     today = datetime.now(UTC).strftime("%Y-%m-%dT00:00:00")
     for n in range(HIRING_COMPANIES):
@@ -81,9 +81,9 @@ async def listed(page: Page) -> int:
 
 
 async def open_hiring(page: Page) -> None:
-    """Expand "Hiring now" (it starts as one line)."""
+    """Expand "New this week" (it starts as one line)."""
     toggle = page.locator("#hiringToggle")
-    if await toggle.get_attribute("aria-expanded") == "false":
+    if await toggle.is_visible() and await toggle.get_attribute("aria-expanded") == "false":
         await toggle.click()
 
 
@@ -353,10 +353,10 @@ async def test_the_footer_sentence_and_its_link_open_the_coverage_gaps(page: Pag
     covered = await covered_count(page)
     gaps = json.loads(await page.locator("#page-data").text_content() or "{}")["gaps"]["total"]
     assert gaps > 0
-    assert await sentence.inner_text() == (
+    assert (await sentence.text_content() or "").strip() == (
         f"Roles from {count_words(covered)} whose career pages we read daily. "
         f"Coverage gaps lists {count_words(gaps)} whose roles may be missing or old."
-    )
+    )  # the words are one sentence pair for an agent, wherever the link sits
     link = sentence.locator("a")
     box = await link.bounding_box()
     assert box is not None
@@ -366,6 +366,37 @@ async def test_the_footer_sentence_and_its_link_open_the_coverage_gaps(page: Pag
     await link.click()
     assert await page.locator("#gaps").get_attribute("open") is not None  # the closed card is opened for the jump
     assert await page.evaluate(NO_SIDEWAYS)
+
+
+# The line boxes of the sentence before the link: the text node's rectangles, one per line.
+MEASURE_FIRST_SENTENCE = """() => {
+  const p = document.querySelector('#coverage');
+  const range = document.createRange();
+  range.selectNodeContents(p.firstChild);
+  const lines = [];
+  for (const r of range.getClientRects()) {
+    if (!lines.some((l) => Math.abs(l.top - r.top) < 1)) lines.push({ top: r.top, height: r.height });
+  }
+  const link = p.querySelector('a').getBoundingClientRect();
+  const last = lines[lines.length - 1];
+  return { lines, linkTop: link.top, linkHeight: link.height, textBottom: last.top + last.height };
+}"""
+
+
+@pytest.mark.parametrize("scheme", ["light", "dark"])
+@pytest.mark.parametrize("width", [320, 375, 1480])
+async def test_the_first_footer_sentence_has_even_lines_and_its_link_is_a_44px_target_below_it(
+    page: Page, crowd: Path, width: int, scheme: str
+) -> None:
+    await open_page(page, crowd, width, scheme=scheme)
+    await page.locator("footer.foot").scroll_into_view_if_needed()
+    m = await page.evaluate(MEASURE_FIRST_SENTENCE)
+    heights = {round(line["height"], 1) for line in m["lines"]}
+    assert len(heights) == 1  # the link's box does not make one line taller than the others
+    steps = {round(b["top"] - a["top"], 1) for a, b in zip(m["lines"], m["lines"][1:], strict=False)}
+    assert len(steps) <= 1  # and the spacing between the lines is even
+    assert m["linkHeight"] >= TAP
+    assert m["linkTop"] >= m["textBottom"] - 1  # the link box starts under the sentence, covering none of it
 
 
 async def test_the_search_and_the_first_job_are_on_the_first_screen_of_an_iphone(page: Page, crowd: Path) -> None:
@@ -476,7 +507,7 @@ async def test_a_wide_screen_has_the_filters_in_the_page_and_no_filters_button(p
     await page.click("#reset")
     assert await page.locator("#filtersOpen").inner_text() == "Filters"
     assert await sheet.is_visible()
-    assert await lines_of_stories(page) == 1  # "Hiring now" is one line here too
+    assert await lines_of_stories(page) == 1  # "New this week" is one line here too
 
 
 @pytest.mark.parametrize("width", [320, 393])
@@ -625,16 +656,11 @@ FOOT_DATE = re.compile(r"^\d{1,2} [A-Z][a-z]{2}( \d{4})?, \d{2}:\d{2} UTC$")
 
 @pytest.mark.parametrize("scheme", ["light", "dark"])
 @pytest.mark.parametrize("width", [320, 375, 393, 1650])
-async def test_the_footer_fits_has_44px_links_and_says_where_choices_are_saved(
-    page: Page, crowd: Path, width: int, scheme: str
-) -> None:
+async def test_the_footer_fits_and_has_44px_links(page: Page, crowd: Path, width: int, scheme: str) -> None:
     await open_page(page, crowd, width, scheme=scheme)
     foot = page.locator("footer.foot")
     await foot.scroll_into_view_if_needed()
     assert await page.evaluate(NO_SIDEWAYS)
-    assert await page.locator("#saveNote").inner_text() == (
-        'Your stars, "Not for me" choices and filters stay in this browser and are sent nowhere.'
-    )
     stamp = await page.locator("#upd").inner_text()
     assert FOOT_DATE.match(stamp), stamp
     assert await page.locator(".foot-updated").inner_text() == f"Career pages last read {stamp}."
@@ -651,10 +677,10 @@ async def test_the_footer_fits_has_44px_links_and_says_where_choices_are_saved(
         names.append(await link.inner_text())
     assert names == ["Privacy", "Terms", "Contact"]
     gaps_link = await foot.locator("a.foot-gaps").bounding_box()
-    note = await page.locator("#saveNote").bounding_box()
+    note = await page.locator(".foot-updated").bounding_box()
     assert gaps_link is not None
     assert note is not None
-    assert gaps_link["y"] + gaps_link["height"] <= note["y"] + 1  # its 44px box never covers the note below
+    assert gaps_link["y"] + gaps_link["height"] <= note["y"] + 1  # its 44px box never covers the date line below
     links = await foot.locator("nav").bounding_box()
     text = await foot.locator(".foot-info").bounding_box()
     assert links is not None
@@ -690,3 +716,174 @@ async def test_the_footer_date_is_short_and_says_the_year_only_when_it_is_not_th
     )
     await open_page(page, crowd, 393)
     assert year not in await page.locator("#upd").inner_text()
+
+
+async def hero(page: Page) -> str:
+    return " ".join((await page.locator("#heroTop").inner_text(), await page.locator("#heroBottom").inner_text()))
+
+
+async def pick_level(page: Page, level: str) -> None:
+    await page.click(f'.chip[data-group=levels][data-value="{level}"]')
+
+
+async def test_the_headline_and_the_row_say_the_same_with_no_filter(page: Page, crowd: Path) -> None:
+    await open_page(page, crowd, 1650)
+    assert await page.locator("#hiring-h").inner_text() == "New this week"
+    assert await hero(page) == f"{HIRING_COMPANIES} new this week."
+    story = page.locator("#stories .story").first
+    assert await story.get_attribute("data-count") == "1"
+    assert await story.locator(".story-count").inner_text() == "1 new"
+    assert await story.locator(".story-count").get_attribute("aria-hidden") == "true"
+    assert await story.inner_text() == "C\nCompany number 00 with a rather long name that must fit\n1 new\n, 1 new role"
+
+
+@pytest.mark.parametrize("level", ["Intern", "Not specified", "Junior"])
+async def test_a_circle_never_promises_more_new_roles_than_a_tap_shows(page: Page, crowd: Path, level: str) -> None:
+    """The bug: with Level = Junior a circle said "5 new" and the list was empty after the tap."""
+    await open_page(page, crowd, 1650)
+    await pick_level(page, level)
+    await open_hiring(page)
+    names = [await s.get_attribute("data-company") for s in await page.locator("#stories .story").all()]
+    assert len(names) == (HIRING_COMPANIES if level == "Intern" else 0)  # the new roles are the interns
+    for name in names:
+        story = page.locator(f'#stories .story[data-company="{name}"]')
+        promised = int(str(await story.get_attribute("data-count")))
+        await story.click()
+        assert await story.get_attribute("aria-pressed") == "true"
+        shown = await page.locator("#list article[data-new=true]").count()
+        assert shown == promised >= 1
+        await story.click()  # a second tap clears the company
+        assert await story.get_attribute("aria-pressed") == "false"
+    assert await page.locator("#hiring").is_hidden() == (not names)
+
+
+@pytest.mark.parametrize(
+    ("level", "query", "words"),
+    [
+        ("", "", f"{HIRING_COMPANIES} new this week."),
+        ("Intern", "", f"{HIRING_COMPANIES} new matches."),
+        ("", "Intern 14", "1 new match."),
+        ("Not specified", "", f"{HIRING_COMPANIES} open matches."),  # nothing new matches: the open roles that do
+        ("Junior", "", "No matches."),
+    ],
+)
+async def test_the_headline_follows_the_filters(page: Page, crowd: Path, level: str, query: str, words: str) -> None:
+    await open_page(page, crowd, 1650)
+    if level:
+        await pick_level(page, level)
+    if query:
+        await page.fill("#q", query)
+    shown = "document.getElementById('heroTop').textContent + ' ' + document.getElementById('heroBottom').textContent"
+    await settle(page, f"{shown} === '{words}'")
+    assert await hero(page) == words
+
+
+async def test_the_headline_for_all_locations_and_for_starred_names_no_place(page: Page, crowd: Path) -> None:
+    await open_page(page, crowd, 1650)
+    await page.select_option("#loc", "all")
+    assert await hero(page) == f"{HIRING_COMPANIES} new this week."
+    await page.click("#starredView")
+    assert await hero(page) == "Starred roles."
+    await page.click("#starredView")
+    assert await page.locator("#hiring").is_visible()
+
+
+async def test_a_company_without_new_roles_stays_while_it_is_chosen(page: Page, crowd: Path) -> None:
+    await open_page(page, crowd, 1650)
+    await page.locator("#stories .story").first.click()
+    await pick_level(page, "Not specified")  # the chosen company's new role is an intern
+    stories = page.locator("#stories .story")
+    assert await stories.count() == 1
+    assert await stories.get_attribute("aria-pressed") == "true"
+    assert await stories.locator(".story-count").inner_text() == "0 new"
+    assert (await stories.inner_text()).endswith(", no new roles")
+    await stories.click()  # it can be turned off
+    assert await page.locator("#hiring").is_hidden()
+
+
+async def test_the_focus_stays_on_the_circle_after_a_tap(page: Page, crowd: Path) -> None:
+    await open_page(page, crowd, 393)
+    story = page.locator("#stories .story").nth(1)
+    name = await story.get_attribute("data-company")
+    await story.focus()
+    await page.keyboard.press("Enter")
+    assert await page.evaluate("document.activeElement.dataset.company") == name
+
+
+@pytest.fixture
+def stale(db: sqlite3.Connection, workdir: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """The page built over roles that are all older than a week: nothing is new, one role is abroad."""
+    old = (datetime.now(UTC) - timedelta(days=30)).strftime("%Y-%m-%dT00:00:00")
+
+    def fill(conn: sqlite3.Connection) -> None:
+        for n in range(3):
+            add_job(conn, f"Old company {n}", "0", "Accountant", first_seen=old)
+        add_job(conn, "Far company", "0", "Accountant", first_seen=old, location="London, United Kingdom")
+
+    monkeypatch.setattr(build_dashboard, "DIGEST_SIGNUP_ENABLED", False)
+    return build_site(db, workdir, fill)
+
+
+async def test_the_headline_counts_open_roles_when_nothing_is_new(page: Page, stale: Path) -> None:
+    await open_page(page, stale, 1650)
+    assert await hero(page) == "3 open in Israel."
+    assert await page.locator("#hiring").is_hidden()
+    await page.select_option("#loc", "all")
+    assert await hero(page) == "4 open roles."
+
+
+@pytest.fixture
+def abroad(db: sqlite3.Connection, workdir: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """The crowd, plus a new role abroad."""
+
+    def fill(conn: sqlite3.Connection) -> None:
+        add_companies(conn)
+        today = datetime.now(UTC).strftime("%Y-%m-%dT00:00:00")
+        old = (datetime.now(UTC) - timedelta(days=30)).strftime("%Y-%m-%dT00:00:00")
+        add_job(conn, "Far company", "0", "Accountant abroad", first_seen=old, location="London, United Kingdom")
+        add_job(conn, "Far company", "1", "Intern abroad", first_seen=today, location="London, United Kingdom")
+
+    monkeypatch.setattr(build_dashboard, "DIGEST_SIGNUP_ENABLED", False)
+    return build_site(db, workdir, fill)
+
+
+async def test_all_locations_adds_the_new_roles_abroad_to_the_headline_and_the_row(page: Page, abroad: Path) -> None:
+    await open_page(page, abroad, 1650)
+    assert await hero(page) == f"{HIRING_COMPANIES} new this week."
+    await open_hiring(page)
+    assert await page.locator("#stories .story").count() == HIRING_COMPANIES
+    await page.select_option("#loc", "all")
+    assert await hero(page) == f"{HIRING_COMPANIES + 1} new this week."
+    await open_hiring(page)
+    assert await page.locator("#stories .story").count() == HIRING_COMPANIES  # the 15 most, Far company is the 16th
+
+
+async def test_a_tap_leaves_the_headline_and_the_other_circles_alone(page: Page, crowd: Path) -> None:
+    await open_page(page, crowd, 1650)
+    await open_hiring(page)
+    await page.locator("#stories .story").first.click()
+    assert await hero(page) == f"{HIRING_COMPANIES} new this week."  # Company is not a filter of the headline
+    assert await page.locator("#stories .story").count() == HIRING_COMPANIES
+
+
+@pytest.mark.parametrize("change", ["sort", "onlyNew", "spaces"])
+async def test_sorting_new_only_and_a_blank_search_do_not_make_the_headline_a_filter(
+    page: Page, crowd: Path, change: str
+) -> None:
+    await open_page(page, crowd, 1650)
+    if change == "sort":
+        await page.select_option("#sort", "co")
+    elif change == "onlyNew":
+        await page.click("#onlyNew")
+    else:
+        await page.fill("#q", "   ")
+    assert await hero(page) == f"{HIRING_COMPANIES} new this week."
+
+
+async def test_the_focus_goes_to_the_list_heading_when_the_chosen_circle_goes(page: Page, crowd: Path) -> None:
+    await open_page(page, crowd, 1650)
+    await page.select_option("#company", "Company number 00 with a rather long name that must fit")
+    await pick_level(page, "Not specified")  # nothing new matches: only the chosen company's circle is left
+    await page.locator("#stories .story").focus()
+    await page.keyboard.press("Enter")  # turns the company off, and the circle with it
+    assert await page.evaluate("document.activeElement.id") == "list-h"
