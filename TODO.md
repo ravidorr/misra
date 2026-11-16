@@ -1,8 +1,8 @@
 # TODO
 
 Open work, as of 2026-11-14. Each item says what triggers it, how to do it and when it is done. When one is finished,
-delete it and update the counts in the others: the 88 and the four segment counts in the research item (a pin removes
-one row from one segment), its "(29)" if the company had no careers URL, else its "(59 today)".
+delete it and update the counts in the others: the 87 and the four segment counts in the research item (a pin removes
+one row from one segment), its "(29)" if the company had no careers URL, else its "(58 today)".
 An item with a screenshot in `todo-images/` goes with it: delete the image file in the same PR.
 Observations about live sites below come from checks made on 2026-11-14 and may have changed.
 
@@ -60,10 +60,10 @@ Observations about live sites below come from checks made on 2026-11-14 and may 
 
 ## Research the remaining unresolved companies
 
-- [ ] `data/unresolved_candidates.csv` lists 88 researched companies with no usable job feed (as of 2026-11-14: 24
-  multinational, 40 deeptech, 12 cyber_infra, 12 biz_software). Each needs
+- [ ] `data/unresolved_candidates.csv` lists 87 researched companies with no usable job feed (as of 2026-11-14: 24
+  multinational, 39 deeptech, 12 cyber_infra, 12 biz_software). Each needs
   its own research; there is no batch fix left. Every observation about a live site below is from the checks of
-  2026-11-14, a crawl of the 105 rows that had a careers URL that day (59 today) and a scan of their rendered pages. The
+  2026-11-14, a crawl of the 105 rows that had a careers URL that day (58 today) and a scan of their rendered pages. The
   remaining work falls into these groups:
   - **No careers URL (29).** Status `not_found` in `data/new/*_companies.json`: Upsolver, Ceva, Speedata,
     Teramount, X-Globe, Q Factor, Gilat, Siklu, Silicom, Sight Diagnostics, Brainsway, EarlySign, Diagnostic Robotics,
@@ -83,7 +83,7 @@ Observations about live sites below come from checks made on 2026-11-14 and may 
     an entry in `ADAPTERS`, tests with the fakes in `tests/test_adapters.py`, a version bump and a changelog entry.
   - **A board was found but its address is wrong or dead.**
     - Pliops: on 2026-11-14 the Comeet page for `pliops/05.004` said "This Spark Hire Recruit account has been
-      deactivated", and it still does, but `pliops.com/careers` still links to that page, so the company has published no
+      deactivated", and it still did on 2026-11-16, but `pliops.com/careers` still links to that page, so the company has published no
       new board. A Workable account `pliops` exists (`adapters.workable("pliops")` answers with no job) but nothing links
       to it, so it is not pinned: pin it, or the board the careers page ends up linking to, once it lists a job.
     - Western Digital: the SmartRecruiters board (`WesternDigital`, 325 jobs) has no Israel job today, so there is
@@ -150,8 +150,9 @@ Observations about live sites below come from checks made on 2026-11-14 and may 
       (`careers.kornit.com/all-positions/` lists 11 jobs with its own theme and `/cmcareer/<id>/` links, not the
       plugin's, so it needs its own parser, for one company).
     - Comeet account valid but not the company's own board: Magic Software (19.00F is Matrix IFS, 23 jobs, none in
-      Israel). NeuReality (89.002) answers no job and says there are no open positions: pin it once it lists one (the
-      hosted page is not served, so the `comeet` adapter returns None for it).
+      Israel). NeuReality (89.002) answers no job through the `comeet` adapter (its hosted page is not served), but its
+      careers page is a Comeet plugin page that the `comeet_page` adapter reads: pinned on 2026-11-16, `israel_only`,
+      "We don't have any open positions" today, so the first Israel job reaches the digest.
     - No openings at all, no feed to pin: Mitiga ("We don't have any openings right now"), Applitools ("No openings
       available"), H2Pro and Madgicx (no open positions; Madgicx takes CVs through a ClickUp form).
     - Own-site pages the crawler's link pattern does not match, no ATS behind them: Pillar Security
