@@ -143,7 +143,7 @@ if (open && dialog) {
       case 'on':
         return `The email is on. New roles that match your filters go to ${row.address}, ${every(row.frequency)}.`;
       case 'waiting':
-        return `Waiting for you to confirm ${row.address}. Open the link in the confirmation email and press Confirm; until then nothing is sent. The link works for 7 days.`;
+        return `Waiting for you to confirm ${row.address}. Open the link in the confirmation email and press "Confirm my email"; until then nothing is sent. The link works for 7 days.`;
       case 'unsubscribed':
         return 'You unsubscribed, so nothing is sent. You can turn the email on again; you will confirm your address again first.';
       default:
@@ -323,7 +323,7 @@ if (open && dialog) {
         success: (answer) =>
           answer.state === 'on'
             ? 'The email was already on for this address, so nothing was changed and nothing was sent.'
-            : `Check ${sentTo} for a confirmation link. Your ${running() ? view.row.frequency : view.draft.frequency} job alerts start only after you click it.${state === 'on' ? ' The email stays paused until then.' : ''}`,
+            : `Check ${sentTo} for a confirmation link. Your ${running() ? view.row.frequency : view.draft.frequency} job alerts start only after you open it and press "Confirm my email".${state === 'on' ? ' The email stays paused until then.' : ''}`,
       },
     );
   }
@@ -335,7 +335,7 @@ if (open && dialog) {
         success: (answer) =>
           answer.status === 'not_subscribed'
             ? 'The email was not on, so nothing was changed.'
-            : 'The email is off. Nothing more will be sent, and your saved filters were deleted. We keep the address and the times you turned it on, confirmed and off as a record of your consent.',
+            : 'The email is off. Nothing more will be sent. The filters saved for the email were deleted; your dashboard filters stay as they are. We keep the address and the times you turned it on, confirmed and off as a record of your consent.',
       },
     );
   }

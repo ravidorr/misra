@@ -23,7 +23,10 @@ CORS = {"access-control-allow-origin": "*", "access-control-allow-headers": "*"}
 CONFIRMED = "Your job alerts are confirmed"
 NOT_VALID = "This link is no longer valid"
 UNSUBSCRIBED = "You have been unsubscribed"
-KEEP = "It may have already been used, expired, or been replaced by a newer link."
+KEEP = (
+    "It may have expired (confirmation links work for 7 days), been replaced by a newer link, "
+    "or belong to job alerts that were turned off."
+)
 ANSWERS = {
     "ok": (200, {"ok": True, "status": "confirmed", "schedule": "weekly"}),
     "daily": (200, {"ok": True, "status": "confirmed", "schedule": "daily"}),
@@ -88,7 +91,7 @@ async def test_a_confirmation_link_shows_a_button_and_confirms_nothing_until_it_
     await expect(page.locator("#heading")).to_have_text(CONFIRMED)
     await expect(page.locator("#message")).to_have_text(
         "You now get a weekly email when new roles match your saved filters. Your first email includes "
-        "only roles posted from now on, and you can unsubscribe in one click from any email."
+        "only roles Misra finds from now on, and you can unsubscribe in one click from any email."
     )
     await expect(page.locator("#confirm")).to_be_hidden()
     await expect(page.locator("#back")).to_be_visible()
@@ -192,7 +195,9 @@ async def test_the_unsubscribed_text_says_what_was_deleted_and_what_was_not(page
     await open_page(page, site, "#unsubscribed")
     message = await page.locator("#message").inner_text()
     assert message == (
-        "We stopped your job alerts and deleted your alert filters and history of emailed jobs. "
+        "Your job alerts are stopped. We deleted the filters saved for them and the list of jobs we already emailed "
+        "you. We keep your address and the times you turned the email on, confirmed it and unsubscribed, as a "
+        "record of your consent. "
         'Your Misra account (stars, "Not for me" choices, and dashboard filters) is unchanged. To delete your entire '
         'account and all stored data, sign in on the dashboard and choose "Delete my account".'
     )

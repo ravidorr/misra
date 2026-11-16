@@ -146,7 +146,7 @@ if (typeof globalThis.supabase?.createClient === 'function') {
   $('account').hidden = false;
   say(failure);
 
-  /* "Sign in" only opens the notice (what signing in is for, what is stored, the Terms and the Privacy Notice). The
+  /* "Sign in" only opens the notice (what signing in is for, what is stored, the Terms and the privacy notice). The
      Google redirect starts from "Continue with Google" and from nothing else. */
   const signInDialog = $('signInDialog');
   $('signIn').addEventListener('click', () => {

@@ -384,11 +384,12 @@ async def test_blocked_browser_storage_does_not_break_the_page_or_the_sign_in_bu
 
 NOTICE_FIRST = 'Sign in to sync your stars, "Not for me" choices, and saved filters across devices.'
 NOTICE_SECOND = (
-    "Signing in is optional. We store only your Google email address and job preferences in our EU database "
-    "(Supabase)\u2014never your CV, password, or tracking cookies. "
+    "Signing in is optional. We store only your Google email address and job preferences. They are kept in our "
+    "database in the EU (Supabase), with a daily backup copy at GitHub in the United States. We never store your CV "
+    "or a password, and we set no tracking cookies. "
     # accuracy fix: Supabase's own sign-in record also holds the Google name and photo, as PRIVACY.md says
     "(Supabase's own sign-in record also holds your Google name and photo until you delete your account.) "
-    "By signing in, you agree to the Terms and Privacy Notice."
+    "By signing in, you agree to the Terms and privacy notice."
 )
 DIALOG = "#signInDialog"
 
@@ -417,7 +418,7 @@ async def test_fr1_ac7_pressing_sign_in_shows_the_notice_and_does_not_leave_the_
     paragraphs = [" ".join(t.split()) for t in await page.locator("#signInText p").all_text_contents()]
     assert paragraphs == [NOTICE_FIRST, NOTICE_SECOND]  # the approved text, word for word, and nothing else
     text = page.locator("#signInText")
-    assert await text.get_by_role("link", name="Privacy Notice").get_attribute("href") == "privacy.html"
+    assert await text.get_by_role("link", name="privacy notice").get_attribute("href") == "privacy.html"
     assert await text.get_by_role("link", name="Terms").get_attribute("href") == "terms.html"
     for link in await text.locator("a").all():  # the pages are on the site: the same tab, no new-tab words
         assert await link.get_attribute("target") is None

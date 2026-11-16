@@ -4,6 +4,20 @@ All notable changes are documented here. Format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
+## [0.43.0] - 2026-11-16
+
+### Changed
+
+- The editorial changes the lawyer approved on 2026-11-16 (the technical writer's review, 26 items) are applied to the legal pages, the emails and the screens. Item 16 and item 19 use his own wording; item 22 (the postal address) needs no change.
+- The confirmation email now says to open the link and press "Confirm my email" (the link only opens the page; nothing is confirmed until the button is pressed), adds "The link works for 7 days.", and says no emails are sent until the button is pressed. The "Job alerts" dialog, the confirm page and the `confirm-email` 405 message name the same button.
+- The job alert email footer drops "immediately" from the deletion sentence and says the listings may not be "accurate, complete or still open", the same words as `TERMS.md`. `supabase/email-texts.md`, `handler.ts` and `send_digests.py` stay identical line for line.
+- The sign-in dialog names the daily backup copy at GitHub (United States) and no longer mixes the database with cookies. The delete-account dialog says a copy remains in the daily backup for up to 30 days and speaks of "job alert settings and the record of your consent". The address hint says every address, the Google one included, gets a confirmation email first. The job alerts dialog drops the intro sentence that repeated the consent line, and says the filters saved for the email were deleted, not the dashboard filters, when the email is turned off. "Privacy Notice" is "privacy notice" in running text.
+- The "link not valid" page names the real causes (a link older than 7 days, a replaced link, job alerts turned off). The confirmed page says the first email includes only roles Misra finds from now on. The unsubscribed page says what was deleted and that the consent record is kept.
+- `PRIVACY.md`: the transfer sentence names the GitHub backup; the data processing agreement sentence names Supabase, Resend and GitHub; the exception for the spam counter is stated; the spam counter bullet is shorter; the Supabase backup sentence is replaced by "Supabase's free plan keeps no backups for us."; "account ID" is explained; "we" and "the maintainer" are defined; "Not for me" choices replace "discards"; technical terms come with plain words first; the provider log list names all five small programs; the maintainer's own email is "the daily summary email"; the last line links "the security note".
+- `TERMS.md`: "hobby" is dropped and a "Job alerts" bullet is added. `SECURITY.md`: the database list is in the present tense and names the jobs already emailed; `UNSUBSCRIBE_SECRET` is listed and is part of breach step 1.
+- `CONTRIBUTING.md` (one real subscriber, the maintainer; signup is open) and `PRD.md` ("career page link") are corrected.
+- The Edge Functions `email-settings` and `confirm-email` must be redeployed to send the new confirmation email and the new 405 message.
+
 ## [0.41.0] - 2026-11-16
 
 ### Changed

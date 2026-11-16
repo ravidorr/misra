@@ -1,5 +1,7 @@
 # Security Policy
 
+Last updated: 2026-11-16
+
 ## Supported versions
 
 | Version | Supported |
@@ -21,8 +23,8 @@ are the rules that protect the data.
 ### What the database holds
 
 - The email address of each person who signs in with Google, their stars, their "Not for me" choices and their saved
-  filters. When the daily email exists: the address it goes to, the filters copied for it, daily or weekly, and a
-  consent log (when it was turned on, confirmed and unsubscribed).
+  filters. For job alerts: the address they go to, the filters copied for them, daily or weekly, the jobs already
+  emailed, and a consent log (when they were turned on, confirmed and unsubscribed).
 - Never a CV, a phone number, a postal address or a password. Google's name and photo sit only in Supabase's own
   sign-in record until the account is deleted. The jobs data is public job postings.
 - Where it lives: Supabase (EU, Ireland) for the database, sign-in and Edge Functions; Resend (Ireland) for email;
@@ -35,7 +37,7 @@ are the rules that protect the data.
   and the public (anon) key can read open jobs only. The policy tests are in `supabase/tests/`.
 - **Secrets:** the service-role key lives only in Supabase's function settings and in GitHub Actions secrets, never in
   the browser or the repository. Other secrets by name: `RESEND_API_KEY` (limited to sending from `send.avidor.org`),
-  `REPORT_TO_EMAIL`, `IP_HASH_SECRET`, the GitHub deploy key and `BACKUP_DEPLOY_KEY` (a write deploy key of the private
+  `REPORT_TO_EMAIL`, `IP_HASH_SECRET`, `UNSUBSCRIBE_SECRET` (the key that signs the unsubscribe links), the GitHub deploy key and `BACKUP_DEPLOY_KEY` (a write deploy key of the private
   backup repository only, used by the backup step of the daily job and nothing else). Values are typed into the
   providers' own pages.
 - **Backups:** every daily run copies the account tables, as JSON files, to the private repository
@@ -89,8 +91,10 @@ Reviews done: none yet.
 
 ### If there is a breach
 
-1. **Contain it:** rotate the service-role key, `BACKUP_DEPLOY_KEY` and any exposed secret, disable the affected Edge Function or sign-in
-   provider, and fix the hole.
+1. **Contain it:** rotate the service-role key, `BACKUP_DEPLOY_KEY`, `UNSUBSCRIBE_SECRET` (the key that signs the unsubscribe links) and any
+   exposed secret, disable the affected Edge Function or sign-in provider, and fix the hole. Changing `UNSUBSCRIBE_SECRET`
+   stops the unsubscribe links in emails already sent; people can still turn the email off on the dashboard or reply
+   "Remove".
 2. **Find out what was exposed:** which tables, which people, since when (use the provider logs).
 3. **Tell the affected people** by a short, plain email: what was exposed (their email address and saved choices, for
    example), what was done, and how to delete their account. No report to the regulator is required at this level, but
