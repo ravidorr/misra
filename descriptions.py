@@ -24,6 +24,7 @@ from typing import Any
 
 MAX_CHARS = 20_000  # the cap per job: it protects the free Supabase database (500 MB), see CONTRIBUTING.md
 CUT_WINDOW = 200  # a cut moves back to a space when there is one this close to the cap, so no word is cut in half
+SNIPPET_CHARS = 255  # the public snippet: the first characters of a description (PLAN.md step 7.2)
 MAX_DETAIL_CHARS = 200
 MAX_DETAIL_ITEMS = 20
 TRUNCATED = "description_truncated"  # the details key that records a text cut at the cap
@@ -117,6 +118,28 @@ def cap(text: str, limit: int = MAX_CHARS) -> tuple[str, bool]:
     if space >= 0 and space >= limit - CUT_WINDOW:
         cut = cut[:space]
     return cut.rstrip(), True
+
+
+_SNIPPET_TAIL = (
+    " \t\n,.;:!?-\u2013\u2014\u05be(/\\|&*\"'[{"  # punctuation a cut must not end on; `#` and `+` stay (C#, C++)
+)
+
+
+def snippet(text: str | None) -> str | None:
+    """The public snippet of a description: its first SNIPPET_CHARS characters as written, cut at a word boundary (a
+    word is never cut in half), with trailing punctuation and spaces trimmed when it was cut, and no ellipsis (the page
+    adds one). A text that fits is returned whole. None for no text, and for a text that has no space in its first
+    SNIPPET_CHARS characters (one word that long has no honest cut). Any white space is a boundary, a line break too."""
+    text = (text or "").strip()
+    if len(text) <= SNIPPET_CHARS:
+        return text or None
+    cut = text[:SNIPPET_CHARS]
+    if not text[SNIPPET_CHARS].isspace():  # the cut falls inside a word: back to the space before it
+        space = max((m.start() for m in re.finditer(r"\s", cut)), default=-1)
+        if space < 0:
+            return None
+        cut = cut[:space]
+    return cut.rstrip(_SNIPPET_TAIL) or None
 
 
 def clean_details(details: dict[str, Any]) -> dict[str, Any]:

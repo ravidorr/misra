@@ -224,14 +224,31 @@ PLAN.md step 7.1. Where the text of a posting lives, and how it gets there:
   so a description there would grow every daily commit and publish other companies' full postings on GitHub. The
   database has no description column, and `tests/test_descriptions_flow.py` fails if the workflow stages anything that
   could carry one.
-- **Not public yet.** The migration `20261121100000_jobs_text_not_public.sql` takes the table-level `select` on `jobs` from
-  `anon` and `authenticated` and gives it back on every column except `description` and `details`, so the text is not
-  readable through the public API, signed in or not, until the lawyer has seen that other companies' full postings are
-  stored. Step 7.3 (the dashboard drill-down) and step 8.1 (`get_job`) will expose it, with a new migration, only after
-  that approval. The service role (the sync) keeps full access. A column added to `jobs` later has no column grant, so it is
-  closed by default: the migration that adds it must grant it, and `tests/test_migrations.py` fails until its list of
-  public and closed columns agrees with the table. `supabase/tests/job_text_private.sql` (the `sql-tests` CI job) pins it.
-  The maintainer applies the migration before the first daily run that writes text.
+- **Not public.** The full text is never readable through the public API (the lawyer's decision of 2026-11-16): it stays
+  in Supabase for search and the assistant. The migration `20261121100000_jobs_text_not_public.sql` takes the table-level
+  `select` on `jobs` from `anon` and `authenticated` and gives it back on every column except `description` and `details`,
+  signed in or not. Only three things ever read it: the sync (service role), the full-text search of step 7.3 (a database
+  function that returns matching job keys only, never the text) and `get_job` of step 8.1 (the full text, to the assistant,
+  rate limited). The dashboard drill-down never shows the full text: it shows the snippet and a "Read full description &
+  apply on (company name)" link to the employer. The service role (the sync) keeps full access. A column added to `jobs` later has no column grant, so
+  it is closed by default: the migration that adds it must grant it, and `tests/test_migrations.py` fails until its list
+  of public and closed columns agrees with the table. `supabase/tests/job_text_private.sql` and
+  `supabase/tests/job_snippet_and_trim.sql` (the `sql-tests` CI job) pin it. The maintainer applies a migration before the
+  first daily run that needs it.
+- **The snippet.** The only public part of the text is `snippet`, a column the sync fills (migration
+  `20261122100000_jobs_snippet.sql`): the first 255 characters of the description as written (`descriptions.snippet`), cut at
+  a word boundary, no ellipsis in the data (the page adds one), trailing punctuation trimmed when the text was cut, the
+  whole text when it fits, none when the job has no description or its first 255 characters have no space. The dashboard
+  shows it with a link to the employer. It is refreshed with the text, and also when the stored snippet is not the one
+  computed (so a stored text gets its snippet on the next run).
+- **The 30-day trim.** The full text of a closed job is deleted 30 days after the job closes. The table has no closed-at
+  column; `last_seen` is the last crawl that saw the job open, and the sync does not change it when it closes the job, so
+  `jobs_text_trim(p_day)` (migration `20261123100000_jobs_text_trim.sql`, service role only) sets `description`, `details`
+  and `snippet` to null for the closed jobs whose `last_seen` is more than 30 days before `p_day`, and keeps the row (title,
+  company, link, dates). `details` goes whole because it holds the text fingerprint (`text_sha256`): with it gone, a job
+  that reopens gets its text and snippet written again by the next sync. The trim is early at worst, never late: `last_seen` is never after the real close, so a company whose crawl failed or was
+  skipped before its jobs closed has them trimmed sooner than 30 days after the close. A removal request deletes the whole row,
+  see "Removing a company on request".
 - **How it travels.** The crawl (`python run.py`) writes the texts of the day to a work file outside the checkout,
   `$RUNNER_TEMP/misra-descriptions.jsonl` (the system's temporary directory when run elsewhere), and the sync step
   (`python sync_supabase.py`) of the same job reads it. A step after the crawl reads what the crawl left, and a sync
@@ -239,8 +256,9 @@ PLAN.md step 7.1. Where the text of a posting lives, and how it gets there:
   committed path and is never uploaded as an artifact.
 - **The sync.** After the jobs are upserted, a second pass sends `description` and `details` for the open jobs that have a
   text today, in batches of 25 and in requests of their own (a job without a text keeps the one it has: a missing key,
-  never `null`). A hash of the text, kept in `details` as `text_sha256`, skips a job whose text did not change. A job that
-  closes keeps its text; the removal of a company (see "Removing a company on request") deletes the whole row. A failure
+  never `null`). A hash of the text, kept in `details` as `text_sha256`, skips a job whose text and snippet did not change (the
+  snippet goes in the same request). A job that closes keeps its text until the trim above; the removal of a company (see
+  "Removing a company on request") deletes the whole row. After this pass the sync calls `jobs_text_trim`. A failure
   in this pass is a `::warning::` with the HTTP status and nothing else (an answer can quote the row, and the log is
   public); it never fails the step, so the digests and the deploy still run.
 - **What is read.** Only what a site publishes for applicants, and only from the request the adapter already makes
@@ -261,7 +279,10 @@ PLAN.md step 7.1. Where the text of a posting lives, and how it gets there:
   description: nothing in this path can stop a company's crawl.
 - **The log.** One line in the crawl step, counts and percentages only: `descriptions: greenhouse 1900/2083 (91%); comeet
   ...; all N/M (P%); cut at 20000 characters C; K characters kept`. The share is of the jobs the crawl returned today, per
-  ATS (a company that failed or was skipped has no count). That is the list of what to improve next (FR-4 AC 3).
+  ATS (a company that failed or was skipped has no count). That is the list of what to improve next (FR-4 AC 3). The
+  sync step logs `Supabase: descriptions N written, N unchanged, N failed` and `Supabase: N closed jobs lost their text (30
+  days after closing)`: counts only, never a text. A trim that fails is `::warning::the text of closed jobs could not be
+  trimmed: ...` followed by `Supabase: the text of closed jobs was not trimmed today`, and the next run tries again.
 - **Adding an adapter.** Return the description with `attach(job, text, details)` from `descriptions.py` (`html_to_text`
   for HTML, `plain_text` for text), from the request the adapter already makes. Do not add a request per job without
   measuring: one host takes one request a second.
