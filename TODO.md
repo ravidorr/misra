@@ -130,7 +130,7 @@ Observations about live sites below come from checks made on 2026-11-14 and may 
     is the page address; it reads the plugin's links `/co/<place>/<uid>/<title>` from the page HTML), all `israel_only`:
     REE Automotive (`https://ree.auto/careers/`, 2 jobs, 1 in Israel), Gauzy (`https://www.gauzy.com/careers/`, 9 jobs, none
     in Israel), Guesty (`https://www.guesty.com/careers/`, 35 jobs, 8 in Israel) and Apester (`https://apester.com/careers/`:
-    "We don't have any open positions" today, so the first Israel job reaches the digest).
+    "We don't have any open positions" today, so the first Israel job is reported as new).
     On 2026-11-16, Ceva (`ceva/76.005`, found in the job-page source of its own `/career/` site; the page names the
     account SNC but the board answered under the name `ceva`, not `SNC`; 25 jobs, 14 in Israel, `israel_only`).
     Not done, and why (checked on 2026-11-14, or 2026-11-16 where dated; do not repeat):
@@ -141,8 +141,8 @@ Observations about live sites below come from checks made on 2026-11-14 and may 
       plugin's, so it needs its own parser, for one company).
     - Comeet account valid but not the company's own board: Magic Software (19.00F is Matrix IFS, 23 jobs, none in
       Israel). NeuReality (89.002) answers no job through the `comeet` adapter (its hosted page is not served), but its
-      careers page is a Comeet plugin page that the `comeet_page` adapter reads: pinned on 2026-11-16, `israel_only`,
-      "We don't have any open positions" today, so the first Israel job reaches the digest.
+      career page is a Comeet plugin page that the `comeet_page` adapter reads: pinned on 2026-11-16, `israel_only`,
+      "We don't have any open positions" today, so the first Israel job is reported as new.
     - No openings at all, no feed to pin: Mitiga ("We don't have any openings right now"), Applitools ("No openings
       available"), H2Pro and Madgicx (no open positions; Madgicx takes CVs through a ClickUp form).
     - Own-site pages the crawler's link pattern does not match, no ATS behind them: Pillar Security
