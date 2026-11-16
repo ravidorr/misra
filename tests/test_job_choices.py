@@ -39,10 +39,6 @@ SECONDS = 0.05
 TRIES = 100
 PM1 = "article[data-job-id='Acme|1']"
 PM2 = "article[data-job-id='Acme|2']"
-SAVED_HERE = 'Your stars, "Not for me" choices and filters stay in this browser and are sent nowhere.'
-SAVED_THERE = (
-    'Your stars, "Not for me" choices and filters are saved to your account and follow you to your other devices.'
-)
 
 
 def star_row(job_id: str, title: str = "Gone Role", location: str = "Haifa", company: str = "Gone") -> dict[str, Any]:
@@ -187,7 +183,6 @@ async def test_fr2_ac7_signed_out_a_star_stays_in_this_browser_and_nothing_is_se
     assert await page.locator(PM1).get_attribute("data-starred") == "true"
     assert await starred_count(page) == "Starred (1)"
     assert choices.requests == []  # a visitor who is not signed in never talks to the table
-    assert await page.locator("#saveNote").inner_text() == SAVED_HERE
     assert await page.locator("#syncNote").inner_text() == ""
 
 
@@ -292,7 +287,6 @@ async def test_fr2_ac3_the_choices_of_the_account_appear_after_signing_in(page: 
     assert await page.locator(PM1).get_attribute("data-starred") == "true"
     assert await page.locator(PM2).count() == 0  # discarded on the other device: hidden here
     assert await summary(page) == f"Showing {ISRAEL_JOBS - 1} of {ISRAEL_JOBS} open roles in Israel. 1 discarded."
-    assert await page.locator("#saveNote").inner_text() == SAVED_THERE
     read = next(r for r in choices.requests if r.method == "GET")
     token = json.loads((await stored(page))["misra-auth"])["access_token"]
     assert read.headers["authorization"] == f"Bearer {token}"  # the user's own token, never the public key alone
@@ -666,7 +660,6 @@ async def test_signing_out_returns_to_the_choices_of_this_browser(page: Page, si
     await page.wait_for_selector("#signIn")
     assert await page.locator(PM1).get_attribute("data-starred") == "false"  # the account's stars do not stay on screen
     assert await starred_count(page) == "Starred (0)"
-    assert await page.locator("#saveNote").inner_text() == SAVED_HERE
     assert await page.locator("#exp").is_visible()
     assert await page.locator("#syncNote").inner_text() == ""
     assert (await stored(page)).get(STARRED) is None  # nothing of the account was copied to this browser

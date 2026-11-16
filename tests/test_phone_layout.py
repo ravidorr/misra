@@ -609,16 +609,11 @@ FOOT_DATE = re.compile(r"^\d{1,2} [A-Z][a-z]{2}( \d{4})?, \d{2}:\d{2} UTC$")
 
 @pytest.mark.parametrize("scheme", ["light", "dark"])
 @pytest.mark.parametrize("width", [320, 375, 393, 1650])
-async def test_the_footer_fits_has_44px_links_and_says_where_choices_are_saved(
-    page: Page, crowd: Path, width: int, scheme: str
-) -> None:
+async def test_the_footer_fits_and_has_44px_links(page: Page, crowd: Path, width: int, scheme: str) -> None:
     await open_page(page, crowd, width, scheme=scheme)
     foot = page.locator("footer.foot")
     await foot.scroll_into_view_if_needed()
     assert await page.evaluate(NO_SIDEWAYS)
-    assert await page.locator("#saveNote").inner_text() == (
-        'Your stars, "Not for me" choices and filters stay in this browser and are sent nowhere.'
-    )
     stamp = await page.locator("#upd").inner_text()
     assert FOOT_DATE.match(stamp), stamp
     assert await page.locator(".foot-updated").inner_text() == f"Career pages last read {stamp}."
@@ -635,10 +630,10 @@ async def test_the_footer_fits_has_44px_links_and_says_where_choices_are_saved(
         names.append(await link.inner_text())
     assert names == ["Privacy", "Terms", "Contact"]
     gaps_link = await foot.locator("a.foot-gaps").bounding_box()
-    note = await page.locator("#saveNote").bounding_box()
+    note = await page.locator(".foot-updated").bounding_box()
     assert gaps_link is not None
     assert note is not None
-    assert gaps_link["y"] + gaps_link["height"] <= note["y"] + 1  # its 44px box never covers the note below
+    assert gaps_link["y"] + gaps_link["height"] <= note["y"] + 1  # its 44px box never covers the date line below
     links = await foot.locator("nav").bounding_box()
     text = await foot.locator(".foot-info").bounding_box()
     assert links is not None

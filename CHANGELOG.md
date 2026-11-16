@@ -8,7 +8,7 @@ All notable changes are documented here. Format follows [Keep a Changelog](https
 
 ### Fixed
 
-- The first footer sentence is no longer taller on one line. The "Coverage gaps" link was a 44px box inside the sentence, which made its line 44px tall and left a gap in the paragraph. The whole second sentence ("Coverage gaps lists N companies whose roles may be missing or old.") is now the link, a 44px block under the first sentence; the words are the same. A browser test pins even lines at 320, 375 and 1480 px in light and dark.
+- The first footer sentence is no longer taller on one line. The "Coverage gaps" link was a 44px box inside the sentence, which made its line 44px tall and left a gap in the paragraph. The whole second sentence ("Coverage gaps lists N companies whose roles may be missing or old.") is now the link, a 44px block under the first sentence; the words are the same. The footer sentence about where the choices are saved (`#saveNote`, `savedHere`, `savedThere`) is removed: the sign-in dialog and PRIVACY.md say it, and the dialog and the privacy notice are unchanged. A browser test pins even lines at 320, 375 and 1480 px in light and dark.
 
 ## [0.49.0] - 2026-11-16
 

@@ -698,7 +698,6 @@ html:has(.sheet:modal) {
   gap: var(--space-1);
 }
 
-.foot-note,
 .foot-coverage,
 .foot-updated {
   margin: 0;
