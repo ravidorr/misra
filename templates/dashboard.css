@@ -71,11 +71,6 @@ a {
   stroke: var(--mark-ink);
 }
 
-.mark-spark {
-  fill: var(--mark-spark);
-  stroke: var(--mark-ink);
-}
-
 .wordmark {
   display: inline-block;
   padding: 0 var(--space-2);
