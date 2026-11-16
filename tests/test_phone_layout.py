@@ -782,3 +782,25 @@ async def test_the_focus_stays_on_the_circle_after_a_tap(page: Page, crowd: Path
     await story.focus()
     await page.keyboard.press("Enter")
     assert await page.evaluate("document.activeElement.dataset.company") == name
+
+
+@pytest.fixture
+def stale(db: sqlite3.Connection, workdir: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """The page built over roles that are all older than a week: nothing is new, one role is abroad."""
+    old = (datetime.now(UTC) - timedelta(days=30)).strftime("%Y-%m-%dT00:00:00")
+
+    def fill(conn: sqlite3.Connection) -> None:
+        for n in range(3):
+            add_job(conn, f"Old company {n}", "0", "Accountant", first_seen=old)
+        add_job(conn, "Far company", "0", "Accountant", first_seen=old, location="London, United Kingdom")
+
+    monkeypatch.setattr(build_dashboard, "DIGEST_SIGNUP_ENABLED", False)
+    return build_site(db, workdir, fill)
+
+
+async def test_the_headline_counts_open_roles_when_nothing_is_new(page: Page, stale: Path) -> None:
+    await open_page(page, stale, 1650)
+    assert await hero(page) == "3 open in Israel."
+    assert await page.locator("#hiring").is_hidden()
+    await page.select_option("#loc", "all")
+    assert await hero(page) == "4 open roles."
