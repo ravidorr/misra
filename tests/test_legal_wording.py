@@ -9,14 +9,15 @@ import publish_backup
 
 REPO = Path(__file__).resolve().parents[1]
 CONTACT = "raanan@avidor.org"
-MAX_TERMS_BULLETS = 6
+MAX_TERMS_BULLETS = 7
 PROMISED_DAYS = 30
+SECRET_MENTIONS = 2
 FOOTERS = 2  # the confirmation email and the digest
 DIGEST_FOOTER = (
     "You are receiving this {{schedule}} email because you confirmed job alerts on Misra "
     "(https://ravidorr.github.io/misra/). Misra is a free, non-commercial project run by Raanan Avidor "
     "(raanan@avidor.org), Ditsa 8, Herzliya 4627825, Israel. Job listings are collected automatically "
-    "from public career pages and are provided as-is without guarantee that they are complete or "
+    "from public career pages and are provided as-is, without guarantee that they are accurate, complete or "
     "still open."
 )
 CONFIRM_FOOTER = (
@@ -71,7 +72,14 @@ def test_the_privacy_notice_names_the_providers_and_where_they_are() -> None:
         assert re.search(rf"\*\*{provider}\*\* \({place}\)", body), provider
     assert "processed on these providers' infrastructure, in the EU and in the United States" in body
     assert "your account is stored at Supabase in the EU" in body
-    assert "standard data processing agreement" in body
+    assert (
+        "Supabase, Resend, and GitHub each include their standard data processing agreement in their terms of "
+        "service, and it applies to our use of them."
+    ) in body
+    assert (
+        "your account is stored at Supabase in the EU, a daily backup copy is kept at GitHub in the United States, "
+        "and Google, in the United States, handles the sign-in."
+    ) in body
     assert (
         "**Resend** (Ireland): sends the site-report email to the maintainer and, if you turn on job alerts, "
         "processes your email address and the matched job links to deliver your confirmation and job alert emails."
@@ -104,7 +112,10 @@ SPAM_GUARD = (
 def test_the_spam_guard_sentence_is_the_lawyers_in_the_notice_and_the_form_and_a_daily_cleanup_backs_it() -> None:
     text = read("PRIVACY.md")
     assert SPAM_GUARD in text
-    assert "A cleanup that runs every day deletes the counters of every earlier day." in text
+    assert (
+        "With it we keep how many reports came from that hash that day, and how many reports were emailed that "
+        "day in all."
+    ) in text
     assert "whenever the next report is handled" not in text  # the old promise, replaced by the daily cleanup
     assert (
         "24 hours" not in text.split("**Reporting a missing career site**")[1].split("\n")[0]
@@ -154,7 +165,9 @@ def test_the_digest_is_described_in_the_present_tense_as_it_is_built() -> None:
         "and the time you unsubscribed",
         "plus the jobs already emailed to you",
         "Turning it on sends one confirmation email to that address, and nothing else is sent until you confirm.",
-        "Only the SHA-256 hash of the confirmation link is stored, never the link.",
+        "We store only a one-way code made from the confirmation link (a SHA-256 hash), never the link itself.",
+        "from your account ID (a random code that identifies your account in our database; it is not your name "
+        "or email address)",
         "The link contains your account ID in plain text",
         "and use the link to unsubscribe you",
         "deletes your filters and the list of emailed jobs and resets daily or weekly",
@@ -184,7 +197,7 @@ def test_the_agreement_line_sits_next_to_the_email_control_and_is_in_the_dialog_
     region = "".join(build_dashboard.DIGEST_REGION.findall(page))
     assert (
         'By turning this on you agree to the <a href="https://ravidorr.github.io/misra/terms.html">Terms</a> and the '
-        '<a href="https://ravidorr.github.io/misra/privacy.html">Privacy Notice</a>.'
+        '<a href="https://ravidorr.github.io/misra/privacy.html">privacy notice</a>.'
     ) in region
     assert 'id="digestConsent"' in region
     assert not re.search(r'id="digestConsent"[^>]*hidden', region)
@@ -193,7 +206,8 @@ def test_the_agreement_line_sits_next_to_the_email_control_and_is_in_the_dialog_
 def test_the_terms_say_what_the_lawyer_asked_and_no_more() -> None:
     text = read("TERMS.md")
     for phrase in [
-        "free, non-commercial hobby project",
+        "free, non-commercial project run by a private individual",
+        "**Job alerts:** Turn on job alerts only for an email address you own or are authorized to use.",
         'provided "as is" and "as available", without warranties',
         "collected automatically from public career pages",
         "do not guarantee that they are accurate, complete or still open",
@@ -300,3 +314,72 @@ def test_the_security_note_scopes_and_rotates_the_backup_key_and_forbids_stray_c
     assert "plaintext email addresses never sit on a disk outside the 30-day rotation" in text
     for name in ("PRIVACY.md", "SECURITY.md"):
         assert "encrypted" not in read(name).lower(), name  # we claim no encryption of our own
+
+
+def test_the_lawyers_round_of_2026_11_16_editorial_wording_is_in_the_notice_the_terms_and_the_security_note() -> None:
+    privacy = read("PRIVACY.md")
+    parts = sections(privacy)
+    assert '"we" and "the maintainer" both mean Raanan Avidor' in parts["Who is responsible"]
+    assert (
+        "we store nothing about you. The one exception is the short-lived spam counter described below, "
+        "if you report a site."
+    ) in parts["What we store"]
+    assert 'mark "Not for me" (the dashboard also calls them discards)' in parts["The short version"]
+    assert "Supabase's free plan keeps no backups for us." in parts["How long we keep it"]
+    assert "Supabase may keep database backups" not in privacy
+    assert (
+        "the small programs (Edge Functions) behind the report form, account deletion, job alerts, and the" in privacy
+    )
+    assert "the maintainer's own daily summary email" in privacy
+    assert "use the private route in [the security note](./SECURITY.md)." in privacy
+    assert "[SECURITY.md]" not in privacy  # a file name is not link text
+    assert "stars, discards" not in privacy
+    terms = read("TERMS.md")
+    assert "hobby" not in terms
+    assert "- **Job alerts:** Turn on job alerts only for an email address you own or are authorized to use." in terms
+    security = " ".join(read("SECURITY.md").split())
+    assert "When the daily email exists" not in security
+    assert (
+        "For job alerts: the address they go to, the filters copied for them, daily or weekly, the jobs already"
+        in security
+    )
+    assert (
+        security.count("`UNSUBSCRIBE_SECRET` (the key that signs the unsubscribe links)") == SECRET_MENTIONS
+    )  # secrets, breach
+    assert "Changing `UNSUBSCRIBE_SECRET` stops the unsubscribe links in emails already sent;" in security
+    assert 'people can still turn the email off on the dashboard or reply "Remove".' in security
+
+
+def test_the_screens_carry_the_lawyers_round_of_2026_11_16_editorial_wording() -> None:
+    page = read("templates/dashboard.html")
+    for phrase in (
+        "They are kept in our database in the EU (Supabase), with a daily backup copy at GitHub in the United States. "
+        "We never store your CV or a password, and we set no tracking cookies.",
+        "A copy remains in the daily backup until the backup is replaced, within 30 days; it is never put back into "
+        "the live service.",
+        "any job alert settings and the record of your consent to them from our database.",
+        '<p id="digestIntro">Get the new roles that match your filters by email.</p>',
+        "Either way, the address gets a confirmation email first, and nothing else until its owner confirms.",
+    ):
+        assert phrase in page, phrase
+    assert "Privacy Notice" not in page
+    digest = read("templates/digest.js")
+    assert 'press "Confirm my email"; until then nothing is sent. The link works for 7 days.' in digest
+    assert 'job alerts start only after you open it and press "Confirm my email".' in digest
+    assert "The filters saved for the email were deleted; your dashboard filters stay as they are." in digest
+    email = read("templates/email.js")
+    assert (
+        "It may have expired (confirmation links work for 7 days), been replaced by a newer link, or belong to job"
+        in email
+    )
+    assert (
+        "Your job alerts are stopped. We deleted the filters saved for them and the list of jobs we already "
+        "emailed you." in email
+    )
+    assert "as a record of your consent." in email
+    assert "roles Misra finds from now on" in email
+
+
+def test_the_three_documents_carry_the_date_of_the_round_of_2026_11_16() -> None:
+    for name in ("PRIVACY.md", "TERMS.md", "SECURITY.md"):
+        assert "\nLast updated: 2026-11-16\n" in read(name), name

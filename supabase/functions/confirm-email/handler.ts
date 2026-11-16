@@ -69,7 +69,7 @@ export async function handleConfirm(request: Request, deps: Deps): Promise<Respo
   if (request.method === 'OPTIONS') return reply(origin, 204, null);
   if (request.method === 'HEAD') return emptyOk(); // nothing is read or changed: no secrets, body or database
   if (request.method !== 'POST') {
-    return fail(origin, 405, 'method_not_allowed', 'Open the link from your email and press Confirm.', {
+    return fail(origin, 405, 'method_not_allowed', 'Open the link from your email and press "Confirm my email".', {
       allow: 'POST, HEAD, OPTIONS',
     });
   }

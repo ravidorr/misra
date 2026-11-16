@@ -926,11 +926,11 @@ async def test_the_lawyers_wording_is_on_the_control_with_big_links(page: Page, 
     assert text == (
         f"We first send a confirmation link to {EMAIL}. Nothing is sent until you confirm, and you get an email "
         "only when there are new matches. One-click unsubscribe is in every email. By turning this on you agree to "
-        "the Terms and the Privacy Notice."
+        "the Terms and the privacy notice."
     )
     base = "https://ravidorr.github.io/misra"
     assert await line.get_by_role("link", name="Terms").get_attribute("href") == f"{base}/terms.html"
-    assert await line.get_by_role("link", name="Privacy Notice").get_attribute("href") == f"{base}/privacy.html"
+    assert await line.get_by_role("link", name="privacy notice").get_attribute("href") == f"{base}/privacy.html"
     for link in await line.locator("a").all():  # same tab: pages of the site
         assert await link.get_attribute("target") is None
         assert await link.get_attribute("rel") is None
@@ -955,7 +955,8 @@ async def test_after_turning_it_on_the_status_names_the_address_and_the_schedule
     await page.click(f"input[name=digestFrequency][value={word}]")
     await page.click("#digestSend")
     await expect(page.locator("#digestNote")).to_have_text(
-        f"Check {EMAIL} for a confirmation link. Your {word} job alerts start only after you click it."
+        f"Check {EMAIL} for a confirmation link. Your {word} job alerts start only after you open it "
+        'and press "Confirm my email".'
     )
 
 
@@ -1012,7 +1013,7 @@ async def test_the_dialog_works_from_the_keyboard_and_gives_the_focus_back(page:
     assert seen == [
         "digestAddress",
         "Terms",
-        "Priva",
+        "priva",
         "digestFrequency",
         "digestUseFilters",
         "digestSend",
