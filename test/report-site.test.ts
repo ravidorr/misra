@@ -472,6 +472,26 @@ describe('email content', () => {
     expect(text).not.toContain('Why it matters');
   });
 
+  it('keeps each optional part on its own, and the subject within 150 characters', () => {
+    const now = new Date('2026-11-16T10:00:00Z');
+    const onlyCompany = renderEmail({ company: 'Acme', link: 'https://a.example/', why: '' }, now);
+    expect(onlyCompany.text).toContain('Company: Acme');
+    expect(onlyCompany.text).not.toContain('Why it matters');
+    const onlyWhy = renderEmail({ company: '', link: 'https://a.example/', why: 'Hires juniors.' }, now);
+    expect(onlyWhy.subject).toBe('Site report: https://a.example/');
+    expect(onlyWhy.text).not.toContain('Company:');
+    expect(onlyWhy.text).toContain('Why it matters:\nHires juniors.');
+    const longLink = renderEmail({ company: '', link: `https://a.example/${'x'.repeat(300)}`, why: '' }, now);
+    expect(longLink.subject.length).toBeLessThanOrEqual(150);
+  });
+
+  it('sends a report that has only a link', async () => {
+    const world = fakeWorld();
+    const result = await answer(await handleReport(post({ link: 'https://a.example/' }), world.deps));
+    expect(result.status).toBe(200);
+    expect(world.emails).toHaveLength(1);
+  });
+
   it('renders the report as text', () => {
     const { subject, text } = renderEmail({ company: 'A'.repeat(200), link: 'https://a.example/', why: 'w' }, new Date('2026-11-16T10:00:00Z'));
     expect(subject.length).toBeLessThanOrEqual(150);

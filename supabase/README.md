@@ -159,8 +159,9 @@ and `supabase/config.toml` (`verify_jwt = false`: the page calls the function wi
 `POST <project url>/functions/v1/report-site` with `Content-Type: application/json` and the body
 `{"company": "...", "link": "https://...", "why": "...", "website": ""}`. `website` is the honeypot: the page must
 render it as a text input a person never sees (off-screen, `tabindex="-1"`, `autocomplete="off"`, `aria-hidden="true"`,
-not `display: none`) and send it empty. Limits: company 1 to 100 characters, link an http or https address of at most
-500 characters with a host name and no user name or password, why 3 to 1,000 characters, the whole body 8 KB.
+not `display: none`) and send it empty. Limits: link (the only required field) an http or https address of at most
+500 characters with a host name and no user name or password, company at most 100 characters, why at most 1,000
+characters (company and why may be left out), the whole body 8 KB.
 
 Every answer is JSON, `{"ok": true}` or `{"ok": false, "error": {"code", "message", ...}}`:
 
