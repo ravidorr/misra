@@ -1,5 +1,5 @@
 """The count of companies the dashboard says it covers: computed in build_dashboard.py from data/companies.json at
-build time, put in jobs.json, the page data and the footer, and never typed into a template."""
+build time, put in jobs.json, the page data and the search field, and never typed into a template."""
 
 import json
 import re
@@ -15,10 +15,6 @@ from tests.test_build_dashboard import log, prepare, read_payload
 REPO = Path(__file__).resolve().parents[1]
 
 
-def link(gaps: str) -> str:
-    return f'<a class="foot-gaps" href="#gaps">Coverage gaps lists {gaps} whose roles may be missing or old.</a>'
-
-
 def test_companies_covered_counts_the_working_feeds() -> None:
     companies = [
         {"name": "A", "status": "ok"},
@@ -31,19 +27,11 @@ def test_companies_covered_counts_the_working_feeds() -> None:
 
 
 @pytest.mark.parametrize(
-    ("covered", "gaps", "companies", "sentence"),
-    [
-        (224, 122, "224 companies", f" {link('122 companies')}"),
-        (1, 1, "1 company", f" {link('1 company')}"),
-        (5, 0, "5 companies", ""),  # the card is hidden when it is empty, so nothing points at it
-    ],
+    ("covered", "companies"),
+    [(224, "224 companies"), (1, "1 company"), (0, "0 companies")],
 )
-def test_coverage_words(covered: int, gaps: int, companies: str, sentence: str) -> None:
-    assert build_dashboard.coverage_words(covered, gaps) == {
-        "__COVERED__": str(covered),
-        "__COMPANIES__": companies,
-        "__COVERAGE_GAPS__": sentence,
-    }
+def test_coverage_words(covered: int, companies: str) -> None:
+    assert build_dashboard.coverage_words(covered) == {"__COVERED__": str(covered), "__COMPANIES__": companies}
 
 
 def test_the_count_of_companies_reaches_the_page_and_the_data(db: sqlite3.Connection, workdir: Path) -> None:
@@ -64,17 +52,16 @@ def test_the_count_of_companies_reaches_the_page_and_the_data(db: sqlite3.Connec
     log(db, "2024-01-02", "Down", 0, "HTTP 403")
     log(db, "2024-01-03", "Down", 0, None)
     (workdir / "templates" / "dashboard.html").write_text(
-        '<main data-companies-covered="__COVERED__">__COMPANIES__|__COVERAGE_GAPS__|__PAGE_DATA__</main>',
+        '<main data-companies-covered="__COVERED__">__COMPANIES__|__PAGE_DATA__</main>',
         encoding="utf-8",
     )
     db.close()
     build_dashboard.main()
     payload = read_payload(workdir)
     assert payload["covered"] == len(["Zed", "Down"])  # Down is failing today and also on the card; Alpha has no feed
-    assert payload["gaps"]["total"] == len(["Down", "Alpha", "Beta"])  # Beta is the researched company
     page = (workdir / "docs" / "index.html").read_text(encoding="utf-8")
-    assert page.startswith(f'<main data-companies-covered="2">2 companies| {link("3 companies")}|')
-    assert json.loads(page.split("|")[2].removesuffix("</main>"))["covered"] == payload["covered"]
+    assert page.startswith('<main data-companies-covered="2">2 companies|')
+    assert json.loads(page.split("|")[1].removesuffix("</main>"))["covered"] == payload["covered"]
 
 
 def test_the_count_on_the_real_data_is_the_ok_status_of_companies_json(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -96,4 +83,6 @@ def test_no_template_or_doc_types_the_number_and_the_docs_say_where_to_find_it()
     for name in ("README.md", "llms.txt"):
         text = (REPO / name).read_text(encoding="utf-8")
         assert "Coverage gaps" in text, name
-        assert re.search(r"\d+ compan", text) is None, name  # a typed number goes stale; the footer is the live one
+        assert re.search(r"\d+ compan", text) is None, (
+            name
+        )  # a typed number goes stale; the search field is the live one

@@ -18,6 +18,17 @@ All notable changes are documented here. Format follows [Keep a Changelog](https
 - The violet spark (star) in the top-right corner of the Misra logo: from `design-system/assets/mark.svg` (so the favicon), `design-system/assets/apple-touch-icon.png` (rendered again from the SVG, same 180 px size and white background), the header logo in `templates/dashboard.html`, the `.mark-spark` rule and the unused `--mark-spark` token. The logo is the lime disc with the ink pulse line, same size and position; the page, wordmark and layout are unchanged. `design-system/README.md` and `logo-brief.md` describe the new mark.
 - "Export discards" and "Import discards" on the filters card, the hidden file input behind them and the code that read and wrote the file. Accounts sync discards across devices, and the first sign-in already offers to bring this browser's own choices over (PLAN.md step 4.3), so the file was redundant. A signed-out visitor's discards stay in the browser as before. `PRIVACY.md` no longer says the "Import discards" file is read inside the browser (the sentence about the missing document upload keeps its first half); the lawyer must approve that edit before the merge.
 
+## [0.50.1] - 2026-11-16
+
+### Changed
+
+- The dashboard footer is two lines: "Career pages last read <time>. Career pages are read daily." and, on a line of its own below it, Privacy, Terms and Contact (centered on a phone, both lines start at the left from 768px). The links no longer sit to the right of the text.
+- `data-companies-covered` (the number of covered companies, read by agents) moved from the footer sentence to the search field, next to its "Search N companies" placeholder; `covered` in `jobs.json` is unchanged. `coverage_words` takes only the count.
+
+### Removed
+
+- The footer sentences "Roles from N companies whose career pages we read daily." (the search placeholder says it) and "Coverage gaps lists N companies whose roles may be missing or old." with its link (the Coverage gaps card says it), the `__COVERAGE_GAPS__` placeholder, the `.foot-coverage`, `.foot-gaps` and `.foot-info` styles, the two-column footer layout and the click handler that opened the card from the footer link.
+
 ## [0.50.0] - 2026-11-16
 
 ### Added

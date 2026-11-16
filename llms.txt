@@ -4,7 +4,7 @@
 
 ## Project
 
-- [Dashboard](https://ravidorr.github.io/misra/): Open entry-level, student and product roles in Israel, read daily from company career pages; the footer gives the live company count and links to Coverage gaps.
+- [Dashboard](https://ravidorr.github.io/misra/): Open entry-level, student and product roles in Israel, read daily from company career pages; the search field gives the live company count and the Coverage gaps card lists the companies whose roles may be missing or old.
 - [Overview and quickstart](/README.md): Pipeline commands, the daily run, the dashboard and development setup.
 - [Changelog](/CHANGELOG.md): Released changes.
 
