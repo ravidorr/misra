@@ -214,10 +214,13 @@ _COMEET_COMMENT = re.compile(r"<!--.*?-->", re.S)
 _COMEET_LINK = re.compile(
     rf'<a\b[^>]*?\bhref="([^"]*/co/([a-z0-9-]+)/({_COMEET_UID})/[a-z0-9-]+/?[^"]*)"[^>]*>(.*?)</a>', re.S | re.I
 )
-_COMEET_ANY_UID = re.compile(rf"/co/[a-z0-9-]+/({_COMEET_UID})/[a-z0-9-]+")
+_COMEET_ANY_UID = re.compile(rf"/co/[^/\"'\s<>]+/({_COMEET_UID})/", re.I)  # wider than the card link on purpose
+_COMEET_SCRIPT = re.compile(r"<(script|style)\b.*?</\1>", re.S | re.I)
 _COMEET_HEADING = re.compile(r"<h[1-6]\b[^>]*>(.*?)</h[1-6]>", re.S | re.I)
 _COMEET_NAME = re.compile(r'class="comeet-position-name"[^>]*>(.*?)(?:<br|<span|</div>)', re.S | re.I)
-_COMEET_TEAM = re.compile(r'<span[^>]*class="[^"]*(?:department|\bposition\b)[^"]*"[^>]*>(.*?)</span>', re.S | re.I)
+_COMEET_TEAM = re.compile(
+    r'<span[^>]*class="[^"]*(?:department|(?<![\w-])position(?![\w-]))[^"]*"[^>]*>(.*?)</span>', re.S | re.I
+)
 _COMEET_PLACE = re.compile(r'<span[^>]*class="[^"]*location[^"]*"[^>]*>(.*?)</span>', re.S | re.I)
 _COMEET_EMPTY = re.compile(r"don.t have any open positions", re.I)
 _COMEET_PLUGIN = "comeet-outer-wrapper"
@@ -232,8 +235,10 @@ def comeet_page(slug: str) -> list[Job] | None:
     unread card or a page that is neither a list nor the plugin's "no open positions" notice is None, never a partial
     list (which would close stored jobs)."""
     host = urlparse(slug).hostname
+    if not host:
+        return None  # not an address: nothing is requested
     r = get(slug)
-    if r is None or r.status_code != HTTP_OK or not host or urlparse(r.url).hostname != host:
+    if r is None or r.status_code != HTTP_OK or urlparse(r.url).hostname != host:
         return None
     page = _COMEET_COMMENT.sub("", r.text)  # the plugin keeps a commented copy of every title link
     out: list[Job] = []
@@ -243,7 +248,7 @@ def comeet_page(slug: str) -> list[Job] | None:
         if not title:
             return None  # a card we cannot read: a partial list would close the jobs we missed
         team, where = _COMEET_TEAM.search(card), _COMEET_PLACE.search(card)
-        location = _page_text(where.group(1)) if where else place.replace("-", " ")
+        location = (_page_text(where.group(1)) if where else "") or place.replace("-", " ")
         out.append(
             _job(
                 uid,
@@ -254,9 +259,9 @@ def comeet_page(slug: str) -> list[Job] | None:
             )
         )
     # job links the card markup did not yield (a changed layout) mean the list is not complete
-    if len(set(_COMEET_ANY_UID.findall(page))) != len({j["job_id"] for j in out}):
+    if {u.upper() for u in _COMEET_ANY_UID.findall(page)} != {j["job_id"].upper() for j in out}:
         return None
-    if not out and not (_COMEET_PLUGIN in page and _COMEET_EMPTY.search(html.unescape(page))):
+    if not out and not (_COMEET_PLUGIN in page and _COMEET_EMPTY.search(html.unescape(_COMEET_SCRIPT.sub("", page)))):
         return None  # no job and no notice that there is none: not a page we understand
     return out
 

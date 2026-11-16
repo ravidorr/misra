@@ -1283,6 +1283,22 @@ def test_comeet_page_reads_the_department_and_the_place_of_the_link(monkeypatch:
     assert jobs[0]["url"].startswith("https://gauzy.test/gauzy-careers/co/lyon-france/")
 
 
+def test_comeet_page_an_empty_location_span_falls_back_to_the_place_of_the_link(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    page = COMEET_GUESTY.replace(
+        '<span class="Block_location">London, UK</span>', '<span class="Block_location"></span>'
+    )
+    fake_get(monkeypatch, FakeHttpResponse(text=page, url="https://guesty.test/careers/"))
+    jobs = adapters.comeet_page("https://guesty.test/careers/")
+    assert jobs is not None
+    assert jobs[1]["location"] == "london uk"
+
+
+def test_comeet_page_a_slug_without_a_host_fails() -> None:
+    assert adapters.comeet_page("not a url") is None
+
+
 def test_comeet_page_reads_heading_cards_with_a_place_in_the_card(monkeypatch: pytest.MonkeyPatch) -> None:
     fake_get(monkeypatch, FakeHttpResponse(text=COMEET_GUESTY, url="https://guesty.test/careers/"))
     jobs = adapters.comeet_page("https://guesty.test/careers/")
@@ -1320,6 +1336,12 @@ def test_comeet_page_a_page_that_says_no_open_position_is_empty(monkeypatch: pyt
         (COMEET_GUESTY.replace("<h3>Staff Product Manager</h3>", "<h3> </h3>"), COMEET_URL),  # an empty heading
         # a job link outside any card we read (the markup changed) makes the list partial
         (COMEET_REE + '<script>{"href":"/co/israel/AA.111/lost-job/"}</script>', COMEET_URL),
+        (COMEET_REE.replace("/co/israel-glil-yam/", "/co/Tel-Aviv/") + "<p>/co/israel/FF.666/lost/</p>", COMEET_URL),
+        (COMEET_REE.replace("motion-control-sw-engineer", "%D7%9E%D7%94"), COMEET_URL),  # a slug the card regex skips
+        (
+            COMEET_NONE.replace("We don", "<script>We don").replace("soon.", "soon.</script>"),
+            COMEET_URL,
+        ),  # notice in a script
         (COMEET_REE.replace("<a class", "<span class").replace("</a></li>", "</span></li>"), COMEET_URL),
     ],
 )
