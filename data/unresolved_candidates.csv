@@ -23,10 +23,10 @@ Ex Libris,exlibrisgroup.com,https://exlibrisgroup.com/careers/,biz_software,need
 Playstudios,playstudios.com,https://www.playstudios.com/careers/,biz_software,needs_reader,Dayforce portal; its jobs have no location
 Jelly Button Games,jellybuttongames.com,https://www.jellybuttongames.com/careers,biz_software,site_unusable,Domain parked at GoDaddy
 Camtek,camtek.com,https://www.camtek.com/careers/,deeptech,site_unusable,The page is empty
-Speedata,speedata.io,,deeptech,no_careers_url,Jobs are on Viola Group's Getro board; its own page is a Wix site with no feed
-Teramount,teramount.com,,deeptech,no_careers_url,"Own domain does not answer; its jobs are on Grove Ventures' Getro board, no adapter"
+Speedata,speedata.io,,deeptech,no_careers_url,Jobs are on Viola Group's Getro board (API robots.txt disallows); its own page is a Wix site with no feed
+Teramount,teramount.com,,deeptech,no_careers_url,"Acquired by Molex in May 2026; teramount.com redirects to a Molex page; its one job is on Grove Ventures' Getro board, whose API robots.txt disallows"
 X-Globe,x-globe.com,,deeptech,no_careers_url,
-Q Factor,qfactor.ai,,deeptech,no_careers_url,qfactor.ai does not answer and q-factor.io is another site; real domain not found
+Q Factor,q-factor.com,,deeptech,no_careers_url,"Real domain q-factor.com (a one-page site); it has no careers page, only a careers@ email address"
 Cognata,cognata.com,https://www.cognata.com,deeptech,no_feed_found,"No ATS link, feed or job link found"
 Gilat,gilat.com,,deeptech,no_careers_url,
 Siklu,siklu.com,,deeptech,no_careers_url,"Now part of Ceragon; the Comeet board on ceragon.com is Ceragon's, not Siklu's"
@@ -38,7 +38,7 @@ Quantum Art,quantum-art.com,https://www.quantum-art.com/careers,deeptech,bot_pro
 Sight Diagnostics,sightdx.com,,deeptech,no_careers_url,
 Brainsway,brainsway.com,,deeptech,no_careers_url,
 ReWalk,rewalk.com,https://golifeward.com/,deeptech,no_openings,"The list is US jobs, none in Israel"
-EarlySign,earlysign.com,,deeptech,no_careers_url,earlysign.com does not answer; no careers page or board found
+EarlySign,earlysign.com,,deeptech,no_careers_url,"earlysign.com does not answer; one source says it ceased operations in October 2025, not confirmed"
 Kahun,kahun.com,https://www.kahun.com/careers,deeptech,site_unusable,Domain parked at GoDaddy
 Tyto Care,tytocare.com,https://www.tytocare.com/careers/,deeptech,needs_reader,A list or CV form with no job link
 Diagnostic Robotics,diagnosticrobotics.com,,deeptech,no_careers_url,The career page is a script list that shows no items

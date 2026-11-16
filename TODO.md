@@ -190,6 +190,20 @@ Observations about live sites below come from checks made on 2026-11-14 and may 
       has a `jobs.rss` feed, but Pinpoint is used by Align alone. The careers pages of the remaining own-site rows
       show no Comeet, Greenhouse, Lever, Ashby, Workable, BambooHR, Recruitee, Teamtailor or Personio marker besides
       those already listed.
+    - Checked on 2026-11-16 (fourth batch, do not repeat): Getro boards (Grove Ventures, Viola Group; TLV Partners'
+      board is `jobs.tlv.partners`) are not readable. The board pages (`careers.grovevc.com`) allow crawling in their
+      robots.txt but hold no job list: the list is drawn by script from `POST
+      api.getro.com/api/v2/collections/<network id>/search/jobs`, and the robots.txt of `api.getro.com` is `Disallow: /`
+      for every agent, so no adapter was written. The boards' sitemaps list company pages and job pages with a
+      JSON-LD `JobPosting`, but the list is incomplete (Teramount's one job is not in Grove's sitemap), so it is not a
+      feed. Getro's own job link is the employer's page when it has one (`teramount.com/careers/?job=1`). Revisit only
+      if Getro publishes a feed or lifts the API rule. Q Factor's real domain is `q-factor.com` (a one-page site, a
+      neutral-atom quantum company that emerged from stealth in April 2026; its only job route is a `careers@` email
+      address, so nothing to pin); the lists now carry the right domain. Teramount was acquired by Molex (completed
+      on 2026-05-07; `teramount.com` redirects to a Molex product page), so its jobs would be Molex's worldwide board.
+      EarlySign (Medial EarlySign): `earlysign.com` has no DNS answer, `earlysign.ai` is a parked page, and a Start-Up
+      Nation Central listing (403 to us, seen only in a search summary) says it ceased operations in October 2025; not
+      confirmed by the company.
     - Dead or unusable: Jelly Button Games, Kahun, Nucleai and Quantum Art (domain parked at GoDaddy), Satixfy (now an
       MDA Space page), Line 5 (needs a login), lakeFS and Quantum Art (403 or "Access Denied": bot protection), Radware
       and Camtek (an empty page), Elbit Systems (timeout on the news page; its career site `elbitsystemscareer.com` is a
