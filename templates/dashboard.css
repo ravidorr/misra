@@ -960,6 +960,12 @@ html:has(.sheet:modal) {
   margin: 0;
 }
 
+/* The dashboard's phone rule moves and spaces .card-actions for its cards; here the button is the card's last row. */
+.email-card .card-actions {
+  order: 0;
+  margin: 0;
+}
+
 .card-actions[hidden] {
   display: none;
 }

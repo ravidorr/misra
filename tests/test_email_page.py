@@ -272,6 +272,13 @@ def test_the_page_knows_every_word_the_functions_send() -> None:
     assert (root / "supabase" / "functions" / "confirm-email").is_dir()
 
 
+UNSUBSCRIBED_TEXT = (
+    "Your job alerts are stopped. We deleted the filters saved for them and the list of jobs we already emailed "
+    "you. We keep your address and the times you turned the email on, confirmed it and unsubscribed, as a "
+    "record of your consent. "
+    'Your Misra account (stars, "Not for me" choices, and dashboard filters) is unchanged. To delete your entire '
+    'account and all stored data, sign in on the dashboard and choose "Delete my account".'
+)
 STATES = {
     f"#token={TOKEN}": (
         "Confirm your email",
@@ -284,6 +291,8 @@ STATES = {
         "Open Misra dashboard",
     ),
     "#unsubscribe-link-not-valid": (UNSUBSCRIBE_NOT_VALID, UNSUBSCRIBE_NOT_VALID_TEXT, "Open Misra dashboard"),
+    "#unsubscribed": ("You have been unsubscribed", UNSUBSCRIBED_TEXT, "Open Misra dashboard"),
+    "#already-unsubscribed": ("You have been unsubscribed", UNSUBSCRIBED_TEXT, "Open Misra dashboard"),
     "#try-again": (
         "Something went wrong",
         "We could not finish this. Open the link in your email again in a moment.",
@@ -305,8 +314,9 @@ async def test_every_state_sits_in_one_card_with_the_dashboard_header_and_footer
     await expect(card.locator("h1 #heading")).to_have_text(heading)
     await expect(card.locator("#message")).to_have_text(message)
     # The card holds the heading, the text, the one visible button and the screen-reader status: nothing else.
-    visible = card.locator("#confirm, #back")
-    await expect(visible.locator("visible=true")).to_have_text(button)
+    shown = card.locator("button:visible, a.btn:visible")
+    await expect(shown).to_have_count(1)
+    await expect(shown).to_have_text(button)
     assert await card.evaluate("c => [...c.children].map(e => e.id || e.tagName)") == [
         "H1",
         "message",
