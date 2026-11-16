@@ -10,6 +10,7 @@ from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
 import common
+import descriptions
 from adapters import ADAPTERS
 from browser_crawl import WHY, crawl_many
 from common import (
@@ -318,6 +319,17 @@ def gaps_step() -> int:
         c.close()
 
 
+def save_descriptions(texts: list[dict[str, Any]], crawled: list[tuple[str, list[dict[str, Any]]]]) -> None:
+    """Hands the descriptions to the sync step and logs their share (FR-4 AC 3: counts only, no text). The texts go to
+    a work file outside the checkout (descriptions.work_path), never into data/jobs.db or any committed file. A file
+    that cannot be written is a warning: the jobs are stored as always, only their descriptions are missing."""
+    print(descriptions.share_report(crawled))
+    try:
+        descriptions.write_work_file(texts)
+    except OSError as exc:
+        print(f"::warning::the descriptions could not be handed to the sync step, {type(exc).__name__}")
+
+
 def main() -> None:  # noqa: PLR0912, PLR0915
     excluded = load_excluded()  # a bad list stops the run: nobody can say who must not be crawled
     with open("data/companies.json") as fh:
@@ -339,6 +351,8 @@ def main() -> None:  # noqa: PLR0912, PLR0915
     failed: list[str] = []
     skipped: list[str] = []
     attempted: set[str] = set()  # companies with any result that is not a robots skip: crawled, held or failed
+    crawled: list[tuple[str, list[dict[str, Any]]]] = []  # (ats, jobs) of every crawl that gave a list
+    texts: list[dict[str, Any]] = []  # the descriptions for the sync step: never stored in the database
     for co, fetched in results:
         name = co["name"]
         jobs = fetched
@@ -374,6 +388,12 @@ def main() -> None:  # noqa: PLR0912, PLR0915
             continue
         if held:
             failed.append(name)  # a crawl that probably lost most of the list: record what it saw, close nothing
+        crawled.append((co["ats"], jobs))
+        texts.extend(
+            {"company": name, "job_id": j["job_id"], "description": j["description"], "details": j.get("details") or {}}
+            for j in jobs
+            if j.get("description")
+        )
         seen: set[str] = set()
         known = is_known(c, co, now)
         for j in jobs:
@@ -411,6 +431,7 @@ def main() -> None:  # noqa: PLR0912, PLR0915
     n_open = c.execute("SELECT COUNT(*) FROM jobs WHERE status='open'").fetchone()[0]
     print(f"crawled {len(companies)} companies, failed {len(failed)} {failed}, open jobs {n_open}")
     print(f"skipped by robots.txt {len(skipped)} {skipped}")
+    save_descriptions(texts, crawled)
     print(f"robots.txt: closed {closed_jobs} jobs of {closed_companies} companies skipped for {ROBOTS_CLOSE_DAYS} days")
     if not common.ROBOTS_ENFORCED:
         print(

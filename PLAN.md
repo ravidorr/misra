@@ -285,9 +285,20 @@ Decisions made in planning (they change the PRD's wording, so update the PRD in 
 ## FR-4 (richer job data)
 
 - [ ] 7.1 Descriptions in the crawl: extend adapters one site at a time (Greenhouse, Lever, Comeet, Ashby and so on,
-  best effort) to return `description` and `details`; `jobs` table gains the columns in SQLite too; a site that gives
-  none, or fails to, does not stop the daily update. Start with the adapters that cover the most jobs. Done when: FR-4
-  AC 1, 2, 3 and 9 hold for the first adapters (AC 3: the share with a full description is printed in the daily log).
+  best effort) to return `description` and `details`; a site that gives none, or fails to, does not stop the daily
+  update. Start with the adapters that cover the most jobs. **Decision (the maintainer's): the full text lives in Supabase
+  only**, never in `data/jobs.db` or any committed file (the size of the daily commit, and other companies' full postings
+  are not published on GitHub), so the SQLite `jobs` table does not gain the columns. Done when: FR-4 AC 1, 2, 3 and 9
+  hold for the first adapters (AC 3: the share with a full description is printed in the daily log).
+  First slice done in v0.49.0: `greenhouse`, `greenhouse_url`, `lever`, `ashby`, `workable`, `comeet` and `amazon`, from the
+  request each already makes (no new request, host or path), 4,760 of the 6,814 open jobs (70 percent). The crawl leaves
+  the texts in a work file in `$RUNNER_TEMP`; the sync step writes them to the `description` and `details` columns that
+  migration 2.1 already created (no migration), with a hash in `details` to skip an unchanged text; the log line per ATS
+  is in the crawl step. CONTRIBUTING.md, "Job descriptions", has the design, the size cap (20,000 characters) and the
+  storage estimate. Left: the browser crawl (1,589 jobs, 23 percent: no standard field), Workday (318, one request per job
+  and a new path to check against `robots.txt`), Phenom (89, a teaser only), Oracle HCM, `comeet_page`, JazzHR and BambooHR
+  (a request per job), SmartRecruiters (skipped by `robots.txt`). After the first daily run with descriptions: check the
+  log line and the size of the `jobs` table in the dashboard (Reports, Database), and write both in CONTRIBUTING.md.
 - [ ] 7.2 Short description: first 255 characters as written, cut at a word boundary, none when no description; sync
   stores it; card shows it. Done when: FR-4 AC 4 and 8 hold.
 - [ ] 7.3 Drill-down on the card (detail view without leaving the dashboard) and search over the full text (Postgres

@@ -73,6 +73,8 @@ All of these hold after the run:
 - With a non-empty list and empty Supabase secrets the sync step fails on purpose: a removal must not look done.
 - Nothing here is applied to the Supabase project by hand: no migration is involved, and the service-role key that the
   sync step already has does the deleting.
+- The removal takes the descriptions with it: they are columns of the `jobs` row in Supabase (see "Job descriptions"), and
+  the row is deleted. They are in no other place: `data/jobs.db` and the repository never hold a description.
 
 ## How the crawler behaves
 
@@ -162,16 +164,22 @@ Notes on the table:
   loads a month if egress is counted before compression, and up to ten times that if it is counted after (the pricing
   page does not say which). Tens of users are far below it; thousands of visitors a
   month would not be.
-- Full descriptions (PLAN.md step 7.1) add about 5 to 20 times today's text. Applied to the 3 MB above, that is about 15
-  to 60 MB in SQLite. A full-text index and the other indexes in Postgres can add up to the size of the text again, so
-  plan for up to about 120 MB in Supabase, which is under a quarter of the 500 MB. The multiplier is an assumption, not
-  measured: step 7.4 measures it after a month of real descriptions.
-- Watch the repository too. `data/jobs.db` is committed every day, so a 15 to 60 MB database means a new large binary in
-  the history every day. GitHub recommends a repository under 1 GB, warns about a file over 50 MiB and refuses one over
-  100 MiB (GitHub's large-files rules, from memory, not re-fetched on the day: check them). The daily deploy push would then fail.
-  Step 7.4 and step 9.1 (the export that replaces the committed database) must decide this before descriptions go into
-  SQLite. The trim plan already in PLAN.md (descriptions for open jobs only, dropped some days after a job closes) helps
-  both.
+- Full descriptions (PLAN.md step 7.1) live in Supabase only, so they cost the free 500 MB database and nothing in the
+  repository: `data/jobs.db` stays about 3 MB. Measured on 2026-11-16 on live samples of the feeds (one board each, counts
+  and sizes only, no text kept): the text of a job is 2,400 to 5,400 characters on average (Greenhouse 4,266, Lever 2,369,
+  Ashby 2,900, Workable 5,439, Comeet 3,461, Amazon 3,959) and 4,300 to 12,400 at most, nowhere near the 20,000-character
+  cap, and it is almost all ASCII (1 byte a character; Hebrew would be 2). Weighted by the open jobs of those feeds
+  (about 4,760 of 6,814, 70 percent), that is about 18 MB of text for the open jobs, about 3.7 KB a job, and a little
+  more for `details` and the hash. The full-text index of step 7.3 can add up to the size of the text again, so plan for
+  about 40 MB for the open jobs. The worst case is every job at the cap in Hebrew (40 KB a job): 4,760 jobs would be
+  190 MB, still under 500 MB. The size of the Supabase tables is not known here (the dashboard's Reports, Database
+  shows it; no secret is used for this note): measure it before and after the first sync with descriptions.
+- What grows without bound is the closed jobs: the sync marks a job closed and never deletes it, and a closed job keeps its
+  text. The database is 3 days old (2,847 closed jobs, much of it the first days' churn), so the rate is not known. At
+  200 jobs closing a day, the text adds 0.7 MB a day, about 22 MB a month, and the free 500 MB would be used in about 18
+  months; at 1,000 a day, in about 4. Step 7.4 measures the real rate after a month and sets the trim (drop the text of
+  a job some days after it closes). The 500 MB limit is the Free plan's, from supabase.com/pricing on 2026-11-16 (the
+  page says nothing about what happens above it).
 - Resend: `report-site`, the confirmation email and the job alerts (`send_digests.py`, PLAN.md step 6.4) send
   through it; Gmail is left for the failure alert only (see "The daily digest", below). The volume arithmetic is in "Resend volume".
 
@@ -206,6 +214,49 @@ Move to a paid plan, or trim, when any of these is true:
 - A pause happens, or the "about to pause" warning arrives twice. The account tables are backed up daily (below); move
   to a plan with backups if that export ever stops being enough (a restore that is too slow, or a need for point-in-time recovery).
 - The repository passes 800 MB (80% of the recommended 1 GB), or `data/jobs.db` passes 50 MB (GitHub's warning size).
+
+## Job descriptions
+
+PLAN.md step 7.1. Where the text of a posting lives, and how it gets there:
+
+- **Where.** In Supabase only, in the `description` (plain text) and `details` (`jsonb`) columns of `jobs`. Never in
+  `data/jobs.db`, `docs/` or any other file of the repository: the daily workflow commits those to a public repository,
+  so a description there would grow every daily commit and publish other companies' full postings on GitHub. The
+  database has no description column, and `tests/test_descriptions_flow.py` fails if the workflow stages anything that
+  could carry one.
+- **How it travels.** The crawl (`python run.py`) writes the texts of the day to a work file outside the checkout,
+  `$RUNNER_TEMP/misra-descriptions.jsonl` (the system's temporary directory when run elsewhere), and the sync step
+  (`python sync_supabase.py`) of the same job reads it. A step after the crawl reads what the crawl left, and a sync
+  without that file (the crawl did not run, or it failed) sends no description and changes none. The file is not a
+  committed path and is never uploaded as an artifact.
+- **The sync.** After the jobs are upserted, a second pass sends `description` and `details` for the open jobs that have a
+  text today, in batches of 25 and in requests of their own (a job without a text keeps the one it has: a missing key,
+  never `null`). A hash of the text, kept in `details` as `text_sha256`, skips a job whose text did not change. A job that
+  closes keeps its text; the removal of a company (see "Removing a company on request") deletes the whole row. A failure
+  in this pass is a `::warning::` with the HTTP status and nothing else (an answer can quote the row, and the log is
+  public); it never fails the step, so the digests and the deploy still run.
+- **What is read.** Only what a site publishes for applicants, and only from the request the adapter already makes
+  (no new host, no new path, no request per job): Greenhouse (`?content=true` on the board list), Lever (the posting
+  list: description, the named lists, the closing text), Ashby (the posting list), Workable (`?details=true` on the widget
+  list), Comeet (`custom_fields.details` of each position in the page's embedded data) and Amazon (the search JSON: description
+  and qualifications). `greenhouse_url` takes the content when the company's proxy gives it. Every request stays inside
+  the one-request-a-second rule and the `robots.txt` gate. `details` holds a short list of fields a site gives
+  (employment type, department, experience, workplace type, offices) and nothing else: Greenhouse `metadata` and the
+  compliance fields are left out on purpose.
+- **Not read yet.** The browser crawl (a page of text, no standard field), Workday (a request per job: about 320 jobs, one
+  second each on one host, and a new path to check against `robots.txt`), Phenom and Oracle HCM (the lists carry a teaser,
+  not the text), `comeet_page`, JazzHR and BambooHR (a request per job), and SmartRecruiters (skipped by `robots.txt`).
+- **The text.** Plain text made from the site's HTML with the standard library: scripts, styles and embedded frames are
+  dropped with their content, no markup survives, paragraphs and list items keep their line breaks, control characters
+  (NUL breaks a Postgres insert) are removed. At most 20,000 characters a job (`MAX_CHARS` in `descriptions.py`, cut at a
+  word); a cut text is marked `description_truncated` in `details` and counted in the log. A value that is not text is no
+  description: nothing in this path can stop a company's crawl.
+- **The log.** One line in the crawl step, counts and percentages only: `descriptions: greenhouse 1900/2083 (91%); comeet
+  ...; all N/M (P%); cut at 20000 characters C; K characters kept`. The share is of the jobs the crawl returned today, per
+  ATS (a company that failed or was skipped has no count). That is the list of what to improve next (FR-4 AC 3).
+- **Adding an adapter.** Return the description with `attach(job, text, details)` from `descriptions.py` (`html_to_text`
+  for HTML, `plain_text` for text), from the request the adapter already makes. Do not add a request per job without
+  measuring: one host takes one request a second.
 
 ## The daily digest
 

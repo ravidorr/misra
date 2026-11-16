@@ -19,7 +19,15 @@ MAX_PURGE_COMPANIES companies that still have rows. Counts are logged, never the
 
 Every open job is sent, in Israel or not, with its `level` and `role_types` (classify.py) and its `regions` and
 `locations` (regions.py). The upsert is keyed on (company, job_id) and merges columns, so a second run with the same
-database writes the same values, and columns this module does not send (`description`, `details`) are left alone."""
+database writes the same values, and columns that request does not send are left alone.
+
+The descriptions (PLAN.md step 7.1) are a second pass. The full text of a posting is never in data/jobs.db, which is
+committed to a public repository: the crawl leaves it in a work file outside the checkout (descriptions.py) and this
+step reads that file. Only the jobs that are open, not excluded and given a text by today's crawl get `description` and
+`details`, in batches of their own (a batch needs the same columns in every row, and a job without a text must keep the
+one it has). A hash of the text, kept in `details`, tells a posting that did not change: it is not sent again. A job
+that closes keeps its text, and the removal of an excluded company deletes the whole row, text included. A failure in
+this pass is a warning, never a failed step: the jobs are already stored and the day's update goes on."""
 
 import os
 import sqlite3
@@ -32,10 +40,12 @@ from typing import Any, Protocol, cast
 import requests
 
 import classify
+import descriptions
 import regions
 from common import DB, EXCLUDED_MIN_NAME, MAX_PURGE_COMPANIES, ExclusionError, is_excluded, load_excluded
 
 BATCH = 500  # rows per upsert request
+TEXT_BATCH = 25  # rows per upsert request with descriptions: up to 20,000 characters each
 PAGE = 1000  # rows asked per read; Supabase caps a response at 1,000 rows by default, a project may set less
 TIMEOUT = 60
 HTTP_OK, HTTP_REDIRECT = 200, 300
@@ -65,6 +75,9 @@ class Result:
     upserted: int
     closed: int
     purged: int = 0  # rows deleted for the companies on the exclusion list
+    texts: int = 0  # jobs whose description was written
+    texts_same: int = 0  # jobs whose description was already stored as it is
+    texts_failed: int = 0  # jobs whose description could not be written (a warning, not a failure)
 
 
 class Client:
@@ -78,13 +91,14 @@ class Client:
         self.base = self.rest + "jobs"
         self.headers = {"apikey": key, "Authorization": f"Bearer {key}", "Content-Type": "application/json"}
 
-    def call(
+    def call(  # noqa: PLR0913, PLR0917
         self,
         method: str,
         params: Mapping[str, str | int],
         body: list[dict[str, Any]] | dict[str, Any] | None = None,
         table: str = "jobs",
         prefer: str | None = None,
+        quiet: bool = False,
     ) -> Response:
         headers = dict(self.headers)
         if body is not None:
@@ -104,7 +118,8 @@ class Client:
         except requests.RequestException as exc:
             raise SyncError(f"{method} {table} failed: {type(exc).__name__}") from None
         if not HTTP_OK <= response.status_code < HTTP_REDIRECT:
-            raise SyncError(f"{method} {table} failed: HTTP {response.status_code} {response.text[:300]}")
+            reason = "" if quiet else f" {response.text[:300]}"  # an answer about a text can quote it: quiet omits
+            raise SyncError(f"{method} {table} failed: HTTP {response.status_code}{reason}")
         return response
 
     def has_rows(self, table: str, company: str) -> bool:
@@ -127,16 +142,24 @@ class Client:
             raise SyncError(f"DELETE {table} returned something other than a list")
         return len(deleted)
 
-    def upsert(self, rows: list[dict[str, Any]]) -> None:
-        for start in range(0, len(rows), BATCH):
-            self.call("POST", {"on_conflict": "company,job_id"}, rows[start : start + BATCH])
+    def upsert(self, rows: list[dict[str, Any]], size: int | None = None, quiet: bool = False) -> None:
+        size = size or BATCH
+        for start in range(0, len(rows), size):
+            self.call("POST", {"on_conflict": "company,job_id"}, rows[start : start + size], quiet=quiet)
 
     def open_keys(self) -> set[tuple[str, str]]:
-        keys: set[tuple[str, str]] = set()
+        return set(self.open_text_hashes("company,job_id"))
+
+    def text_hashes(self) -> dict[tuple[str, str], str | None]:
+        """The fingerprint of the stored description of every open job (None when it has none)."""
+        return self.open_text_hashes("company,job_id,hash:details->>" + descriptions.HASH_KEY)
+
+    def open_text_hashes(self, select: str) -> dict[tuple[str, str], str | None]:
+        keys: dict[tuple[str, str], str | None] = {}
         offset = 0
         while True:
             params: dict[str, str | int] = {
-                "select": "company,job_id",
+                "select": select,
                 "status": "eq.open",
                 "order": "company.asc,job_id.asc",
                 "limit": PAGE,
@@ -147,7 +170,7 @@ class Client:
                 raise SyncError("GET jobs returned something other than a list")
             if not page:  # a server may cap a response below PAGE, so only an empty page ends the read
                 return keys
-            keys.update((row["company"], row["job_id"]) for row in page)
+            keys.update(((row["company"], row["job_id"]), row.get("hash")) for row in page)
             offset += len(page)
 
 
@@ -194,7 +217,50 @@ def sync(conn: sqlite3.Connection, client: Client, excluded: Sequence[str] = ())
     still_open = {(row["company"], row["job_id"]) for row in rows}
     stale = sorted(client.open_keys() - still_open)
     client.upsert([{"company": company, "job_id": job_id, "status": "closed"} for company, job_id in stale])
-    return Result(upserted=len(rows), closed=len(stale), purged=purged)
+    written, same, failed = push_texts(client, descriptions.read_work_file(), still_open)
+    return Result(
+        upserted=len(rows), closed=len(stale), purged=purged, texts=written, texts_same=same, texts_failed=failed
+    )
+
+
+def push_texts(
+    client: Client, texts: Mapping[tuple[str, str], tuple[str, dict[str, Any]]], still_open: set[tuple[str, str]]
+) -> tuple[int, int, int]:
+    """Writes the descriptions of the open jobs that the crawl gave one for and that Supabase does not hold as they are.
+    Returns (written, already stored, failed). Nothing here fails the sync: the jobs are stored by now. A request that
+    fails is reported by its HTTP status only (an answer can quote the row, and the log is public), and the next batch
+    still goes, so one bad row costs its batch and not every description."""
+    wanted = sorted(still_open & texts.keys())
+    if not wanted:
+        return 0, 0, 0
+    try:
+        stored = client.text_hashes()
+    except SyncError as exc:
+        print(f"::warning::the stored descriptions could not be read, so none is written: {exc}")
+        return 0, 0, len(wanted)
+    fresh: list[dict[str, Any]] = []
+    for company, job_id in wanted:
+        text, details = texts[(company, job_id)]
+        digest = descriptions.fingerprint(text, details)
+        if stored.get((company, job_id)) != digest:
+            fresh.append(
+                {
+                    "company": company,
+                    "job_id": job_id,
+                    "description": text,
+                    "details": {**details, descriptions.HASH_KEY: digest},
+                }
+            )
+    written = failed = 0
+    for start in range(0, len(fresh), TEXT_BATCH):
+        batch = fresh[start : start + TEXT_BATCH]
+        try:
+            client.upsert(batch, TEXT_BATCH, quiet=True)
+            written += len(batch)
+        except SyncError as exc:
+            failed += len(batch)
+            print(f"::warning::a batch of {len(batch)} descriptions was not written: {exc}")
+    return written, len(wanted) - len(fresh), failed
 
 
 CLEANUP_FUNCTIONS = ("report_site_cleanup", "confirm_email_cleanup")
@@ -239,6 +305,8 @@ def main() -> None:
         client = Client(cast("HttpSession", requests.Session()), url, key)
         result = sync(conn, client, load_excluded())
         print(f"Supabase: {result.upserted} open jobs upserted, {result.closed} closed, {result.purged} rows purged")
+        done = f"{result.texts} written, {result.texts_same} unchanged, {result.texts_failed} failed"
+        print(f"Supabase: descriptions {done}")
         print(f"Supabase: {cleanup(client, datetime.now(UTC).date())} spam-guard counter rows deleted")
         print(quality_report(conn))
     except (SyncError, ExclusionError) as exc:
