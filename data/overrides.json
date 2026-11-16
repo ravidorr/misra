@@ -863,5 +863,10 @@
   "ats": "comeet",
   "slug": "ceva/76.005",
   "israel_only": true
+ },
+ "Nano Dimension": {
+  "ats": "comeet",
+  "slug": "nanodimension/62.003",
+  "israel_only": true
  }
 }
