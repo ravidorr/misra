@@ -295,7 +295,7 @@ Decisions made in planning (they change the PRD's wording, so update the PRD in 
   the texts in a work file in `$RUNNER_TEMP`; the sync step writes them to the `description` and `details` columns that
   migration 2.1 already created (no migration), with a hash in `details` to skip an unchanged text; the log line per ATS
   is in the crawl step. CONTRIBUTING.md, "Job descriptions", has the design, the size cap (20,000 characters) and the
-  storage estimate. The text is not readable through the public API (migration `20261121100000_jobs_text_not_public.sql`, column-level `select`): steps 7.3 and 8.1 expose it, as the lawyer approved on 2026-11-16 (PRD decisions log). Left: the browser crawl (1,589 jobs, 23 percent: no standard field), Workday (318, one request per job
+  storage estimate. The text is not readable through the public API (migration `20261121100000_jobs_text_not_public.sql`, column-level `select`): step 7.3 searches it through a function that returns keys only and step 8.1 (`get_job`) returns it to the assistant, as the lawyer approved on 2026-11-16 (PRD decisions log). Left: the browser crawl (1,589 jobs, 23 percent: no standard field), Workday (318, one request per job
   and a new path to check against `robots.txt`), Phenom (89, a teaser only), Oracle HCM, `comeet_page`, JazzHR and BambooHR
   (a request per job), SmartRecruiters (skipped by `robots.txt`). After the first daily run with descriptions: check the
   log line and the size of the `jobs` table in the dashboard (Reports, Database), and write both in CONTRIBUTING.md.
@@ -313,7 +313,7 @@ Decisions made in planning (they change the PRD's wording, so update the PRD in 
 
 - [ ] 8.1 Edge Function MCP endpoint, public and read-only: `search_jobs` (region, level, role type, keyword incl. full
   text; it returns keys, titles and snippets), `get_job` (everything collected, including the full text, for the
-  assistant; rate limited), no user data. Same query code path as the dashboard (shared SQL function) so the results
+  assistant), no user data, rate limited. Same query code path as the dashboard (shared SQL function) so the results
   match. The text is exposed to assistants and search only by this step and 7.3, as the lawyer approved on 2026-11-16. Done when: FR-6 AC 1 to 4 and 8 hold against a real MCP client.
 - [ ] 8.2 "Connect your assistant" page on the dashboard with plain step-by-step instructions for the common assistants
   tested by hand, README cut to a short developer note, `llms.txt` updated. Done when: FR-6 AC 5 to 7 hold; a person with
@@ -342,8 +342,8 @@ Decisions made in planning (they change the PRD's wording, so update the PRD in 
 
 - [ ] Every AC is named in a step's "Done when". Mapping: FR-1 AC 1-3, 6: 4.1; AC 4, 5: 4.4. FR-2 AC 1-3, 7-10: 4.2;
   AC 4-6: 4.3. FR-3 AC 1-7, 11: 3.2; AC 8-10: 3.4. FR-4 AC 1-3, 9: 7.1; AC 4, 8: 7.2; AC 5, 6: 7.3; AC 7: 8.1;
-  AC 10: 7.4; AC 11: policy. FR-5: 1.1. FR-6 AC 1-4, 8: 8.1; AC 5-7: 8.2. FR-7: 5.1 (spam AC), 5.2. FR-8 AC 1-3: 6.2;
-  AC 4-6, 8, 9: 6.3; AC 7: 6.1; AC 10: 6.4; AC 11 (consent log): 6.1; AC 12 (footer): 6.3. FR-1 AC 7 (sign-in notice) and the `TERMS.md` disclaimer: 6.6. FR-4 AC 12: policy, applied in 7.1. FR-9 AC 3-6, 10: 3.1; AC 1, 2, 7, 8: 3.4; AC 9: 6.3. Re-check this when a
+  AC 10, 12: 7.4; AC 11: policy. FR-5: 1.1. FR-6 AC 1-4, 8: 8.1; AC 5-7: 8.2. FR-7: 5.1 (spam AC), 5.2. FR-8 AC 1-3: 6.2;
+  AC 4-6, 8, 9: 6.3; AC 7: 6.1; AC 10: 6.4; AC 11 (consent log): 6.1; AC 12 (footer): 6.3. FR-1 AC 7 (sign-in notice) and the `TERMS.md` disclaimer: 6.6. FR-4 AC 12: also applied in 7.1. FR-9 AC 3-6, 10: 3.1; AC 1, 2, 7, 8: 3.4; AC 9: 6.3. Re-check this when a
   step is split.
 - [x] ~~Success metrics are read from Supabase tables and Resend reports monthly; add the queries to `CONTRIBUTING.md`
   with step 6.4 (sign-ins, 30-day returns, subscribers, share starring, region and description shares, accepted sites).~~

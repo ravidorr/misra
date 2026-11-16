@@ -454,7 +454,7 @@ Recorded 2026-11-15, one line per decision, newest last. The first lines were ma
 - 2026-11-15: The lawyer review is answered: the digest is not "advertising" but double opt-in and one-click
   unsubscribe stay; keep a consent log; the footer, the `TERMS.md` disclaimer, the sign-in notice and the privacy notice
   wording are required; no registration or data protection officer; providers' standard terms accepted; two-factor
-  sign-in done; full-text descriptions are a grey area (Before launch, FR-1, FR-4, FR-8). `PLAN.md` step 6.6 stays the
+  sign-in done; full-text descriptions are a grey area, answered 2026-11-16 below (Before launch, FR-1, FR-4, FR-8). `PLAN.md` step 6.6 stays the
   gate.
 - 2026-11-16: "DevOps & SRE" is a role type, right after R&D. DevOps, DevSecOps, SRE, site reliability, platform,
   infrastructure, cloud, release, build, CI/CD, Kubernetes and production engineer titles leave R&D and belong to it (a
@@ -471,5 +471,5 @@ Recorded 2026-11-15, one line per decision, newest last. The first lines were ma
   readable through the public API; search and `get_job` use it behind functions that never return the text of jobs in
   bulk. It is exposed to assistants and search only after steps 7.3 and 8.1, as the lawyer approved. The full text of a
   closed job is deleted (set to NULL) 30 days after the job closes, and at once when a company asks for removal (the
-  exclusion list deletes the whole row); title, company, place, link and dates stay. `PRIVACY.md` and `TERMS.md` carry
+  exclusion list deletes the whole row). After the 30-day trim, title, company, place, link, dates and the snippet stay. `PRIVACY.md` and `TERMS.md` carry
   his wording.

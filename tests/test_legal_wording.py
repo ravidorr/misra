@@ -134,6 +134,7 @@ def test_the_privacy_notice_contact_is_a_direct_address_not_only_a_public_issue(
 def test_the_privacy_notice_says_where_full_job_descriptions_are_stored() -> None:
     text = read("PRIVACY.md")
     assert "Full job descriptions (which may include business contact details published by the employer" in text
+    assert "such as a recruiter's name or work email" in text
     assert "are stored in our Supabase database in the EU and contain only public job postings" in text
 
 
@@ -219,6 +220,7 @@ def test_the_terms_say_what_the_lawyer_asked_and_no_more() -> None:
         "do not guarantee that they are accurate, complete or still open",
         "**Employer content and removal:** All job descriptions, trademarks, and company names belong to their",
         'shown as published, "as is", without endorsement',
+        "want your listings or descriptions removed",
         "you accept the [privacy notice](./PRIVACY.md)",
         "third-party infrastructure in the EU and the United States",
         f"write to <{CONTACT}> and they will be deleted promptly",
