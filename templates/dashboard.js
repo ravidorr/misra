@@ -1448,7 +1448,7 @@ $('stories').addEventListener('click', (e) => {
   update();
 });
 $('reset').addEventListener('click', () => {
-  F = defaults();
+  F = { ...defaults(), q: F.q }; /* the search words are not a filter: the search box keeps them */
   $('placeSearch').value = '';
   for (const item of $('places').children) item.hidden = false;
   update();

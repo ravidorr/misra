@@ -477,7 +477,7 @@ async def test_fr2_ac5_a_filter_change_is_saved_to_the_account_once_typing_pause
     assert await stored_json(page, FILTERS) is None  # signed in, the browser's own filters are left alone
     await page.click("#reset")
     await until(lambda: len(prefs.writes) == 2)  # noqa: PLR2004
-    assert saved_filters(prefs) == DEFAULTS
+    assert saved_filters(prefs) == {**DEFAULTS, "q": "prod"}  # the search words are not a filter: reset keeps them
 
 
 async def test_fr2_ac5_the_account_filters_win_over_this_browsers_when_the_page_loads(page: Page, site: Path) -> None:

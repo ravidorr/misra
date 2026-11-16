@@ -1253,6 +1253,16 @@ async def test_a_saved_choice_of_the_wrong_type_or_a_company_that_is_gone_is_dro
     assert await page.locator("#company").input_value() == ""
 
 
+async def test_reset_keeps_the_search_words(page: Page, site: Path) -> None:
+    await serve_filters(page, site)
+    await page.fill("#q", "product")
+    await page.click(".chip[data-group=levels][data-value=Junior]")
+    await page.click("#reset")
+    assert await page.input_value("#q") == "product"
+    assert await page.locator("#levels .chip[aria-pressed=true]").all_text_contents() == ["All"]
+    assert json.loads(await page.evaluate("localStorage.getItem('il-jobs-filters-v3')"))["q"] == "product"
+
+
 async def test_reset_clears_the_place_search(page: Page, site: Path) -> None:
     await serve_filters(page, site)
     await open_places(page)
