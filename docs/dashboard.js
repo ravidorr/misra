@@ -1035,8 +1035,52 @@ function placeMatches(j, f) {
 const levelMatches = (j, f) => f.levels.length === 0 || f.levels.includes(j.lv);
 const typeMatches = (j, f) => f.types.length === 0 || f.types.some((t) => j.rt.includes(t));
 
+/* Words in the full text of a posting (PLAN.md step 7.3). The text is never sent to the page: a database function
+   (search_job_keys) answers with the keys of the open roles whose text has the words, and a role matches the search when
+   its title, company, team or location has every word, or when its key is in that answer. The answers are kept by query
+   (the words, one space apart), so only the answer for the query being shown counts; a search that fails or is slow
+   leaves the match on title, company, team and location alone. */
+const SEARCH_MIN = 3; /* the function answers nothing for less */
+const SEARCH_DELAY_MS = 400; /* the box changes with every key: ask once typing pauses */
+const SEARCH_KEPT = 30; /* answers kept */
+const textKeys = new Map();
+let searchTimer;
+const searchQuery = (q) => q.trim().toLowerCase().split(/\s+/).filter(Boolean).join(' ');
+
+async function fetchTextKeys(query) {
+  const response = await fetch(`${SUPABASE_URL}/rest/v1/rpc/search_job_keys`, {
+    method: 'POST',
+    headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ p_query: query }),
+    signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+  });
+  if (!response.ok) throw new Error(`search_job_keys: HTTP ${response.status}`);
+  const pairs = await response.json();
+  if (!Array.isArray(pairs)) throw new Error('search_job_keys: not a list');
+  return new Set(pairs.map(([company, id]) => `${company}|${id}`));
+}
+
+/* Ask for the keys of the query in the box once, a moment after the last key; show the list again when they come, if
+   the box still says the same. */
+function searchText() {
+  clearTimeout(searchTimer);
+  const query = searchQuery(F.q);
+  if (query.length < SEARCH_MIN || textKeys.has(query)) return;
+  searchTimer = setTimeout(async () => {
+    try {
+      const keys = await fetchTextKeys(query);
+      if (textKeys.size >= SEARCH_KEPT) textKeys.clear();
+      textKeys.set(query, keys);
+    } catch {
+      return; /* the title match stays; a later keystroke asks again */
+    }
+    if (ready && view === 'roles' && searchQuery(F.q) === query) render();
+  }, SEARCH_DELAY_MS);
+}
+
 function select(f) {
   const terms = f.q.trim().toLowerCase().split(/\s+/).filter(Boolean);
+  const found = textKeys.get(searchQuery(f.q));
   const out = JOBS.filter((j) => {
     if (isDiscarded(key(j)) && !f.showGone) return false;
     if (!inScope(j, f)) return false;
@@ -1046,7 +1090,7 @@ function select(f) {
     if (f.hideStale && j.s) return false;
     if (terms.length > 0) {
       const hay = `${j.c} ${j.t} ${j.m} ${j.l}`.toLowerCase();
-      return terms.every((term) => hay.includes(term));
+      return terms.every((term) => hay.includes(term)) || Boolean(found?.has(key(j)));
     }
     return true;
   });
@@ -1061,6 +1105,7 @@ function select(f) {
 function sync() {
   hideUndo(); /* every change to F, from the reader or from the account, ends the offer of an undo (reset sets it after) */
   $('q').value = F.q;
+  searchText();
   $('company').value = F.company;
   $('loc').value = F.loc;
   $('sort').value = F.sort;
@@ -1271,6 +1316,19 @@ function closedCardEl(e) {
   return h('li', {}, [art]);
 }
 
+/* The place, level, role types and team of a role, and when it was first seen: on the card and in its detail view. */
+const tagsEl = (j) =>
+  h('p', { class: 'card-tags' }, [
+    j.l && h('span', { class: 'pill', text: j.l.slice(0, MAX_LOCATION) }),
+    ...j.rg.filter((region) => region !== j.l).map((region) => tag('Region', region, 'pill')),
+    ...j.lo.filter((place) => place !== j.l).map((place) => tag('Place', place, 'pill')),
+    j.ru && tag('Region', REMOTE_NOT_SAID, 'pill'),
+    tag('Level', j.lv, 'pill pill-soft'),
+    ...j.rt.map((type) => tag('Role type', type, 'pill pill-soft')),
+    j.m && h('span', { class: 'pill', text: j.m }),
+    j.f && h('time', { class: 'card-seen', datetime: j.f, text: ago(j.f) }),
+  ]);
+
 /* A heuristic: the data does not say whether a snippet was cut. A cut never ends in `.`, `!` or `?` (the sync trims
    them), so a text of 200 or more characters that does not is treated as cut and gets the ellipsis, hidden from screen
    readers; a whole text of that length that ends in a quote or a bracket gets a false one. */
@@ -1319,16 +1377,7 @@ function cardEl(j) {
     ]),
     /* Third-party text, so text and never markup; dir="auto" lets a Hebrew posting run right to left. */
     j.sn && h('p', { class: 'card-snippet', dir: 'auto' }, [j.sn, cutMark(j.sn)]),
-    h('p', { class: 'card-tags' }, [
-      j.l && h('span', { class: 'pill', text: j.l.slice(0, MAX_LOCATION) }),
-      ...j.rg.filter((region) => region !== j.l).map((region) => tag('Region', region, 'pill')),
-      ...j.lo.filter((place) => place !== j.l).map((place) => tag('Place', place, 'pill')),
-      j.ru && tag('Region', REMOTE_NOT_SAID, 'pill'),
-      tag('Level', j.lv, 'pill pill-soft'),
-      ...j.rt.map((type) => tag('Role type', type, 'pill pill-soft')),
-      j.m && h('span', { class: 'pill', text: j.m }),
-      j.f && h('time', { class: 'card-seen', datetime: j.f, text: ago(j.f) }),
-    ]),
+    tagsEl(j),
     h('p', { class: 'card-actions' }, [
       h('a', { class: 'btn btn-primary', href: url, target: '_blank', rel: 'noopener noreferrer' }, [
         'Apply ',
@@ -1336,6 +1385,16 @@ function cardEl(j) {
         h('span', { class: 'sr-only', text: ` to ${what}${NEW_TAB}` }),
       ]),
       starButton(k, what, starredNow),
+      /* Only a role with a snippet has more to show than the card: the detail view is the snippet and the link to the
+         employer's page. Not a [data-act]: that list is how the focus finds its place after a star or a discard. */
+      j.sn &&
+        h('button', {
+          type: 'button',
+          class: 'btn',
+          'data-detail': k,
+          'aria-label': `Details: ${what}`,
+          text: 'Details',
+        }),
       h('button', {
         type: 'button',
         class: 'btn btn-link',
@@ -1580,6 +1639,42 @@ $('list').addEventListener('click', (e) => {
   if (button.dataset.act === 'star') setChoice(item, isStarred(k) ? null : 'star');
   else setChoice(item, isDiscarded(k) ? null : 'discard');
   render(index);
+});
+
+/* The detail view of a role (PLAN.md step 7.3, FR-4 AC 5): one dialog, outside the list, filled for the role. It shows
+   the snippet in full and the link to the employer's page for the rest; the full text of the posting is never in the
+   page. The focus goes to its title (the other dialogs do the same) and comes back to the role's button on closing. When
+   that button is gone (the list was drawn again meanwhile), it goes to the list heading. */
+const detail = $('detailDialog');
+let detailKey = '';
+
+function openDetail(j) {
+  detailKey = key(j);
+  $('detailCompany').textContent = j.c;
+  $('detailTitle').textContent = j.t;
+  $('detailTags').replaceChildren(...tagsEl(j).childNodes);
+  $('detailText').replaceChildren(j.sn, cutMark(j.sn) || '');
+  $('detailLink').replaceChildren(
+    'Read full description & apply on ',
+    j.c,
+    ' ',
+    h('span', { 'aria-hidden': 'true', text: '↗' }),
+    h('span', { class: 'sr-only', text: NEW_TAB }),
+  );
+  $('detailLink').href = safeUrl(j.u);
+  detail.showModal();
+  $('detailTitle').focus();
+}
+
+detail.addEventListener('close', () => {
+  const back = [...$('list').querySelectorAll('[data-detail]')].find((button) => button.dataset.detail === detailKey);
+  (back ?? $('list-h')).focus();
+});
+$('detailClose').addEventListener('click', () => detail.close());
+
+$('list').addEventListener('click', (e) => {
+  const button = e.target.closest('[data-detail]');
+  if (button) openDetail(JOB_BY_KEY.get(button.dataset.detail));
 });
 
 $('starredView').addEventListener('click', () => {

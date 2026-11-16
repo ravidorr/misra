@@ -302,7 +302,7 @@ Decisions made in planning (they change the PRD's wording, so update the PRD in 
 - [ ] 7.2 Short description: a public `snippet` column holding the first 255 characters of the description as written, cut
   at a word boundary, none when no description; sync stores it; the card and the detail view show it, with the link
   "Read full description & apply on `<Company>`" to the employer's page. Done when: FR-4 AC 4 and 8 hold.
-- [ ] 7.3 Detail view from the card (it shows the snippet and the "Read full description & apply" button; the full text is
+- [x] 7.3 Detail view from the card (it shows the snippet and the "Read full description & apply" button; the full text is
   not shown) and search over the full text (Postgres full-text index, also used by the digest keyword filter) through
   a database function that returns matching job keys only. Done when: FR-4 AC 5 and 6 hold. FR-4 AC 11 (AI summary only if users ask) is a standing policy, not a step.
 - [ ] 7.4 Storage check after one month of descriptions against the free database size, and the trim of closed jobs'

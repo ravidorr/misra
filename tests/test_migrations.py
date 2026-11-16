@@ -148,7 +148,7 @@ SUBSCRIBE_FUNCTION = re.compile(
 REPORT_SIGNATURE = (
     r"(?:jsonb|date|date, text|date, text, integer, integer|text, timestamptz|date, text, text"
     r"|date, text, text, integer, integer, integer|uuid, timestamptz"
-    r"|uuid, text, text, jsonb, text, timestamptz, text, timestamptz)?"
+    r"|uuid, text, text, jsonb, text, timestamptz, text, timestamptz|text)?"
 )
 REVOKE_FUNCTION = re.compile(
     rf"revoke (?:all|execute) on function public\.(?P<name>\w+)\({REPORT_SIGNATURE}\) from (?P<roles>[a-z, ]+)"
@@ -179,6 +179,17 @@ JOBS_TRIM_FUNCTION = re.compile(
     r"set search_path = '' as \$\$(?P<body>.*)\$\$"
 )
 GRANT_JOBS_TRIM_FUNCTION = re.compile(r"grant execute on function public\.jobs_text_trim\(date\) to service_role")
+# Step 7.3: search over the text of a posting. The one security definer function the public roles may run, and the one
+# index that is not on bare columns. Both are matched whole, so a change to either fails the lint until it is taught.
+SEARCH_NAME = "search_job_keys"
+SEARCH_FUNCTION = re.compile(
+    r"create function public\.search_job_keys\((?P<args>[a-z_0-9 ,]*)\) returns jsonb language sql stable "
+    r"security definer set search_path = '' as \$\$(?P<body>.*)\$\$"
+)
+SEARCH_INDEX = (
+    "create index jobs_description_search on public.jobs using gin (to_tsvector('simple', coalesce(description, '')))"
+)
+GRANT_SEARCH_FUNCTION = "grant execute on function public.search_job_keys(text) to anon, authenticated, service_role"
 DOLLAR_QUOTE = re.compile(r"\$\w*\$")
 CASCADE = "references auth.users (id) on delete cascade"
 
@@ -403,6 +414,9 @@ def problems(stmts: list[str]) -> list[str]:
         elif m := JOBS_TRIM_FUNCTION.fullmatch(s):
             functions[JOBS_TRIM_NAME] = False
             found.extend(jobs_trim_problems(m))
+        elif m := SEARCH_FUNCTION.fullmatch(s):
+            functions[SEARCH_NAME] = True
+            found.extend(search_problems(m))
         elif m := TRIGGER.fullmatch(s):
             triggers.append((m["table"], m["function"]))
         elif not (
@@ -411,6 +425,7 @@ def problems(stmts: list[str]) -> list[str]:
             or COLUMN_GRANT.fullmatch(s)
             or GRANT_REPORT_FUNCTION.fullmatch(s)
             or GRANT_JOBS_TRIM_FUNCTION.fullmatch(s)
+            or s in {SEARCH_INDEX, GRANT_SEARCH_FUNCTION}
             or ADD_JOBS_COLUMN.fullmatch(s)
             or GRANT_SUBSCRIPTION_FUNCTION.fullmatch(s)
             or GRANT_SUBSCRIBE_FUNCTION.fullmatch(s)
@@ -467,6 +482,41 @@ def jobs_trim_problems(m: re.Match[str]) -> list[str]:
     assigned = re.findall(r"\bset (.+?) where", body, re.S)
     found += [f"function {JOBS_TRIM_NAME} may set only {sorted(JOBS_TRIM_NULLS)}"] * bool(
         [" ".join(a.split()) for a in assigned] != [", ".join(f"{c} = null" for c in JOBS_TRIM_NULLS)]
+    )
+    return found
+
+
+SEARCH_SELECTS = "select j.company, j.job_id from public.jobs j"
+SEARCH_RETURNS = "jsonb_agg(jsonb_build_array(found.company, found.job_id))"
+SEARCH_GUARDS = (  # each is something the function must keep saying, see the comment of the migration
+    "j.status = 'open'",
+    "coalesce(p_query, '') ~ '[[:alnum:]]{3}'",
+    "to_tsvector('simple', coalesce(j.description, '')) @@ plainto_tsquery('simple', left(p_query, 200))",
+)
+SEARCH_WHERE = (  # the whole clause, so nothing can be added to it or after it
+    "where j.status = 'open' and coalesce(p_query, '') ~ '[[:alnum:]]{3}' "
+    "and to_tsvector('simple', coalesce(j.description, '')) "
+    "@@ plainto_tsquery('simple', left(p_query, 200)) order by j.company, j.job_id limit 3000 ) found"
+)
+
+
+def search_problems(m: re.Match[str]) -> list[str]:
+    """The search is the one definer function the public roles may run, so it is pinned: one text argument, only `jobs`
+    read, never written, only open jobs, a minimum and a maximum query, a limit, and only the two keys leave it (the
+    text is read in the `where` clause and nowhere else)."""
+    body = " ".join(m["body"].split())
+    touched = set(re.findall(r"public\.(\w+)", body)) - {"jobs"}
+    found = [] if m["args"] == "p_query text" else [f"function {SEARCH_NAME} has another signature"]
+    found += [f"function {SEARCH_NAME} may touch only jobs, not {sorted(touched)}"] * bool(touched)
+    found += [f"function {SEARCH_NAME} reaches outside public"] * bool(re.search(r"\b(?:auth|storage|vault)\.", body))
+    found += [f"function {SEARCH_NAME} may only read"] * bool(re.search(r"\b(?:insert|update|delete|truncate)\b", body))
+    found += [f"function {SEARCH_NAME} is missing: {g}" for g in SEARCH_GUARDS if g not in body]
+    found += [f"function {SEARCH_NAME} may return only the two keys"] * (
+        SEARCH_SELECTS not in body or SEARCH_RETURNS not in body or body.count("description") != 1
+    )  # the one use is in the where clause
+    found += [f"function {SEARCH_NAME} has another where clause"] * (SEARCH_WHERE not in body)
+    found += [f"function {SEARCH_NAME} must use plainto_tsquery only, on description only"] * bool(
+        re.search(r"(?<!plain)to_tsquery|websearch_|phraseto_|ts_headline|ts_rank|ts_stat|details|snippet", body)
     )
     return found
 
@@ -814,6 +864,7 @@ def test_the_report_counters_have_no_policy_and_no_grant_for_anyone_but_the_serv
         and not GRANT_SUBSCRIPTION_FUNCTION.fullmatch(s)
         and not GRANT_SUBSCRIBE_FUNCTION.fullmatch(s)
         and not GRANT_JOBS_TRIM_FUNCTION.fullmatch(s)
+        and s != GRANT_SEARCH_FUNCTION
         and s not in HOOK_GRANTS
     ]
 
@@ -997,3 +1048,65 @@ def test_a_weakened_trim_is_refused(old: str, new: str) -> None:
 @pytest.mark.parametrize("column", ["description", "details"])
 def test_the_snippet_migration_cannot_grant_the_text(column: str) -> None:
     assert grant_problem(f"grant select (snippet, {column}) on public.jobs to anon, authenticated")
+
+
+SEARCH_FILE = MIGRATION_DIR / "20261124100000_jobs_text_search.sql"
+SEARCH_CLOSE = "revoke all on function public.search_job_keys(text) from public, anon, authenticated;"
+SEARCH_GRANT = "grant execute on function public.search_job_keys(text) to anon, authenticated, service_role;"
+
+
+def test_the_search_returns_keys_only_from_open_jobs_with_a_minimum_a_maximum_and_a_limit() -> None:
+    text = SEARCH_FILE.read_text(encoding="utf-8")
+    assert SEARCH_CLOSE in text
+    assert SEARCH_GRANT in text
+    (search,) = [m for s in statements() if (m := SEARCH_FUNCTION.fullmatch(s))]
+    assert search_problems(search) == []
+    assert "description" not in text.split("create function", 1)[1].split("$$", 2)[2]  # nothing after the body
+    assert problems(statements()) == []
+    # the public roles still cannot read the text itself: no column grant of it anywhere
+    assert not any(words(g["columns"]) & JOBS_CLOSED_COLUMNS for s in statements() if (g := COLUMN_GRANT.fullmatch(s)))
+
+
+@pytest.mark.parametrize(
+    ("old", "new"),
+    [
+        (SEARCH_CLOSE, ""),
+        (SEARCH_CLOSE, SEARCH_CLOSE.replace("public, anon, authenticated", "public, anon")),
+        (SEARCH_GRANT, SEARCH_GRANT.replace("anon, ", "anon, public, ")),
+        ("(p_query text)\nreturns", "(p_query text, p_all boolean)\nreturns"),
+        ("security definer\n", ""),
+        ("where j.status = 'open'", "where true"),
+        ("coalesce(p_query, '') ~ '[[:alnum:]]{3}'", "coalesce(p_query, '') ~ '[[:alnum:]]{1}'"),
+        ("where j.status = 'open'", "where j.status = 'open' or true"),
+        ("limit 3000", "limit 30000"),
+        ("plainto_tsquery('simple', left(p_query, 200))", "websearch_to_tsquery('simple', left(p_query, 200))"),
+        (
+            "@@ plainto_tsquery",
+            "and to_tsvector('simple', j.details) @@ plainto_tsquery('x') @@ plainto_tsquery",
+        ),
+        ("limit 3000", ""),
+        ("order by j.company, j.job_id", "order by j.company"),
+        ("left(p_query, 200)", "p_query"),
+        ("plainto_tsquery('simple'", "to_tsquery('simple'"),
+        ("jsonb_build_array(found.company, found.job_id)", "jsonb_build_array(found.company, found.job_id, found.d)"),
+        ("select j.company, j.job_id\n", "select j.company, j.job_id, j.description\n"),
+        ("from public.jobs j\n", "from public.jobs j, public.user_jobs u\n"),
+        ("    from (\n", "    from (\n      delete from public.jobs where true returning 1) x, (\n"),
+        ("    from (\n", "    from auth.users, (\n"),
+        ("coalesce(j.description, '')) @@", "coalesce(j.description, '')) @@ ts_headline('x', 'y') ||"),
+        (
+            "using gin (to_tsvector('simple', coalesce(description, '')))",
+            "using gin (to_tsvector('simple', description))",
+        ),
+    ],
+)
+def test_a_weakened_search_is_refused(old: str, new: str) -> None:
+    text = SEARCH_FILE.read_text(encoding="utf-8")
+    assert old in text, old
+    weakened = text.replace(old, new)
+    assert problems(statements_of(f"{REAL.replace(text, '')}\n{weakened}")), old
+
+
+@pytest.mark.parametrize("columns", ["description", "company, details", "snippet, description"])
+def test_the_search_migration_cannot_open_the_text_by_a_grant(columns: str) -> None:
+    assert grant_problem(f"grant select ({columns}) on public.jobs to anon, authenticated")
