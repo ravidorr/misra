@@ -4,6 +4,18 @@ All notable changes are documented here. Format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
+## [0.37.0] - 2026-11-16
+
+### Added
+
+- The `comeet_page` adapter reads a WordPress careers page that shows the Comeet plugin's jobs, drawn on the server, for companies whose Comeet account answers 400 so the `comeet` adapter cannot read them. The slug is the page address. A job is a link `/co/<place>/<uid>/<title>` (the uid is the job id, with two parts for a job in a second place); the title comes from a heading or from the plugin's `comeet-position-name`, the department from a `department` or `position` span, the place from a `location` span, else from the place in the link. The plugin's commented copy of each link is ignored. It returns `None` for a failed request, a redirect to another host, a card with no title, a job link that no card yielded (a changed layout) and a page with no job and no "don't have any open positions" notice of the plugin; that notice gives `[]`.
+- Pinned on it, `israel_only` (they list worldwide jobs): REE Automotive, Gauzy, Guesty and Apester.
+- Tests: the plugin cards of ree.auto and gauzy.com, the Next.js cards of guesty.com, the notice of apester.com (fixtures trimmed from the real pages), and each case that must return `None`.
+
+### Changed
+
+- `data/unresolved_candidates.csv` loses the four rows; the notes of SQream (its one job card names no place) and Kornit Digital (its own theme, links `/cmcareer/`) say why they are not on the adapter.
+
 ## [0.34.0] - 2026-11-15
 
 ### Changed

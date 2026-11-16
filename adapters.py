@@ -6,7 +6,7 @@ import json
 import re
 from collections.abc import Callable, Iterator
 from typing import Any
-from urllib.parse import urlparse
+from urllib.parse import urljoin, urlparse
 
 from common import ISRAEL, get, post
 
@@ -172,11 +172,11 @@ _JAZZHR_ITEM_END = re.compile(r"</ul>\s*</li>")
 _JAZZHR_LINK = re.compile(r'<a href="(https://[^"]+/apply/([A-Za-z0-9]+)/[^"]*)">(.*?)</a>', re.S)
 _JAZZHR_ANY_JOB_LINK = re.compile(r'href="https://[^"]+/apply/([A-Za-z0-9]+)/')
 _JAZZHR_FACT = re.compile(r"<li><i class='fa fa-(map-marker|sitemap)'></i>(.*?)</li>", re.S)
-_JAZZHR_TAG = re.compile(r"<[^>]+>")
+_TAG = re.compile(r"<[^>]+>")
 
 
-def _jazzhr_text(raw: str) -> str:
-    return html.unescape(re.sub(r"\s+", " ", _JAZZHR_TAG.sub(" ", raw))).strip()
+def _page_text(raw: str) -> str:
+    return html.unescape(re.sub(r"\s+", " ", _TAG.sub(" ", raw))).strip()
 
 
 def jazzhr(slug: str) -> list[Job] | None:
@@ -194,18 +194,70 @@ def jazzhr(slug: str) -> list[Job] | None:
     for chunk in board.split(_JAZZHR_ITEM)[1:]:
         item = _JAZZHR_ITEM_END.split(chunk)[0]  # the footer and anything after the list is not part of the last job
         link = _JAZZHR_LINK.search(item)
-        title = _jazzhr_text(link.group(3)) if link else ""
+        title = _page_text(link.group(3)) if link else ""
         if not link or not title:
             return None  # an entry we cannot read: a partial list would close the jobs we missed
         facts: dict[str, str] = {}
         for kind, value in _JAZZHR_FACT.findall(item):
-            facts.setdefault(kind, _jazzhr_text(value))
+            facts.setdefault(kind, _page_text(value))
         out.append(
             _job(link.group(2), title, facts.get("map-marker"), html.unescape(link.group(1)), team=facts.get("sitemap"))
         )
     # job links the item markup did not yield (a changed layout) mean the list is not complete
     if len(set(_JAZZHR_ANY_JOB_LINK.findall(board))) != len({j["job_id"] for j in out}):
         return None
+    return out
+
+
+_COMEET_UID = r"[0-9A-F]{2}\.[0-9A-F]{3}(?:-[0-9A-F]{2}\.[0-9A-F]{3})*"
+_COMEET_COMMENT = re.compile(r"<!--.*?-->", re.S)
+_COMEET_LINK = re.compile(
+    rf'<a\b[^>]*?\bhref="([^"]*/co/([a-z0-9-]+)/({_COMEET_UID})/[a-z0-9-]+/?[^"]*)"[^>]*>(.*?)</a>', re.S | re.I
+)
+_COMEET_ANY_UID = re.compile(rf"/co/[a-z0-9-]+/({_COMEET_UID})/[a-z0-9-]+")
+_COMEET_HEADING = re.compile(r"<h[1-6]\b[^>]*>(.*?)</h[1-6]>", re.S | re.I)
+_COMEET_NAME = re.compile(r'class="comeet-position-name"[^>]*>(.*?)(?:<br|<span|</div>)', re.S | re.I)
+_COMEET_TEAM = re.compile(r'<span[^>]*class="[^"]*(?:department|\bposition\b)[^"]*"[^>]*>(.*?)</span>', re.S | re.I)
+_COMEET_PLACE = re.compile(r'<span[^>]*class="[^"]*location[^"]*"[^>]*>(.*?)</span>', re.S | re.I)
+_COMEET_EMPTY = re.compile(r"don.t have any open positions", re.I)
+_COMEET_PLUGIN = "comeet-outer-wrapper"
+
+
+def comeet_page(slug: str) -> list[Job] | None:
+    """slug is the address of a WordPress careers page that shows the Comeet plugin's jobs, drawn on the server, for
+    example 'https://ree.auto/careers/'. Comeet's own board is not readable for these accounts (the API answers 400), so
+    the page is the source. Whatever the theme's card markup, a job is a link `/co/<place>/<uid>/<title>` with a title
+    (a heading, or the plugin's `comeet-position-name`), maybe a department and a place; with no place in the card the
+    place in the link is used. The list is trusted only when every job link of the page was read: a changed layout, an
+    unread card or a page that is neither a list nor the plugin's "no open positions" notice is None, never a partial
+    list (which would close stored jobs)."""
+    host = urlparse(slug).hostname
+    r = get(slug)
+    if r is None or r.status_code != HTTP_OK or not host or urlparse(r.url).hostname != host:
+        return None
+    page = _COMEET_COMMENT.sub("", r.text)  # the plugin keeps a commented copy of every title link
+    out: list[Job] = []
+    for href, place, uid, card in _COMEET_LINK.findall(page):
+        named = _COMEET_HEADING.search(card) or _COMEET_NAME.search(card)
+        title = _page_text(named.group(1)) if named else ""
+        if not title:
+            return None  # a card we cannot read: a partial list would close the jobs we missed
+        team, where = _COMEET_TEAM.search(card), _COMEET_PLACE.search(card)
+        location = _page_text(where.group(1)) if where else place.replace("-", " ")
+        out.append(
+            _job(
+                uid,
+                title,
+                location,
+                urljoin(r.url, html.unescape(href)),
+                team=_page_text(team.group(1)) if team else "",
+            )
+        )
+    # job links the card markup did not yield (a changed layout) mean the list is not complete
+    if len(set(_COMEET_ANY_UID.findall(page))) != len({j["job_id"] for j in out}):
+        return None
+    if not out and not (_COMEET_PLUGIN in page and _COMEET_EMPTY.search(html.unescape(page))):
+        return None  # no job and no notice that there is none: not a page we understand
     return out
 
 
@@ -611,4 +663,5 @@ ADAPTERS: dict[str, Callable[[str], list[Job] | None]] = {
     "oraclehcm": oraclehcm,
     "amazon": amazon,
     "phenom": phenom,
+    "comeet_page": comeet_page,
 }

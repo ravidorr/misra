@@ -2840,5 +2840,53 @@
   "status": "ok",
   "n_jobs": 36,
   "n_israel": 7
+ },
+ {
+  "name": "REE Automotive",
+  "domain": "ree.auto",
+  "careers_url": "",
+  "ats": "comeet_page",
+  "slug": "https://ree.auto/careers/",
+  "source": "override",
+  "status": "ok",
+  "n_jobs": 1,
+  "n_israel": 1,
+  "israel_only": true
+ },
+ {
+  "name": "Gauzy",
+  "domain": "gauzy.com",
+  "careers_url": "",
+  "ats": "comeet_page",
+  "slug": "https://www.gauzy.com/careers/",
+  "source": "override",
+  "status": "ok",
+  "n_jobs": 0,
+  "n_israel": 0,
+  "israel_only": true
+ },
+ {
+  "name": "Guesty",
+  "domain": "guesty.com",
+  "careers_url": "",
+  "ats": "comeet_page",
+  "slug": "https://www.guesty.com/careers/",
+  "source": "override",
+  "status": "ok",
+  "n_jobs": 8,
+  "n_israel": 8,
+  "israel_only": true
+ },
+ {
+  "name": "Apester",
+  "domain": "apester.com",
+  "careers_url": "",
+  "ats": "comeet_page",
+  "slug": "https://apester.com/careers/",
+  "source": "override",
+  "status": "ok",
+  "n_jobs": 0,
+  "n_israel": 0,
+  "israel_only": true
  }
 ]
