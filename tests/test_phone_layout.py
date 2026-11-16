@@ -19,7 +19,7 @@ from tests.test_dashboard_page import AXE, TAP, build_site, serve
 HIRING_COMPANIES = 15  # the row shows up to 15
 ROLES_PER_COMPANY = 2  # an old one and a new one
 WIDTHS = [320, 375, 393, 430, 768, 1650]
-WIDE = 768  # the footer puts the links beside the text from here
+WIDE = 768  # the footer text and links start at the left from here (centered below)
 PHONE_WIDTHS = [320, 375, 393, 430]
 FIRST_SCREEN = {"width": 393, "height": 852}  # an iPhone 16
 SHEET = "#moreFilters"
@@ -295,12 +295,12 @@ async def test_the_search_is_on_the_first_screen_without_opening_anything(
 
 
 def count_words(n: int) -> str:
-    return build_dashboard.coverage_words(n, 0)["__COMPANIES__"]
+    return build_dashboard.coverage_words(n)["__COMPANIES__"]
 
 
 async def covered_count(page: Page) -> int:
-    """The number the page says it covers, read from the footer's hook; it must be the one of the page data."""
-    hook = await page.locator("#coverage").get_attribute("data-companies-covered")
+    """The number the page says it covers, read from the search field's hook; it must be the one of the page data."""
+    hook = await page.locator("#q").get_attribute("data-companies-covered")
     assert hook is not None
     data = json.loads(await page.locator("#page-data").text_content() or "{}")
     assert data["covered"] == int(hook)
@@ -345,58 +345,6 @@ async def test_the_company_count_is_in_view_without_scrolling_and_fits_its_line(
     measured = await page.evaluate(MEASURE_PLACEHOLDER)
     assert measured["text"] <= measured["room"]  # one line, not cut off
     assert await page.evaluate(NO_SIDEWAYS)
-
-
-async def test_the_footer_sentence_and_its_link_open_the_coverage_gaps(page: Page, crowd: Path) -> None:
-    await open_page(page, crowd, 375)
-    sentence = page.locator("#coverage")
-    covered = await covered_count(page)
-    gaps = json.loads(await page.locator("#page-data").text_content() or "{}")["gaps"]["total"]
-    assert gaps > 0
-    assert (await sentence.text_content() or "").strip() == (
-        f"Roles from {count_words(covered)} whose career pages we read daily. "
-        f"Coverage gaps lists {count_words(gaps)} whose roles may be missing or old."
-    )  # the words are one sentence pair for an agent, wherever the link sits
-    link = sentence.locator("a")
-    box = await link.bounding_box()
-    assert box is not None
-    assert box["height"] >= TAP
-    assert box["width"] >= TAP
-    assert await page.locator("#gaps").get_attribute("open") is None
-    await link.click()
-    assert await page.locator("#gaps").get_attribute("open") is not None  # the closed card is opened for the jump
-    assert await page.evaluate(NO_SIDEWAYS)
-
-
-# The line boxes of the sentence before the link: the text node's rectangles, one per line.
-MEASURE_FIRST_SENTENCE = """() => {
-  const p = document.querySelector('#coverage');
-  const range = document.createRange();
-  range.selectNodeContents(p.firstChild);
-  const lines = [];
-  for (const r of range.getClientRects()) {
-    if (!lines.some((l) => Math.abs(l.top - r.top) < 1)) lines.push({ top: r.top, height: r.height });
-  }
-  const link = p.querySelector('a').getBoundingClientRect();
-  const last = lines[lines.length - 1];
-  return { lines, linkTop: link.top, linkHeight: link.height, textBottom: last.top + last.height };
-}"""
-
-
-@pytest.mark.parametrize("scheme", ["light", "dark"])
-@pytest.mark.parametrize("width", [320, 375, 1480])
-async def test_the_first_footer_sentence_has_even_lines_and_its_link_is_a_44px_target_below_it(
-    page: Page, crowd: Path, width: int, scheme: str
-) -> None:
-    await open_page(page, crowd, width, scheme=scheme)
-    await page.locator("footer.foot").scroll_into_view_if_needed()
-    m = await page.evaluate(MEASURE_FIRST_SENTENCE)
-    heights = {round(line["height"], 1) for line in m["lines"]}
-    assert len(heights) == 1  # the link's box does not make one line taller than the others
-    steps = {round(b["top"] - a["top"], 1) for a, b in zip(m["lines"], m["lines"][1:], strict=False)}
-    assert len(steps) <= 1  # and the spacing between the lines is even
-    assert m["linkHeight"] >= TAP
-    assert m["linkTop"] >= m["textBottom"] - 1  # the link box starts under the sentence, covering none of it
 
 
 async def test_the_search_and_the_first_job_are_on_the_first_screen_of_an_iphone(page: Page, crowd: Path) -> None:
@@ -663,7 +611,10 @@ async def test_the_footer_fits_and_has_44px_links(page: Page, crowd: Path, width
     assert await page.evaluate(NO_SIDEWAYS)
     stamp = await page.locator("#upd").inner_text()
     assert FOOT_DATE.match(stamp), stamp
-    assert await page.locator(".foot-updated").inner_text() == f"Career pages last read {stamp}."
+    assert (
+        await page.locator(".foot-updated").inner_text()
+        == f"Career pages last read {stamp}. Career pages are read daily."
+    )
     assert re.match(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}Z?", await page.locator("#upd").get_attribute("datetime") or "")
     box = await foot.bounding_box()
     assert box is not None
@@ -676,19 +627,18 @@ async def test_the_footer_fits_and_has_44px_links(page: Page, crowd: Path, width
         assert box["x"] <= link_box["x"] <= link_box["x"] + link_box["width"] <= box["x"] + box["width"]
         names.append(await link.inner_text())
     assert names == ["Privacy", "Terms", "Contact"]
-    gaps_link = await foot.locator("a.foot-gaps").bounding_box()
-    note = await page.locator(".foot-updated").bounding_box()
-    assert gaps_link is not None
-    assert note is not None
-    assert gaps_link["y"] + gaps_link["height"] <= note["y"] + 1  # its 44px box never covers the date line below
     links = await foot.locator("nav").bounding_box()
-    text = await foot.locator(".foot-info").bounding_box()
+    text = await page.locator(".foot-updated").bounding_box()
     assert links is not None
     assert text is not None
+    assert links["y"] >= text["y"] + text["height"]  # the links are a line of their own below the text, at every width
     if width >= WIDE:
-        assert links["x"] > text["x"] + text["width"] - 1  # the text left, the links right
+        first = await foot.locator("nav a").first.bounding_box()
+        assert first is not None
+        assert abs(first["x"] - text["x"]) < 1  # both start at the left
+        assert await foot.evaluate("e => getComputedStyle(e).textAlign") in ("start", "left")
     else:
-        assert links["y"] >= text["y"] + text["height"]  # stacked
+        assert await foot.evaluate("e => getComputedStyle(e).textAlign") == "center"
 
 
 @pytest.mark.parametrize(

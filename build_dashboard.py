@@ -403,17 +403,10 @@ def count_words(n: int) -> str:
     return f"{n} {'company' if n == 1 else 'companies'}"
 
 
-def coverage_words(covered: int, gaps: int) -> dict[str, str]:
-    """The values of the `__COVERED__`, `__COMPANIES__` and `__COVERAGE_GAPS__` placeholders of the page: the count, the
-    count in words, and the sentence that points at the coverage card (nothing when the card has no company). The
-    whole sentence is the link, so it is one 44px block of its own and never a box inside a line of text."""
-    words = f"Coverage gaps lists {count_words(gaps)} whose roles may be missing or old."
-    link = f'<a class="foot-gaps" href="#gaps">{words}</a>'
-    return {
-        "__COVERED__": str(covered),
-        "__COMPANIES__": count_words(covered),
-        "__COVERAGE_GAPS__": f" {link}" if gaps else "",
-    }
+def coverage_words(covered: int) -> dict[str, str]:
+    """The values of the `__COVERED__` and `__COMPANIES__` placeholders of the page: the count (the search field's
+    `data-companies-covered` hook) and the count in words (its placeholder and label)."""
+    return {"__COVERED__": str(covered), "__COMPANIES__": count_words(covered)}
 
 
 def apply_digest_switch(text: str) -> str:
@@ -541,7 +534,7 @@ def main() -> None:
         text = Path(source).read_text(encoding="utf-8")
         text = apply_digest_switch(text)
         text = text.replace("__SUPABASE_URL__", SUPABASE_URL).replace("__SUPABASE_ANON_KEY__", SUPABASE_ANON_KEY)
-        for placeholder, value in coverage_words(covered, gaps["total"]).items():
+        for placeholder, value in coverage_words(covered).items():
             text = text.replace(placeholder, value)
         text = text.replace("__PAGE_DATA__", page_data)  # last: the data is never searched for placeholders
         (out / OUTPUT_NAMES.get(source, Path(source).name)).write_text(text, encoding="utf-8")
