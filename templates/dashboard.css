@@ -947,3 +947,25 @@ html:has(.sheet:modal) {
   min-height: var(--tap);
   justify-content: center;
 }
+
+/* The page the emails link to (email.html): the message of each state in one card under the header, then the footer links. */
+.email-card {
+  display: grid;
+  justify-items: start;
+  gap: var(--space-3);
+}
+
+.email-card .hero,
+.email-card .sub {
+  margin: 0;
+}
+
+.card-actions[hidden] {
+  display: none;
+}
+
+@media (width >= 561px) {
+  .email-card .hero {
+    font-size: 2rem;
+  }
+}

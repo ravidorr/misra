@@ -270,3 +270,84 @@ def test_the_page_knows_every_word_the_functions_send() -> None:
     }
     assert "/functions/v1/confirm-email" in script
     assert (root / "supabase" / "functions" / "confirm-email").is_dir()
+
+
+STATES = {
+    f"#token={TOKEN}": (
+        "Confirm your email",
+        "Press the button to start your Misra job alerts. Nothing is sent until you do.",
+        "Confirm my email",
+    ),
+    "#link-not-valid": (
+        NOT_VALID,
+        f"{KEEP} To manage your job alerts or delete your account, sign in on the Misra dashboard.",
+        "Open Misra dashboard",
+    ),
+    "#unsubscribe-link-not-valid": (UNSUBSCRIBE_NOT_VALID, UNSUBSCRIBE_NOT_VALID_TEXT, "Open Misra dashboard"),
+    "#try-again": (
+        "Something went wrong",
+        "We could not finish this. Open the link in your email again in a moment.",
+        "Open Misra dashboard",
+    ),
+    "": ("This link is incomplete", "Open the link from your email again.", "Open Misra dashboard"),
+}
+
+
+@pytest.mark.parametrize("fragment", list(STATES))
+async def test_every_state_sits_in_one_card_with_the_dashboard_header_and_footer(
+    page: Page, site: Path, fragment: str
+) -> None:
+    """The page looks like the dashboard (header, one card, footer) and shows exactly the approved words."""
+    heading, message, button = STATES[fragment]
+    await open_page(page, site, fragment)
+    card = page.locator("main > section.card")
+    await expect(card).to_have_count(1)
+    await expect(card.locator("h1 #heading")).to_have_text(heading)
+    await expect(card.locator("#message")).to_have_text(message)
+    # The card holds the heading, the text, the one visible button and the screen-reader status: nothing else.
+    visible = card.locator("#confirm, #back")
+    await expect(visible.locator("visible=true")).to_have_text(button)
+    assert await card.evaluate("c => [...c.children].map(e => e.id || e.tagName)") == [
+        "H1",
+        "message",
+        "actions",
+        "status",
+        "back",
+    ]
+    assert await card.locator("#status").inner_text() == f"{heading}. {message}"
+    top = page.locator("header.top")
+    await expect(top.locator("svg.top-mark")).to_have_count(1)
+    await expect(top.locator("a.wordmark")).to_have_text("misra")
+    assert await top.locator("a.wordmark").get_attribute("href") == "./"
+    links = page.locator("footer.foot nav.foot-links a")
+    assert await links.all_inner_texts() == ["Privacy", "Terms", "Contact"]
+    assert [await link.get_attribute("href") for link in await links.all()] == [
+        "privacy.html",
+        "terms.html",
+        "mailto:raanan@avidor.org",
+    ]
+    for link in await links.all():
+        box = await link.bounding_box()
+        assert box
+        assert box["height"] >= TAP
+
+
+async def test_the_confirmed_state_is_in_the_same_card(page: Page, site: Path) -> None:
+    await open_page(page, site, f"#token={TOKEN}")
+    await page.click("#confirm")
+    card = page.locator("main > section.card")
+    await expect(card.locator("#back")).to_be_visible()
+    await expect(card.locator("#heading")).to_have_text(CONFIRMED)
+
+
+@pytest.mark.parametrize("width", [320, 1480])
+@pytest.mark.parametrize("scheme", ["light", "dark"])
+async def test_the_card_page_is_accessible_and_does_not_scroll_sideways_at_320_and_1480(
+    page: Page, site: Path, width: int, scheme: str
+) -> None:
+    await page.emulate_media(color_scheme=scheme)  # type: ignore[arg-type]
+    await page.set_viewport_size({"width": width, "height": 800})
+    await open_page(page, site, "#unsubscribed")
+    await page.evaluate(AXE.read_text(encoding="utf-8"))
+    assert await page.evaluate(AXE_RUN) == []
+    assert await page.evaluate("document.documentElement.scrollWidth <= window.innerWidth")
