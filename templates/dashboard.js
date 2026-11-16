@@ -1320,6 +1320,19 @@ function closedCardEl(e) {
    of 200 or more that does not end a sentence was cut: the page adds the ellipsis, hidden from screen readers. */
 const cutMark = (text) => text.length >= 200 && !/[.!?]$/.test(text) && h('span', { 'aria-hidden': 'true', text: '…' });
 
+/* The place, level, role types and team of a role, and when it was first seen: on the card and in its detail view. */
+const tagsEl = (j) =>
+  h('p', { class: 'card-tags' }, [
+    j.l && h('span', { class: 'pill', text: j.l.slice(0, MAX_LOCATION) }),
+    ...j.rg.filter((region) => region !== j.l).map((region) => tag('Region', region, 'pill')),
+    ...j.lo.filter((place) => place !== j.l).map((place) => tag('Place', place, 'pill')),
+    j.ru && tag('Region', REMOTE_NOT_SAID, 'pill'),
+    tag('Level', j.lv, 'pill pill-soft'),
+    ...j.rt.map((type) => tag('Role type', type, 'pill pill-soft')),
+    j.m && h('span', { class: 'pill', text: j.m }),
+    j.f && h('time', { class: 'card-seen', datetime: j.f, text: ago(j.f) }),
+  ]);
+
 function cardEl(j) {
   const k = key(j);
   const discarded = isDiscarded(k);
@@ -1363,16 +1376,7 @@ function cardEl(j) {
     ]),
     /* Third-party text, so text and never markup; dir="auto" lets a Hebrew posting run right to left. */
     j.sn && h('p', { class: 'card-snippet', dir: 'auto' }, [j.sn, cutMark(j.sn)]),
-    h('p', { class: 'card-tags' }, [
-      j.l && h('span', { class: 'pill', text: j.l.slice(0, MAX_LOCATION) }),
-      ...j.rg.filter((region) => region !== j.l).map((region) => tag('Region', region, 'pill')),
-      ...j.lo.filter((place) => place !== j.l).map((place) => tag('Place', place, 'pill')),
-      j.ru && tag('Region', REMOTE_NOT_SAID, 'pill'),
-      tag('Level', j.lv, 'pill pill-soft'),
-      ...j.rt.map((type) => tag('Role type', type, 'pill pill-soft')),
-      j.m && h('span', { class: 'pill', text: j.m }),
-      j.f && h('time', { class: 'card-seen', datetime: j.f, text: ago(j.f) }),
-    ]),
+    tagsEl(j),
     h('p', { class: 'card-actions' }, [
       h('a', { class: 'btn btn-primary', href: url, target: '_blank', rel: 'noopener noreferrer' }, [
         'Apply ',
@@ -1380,6 +1384,16 @@ function cardEl(j) {
         h('span', { class: 'sr-only', text: ` to ${what}${NEW_TAB}` }),
       ]),
       starButton(k, what, starredNow),
+      /* Only a role with a snippet has more to show than the card: the detail view is the snippet and the link to the
+         employer's page. Not a [data-act]: that list is how the focus finds its place after a star or a discard. */
+      j.sn &&
+        h('button', {
+          type: 'button',
+          class: 'btn',
+          'data-detail': k,
+          'aria-label': `Details: ${what}`,
+          text: 'Details',
+        }),
       h('button', {
         type: 'button',
         class: 'btn btn-link',
@@ -1624,6 +1638,42 @@ $('list').addEventListener('click', (e) => {
   if (button.dataset.act === 'star') setChoice(item, isStarred(k) ? null : 'star');
   else setChoice(item, isDiscarded(k) ? null : 'discard');
   render(index);
+});
+
+/* The detail view of a role (PLAN.md step 7.3, FR-4 AC 5): one dialog, outside the list, filled for the role. It shows
+   the snippet in full and the link to the employer's page for the rest; the full text of the posting is never in the
+   page. The focus goes to its title (the other dialogs do the same) and comes back to the role's button on closing. When
+   that button is gone (the list was drawn again meanwhile), it goes to the list heading. */
+const detail = $('detailDialog');
+let detailKey = '';
+
+function openDetail(j) {
+  detailKey = key(j);
+  $('detailCompany').textContent = j.c;
+  $('detailTitle').textContent = j.t;
+  $('detailTags').replaceChildren(...tagsEl(j).childNodes);
+  $('detailText').replaceChildren(j.sn, cutMark(j.sn) || '');
+  $('detailLink').replaceChildren(
+    'Read full description & apply on ',
+    j.c,
+    ' ',
+    h('span', { 'aria-hidden': 'true', text: '↗' }),
+    h('span', { class: 'sr-only', text: NEW_TAB }),
+  );
+  $('detailLink').href = safeUrl(j.u);
+  detail.showModal();
+  $('detailTitle').focus();
+}
+
+detail.addEventListener('close', () => {
+  const back = [...$('list').querySelectorAll('[data-detail]')].find((button) => button.dataset.detail === detailKey);
+  (back ?? $('list-h')).focus();
+});
+$('detailClose').addEventListener('click', () => detail.close());
+
+$('list').addEventListener('click', (e) => {
+  const button = e.target.closest('[data-detail]');
+  if (button) openDetail(JOB_BY_KEY.get(button.dataset.detail));
 });
 
 $('starredView').addEventListener('click', () => {

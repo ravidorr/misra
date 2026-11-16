@@ -63,7 +63,7 @@
     </p>
   </section>
   <search class="search" id="searchBar">
-    <label class="sr-only" for="q">Search roles at __COMPANIES__ by title, company, team or location</label>
+    <label class="sr-only" for="q">Search roles at __COMPANIES__ by title, company, team, location or description</label>
     <input class="field" type="search" id="q" data-companies-covered="__COVERED__" placeholder="Search __COMPANIES__" autocomplete="off" enterkeyhint="search">
   </search>
 
@@ -172,6 +172,16 @@
   <p class="dialog-actions">
     <button type="button" class="btn btn-pill" id="deleteCancel">Cancel</button>
     <button type="button" class="btn btn-pill btn-danger" id="deleteConfirm">Delete my account permanently</button>
+  </p>
+</dialog>
+<dialog class="dialog detail-dialog" id="detailDialog" aria-labelledby="detailCompany detailTitle" aria-describedby="detailText">
+  <p class="card-company" id="detailCompany"></p>
+  <h2 class="dialog-title" id="detailTitle" tabindex="-1">Role details</h2>
+  <p class="card-tags" id="detailTags"></p>
+  <p class="detail-text" id="detailText" dir="auto"></p>
+  <p class="dialog-actions">
+    <button type="button" class="btn btn-pill" id="detailClose">Close</button>
+    <a class="btn btn-primary" id="detailLink" href="#" target="_blank" rel="noopener noreferrer">Read full description &amp; apply</a>
   </p>
 </dialog>
 <!--digest-->
