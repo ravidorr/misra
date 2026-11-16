@@ -17,13 +17,6 @@ concurrency:
 permissions:
   contents: read
 
-env:
-  # The maintainer's own single-recipient digest (send_email.py, through Gmail). It keeps running until the maintainer is a
-  # confirmed subscriber and send_digests.py has delivered to them (PLAN.md step 6.4). Then set this to "false" in a PR
-  # that also deletes send_email.py and the selection logic of digest.py (CONTRIBUTING.md, "The daily digest").
-  # Not a secret: no secret is ever set at the workflow or job level.
-  LEGACY_MAINTAINER_DIGEST: "true"
-
 jobs:
   run:
     runs-on: ubuntu-latest
@@ -60,15 +53,13 @@ jobs:
         id: crawl
         timeout-minutes: 20
         run: python run.py
-      - name: Send the maintainer digest (legacy, single recipient)
-        id: digest
+      - name: Log the coverage gaps
+        id: gaps
         timeout-minutes: 5
-        if: ${{ success() && env.LEGACY_MAINTAINER_DIGEST == 'true' }}
-        env:
-          GMAIL_USER: ${{ secrets.GMAIL_USER }}
-          GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
-          DIGEST_TO: ${{ secrets.DIGEST_TO }}
-        run: python send_email.py
+        # The crawl problems the maintainer no longer gets by email: one log line, a ::warning:: annotation for a new gap.
+        # Its own step so a broken coverage check turns the run red (the failure alert fires) without stopping the sync.
+        if: ${{ always() && steps.crawl.outcome == 'success' }}
+        run: python run.py --gaps
       - name: Sync jobs to Supabase
         id: sync
         if: ${{ always() && steps.crawl.outcome == 'success' }}
@@ -173,5 +164,5 @@ jobs:
           GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
           DIGEST_TO: ${{ secrets.DIGEST_TO }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-          STEPS: verify=${{ steps.verify.outcome }} crawl=${{ steps.crawl.outcome }} digest=${{ steps.digest.outcome }} sync=${{ steps.sync.outcome }} digests=${{ steps.digests.outcome }} commit=${{ steps.commit.outcome }} backup=${{ steps.backup.outcome }}
+          STEPS: verify=${{ steps.verify.outcome }} crawl=${{ steps.crawl.outcome }} gaps=${{ steps.gaps.outcome }} sync=${{ steps.sync.outcome }} digests=${{ steps.digests.outcome }} commit=${{ steps.commit.outcome }} backup=${{ steps.backup.outcome }}
         run: python3 send_alert.py "$RUN_URL"

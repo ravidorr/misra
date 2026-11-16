@@ -61,7 +61,7 @@ Only you (signed in, through rules in the database that give each account its ow
 - **Google** (United States): the sign-in. Google knows that you signed in to this dashboard, as with any "Sign in with Google".
 - **GitHub** (United States): hosts the repository and the dashboard (GitHub Pages) and runs the daily crawl (GitHub Actions). The crawl reads public career pages and does not handle your account data. GitHub also hosts a separate private repository that holds the daily backup copy of the account tables (see "What we store"); only the maintainer has access to it.
 - **Resend** (Ireland): sends the site-report email to the maintainer and, if you turn on job alerts, processes your email address and the matched job links to deliver your confirmation and job alert emails.
-- **Gmail (Google SMTP)**: the maintainer's own daily summary email of public new roles, and failure alerts, go to the maintainer's own address. They hold public job data only, no account data.
+- **Gmail (Google SMTP)**: failure alerts about the daily run go to the maintainer's own address. They hold no account data.
 
 By signing in you accept that your account data is processed on these providers' infrastructure, in the EU and in the United States: your account is stored at Supabase in the EU, a daily backup copy is kept at GitHub in the United States, and Google, in the United States, handles the sign-in. Supabase, Resend, and GitHub each include their standard data processing agreement in their terms of service, and it applies to our use of them.
 

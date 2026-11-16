@@ -7,9 +7,6 @@
 ```bash
 python3 discover.py        # data/seed_companies.csv -> data/companies.json (careers URL + ATS)
 python3 run.py             # crawl, diff into data/jobs.db
-python3 digest.py          # preview digest (data/digest.html)
-python3 digest.py --commit # only after sending manually; send_email.py does this itself
-python3 send_email.py      # send the digest (add --dry-run to preview)
 ```
 
 Adapters: Greenhouse, Lever, Ashby, Workable, SmartRecruiters, Comeet (public hosted pages), Comeet plugin pages (a WordPress careers page whose job links `/co/<place>/<uid>/<title>` are drawn on the server; the slug is the page address), Workday (the public job search, Israel only; slug `tenant/wdN/site`), JazzHR (the board page of `<slug>.applytojob.com`), BambooHR (the `/careers/list` JSON of `<slug>.bamboohr.com`), Oracle Fusion HCM (the public requisition search, Israel only; slug `host/site`), Amazon (the search JSON of amazon.jobs for one country; slug `ISR`), Phenom career sites (the search widget filtered to Israel; slug `host/country/lang`), and a generic
@@ -24,10 +21,10 @@ The dashboard lists roles from every company whose career page the daily crawl r
 
 ## Daily run (GitHub Actions)
 
-`.github/workflows/daily.yml` runs at 04:30 UTC: crawl, email new jobs, commit `data/jobs.db` and the built dashboard in `docs/` straight to `main`.
-Repo secrets: `GMAIL_USER`, `GMAIL_APP_PASSWORD` (Gmail app password), `DIGEST_TO` (optional recipient), `DEPLOY_KEY` (private half of a write deploy key; it must be the deploy-key bypass actor of the `protect-main` ruleset, see AGENTS.md).
-The digest holds the new jobs only and is not sent on a day with none. Crawl problems (a company failing, held after a sharp drop, or closed after a believed sharp drop) are not in it: they are on the dashboard's coverage gap card, and `send_email.py` prints one line of counts and company names to the job log ("coverage gaps: ...").
-If a step fails or the run is cancelled, a last step emails a short alert listing the step outcomes with a link to the run (`send_alert.py`, standard library only). It uses the same Gmail account as the digest, so a Gmail outage is not reported that way; GitHub's failed-run notice is then the only signal.
+`.github/workflows/daily.yml` runs at 04:30 UTC: crawl, email each subscriber's new jobs (`send_digests.py`), commit `data/jobs.db` and the built dashboard in `docs/` straight to `main`.
+Repo secrets: `GMAIL_USER`, `GMAIL_APP_PASSWORD` (Gmail app password) and `DIGEST_TO` (optional recipient), used by the failure alert only; the Supabase and Resend secrets of the digest step (see `CONTRIBUTING.md`, "The daily digest"); `DEPLOY_KEY` (private half of a write deploy key; it must be the deploy-key bypass actor of the `protect-main` ruleset, see AGENTS.md).
+A digest holds the new jobs only and is not sent on a day with none. Crawl problems (a company failing, held after a sharp drop, or closed after a believed sharp drop) are not in it: they are on the dashboard's coverage gap card, and the "Log the coverage gaps" step (`python run.py --gaps`) prints one line of counts and company names to the job log ("coverage gaps: ..."), as a `::warning::` annotation when a gap is new.
+If a step fails or the run is cancelled, a last step emails a short alert listing the step outcomes with a link to the run (`send_alert.py`, standard library only). It uses the maintainer's Gmail account, so a Gmail outage is not reported that way; GitHub's failed-run notice is then the only signal.
 Manual run: Actions tab, "daily-job-digest", Run workflow.
 
 ## Dashboard

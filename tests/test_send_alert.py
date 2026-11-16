@@ -86,10 +86,10 @@ def test_missing_or_empty_credentials_say_so(monkeypatch: pytest.MonkeyPatch, mi
 
 
 def test_the_step_outcomes_are_listed_when_given(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("STEPS", "verify=success crawl=failure digest=skipped commit=success")
+    monkeypatch.setenv("STEPS", "verify=success crawl=failure digests=skipped commit=success")
     send_alert.main()
     body = FakeSMTP.instances[0].sent[0].get_content()
-    assert "Steps: verify=success crawl=failure digest=skipped commit=success" in body
+    assert "Steps: verify=success crawl=failure digests=skipped commit=success" in body
     assert RUN_URL in body
     assert "may be missing" not in body  # the alert does not claim what it does not know
 
@@ -130,7 +130,7 @@ def test_importing_the_module_needs_no_installed_dependency() -> None:
     """It must work on the day installing requests or playwright is what failed."""
     code = (
         "import sys\n"
-        "for name in ('requests', 'playwright', 'digest', 'run', 'common', 'adapters', 'discover'):\n"
+        "for name in ('requests', 'playwright', 'run', 'common', 'adapters', 'discover'):\n"
         "    sys.modules[name] = None\n"
         f"sys.path.insert(0, {str(ROOT)!r})\n"
         "import send_alert\n"
@@ -169,9 +169,9 @@ def test_the_alert_step_never_sees_the_deploy_key() -> None:
 
 def test_the_steps_the_alert_reports_have_ids_and_the_slow_ones_a_timeout() -> None:
     workflow = (ROOT / ".github" / "workflows" / "daily.yml").read_text(encoding="utf-8")
-    for step_id in ("verify", "crawl", "digest", "digests", "commit"):
+    for step_id in ("verify", "crawl", "gaps", "digests", "commit"):
         assert f"        id: {step_id}\n" in workflow, step_id
         assert f"steps.{step_id}.outcome" in alert_step()[0]
     # a step that times out fails, so it is alerted without waiting for the job
-    for step_id in ("crawl", "digest", "digests"):
+    for step_id in ("crawl", "gaps", "digests"):
         assert re.search(rf"id: {step_id}\n +timeout-minutes: \d+\n", workflow), step_id

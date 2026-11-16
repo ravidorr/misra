@@ -22,8 +22,7 @@ from markdown_it.token import Token
 
 import classify
 import regions
-from common import ROBOTS_CLOSE_DAYS, ROBOTS_NOTE, is_excluded, load_excluded
-from digest import DB
+from common import DB, ROBOTS_CLOSE_DAYS, ROBOTS_NOTE, is_excluded, load_excluded
 
 # Stylesheets bundled into docs/dashboard.css, in order. Raw colors live only in tokens.css.
 CSS_SOURCES = ("design-system/tokens.css", "design-system/components/*.css", "templates/dashboard.css")
