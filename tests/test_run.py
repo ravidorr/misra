@@ -11,9 +11,8 @@ import pytest
 import adapters
 import browser_crawl
 import run
-from tests.conftest import add_crawls, add_job, write_json
+from tests.conftest import COMEET_FEEDS, add_crawls, add_job, write_json
 from tests.fakes import FakeHttpResponse
-from tests.test_adapters import COMEET_FEEDS
 
 
 def job(job_id: str, title: str = "T") -> dict[str, str]:
@@ -565,10 +564,11 @@ def test_a_comeet_job_whose_link_changes_is_the_same_job_not_a_new_one(
 ) -> None:
     """A job is its (company, job_id): when the crawler stops giving the careers page as the link of a job, the stored
     job keeps its first_seen and its reported flag (so it is not announced again), stays open and is not duplicated."""
-    generic = "https://claroty.com/open-positions"
+    generic, seen = "https://claroty.com/open-positions", "2024-01-02T00:00:00"
     conn = run.init()
-    add_job(conn, "Claroty", "25.57D", "Tech Lead", url=generic, reported=1, first_seen="2024-01-02T00:00:00")
-    add_job(conn, "Claroty", "CE.079", "AI Platform", url="https://claroty.com/open-positions/CE.079", reported=0)
+    add_job(conn, "Claroty", "25.57D", "Tech Lead", url=generic, reported=1, first_seen=seen)
+    own = "https://claroty.com/open-positions/CE.079"
+    add_job(conn, "Claroty", "CE.079", "AI Platform", url=own, reported=0, first_seen=seen)
     conn.close()
     text = f"var COMPANY_POSITIONS_DATA = {json.dumps(COMEET_FEEDS['Claroty']['positions'])};"
     monkeypatch.setattr(adapters, "get", lambda _url, **_kw: FakeHttpResponse(text=text))
@@ -582,8 +582,8 @@ def test_a_comeet_job_whose_link_changes_is_the_same_job_not_a_new_one(
     check.close()
     assert sorted(rows) == ["25.57D", "58.479", "CE.079", "EE.471"]  # the two stored jobs and the two the feed adds
     hosted = "https://www.comeet.com/jobs/Claroty/F2.004/tech-lead-platform-software-engineer/25.57D"
-    assert rows["25.57D"] == (hosted, "2024-01-02T00:00:00", 1, "open")  # new link, same history, still not "new"
-    assert rows["CE.079"] == ("https://claroty.com/open-positions/CE.079", "2024-01-02T00:00:00", 0, "open")
+    assert rows["25.57D"] == (hosted, seen, 1, "open")  # new link, same history, still not "new"
+    assert rows["CE.079"] == (own, seen, 0, "open")
     assert rows["58.479"][2:] == (0, "open")  # the jobs the feed adds are new, as before
 
 

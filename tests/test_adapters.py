@@ -7,6 +7,7 @@ import pytest
 
 import adapters
 import discover
+from tests.conftest import COMEET_FEEDS
 from tests.fakes import FakeHttpResponse
 
 
@@ -160,9 +161,6 @@ def test_comeet(monkeypatch: pytest.MonkeyPatch) -> None:
     assert [(j["job_id"], j["location"], j["url"]) for j in jobs] == [("u1", "TLV, IL", "a"), ("u2", "", "b")]
 
 
-COMEET_FEEDS: dict[str, Any] = json.loads(
-    (Path(__file__).parent / "fixtures" / "comeet_positions.json").read_text(encoding="utf-8")
-)
 COMEET_HOSTED = "https://www.comeet.com/jobs/"
 
 
@@ -218,11 +216,8 @@ def test_comeet_no_two_jobs_of_a_company_share_a_link_and_none_is_the_list_of_jo
     jobs = comeet_feed(monkeypatch, COMEET_FEEDS[company]["positions"])
     urls = [j["url"] for j in jobs]
     assert len(set(urls)) == len(urls)
-    listings = [
-        u
-        for u in urls
-        if not urlparse(u).query and urlparse(u).path.rstrip("/").rsplit("/", 1)[-1] in adapters._COMEET_LISTING
-    ]
+    names = {"career", "careers", "jobs", "open-positions", "positions"}
+    listings = [u for u in urls if not urlparse(u).query and urlparse(u).path.rstrip("/").rsplit("/", 1)[-1] in names]
     assert listings == []
 
 
@@ -248,6 +243,13 @@ def test_comeet_a_changed_link_is_the_same_job(monkeypatch: pytest.MonkeyPatch) 
         ("https://x.test/careers?t=1794790605932", True),  # a tracking query does not make it a job's page
         ("https://x.test/Careers?utm_source=a&ref=b", True),
         ("https://x.test/careers/?job=AB.123", False),  # the job is in the query
+        ("https://x.test/jobs", True),
+        ("https://x.test/openings/", True),
+        ("https://x.test/open-positions", True),
+        ("https://x.test/job-openings", True),
+        ("https://x.test/positions", True),
+        ("https://x.test/vacancies", True),
+        ("https://x.test/p?trakkr_fresh=1&gtm_latency=2&gclid=3&src=4&_gl=5", False),  # a page named p, tracking only
         ("https://x.test/careers-il/", False),  # not a listing name
         ("https://x.test/jobs/36-475?t=1", False),
         ("https://x.test/comeetitem/8b071/", False),  # the company's own id for the job
@@ -265,6 +267,18 @@ def test_comeet_the_same_page_with_other_tracking_is_one_page(monkeypatch: pytes
         monkeypatch, [position("A", "https://x.test/p/?t=1&hsa_cam=2"), position("B", "https://x.test/p?utm_x=1#top")]
     )
     assert [j["url"] for j in jobs] == [f"{COMEET_HOSTED}n/x/A", f"{COMEET_HOSTED}n/x/B"]
+
+
+def test_comeet_a_page_above_the_page_of_another_job_is_not_a_job_page(monkeypatch: pytest.MonkeyPatch) -> None:
+    """`/company/work` is not named as a list of jobs: only the page of another job below it says it is one."""
+    jobs = comeet_feed(
+        monkeypatch,
+        [
+            position("A", "https://x.test/company/work?trakkr_fresh=1&gtm_latency=2&gclid=3&src=4&_gl=5"),
+            position("B", "https://x.test/company/work/B"),
+        ],
+    )
+    assert [j["url"] for j in jobs] == [f"{COMEET_HOSTED}n/x/A", "https://x.test/company/work/B"]
 
 
 def test_comeet_a_page_on_another_host_is_not_below_a_listing(monkeypatch: pytest.MonkeyPatch) -> None:

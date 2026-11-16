@@ -12,6 +12,11 @@ import browser_crawl
 import common
 import run
 
+# real shapes of Comeet feeds (the fields the adapter reads): see test_adapters.py
+COMEET_FEEDS: dict[str, Any] = json.loads(
+    (Path(__file__).parent / "fixtures" / "comeet_positions.json").read_text(encoding="utf-8")
+)
+
 
 @pytest.fixture(autouse=True)
 def no_inherited_git_repository(monkeypatch: pytest.MonkeyPatch) -> None:
