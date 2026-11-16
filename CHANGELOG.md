@@ -10,6 +10,19 @@ All notable changes are documented here. Format follows [Keep a Changelog](https
 
 - The lawyer's round of 2026-11-16 is applied: the email feature has one name, "job alerts". The dashboard button and dialog title read "Job alerts" (was "Daily email"). The confirmation email says "turned on {{schedule}} job alerts" and "your first email will include", the digest footer says "this {{schedule}} email", and the confirm page, the confirmed page title, the unsubscribed page, the note after sign-up and the delete-account dialog use "job alerts" instead of "digest" (the rest of the delete-account dialog is unchanged). The confirmed page is in the present tense ("You now get a daily email ...", "Your first email includes ..."). The consent helper reads "We first send a confirmation link to ...". `PRIVACY.md` names the feature "job alerts" in the same places; the subjects, the consent line, the addresses, the links and the headers are unchanged. `supabase/email-texts.md`, `handler.ts` and `send_digests.py` stay identical line for line. The Edge Function `email-settings` must be redeployed to send the new confirmation email.
 
+## [0.42.0] - 2026-11-16
+
+### Changed
+
+- The footer is redesigned and its text rewritten by the technical-writer agent. Layout: a rule in the card border colour, then three short lines in one block (the coverage sentence of #104, unchanged; where the choices are saved; when the career pages were last read), then the links. Stacked and centered on a phone, text left and links right from 768 px; `--muted` text on the page background as before, in light and dark. The "Coverage gaps" link keeps its 44 px target by padding, so it no longer stretches its line.
+- Where the choices are saved (`#saveNote`, `savedHere` and `savedThere` in `templates/dashboard.js`): signed out, 'Your stars, "Not for me" choices and filters stay in this browser and are sent nowhere.' (was "Stars and discards are saved in this browser only."); signed in, 'Your stars, "Not for me" choices and filters are saved to your account and follow you to your other devices.' (was "Stars and discards are saved to your account."). Both name the choices as PRIVACY.md and the card buttons do, and claim no more than PRIVACY.md says.
+- The date reads "Career pages last read 15 Nov, 20:28 UTC." (was "Data updated 2026-11-15 20:28 UTC."): a short month name, no leading zero, the year only when it is not the current year, an unrecognised value shown as it is. The `time#upd` hook and its `datetime` attribute are unchanged. It is the time of the latest crawl, which is what the build records.
+- The footer links gain "Security" (`security.html`): Privacy, Terms, Security, Contact.
+
+### Removed
+
+- The TODO item and its screenshot.
+
 ## [0.40.0] - 2026-11-16
 
 ### Changed

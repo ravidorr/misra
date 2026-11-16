@@ -4,6 +4,7 @@ rest behind a button, and the filters are a bottom sheet on a phone that the key
 on a wide screen."""
 
 import json
+import re
 import sqlite3
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -18,6 +19,7 @@ from tests.test_dashboard_page import AXE, TAP, build_site, serve
 HIRING_COMPANIES = 15  # the row shows up to 15
 ROLES_PER_COMPANY = 2  # an old one and a new one
 WIDTHS = [320, 375, 393, 430, 768, 1650]
+WIDE = 768  # the footer puts the links beside the text from here
 PHONE_WIDTHS = [320, 375, 393, 430]
 FIRST_SCREEN = {"width": 393, "height": 852}  # an iPhone 16
 SHEET = "#moreFilters"
@@ -552,3 +554,70 @@ async def test_report_a_site_is_in_view_with_the_coverage_card_closed_and_open(
     opened = await button.bounding_box()
     assert opened is not None
     assert opened["y"] >= below - 1  # the row stays under the list
+
+
+FOOT_DATE = re.compile(r"^\d{1,2} [A-Z][a-z]{2}( \d{4})?, \d{2}:\d{2} UTC$")
+
+
+@pytest.mark.parametrize("scheme", ["light", "dark"])
+@pytest.mark.parametrize("width", [320, 375, 393, 1650])
+async def test_the_footer_fits_has_44px_links_and_says_where_choices_are_saved(
+    page: Page, crowd: Path, width: int, scheme: str
+) -> None:
+    await open_page(page, crowd, width, scheme=scheme)
+    foot = page.locator("footer.foot")
+    await foot.scroll_into_view_if_needed()
+    assert await page.evaluate(NO_SIDEWAYS)
+    assert await page.locator("#saveNote").inner_text() == (
+        'Your stars, "Not for me" choices and filters stay in this browser and are sent nowhere.'
+    )
+    stamp = await page.locator("#upd").inner_text()
+    assert FOOT_DATE.match(stamp), stamp
+    assert await page.locator(".foot-updated").inner_text() == f"Career pages last read {stamp}."
+    assert re.match(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}Z?", await page.locator("#upd").get_attribute("datetime") or "")
+    box = await foot.bounding_box()
+    assert box is not None
+    names = []
+    for link in await foot.locator("nav a").all():
+        link_box = await link.bounding_box()
+        assert link_box is not None
+        assert link_box["height"] >= TAP
+        assert link_box["width"] >= TAP
+        assert box["x"] <= link_box["x"] <= link_box["x"] + link_box["width"] <= box["x"] + box["width"]
+        names.append(await link.inner_text())
+    assert names == ["Privacy", "Terms", "Security", "Contact"]
+    links = await foot.locator("nav").bounding_box()
+    text = await foot.locator(".foot-info").bounding_box()
+    assert links is not None
+    assert text is not None
+    if width >= WIDE:
+        assert links["x"] > text["x"] + text["width"] - 1  # the text left, the links right
+    else:
+        assert links["y"] >= text["y"] + text["height"]  # stacked
+
+
+@pytest.mark.parametrize(
+    ("stamp", "shown"),
+    [
+        ("2025-03-05 07:09 UTC", "5 Mar 2025, 07:09 UTC"),  # not this year: the year is said
+        ("2020-12-31 23:59 UTC", "31 Dec 2020, 23:59 UTC"),
+        ("not a date", "not a date"),  # anything else is shown as it is
+    ],
+)
+async def test_the_footer_date_is_short_and_says_the_year_only_when_it_is_not_this_year(
+    page: Page, crowd: Path, stamp: str, shown: str
+) -> None:
+    html = (crowd / "index.html").read_text(encoding="utf-8")
+    match = re.search(r'"generated":"([^"]*)"', html)
+    assert match is not None
+    (crowd / "index.html").write_text(html.replace(match.group(0), f'"generated":"{stamp}"'), encoding="utf-8")
+    await open_page(page, crowd, 393)
+    assert await page.locator("#upd").inner_text() == shown
+    year = str(datetime.now(UTC).year)
+    today = datetime.now(UTC).strftime("%Y-%m-%d 06:30 UTC")
+    html = (crowd / "index.html").read_text(encoding="utf-8")
+    (crowd / "index.html").write_text(
+        html.replace(f'"generated":"{stamp}"', f'"generated":"{today}"'), encoding="utf-8"
+    )
+    await open_page(page, crowd, 393)
+    assert year not in await page.locator("#upd").inner_text()

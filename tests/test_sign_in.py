@@ -33,7 +33,7 @@ from tests.test_dashboard_page import (
 
 AXE_RUN = "axe.run().then(r => r.violations.map(v => v.id + ': ' + v.nodes.map(n => n.html).join(' | ')))"
 STORAGE_KEY = "misra-auth"
-FOOTER_LINKS = 3
+FOOTER_LINKS = 4
 RETRIES = 50
 POLL_SECONDS = 0.1
 CANCELLED = "The sign-in was cancelled."
@@ -519,13 +519,14 @@ async def test_the_footer_links_to_the_privacy_notice_the_terms_and_the_contact(
     privacy = nav.get_by_role("link", name="Privacy")
     assert await privacy.get_attribute("href") == "privacy.html"
     assert await nav.get_by_role("link", name="Terms").get_attribute("href") == "terms.html"
+    assert await nav.get_by_role("link", name="Security").get_attribute("href") == "security.html"
     assert await nav.get_by_role("link", name="Contact").get_attribute("href") == "mailto:raanan@avidor.org"
     for link in await links.all():
         box = await link.bounding_box()
         assert box is not None
         assert box["height"] >= TAP
         assert box["width"] >= TAP
-    assert "Data updated" in await page.locator("footer.foot").inner_text()  # the existing line is still there
+    assert "Career pages last read" in await page.locator("footer.foot").inner_text()  # the date line is still there
 
 
 async def test_the_footer_links_read_well_on_a_phone(page: Page, site: Path) -> None:

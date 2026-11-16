@@ -224,7 +224,10 @@ async def test_fr1_ac4_deleting_clears_this_accounts_queues_and_notes_and_nothin
     assert FILTERS in kept
     # nothing is left to be "saved the next time you sign in", and nothing is sent for the deleted account
     await expect(page.locator("#syncNote")).to_have_text("")
-    assert await page.locator("#saveNote").inner_text() == "Stars and discards are saved in this browser only."
+    assert (
+        await page.locator("#saveNote").inner_text()
+        == 'Your stars, "Not for me" choices and filters stay in this browser and are sent nowhere.'
+    )
     writes_before = len(choices.requests)
     await page.wait_for_timeout(300)
     assert len(choices.requests) == writes_before
