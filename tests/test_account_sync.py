@@ -748,6 +748,7 @@ async def test_the_offer_has_no_axe_violations_and_big_enough_targets(page: Page
     await expect(page.locator(BOX)).to_be_visible()
     await page.evaluate(AXE.read_text(encoding="utf-8"))
     assert await page.evaluate(AXE_RUN) == []
+    await expect(page.locator("#importNo")).to_have_text("Not now")
     for selector in ("#importYes", "#importNo", f"{BOX} label"):
         for target in await page.locator(selector).all():
             box = await target.bounding_box()

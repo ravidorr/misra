@@ -54,16 +54,16 @@
   <div class="sync-note" id="importResult" role="status"></div>
   <section class="notice import-offer" id="importBox" aria-labelledby="importTitle" hidden>
     <h2 class="import-title" id="importTitle">Bring this browser's choices into your account?</h2>
-    <p class="import-intro">This browser holds choices your account does not have yet. Anything you already chose in your account stays as it is. Your choices here are copied, not moved.</p>
+    <p class="import-intro">This browser has choices your account does not have yet. They are copied, not moved, and choices already in your account stay as they are.</p>
     <p class="import-row" id="importChoicesRow"><label><input type="checkbox" id="importChoices" checked> <span id="importChoicesText"></span></label></p>
     <p class="import-row" id="importFiltersRow"><label><input type="checkbox" id="importFilters" checked> <span id="importFiltersText"></span></label></p>
     <p class="import-actions">
       <button type="button" class="btn btn-pill btn-primary" id="importYes">Bring them over</button>
-      <button type="button" class="btn btn-pill" id="importNo">No thanks</button>
+      <button type="button" class="btn btn-pill" id="importNo">Not now</button>
     </p>
   </section>
   <search class="search" id="searchBar">
-    <label class="sr-only" for="q">Search roles at __COMPANIES__ by title, company or city</label>
+    <label class="sr-only" for="q">Search roles at __COMPANIES__ by title, company, team or location</label>
     <input class="field" type="search" id="q" placeholder="Search __COMPANIES__" autocomplete="off" enterkeyhint="search">
   </search>
 
@@ -217,7 +217,7 @@
 <dialog class="dialog" id="reportDialog" aria-labelledby="reportTitle" aria-describedby="reportIntro" data-report="dialog" data-state="idle">
   <h2 class="dialog-title" id="reportTitle" tabindex="-1">Report a site</h2>
   <form id="reportForm" novalidate data-report="form">
-    <p id="reportIntro">Tell us about a company whose careers page is missing from this list. You do not need an account and you do not need to give any personal details. We email the report to the person who runs this page. All three fields are required.</p>
+    <p id="reportIntro">Tell us about a company whose career page is missing from this list. You need no account and no personal details. We email the report to the maintainer. All three fields are required.</p>
     <p class="notice" id="reportError" role="alert" tabindex="-1" hidden></p>
     <div class="field-group">
       <label for="reportCompany">Company</label>
@@ -226,7 +226,7 @@
       <p class="field-error" id="reportCompanyError" hidden></p>
     </div>
     <div class="field-group">
-      <label for="reportLink">Careers page link</label>
+      <label for="reportLink">Career page link</label>
       <input class="field" id="reportLink" type="text" inputmode="url" autocapitalize="none" autocomplete="off" spellcheck="false" aria-required="true" aria-describedby="reportLinkHint reportLinkError" data-field="link">
       <p class="field-hint" id="reportLinkHint">The full address, starting with https://</p>
       <p class="field-error" id="reportLinkError" hidden></p>
@@ -249,7 +249,7 @@
   </form>
   <div id="reportDone" data-report="done" hidden>
     <h3 class="dialog-title" id="reportDoneTitle" tabindex="-1">Report sent</h3>
-    <p role="status">Thank you. Your report was emailed to the person who runs this page. Sites we accept are added to the crawl, or listed on this card with the reason we cannot read them.</p>
+    <p role="status">Your report was emailed to the maintainer. Sites we accept are added to the crawl, or listed on this card with the reason we cannot read them.</p>
     <p class="dialog-actions"><button type="button" class="btn btn-pill btn-primary" id="reportClose">Close</button></p>
   </div>
 </dialog>

@@ -33,6 +33,7 @@ HOLD_SECONDS = 3
 TRIES = 2  # the failed request and the retry
 SERVER_FAULTS = {"company": "Enter the company name.", "link": "The link must start with https:// or http://."}
 
+LIMITED = "as many reports as are allowed today, so this one was not sent"
 # (status, body, words the visitor must read). Every one says whether anything was sent.
 FAILURES = [
     (400, {"code": "invalid_input", "message": "x", "fields": SERVER_FAULTS}, "Some details were not accepted"),
@@ -41,11 +42,11 @@ FAILURES = [
     (405, {"code": "method_not_allowed", "message": "x"}, "Something went wrong on our side, so nothing was sent"),
     (413, {"code": "payload_too_large", "message": "x"}, "too large, so nothing was sent"),
     (415, {"code": "unsupported_media_type", "message": "x"}, "Something went wrong on our side, so nothing was sent"),
-    (429, {"code": "rate_limited", "message": "x"}, "try again tomorrow"),
+    (429, {"code": "rate_limited", "message": "x"}, LIMITED),
     (503, {"code": "daily_cap_reached", "message": "x"}, "Reports are paused until tomorrow"),
     (502, {"code": "send_failed", "message": "x"}, "could not confirm that your report was passed on"),
     (500, {"code": "server_error", "message": "x"}, "Something went wrong on our side, so nothing was sent"),
-    (429, {"code": "something_new", "message": "x"}, "try again tomorrow"),  # an unknown code falls back to the status
+    (429, {"code": "something_new", "message": "x"}, LIMITED),  # an unknown code falls back to the status
     (504, {"code": "something_new", "message": "x"}, "could not confirm that your report was sent"),
     (418, {"code": "something_new", "message": "x"}, "could not confirm that your report was sent"),
 ]
@@ -169,7 +170,7 @@ async def test_fr7_ac2_the_form_asks_for_company_link_and_reason_and_needs_no_ac
     assert await page.locator("#account").is_hidden() or await page.locator("#signOut").is_hidden()  # signed out
     await open_form(page)
     labels = [await page.locator(f"label[for=report{n}]").inner_text() for n in ("Company", "Link", "Why")]
-    assert labels == ["Company", "Careers page link", "Why it matters"]
+    assert labels == ["Company", "Career page link", "Why it matters"]
     for name in ("company", "link", "why"):
         field = page.locator(f"[data-field={name}]")
         assert await field.get_attribute("aria-required") == "true"
@@ -383,8 +384,8 @@ async def test_fr7_ac4_no_answer_or_an_answer_that_is_not_ok_is_never_a_success(
 LONG = "x" * 101
 LONG_LINK = "https://a.test/" + "x" * 500
 BAD_LINKS = [
-    ("", "Enter the link to the careers page."),
-    ("   ", "Enter the link to the careers page."),
+    ("", "Enter the link to the career page."),
+    ("   ", "Enter the link to the career page."),
     (LONG_LINK, "The link can be at most 500 characters."),
     ("https://a.test/a b", "The link cannot contain spaces or line breaks."),
     ("careers", "Enter a full link that starts with https:// or http://."),
@@ -400,7 +401,7 @@ async def test_an_empty_form_shows_every_message_beside_its_field_and_sends_noth
     await page.click("#reportSend")
     expected = {
         "Company": "Enter the company name.",
-        "Link": "Enter the link to the careers page.",
+        "Link": "Enter the link to the career page.",
         "Why": "Tell us why this company matters.",
     }
     for name, message in expected.items():

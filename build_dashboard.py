@@ -118,7 +118,7 @@ BLOCKED_WHY = "its site blocks automated access from GitHub's servers"
 REASONS = {
     "crawl_failing": "Failing in the latest crawl",
     "bot_protection": "Blocks automated access",
-    "no_careers_url": "No careers page found",
+    "no_careers_url": "No career page found",
     "site_unusable": "Site down, parked or unreachable",
     "no_openings": "No open roles in Israel, or the board is closed",
     "needs_reader": "Roles are listed, but we cannot read them yet",

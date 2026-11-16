@@ -577,6 +577,9 @@ async def test_a_company_whose_first_jobs_have_closed_still_shows_its_new_roles(
     # the build knows Acme's first day (30 days ago, a job that is no longer open); Acme's only open role is from today
     await serve(page, site, backend=Backend([row("Acme", "9", "Engineer", today)]))
     assert await page.locator("article[data-company=Acme]").get_attribute("data-new") == "true"
+    sticker = page.locator("article[data-company=Acme] .sticker")
+    assert await sticker.text_content() == "New"  # sentence case for screen readers
+    assert await sticker.evaluate("e => getComputedStyle(e).textTransform") == "uppercase"  # uppercase on screen
 
 
 async def test_a_company_in_the_failing_list_is_marked_possibly_old(page: Page, site: Path) -> None:
@@ -587,6 +590,9 @@ async def test_a_company_in_the_failing_list_is_marked_possibly_old(page: Page, 
     )
     await serve(page, site)
     assert await page.locator("article[data-company=Acme]").first.get_attribute("data-stale") == "true"
+    sticker = page.locator("article[data-company=Acme] .sticker").first
+    assert await sticker.text_content() == "Old?"
+    assert await sticker.evaluate("e => getComputedStyle(e).textTransform") == "uppercase"
     assert await page.locator("article[data-company=Globex]").count() == 0  # not in Israel
 
 
@@ -961,7 +967,7 @@ async def test_fr9_ac8_a_job_must_fit_both_the_levels_and_the_role_types(page: P
     await choose(page, "levels", "Junior")
     await choose(page, "types", "Finance")
     assert await shown(page) == set()  # a Junior job of the Finance type: there is none
-    assert await page.locator("#list").inner_text() == "No roles match these filters."
+    assert await page.locator("#list").inner_text() == "No roles match. Change the search or the filters."
     await choose(page, "levels", "Intern")
     assert await shown(page) == {"fin"}
 

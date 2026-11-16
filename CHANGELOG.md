@@ -20,6 +20,12 @@ All notable changes are documented here. Format follows [Keep a Changelog](https
 
 - The two TODO screenshots of the old card and the TODO item.
 
+## [0.39.0] - 2026-11-16
+
+### Changed
+
+- Copy pass by the technical writer agent over the dashboard, the report and email dialogs, the error messages, the docs and the design-system showcase: no "Please" in errors (what happened, then what to do), "career page" and "open roles" everywhere users read them, "maintainer" for the person who gets reports, "service" for the backend, a next step in every error, and docs lists that match the real labels and WebMCP tools. The `REASONS` label for `no_careers_url` now reads "No career page found" (key unchanged). The lawyer-approved texts (`PRIVACY.md`, `TERMS.md`, `SECURITY.md`, `supabase/email-texts.md`, the sign-in dialog, the Daily email consent, the delete-account warning, the report privacy line, the email landing states) are unchanged. The import box button reads "Not now". The stickers New, Old? and No longer listed are sentence case in the markup and shown uppercase by `text-transform` in `sticker.css`, so screen readers read words, not letters. The `report-site`, `confirm-email`, `delete-account`, `email-settings` and `unsubscribe` function messages changed: redeploy them to show.
+
 ## [0.38.0] - 2026-11-16
 
 ### Added

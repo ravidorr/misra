@@ -106,6 +106,6 @@ export async function handleConfirm(request: Request, deps: Deps): Promise<Respo
     }
   } catch (error) {
     console.error('confirm-email: failed', describe(error));
-    return fail(origin, 500, 'server_error', 'Something went wrong. Please try again.');
+    return fail(origin, 500, 'server_error', 'Something went wrong. Try again.');
   }
 }

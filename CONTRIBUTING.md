@@ -21,7 +21,7 @@ python3 -m venv .venv
 
 - Strict ruff, mypy, ESLint, Stylelint, html-validate, and markdownlint must pass.
 - Python test coverage must be 100% (lines and branches). It is enforced on push and in CI; never lower `fail_under` or add blanket omits.
-- There is no UI; the dashboard is generated from `templates/dashboard.html`.
+- The only UI is the static dashboard. `build_dashboard.py` generates it in `docs/` from `templates/`: edit the templates, never `docs/`.
 - See [AGENTS.md](./AGENTS.md) for the full rule list.
 
 ## Removing a company on request

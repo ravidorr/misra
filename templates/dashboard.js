@@ -137,7 +137,7 @@ function showLoadError(error) {
     h('section', { class: 'notice load-error', id: 'load-error', role: 'alert' }, [
       h('h2', { text: 'The roles could not be loaded' }),
       h('p', {
-        text: 'The job list is kept on a server that did not give a usable answer, so there is nothing to show yet. Check your connection and try again; if it keeps failing, the service may be down.',
+        text: 'The service that holds the roles did not give a usable answer. Check your connection and try again. If it keeps failing, the service may be down.',
       }),
       retry,
     ]),
@@ -272,7 +272,7 @@ const HTTP_TIMEOUT = 408;
 const HTTP_TOO_MANY = 429;
 const HTTP_SERVER_ERROR = 500;
 const SYNC_MESSAGES = {
-  limit: 'You have reached the limit of stars and discards an account can keep, so the last choice was not saved. Take some back (Restore, or remove a star), then try again.',
+  limit: 'Your account has reached the limit of stars and discards it can keep, so the last choice was not saved. Restore a discarded role or remove a star, then try again.',
   refused: 'The service did not accept the last star or discard, so it was not saved.',
   load: 'Your saved stars and discards could not be loaded, so only the changes made on this device show.',
   filtersLoad: 'Your saved filters could not be loaded, so this device uses its own filters for now.',
@@ -972,7 +972,7 @@ async function answerOffer(a, bring) {
 function failedAnswer(error) {
   console.error(error);
   if (account) {
-    account.result = 'Something went wrong bringing the choices over. Anything not saved yet stays on this device.';
+    account.result = 'The choices could not be brought over. Anything not saved yet stays on this device.';
     renderSyncNote();
   }
 }
@@ -1216,7 +1216,7 @@ function closedCardEl(e) {
     'data-pending': String(Boolean(account?.pending.has(k))),
   });
   art.append(
-    h('span', { class: 'sticker sticker-warn card-flag', text: 'NO LONGER LISTED' }),
+    h('span', { class: 'sticker sticker-warn card-flag', text: 'No longer listed' }),
     h('p', { class: 'card-company', text: e.c }),
     h('h3', { class: 'card-title' }, [
       url && url !== '#'
@@ -1255,12 +1255,12 @@ function cardEl(j) {
     art.append(
       h('span', {
         class: 'sticker sticker-warn card-flag',
-        title: 'This company could not be crawled in the latest run. The listing may be out of date.',
-        text: 'OLD?',
+        title: 'The latest crawl of this company failed. The role may be out of date.',
+        text: 'Old?',
       }),
     );
   } else if (isNew) {
-    art.append(h('span', { class: 'sticker card-flag', text: 'NEW' }));
+    art.append(h('span', { class: 'sticker card-flag', text: 'New' }));
   }
   art.append(
     h('p', { class: 'card-company', text: j.c }),
@@ -1352,7 +1352,7 @@ function render(focusIdx) {
     list.replaceChildren(
       h('li', {
         class: 'empty',
-        text: starredView ? 'No starred roles yet. Use Star on a role to keep it here.' : 'No roles match these filters.',
+        text: starredView ? 'No starred roles yet. Use Star on a role to keep it here.' : 'No roles match. Change the search or the filters.',
       }),
     );
     $('pager').hidden = true;
@@ -1561,7 +1561,7 @@ $('file').addEventListener('change', (e) => {
       if (imported && typeof imported === 'object' && account) {
         importFileToAccount(account, imported).catch((error) => {
           console.error(error);
-          account.result = 'The file could not be imported.';
+          account.result = 'The file could not be imported. Try again.';
           renderSyncNote();
         });
       } else if (imported && typeof imported === 'object') {
@@ -1572,7 +1572,7 @@ $('file').addEventListener('change', (e) => {
         render();
       }
     } catch {
-      alert('Not a valid discards file');
+      alert('This is not a discards file. Choose a file saved with Export discards.');
     }
   };
   reader.readAsText(file);

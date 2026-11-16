@@ -287,7 +287,7 @@ async def test_the_search_is_on_the_first_screen_without_opening_anything(
     words = count_words(await covered_count(page))
     assert await page.locator("#q").get_attribute("placeholder") == f"Search {words}"
     label = await page.locator("label[for=q]").inner_text()
-    assert label == f"Search roles at {words} by title, company or city"
+    assert label == f"Search roles at {words} by title, company, team or location"
 
 
 def count_words(n: int) -> str:
