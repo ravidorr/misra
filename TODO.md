@@ -22,15 +22,19 @@ Observations about live sites below come from checks made on 2026-11-14 and may 
     (`design-super-agent`, `ui-design-review`, `ux-web-review`, `accessibility-expert`): a simple single-column layout
     (about 600px, fluid on a phone), the logo as text or a small inline image with alt text (many clients block
     images, so nothing may depend on one), the digest list (company, title, place, one clear "view role" link per job),
-    the confirmation email with one primary button, light and dark (`prefers-color-scheme` where supported, and colours
+    the confirmation email with one primary button (email clients do not support the HTML `<button>` tag: a button is a link
+    styled as one, with padding and a background colour, and it needs a version that still looks right in Outlook), light and dark (`prefers-color-scheme` where supported, and colours
     that stay readable where the client forces its own), 44px targets, contrast WCAG AA. Two or three layouts, one
     picked with reasons. 2) The `technical-writer` agent: wording stays EXACTLY as in `supabase/email-texts.md`
     (the lawyer approved it; the HTML only changes the layout, never the words, the footer, the postal address, the
     unsubscribe link or the explanation of why the person got it). No word is changed, added or removed.
+    Ask the experts whether the full URL should be shown next to the button link, for copying and pasting
+    (a common habit; it may no longer be needed). KISS: leave it out unless they show it helps, and it must not add
+    or change any approved word.
     3) The `advisor`, before choosing the approach and before calling it done.
   - Build it for email clients, not browsers: table layout, inline styles (a build step may inline a small stylesheet),
     no JavaScript, no web fonts (system font stack), no background images, `role="presentation"` on layout tables,
-    `lang` and `dir` set, a visible plain-URL fallback for every button, preheader text, and keep the whole HTML well
+    `lang` and `dir` set, preheader text, and keep the whole HTML well
     below Gmail's clipping size (about 100 KB; a digest with many jobs must stay under it, so cap or split the list as
     the digest already does). Keep the `List-Unsubscribe` and `List-Unsubscribe-Post` headers and the unsubscribe link in
     the footer exactly as now. A test that the plain text and the HTML carry the same words and links (strip the tags and
