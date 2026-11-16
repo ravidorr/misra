@@ -2924,5 +2924,17 @@
   "n_jobs": 0,
   "n_israel": 0,
   "israel_only": true
+ },
+ {
+  "name": "Converge Bio",
+  "domain": "converge-bio.com",
+  "careers_url": "https://converge-bio.com/careers",
+  "ats": "comeet",
+  "slug": "convergebio/CA.00D",
+  "source": "override",
+  "status": "ok",
+  "n_jobs": 0,
+  "n_israel": 0,
+  "israel_only": true
  }
 ]
