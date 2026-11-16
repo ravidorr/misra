@@ -137,7 +137,7 @@ In the Supabase dashboard, Authentication:
 
 ## Report a site (Edge Function `report-site`)
 
-PLAN.md step 5.1, PRD FR-7. A visitor with no account reports a career site that is missing from the crawl; the
+PLAN.md step 5.1, PRD FR-7. A visitor with no account reports a company whose career page is missing from the crawl; the
 maintainer gets one plain-text email through Resend. Nothing in the repository or the browser holds a secret: the
 function reads them from Supabase function secrets. The dashboard form is step 5.2 (`templates/report.js`, the "Report a site" button on the coverage gap card).
 
@@ -219,7 +219,7 @@ before the first run that includes this change, or the sync step fails on the mi
 
 A failed cleanup, including "function not found" when the migration has not been applied, exits the sync step non-zero, so
 the failure alert fires and the subscriber digests of that run are skipped (the jobs were already synced, and the build and
-the data commit still run). Apply the migration before the first run that includes this change. `pg_cron` was not used:
+the data commit still run). `pg_cron` was not used:
 it needs the extension switched on in the project and cannot be tested in the CI database, while the workflow already runs
 every day and already holds the key.
 
@@ -401,7 +401,7 @@ timestamps, the tokens and the address of the cycle before.
 
 ### The digest sender (`send_digests.py`, step 6.3)
 
-Not wired into the daily workflow yet (step 6.4) and nothing sends while no subscription is confirmed. It reads the confirmed,
+The daily workflow runs it after the sync (step 6.4); it sends nothing while no subscription is confirmed. It reads the confirmed,
 not unsubscribed subscriptions and every job with the service-role key, and for each subscriber whose digest is due (daily: every
 day; weekly: Sundays) selects the open jobs in Israel that were first seen after `consent_confirmed_at`, are not in `emailed`,
 are not the baseline of a company seen for the first time, and fit the saved filters by the dashboard's rules (regions, levels,
@@ -475,7 +475,7 @@ sign-in needed. Answers (JSON, `{"ok": true, "status"}` or `{"ok": false, "error
   `"schedule": "daily" | "weekly"`, the subscription's `frequency`, which the landing page names in its text. It is read with a
   service-role `select` by the confirmation-token hash right after the confirm (no migration; the confirm itself stays the one
   atomic SQL function). It is best effort: if the row is gone by then (an unsubscribe in between clears the hash), or the read
-  fails or returns anything else, `schedule` is simply absent and the page says "a daily or weekly email, as you chose".
+  fails or returns anything else, `schedule` is absent and the page says "a daily or weekly email, as you chose".
 - 404 `link_not_valid` (unknown or malformed token, or the old link of an unsubscribed subscription: an unsubscribe clears its
   confirmation token), 409 `unsubscribed`, 410 `link_expired`.
 - 400 `invalid_request`, 403 `origin_not_allowed`, 405 `method_not_allowed`, 413 `payload_too_large`, 415
@@ -612,8 +612,8 @@ default domain is assumed: the GET above confirms it.
 
 PLAN.md step 6.2, PRD FR-8 AC 1 to 3: a signed-in user turns the personalised email on or off, chooses the address (their
 Google email by default), daily or weekly, and copies four dashboard filters for it. This step delivers the dashboard
-settings, one Edge Function and four database functions. It does not send the digest (steps 6.3 and 6.4), so even with the
-switches on, the only email that ever leaves is the confirmation email.
+settings, one Edge Function and four database functions. The only email this function sends is the confirmation email; the
+digest is steps 6.3 and 6.4.
 
 Files: `supabase/migrations/20261118100000_digest_signup_and_limits.sql`, `supabase/functions/email-settings/`
 (`index.ts` starts the server, `handler.ts` holds the logic, `validate.ts` the input checks),
@@ -717,15 +717,15 @@ per-address limit for each; the daily cap bounds the total.
 ### Turning it off
 
 `unsubscribe_user` reads the row's unsubscribe hash and calls the step 6.1 function
-`unsubscribe_subscription`, so the clean-up is the very same code as the unsubscribe link's: it keeps the address and the consent
+`unsubscribe_subscription`, so the clean-up is the same code as the unsubscribe link's: it keeps the address and the consent
 timestamps, sets `unsubscribed_at`, and clears `filters`, `frequency`, the confirmation token and the `emailed` rows. A repeat is
 not an error. A user with no row gets `not_subscribed`. `supabase/tests/digest_signup.sql` runs both ways on identical rows and
 compares them.
 
 ### The page
 
-`templates/digest.js` (a module with its own integrity hash, built to `docs/digest.js` only while the switch is on). The "Daily
-email" button sits next to "Sign out" and opens a native dialog with the state (not on, waiting for you to confirm, on, unsubscribed),
+`templates/digest.js` (a module with its own integrity hash, built to `docs/digest.js` only while the switch is on). The "Job
+alerts" button sits next to "Sign out" and opens a native dialog with the state (not on, waiting for you to confirm, on, unsubscribed),
 the address field, daily or weekly, the filters the email will use, "Use these filters for my email" and the actions "Turn the email
 on" (or "Send the confirmation again" while waiting, "Change the address and confirm it" while on) and "Turn the email off". The
 button copies exactly regions, levels, role types and keywords from the dashboard at that moment (`globalThis.misraEmailFilters()`

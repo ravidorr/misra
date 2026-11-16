@@ -1,22 +1,10 @@
 # TODO
 
 Open work, as of 2026-11-14. Each item says what triggers it, how to do it and when it is done. When one is finished,
-delete it and update the counts in the others: the 86 and the four segment counts in the research item (a pin removes
-one row from one segment), its "(28)" if the company had no careers URL, else its "(58 today)".
+delete it and update the counts in the others: the 85 and the four segment counts in the research item (a pin removes
+one row from one segment), its "(28)" if the company had no careers URL, else its "(57 today)".
 An item with a screenshot in `todo-images/` goes with it: delete the image file in the same PR.
 Observations about live sites below come from checks made on 2026-11-14 and may have changed.
-
-## Web app fixes
-
-- [ ] **Run the technical writer agent over all the text in the app.** Trigger: when you are ready for a copy pass;
-  nothing blocks it.
-  - Where: the agent is `.claude/agents/technical-writer.md`. It reads the docs and every text source, then tightens
-    the wording (short, exact, no fluff) and keeps identifiers, `data-*` hooks and `REASONS` keys unchanged.
-  - How: ask Claude Code to run the `technical-writer` agent. It edits `templates/` and the sources, rebuilds `docs/`,
-    and runs lint and tests. It lists proposed edits to `PRIVACY.md` and the lawyer-approved wording instead of making
-    them: review that list. A change to a listed Python module needs a version bump and a changelog entry.
-  - Done when: the PR is merged, `npm run lint` and `npm run test:coverage` pass, and you have decided on the legal
-    wording it left for you.
 
 ## Yearly security review
 
@@ -60,19 +48,19 @@ Observations about live sites below come from checks made on 2026-11-14 and may 
 
 ## Research the remaining unresolved companies
 
-- [ ] `data/unresolved_candidates.csv` lists 86 researched companies with no usable job feed (as of 2026-11-14: 24
-  multinational, 38 deeptech, 12 cyber_infra, 12 biz_software). Each needs
+- [ ] `data/unresolved_candidates.csv` lists 85 researched companies with no usable job feed (as of 2026-11-14: 24
+  multinational, 37 deeptech, 12 cyber_infra, 12 biz_software). Each needs
   its own research; there is no batch fix left. Every observation about a live site below is from the checks of
-  2026-11-14, a crawl of the 105 rows that had a careers URL that day (58 today) and a scan of their rendered pages. The
+  2026-11-14, a crawl of the 105 rows that had a careers URL that day (57 today) and a scan of their rendered pages. The
   remaining work falls into these groups:
   - **No careers URL (28).** Status `not_found` in `data/new/*_companies.json`: Upsolver, Speedata,
     Teramount, X-Globe, Q Factor, Gilat, Siklu, Silicom, Sight Diagnostics, Brainsway, EarlySign, Diagnostic Robotics,
     Tevel Aerobotics, CytoReason, Converge Bio, SolarEdge, Watergen, Stratasys, AIR, Intel, SAP, eBay,
     Autodesk, Akamai, Ford, Ericsson, Uber, Keysight. Find the real
-    careers page first, then continue with the groups below. The large multinationals will need a location-filtered
+    career page first, then continue with the groups below. The large multinationals will need a location-filtered
     address or their ATS (see the last group).
   - **A job board was found but there is no adapter.** Playstudios and Booking.com. Playstudios was listed as a Jobvite
-    board, but on 2026-11-14 `jobs.jobvite.com/playstudios-inc` is an invalid board and the careers page links to
+    board, but on 2026-11-14 `jobs.jobvite.com/playstudios-inc` is an invalid board and the career page links to
     Dayforce (`jobs.dayforcehcm.com/en-US/playstudios/CANDIDATEPORTAL`). `browser_crawl.crawl_many` reads its 12 jobs with
     real titles and distinct links but an empty location for every one, so none could be recognised as Israel (the page
     shows 5 in Tel Aviv-Yafo), so it is not a browser pin. The portal has a JSON search (`POST
@@ -85,7 +73,7 @@ Observations about live sites below come from checks made on 2026-11-14 and may 
     - Pliops: on 2026-11-14 the Comeet page for `pliops/05.004` said "This Spark Hire Recruit account has been
       deactivated", and it still did on 2026-11-16, but `pliops.com/careers` still links to that page, so the company has published no
       new board. A Workable account `pliops` exists (`adapters.workable("pliops")` answers with no job) but nothing links
-      to it, so it is not pinned: pin it, or the board the careers page ends up linking to, once it lists a job.
+      to it, so it is not pinned: pin it, or the board the career page ends up linking to, once it lists a job.
     - Western Digital: the SmartRecruiters board (`WesternDigital`, 325 jobs) has no Israel job today, so there is
       nothing to show. It can be pinned with `israel_only` now that the matcher and the new-company rule are fixed, but it
       would fetch 325 jobs a day to store none.
@@ -104,7 +92,7 @@ Observations about live sites below come from checks made on 2026-11-14 and may 
       (`intel/wd1/External`) and Autodesk (`autodesk/wd1/Ext`, `autodesk/wd1/uni`) are sent to Workday's maintenance
       page, which is also what a tenant that does not exist on that data centre gets, and Akamai
       (`akamai/wd1/akamaicareers`) answers 500. The tenant, data centre or site name is still unknown: find it from the
-      company's own careers page, not by guessing.
+      company's own career page, not by guessing.
     - Bot protection (403 to a plain request, 2026-11-14; not to be bypassed): Intel (`jobs.intel.com`), Autodesk,
       Akamai, General Motors (`search-careers.gm.com`), Ford, SAP, Uber, Booking.com.
     - Other platforms with no adapter yet: AMD and Keysight (iCIMS: `careers-amd.icims.com`,
@@ -132,19 +120,21 @@ Observations about live sites below come from checks made on 2026-11-14 and may 
     `https://www.comeet.co/careers-api/2.0/company/<uid>/positions?token=<token>&details=true`: its jobs carry the board
     name in `url_comeet_hosted_page` (any name works for a valid uid; a wrong uid gives no data). Done: Retym
     (`retym/C6.003`), Qedma (`qedma/7A.006`), Qodo (`qodo/B8.00B`), Trigo (`trigo/A6.005`), Cyolo (`cyolo/F5.005`; its page
-    shows a `company-uid` in the job page source, not the careers page), Allot (`allot/C4.009`, 24 jobs, one in Israel;
+    shows a `company-uid` in the job page source, not the career page), Allot (`allot/C4.009`, 24 jobs, one in Israel;
     the uid is also in a vacancy page), and three boards with no job today, pinned with `israel_only` so the first Israel job
-    reaches the digest: Foretellix (`Foretellix/84.007`), XM Cyber (`xmcyber/15.005`) and Dataloop (`dataloop/B5.00A`); Sunbit (`sunbit/37.001`, 40 jobs, 8 in Israel; the uid is in the
+    is reported as new: Foretellix (`Foretellix/84.007`), XM Cyber (`xmcyber/15.005`) and Dataloop (`dataloop/B5.00A`); Sunbit (`sunbit/37.001`, 40 jobs, 8 in Israel; the uid is in the
     source of a `?job=` page) and Firefly (`firefly/39.000`, `israel_only`: the board holds one "Future Opportunities" entry
     with no place), and DarioHealth (`Dario.Health/34.006`, 2 jobs, both in India today), and OX Security (`ox_security/F8.006`, 36 jobs,
-    7 in Israel; the uid is in the careers page source, the board name `ox_security` in the careers-api answer),
+    7 in Israel; the uid is in the career page source, the board name `ox_security` in the careers-api answer),
     and, on 2026-11-16, four Comeet plugin pages whose account answers 400, with the new `comeet_page` adapter (the slug
     is the page address; it reads the plugin's links `/co/<place>/<uid>/<title>` from the page HTML), all `israel_only`:
     REE Automotive (`https://ree.auto/careers/`, 2 jobs, 1 in Israel), Gauzy (`https://www.gauzy.com/careers/`, 9 jobs, none
     in Israel), Guesty (`https://www.guesty.com/careers/`, 35 jobs, 8 in Israel) and Apester (`https://apester.com/careers/`:
-    "We don't have any open positions" today, so the first Israel job reaches the digest).
+    "We don't have any open positions" today, so the first Israel job is reported as new).
     On 2026-11-16, Ceva (`ceva/76.005`, found in the job-page source of its own `/career/` site; the page names the
     account SNC but the board answered under the name `ceva`, not `SNC`; 25 jobs, 14 in Israel, `israel_only`).
+    Nano Dimension (`nanodimension/62.003`: the `comeet_uid` is in the source of `nano-di.com/job-openings`, a Comeet
+    plugin page the `comeet_page` adapter cannot read; the board holds 4 jobs, none in Israel, `israel_only`).
     Not done, and why (checked on 2026-11-14, or 2026-11-16 where dated; do not repeat):
     - Comeet plugin pages that the `comeet_page` adapter does not read (checked on 2026-11-16): SQream
       (`sqream.com/careers/` lists 1 job, "Controller", whose card names no place, and its `/co/` link holds the
@@ -153,8 +143,8 @@ Observations about live sites below come from checks made on 2026-11-14 and may 
       plugin's, so it needs its own parser, for one company).
     - Comeet account valid but not the company's own board: Magic Software (19.00F is Matrix IFS, 23 jobs, none in
       Israel). NeuReality (89.002) answers no job through the `comeet` adapter (its hosted page is not served), but its
-      careers page is a Comeet plugin page that the `comeet_page` adapter reads: pinned on 2026-11-16, `israel_only`,
-      "We don't have any open positions" today, so the first Israel job reaches the digest.
+      career page is a Comeet plugin page that the `comeet_page` adapter reads: pinned on 2026-11-16, `israel_only`,
+      "We don't have any open positions" today, so the first Israel job is reported as new.
     - No openings at all, no feed to pin: Mitiga ("We don't have any openings right now"), Applitools ("No openings
       available"), H2Pro and Madgicx (no open positions; Madgicx takes CVs through a ClickUp form).
     - Own-site pages the crawler's link pattern does not match, no ATS behind them: Pillar Security
@@ -169,16 +159,16 @@ Observations about live sites below come from checks made on 2026-11-14 and may 
       company (`air` on Greenhouse). Western Digital's board is on SmartRecruiters, which robots.txt skips.
     - Dead or unusable: Jelly Button Games, Kahun, Nucleai and Quantum Art (domain parked at GoDaddy), Satixfy (now an
       MDA Space page), Line 5 (needs a login), lakeFS and Quantum Art (403 or "Access Denied": bot protection), Radware
-      and Camtek (an empty page), Elbit Systems (timeout on the news page; its careers site `elbitsystemscareer.com` is a
+      and Camtek (an empty page), Elbit Systems (timeout on the news page; its career site `elbitsystemscareer.com` is a
       Hebrew custom site with no feed seen), ReWalk (its list on `golifeward.com/company/careers/` is US jobs, no Israel
-      job), Lumigo, Aniview, AnyClip, Pay-Me, Evogene, Aleph Farms, Remilk, Redefine Meat, Landa, Nano Dimension, Tabit,
+      job), Lumigo, Aniview, AnyClip, Pay-Me, Evogene, Aleph Farms, Remilk, Redefine Meat, Landa, Tabit,
       Cognata: no ATS link, feed or job link in the HTML or the network
       requests; not investigated further.
   - **Bot protection.** Some pages answered 403, "Access Denied" or a browser check. Leave them and record it. Do not try
     to get around bot protection: a few pinned companies (Check Point, Papaya Global, Unity) are already blocked from the CI
-    runner this way and show up as gaps in the digest.
+    runner this way and show on the coverage gap card.
   - How to research a company:
-    1. Find the real careers page, then look for the job board it uses: an embedded or linked Greenhouse, Lever, Ashby,
+    1. Find the real career page, then look for the job board it uses: an embedded or linked Greenhouse, Lever, Ashby,
        Workable, SmartRecruiters, Comeet or Workday board (`discover.ATS_LINK` has the patterns, and the page's HTML,
        links and iframes all need a look, since scripts hide them) or a JSON feed in its network requests.
        A Workable job link on a page is `apply.workable.com/j/<shortcode>`: it names no account (open it: it redirects
