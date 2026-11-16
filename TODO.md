@@ -8,20 +8,37 @@ Observations about live sites below come from checks made on 2026-11-14 and may 
 
 ## Daily run monitoring
 
-- [ ] **Add an outside dead-man's switch for the daily run.** Trigger: on 2026-11-16 the scheduled daily run never
-  started (GitHub Actions was degraded) and nothing told us: the failure alert only fires when a step fails. A backup
-  start time and a guard (a second cron entry in `daily.yml`) cover a late or missed start, but not a GitHub outage.
-  - Where: the last step of `.github/workflows/daily.yml`; an Actions secret for the ping URL; `tests/test_daily_workflow.py`;
-    `SECURITY.md` (the new service) and `CONTRIBUTING.md` (how to read an alert).
-  - How: create a free check at healthchecks.io, or a similar service, that expects one ping a day with a grace period
-    of about 8 hours, and emails the maintainer when it is missed. The maintainer creates the account and the check and
-    gives the ping URL; store it as an Actions secret (for example `HEALTHCHECK_URL`) that only the ping step can read.
-    The step runs last and only on success (`if: success()`), uses `curl -fsS --retry 3 -m 10` and never fails the run
-    (`|| true`). Optionally ping a `/start` address at the beginning and a `/fail` address on failure. The ping carries
-    no personal data (the service sees only the time of the ping), but list the service in `SECURITY.md`, in the yearly
-    review (account access and the ping URL), and in the next note to the lawyer.
-  - Done when: a missed daily run emails the maintainer within the grace period (test it once by pausing the check),
-    the secret is scoped to the ping step, a test pins the step's place and scope, and `SECURITY.md` names the service.
+- [ ] **Start the daily run from outside GitHub, with cron-job.org.** Trigger: on 2026-11-16 the scheduled daily run
+  never started (GitHub Actions was degraded) and nothing told us: the failure alert only fires when a step fails. The
+  second cron entry and the guard in `daily.yml` cover a late or missed first start, but both use GitHub's own
+  scheduler, so a GitHub outage still loses the day. The maintainer already uses cron-job.org in another project. It
+  cannot alert on a missing ping (that is what healthchecks.io does), so it starts the run instead: a third start
+  time, from outside GitHub, and its own failure email when GitHub does not accept the call.
+  - Where: `.github/workflows/daily.yml` (an input on `workflow_dispatch`, and the guard's query);
+    `tests/test_daily_workflow.py`; `SECURITY.md` (the new service and the token); `CONTRIBUTING.md` (how a run from
+    cron-job.org looks in the Actions tab).
+  - How:
+    1. The maintainer creates a fine-grained GitHub token limited to this repository, with only "Actions: read and
+       write". That permission lets the holder start, cancel and disable this repository's workflows (so someone who got
+       the token could stop the daily run and the backups) but not read secrets or change code. This is an accepted
+       risk: the token is stored only at cron-job.org and expires. A disabled workflow raises no alert by itself, so a
+       stop would show only as a missing daily commit of `data/jobs.db`. Use the longest expiry GitHub allows
+       (one year; put the renewal date in the yearly review). It is stored at cron-job.org only, never in the repo or
+       in an Actions secret, and never pasted into chat.
+    2. The maintainer creates a cron-job.org job: `POST
+       https://api.github.com/repos/ravidorr/misra/actions/workflows/daily.yml/dispatches`, headers
+       `Authorization: Bearer <token>`, `Accept: application/vnd.github+json` and `X-GitHub-Api-Version: 2022-11-28`,
+       body `{"ref":"main","inputs":{"source":"cron-job.org"}}`, at about 10:30 UTC (after the second try at 09:53),
+       with "notify me when the job fails" on. A success answer is 204.
+    3. Add a `source` input to `workflow_dispatch` in `daily.yml`. Change the guard so that a start with
+       `source=cron-job.org` is skipped when a scheduled run or an earlier cron-job.org run already succeeded that day,
+       and so that the guard counts those runs too. Other manual runs are never skipped and never counted (a manual run
+       may have been a dry run). Keep the guard failing open. The run job's secrets stay scoped as they are.
+    4. Say in `SECURITY.md` that cron-job.org holds a token that can start, cancel and disable this repository's
+       workflows (it cannot read secrets or change code) and that this risk is accepted, list the service and the token's expiry in the yearly review, and add both to the next note to the lawyer.
+  - Done when: with the first two starts disabled, the cron-job.org call starts a full run that sends the digests once;
+    on a normal day the call is skipped by the guard; a failed call (try a wrong token once) emails the maintainer; a
+    test pins the input, the guard's rule and the secret scope; and `SECURITY.md` names the service.
 
 ## Yearly security review
 
