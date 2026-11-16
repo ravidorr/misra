@@ -227,7 +227,10 @@ PLAN.md step 7.1. Where the text of a posting lives, and how it gets there:
 - **Not public.** The full text is never readable through the public API (the lawyer's decision of 2026-11-16): it stays
   in Supabase for search and the assistant. The migration `20261121100000_jobs_text_not_public.sql` takes the table-level
   `select` on `jobs` from `anon` and `authenticated` and gives it back on every column except `description` and `details`,
-  signed in or not. The service role (the sync) keeps full access. A column added to `jobs` later has no column grant, so
+  signed in or not. Only three things ever read it: the sync (service role), the full-text search of step 7.3 (a database
+  function that returns matching job keys only, never the text) and `get_job` of step 8.1 (the full text, to the assistant,
+  rate limited). The dashboard drill-down never shows the full text: it shows the snippet and a "Read full description &
+  apply on (company name)" link to the employer. The service role (the sync) keeps full access. A column added to `jobs` later has no column grant, so
   it is closed by default: the migration that adds it must grant it, and `tests/test_migrations.py` fails until its list
   of public and closed columns agrees with the table. `supabase/tests/job_text_private.sql` and
   `supabase/tests/job_snippet_and_trim.sql` (the `sql-tests` CI job) pin it. The maintainer applies a migration before the
