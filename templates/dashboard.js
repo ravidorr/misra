@@ -1216,7 +1216,7 @@ function closedCardEl(e) {
     'data-pending': String(Boolean(account?.pending.has(k))),
   });
   art.append(
-    h('span', { class: 'sticker sticker-warn card-flag', text: 'NO LONGER LISTED' }),
+    h('span', { class: 'sticker sticker-warn card-flag', text: 'No longer listed' }),
     h('p', { class: 'card-company', text: e.c }),
     h('h3', { class: 'card-title' }, [
       url && url !== '#'
@@ -1256,11 +1256,11 @@ function cardEl(j) {
       h('span', {
         class: 'sticker sticker-warn card-flag',
         title: 'The latest crawl of this company failed. The role may be out of date.',
-        text: 'OLD?',
+        text: 'Old?',
       }),
     );
   } else if (isNew) {
-    art.append(h('span', { class: 'sticker card-flag', text: 'NEW' }));
+    art.append(h('span', { class: 'sticker card-flag', text: 'New' }));
   }
   art.append(
     h('p', { class: 'card-company', text: j.c }),
