@@ -64,7 +64,7 @@ const SUPABASE_URL = '__SUPABASE_URL__';
 const SUPABASE_ANON_KEY = '__SUPABASE_ANON_KEY__';
 const FETCH_TIMEOUT_MS = 20000;
 const REST_PAGE = 1000; /* PostgREST answers at most 1,000 rows at a time */
-const JOB_COLUMNS = 'company,job_id,title,team,location,url,first_seen,level,role_types,regions,locations';
+const JOB_COLUMNS = 'company,job_id,title,team,location,url,first_seen,level,role_types,regions,locations,snippet';
 
 async function fetchJson(url, headers = {}) {
   const response = await fetch(url, { headers, signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) });
@@ -98,7 +98,8 @@ function remoteNotSaid(location) {
 
 /* A row of the jobs table as the page uses it: c company, i id, t title, m team, l location as written, u url,
    f first seen, lv level, rt role types, rg regions, lo places in Israel without a region, il in Israel, ru remote
-   with no country given, n not on the company's first day of listings, s company's crawl is failing. */
+   with no country given, n not on the company's first day of listings, s company's crawl is failing, sn the snippet:
+   the start of the posting as written, up to 255 characters ('' when the job has no text). */
 function toJob(row, failing, firstDay) {
   /* A row without the classification columns is a backend fault (sync lag, a missing migration), not a role that is
      "Not specified" and "Other": fail loudly instead of showing every role as unclassified. */
@@ -125,6 +126,7 @@ function toJob(row, failing, firstDay) {
     ru: !il && remoteNotSaid(l),
     n: f !== '' && f > (firstDay[row.company] ?? f),
     s: failing.has(row.company),
+    sn: typeof row.snippet === 'string' ? row.snippet.trim() : '',
   };
 }
 
@@ -1269,6 +1271,11 @@ function closedCardEl(e) {
   return h('li', {}, [art]);
 }
 
+/* A heuristic: the data does not say whether a snippet was cut. A cut never ends in `.`, `!` or `?` (the sync trims
+   them), so a text of 200 or more characters that does not is treated as cut and gets the ellipsis, hidden from screen
+   readers; a whole text of that length that ends in a quote or a bracket gets a false one. */
+const cutMark = (text) => text.length >= 200 && !/[.!?]$/.test(text) && h('span', { 'aria-hidden': 'true', text: '…' });
+
 function cardEl(j) {
   const k = key(j);
   const discarded = isDiscarded(k);
@@ -1310,6 +1317,8 @@ function cardEl(j) {
         h('span', { class: 'sr-only', text: NEW_TAB }),
       ]),
     ]),
+    /* Third-party text, so text and never markup; dir="auto" lets a Hebrew posting run right to left. */
+    j.sn && h('p', { class: 'card-snippet', dir: 'auto' }, [j.sn, cutMark(j.sn)]),
     h('p', { class: 'card-tags' }, [
       j.l && h('span', { class: 'pill', text: j.l.slice(0, MAX_LOCATION) }),
       ...j.rg.filter((region) => region !== j.l).map((region) => tag('Region', region, 'pill')),
@@ -1663,6 +1672,7 @@ function describe(j) {
     possiblyOld: j.s,
     discarded: isDiscarded(key(j)),
     starred: isStarred(key(j)),
+    snippet: j.sn || null,
   };
 }
 
