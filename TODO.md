@@ -19,7 +19,10 @@ Observations about live sites below come from checks made on 2026-11-14 and may 
     cron-job.org looks in the Actions tab).
   - How:
     1. The maintainer creates a fine-grained GitHub token limited to this repository, with only "Actions: read and
-       write" (it can start workflows; it cannot read secrets or change code), with the longest expiry GitHub allows
+       write". That permission lets the holder start, cancel and disable this repository's workflows (so someone who got
+       the token could stop the daily run and the backups) but not read secrets or change code. This is an accepted
+       risk: the token is stored only at cron-job.org and expires. A disabled workflow raises no alert by itself, so a
+       stop would show only as a missing daily commit of `data/jobs.db`. Use the longest expiry GitHub allows
        (one year; put the renewal date in the yearly review). It is stored at cron-job.org only, never in the repo or
        in an Actions secret, and never pasted into chat.
     2. The maintainer creates a cron-job.org job: `POST
@@ -31,8 +34,8 @@ Observations about live sites below come from checks made on 2026-11-14 and may 
        `source=cron-job.org` is skipped when a scheduled run or an earlier cron-job.org run already succeeded that day,
        and so that the guard counts those runs too. Other manual runs are never skipped and never counted (a manual run
        may have been a dry run). Keep the guard failing open. The run job's secrets stay scoped as they are.
-    4. Say in `SECURITY.md` that cron-job.org holds a token that can start this repository's workflows and nothing
-       else, list the service and the token's expiry in the yearly review, and add both to the next note to the lawyer.
+    4. Say in `SECURITY.md` that cron-job.org holds a token that can start, cancel and disable this repository's
+       workflows (it cannot read secrets or change code) and that this risk is accepted, list the service and the token's expiry in the yearly review, and add both to the next note to the lawyer.
   - Done when: with the first two starts disabled, the cron-job.org call starts a full run that sends the digests once;
     on a normal day the call is skipped by the guard; a failed call (try a wrong token once) emails the maintainer; a
     test pins the input, the guard's rule and the secret scope; and `SECURITY.md` names the service.
