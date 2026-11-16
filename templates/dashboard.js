@@ -1119,7 +1119,7 @@ $('places').replaceChildren(
    circle (which sets Company) shows at least that many new roles. */
 function newRoles() {
   const counts = {};
-  const jobs = select({ ...F, company: '', onlyNew: true });
+  const jobs = select({ ...F, company: '', showGone: false, onlyNew: true });
   for (const j of jobs) counts[j.c] = (counts[j.c] ?? 0) + 1;
   return { counts, total: jobs.length };
 }
@@ -1155,14 +1155,18 @@ function renderStories(counts) {
     }),
   );
   layoutStories();
-  if (focused !== undefined) [...$('stories').children].find((li) => li.firstChild.dataset.company === focused)?.firstChild.focus();
+  if (focused !== undefined) {
+    /* the circle can be gone (a chosen company without new roles, turned off): the focus goes to the list heading, never to the page */
+    const same = [...$('stories').children].find((li) => li.firstChild.dataset.company === focused);
+    (same?.firstChild ?? $('list-h')).focus();
+  }
 }
 
 /* The headline: the new roles that match the filters, "95 new this week." With a filter on it says "12 new matches."
    and, when none is new, how many open roles match ("40 open matches."). Without a filter and without new roles it is
    the open count. The Location is not a filter here: Israel is the default, and the headline does not name a place. */
 function renderHero(newN, filteredCount) {
-  const filtered = F.q.trim() !== '' || activeFilterCount({ ...F, company: '', loc: 'il', sort: 'new', onlyNew: false }) > 0;
+  const filtered = F.q.trim() !== '' || activeFilterCount({ ...F, company: '', loc: 'il', sort: 'new', onlyNew: false, showGone: false }) > 0;
   const many = (n) => (n === 1 ? 'match.' : 'matches.');
   let top;
   let bottom;
@@ -1376,7 +1380,7 @@ function render(focusIdx) {
   $('goneN').textContent = goneN;
   $('showGone').disabled = goneN === 0;
   const { counts, total } = newRoles();
-  renderHero(total, select({ ...F, company: '', onlyNew: false }).length);
+  renderHero(total, select({ ...F, company: '', showGone: false, onlyNew: false }).length);
   if (!starredView) {
     const summary = `Showing ${res.length} of ${scope} open roles ${F.loc === 'il' ? 'in Israel' : 'in all locations'}. ${goneN} discarded.`;
     $('summary').textContent = summary;

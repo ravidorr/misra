@@ -804,3 +804,60 @@ async def test_the_headline_counts_open_roles_when_nothing_is_new(page: Page, st
     assert await page.locator("#hiring").is_hidden()
     await page.select_option("#loc", "all")
     assert await hero(page) == "4 open roles."
+
+
+@pytest.fixture
+def abroad(db: sqlite3.Connection, workdir: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """The crowd, plus a new role abroad."""
+
+    def fill(conn: sqlite3.Connection) -> None:
+        add_companies(conn)
+        today = datetime.now(UTC).strftime("%Y-%m-%dT00:00:00")
+        old = (datetime.now(UTC) - timedelta(days=30)).strftime("%Y-%m-%dT00:00:00")
+        add_job(conn, "Far company", "0", "Accountant abroad", first_seen=old, location="London, United Kingdom")
+        add_job(conn, "Far company", "1", "Intern abroad", first_seen=today, location="London, United Kingdom")
+
+    monkeypatch.setattr(build_dashboard, "DIGEST_SIGNUP_ENABLED", False)
+    return build_site(db, workdir, fill)
+
+
+async def test_all_locations_adds_the_new_roles_abroad_to_the_headline_and_the_row(page: Page, abroad: Path) -> None:
+    await open_page(page, abroad, 1650)
+    assert await hero(page) == f"{HIRING_COMPANIES} new this week."
+    await open_hiring(page)
+    assert await page.locator("#stories .story").count() == HIRING_COMPANIES
+    await page.select_option("#loc", "all")
+    assert await hero(page) == f"{HIRING_COMPANIES + 1} new this week."
+    await open_hiring(page)
+    assert await page.locator("#stories .story").count() == HIRING_COMPANIES  # the 15 most, Far company is the 16th
+
+
+async def test_a_tap_leaves_the_headline_and_the_other_circles_alone(page: Page, crowd: Path) -> None:
+    await open_page(page, crowd, 1650)
+    await open_hiring(page)
+    await page.locator("#stories .story").first.click()
+    assert await hero(page) == f"{HIRING_COMPANIES} new this week."  # Company is not a filter of the headline
+    assert await page.locator("#stories .story").count() == HIRING_COMPANIES
+
+
+@pytest.mark.parametrize("change", ["sort", "onlyNew", "spaces"])
+async def test_sorting_new_only_and_a_blank_search_do_not_make_the_headline_a_filter(
+    page: Page, crowd: Path, change: str
+) -> None:
+    await open_page(page, crowd, 1650)
+    if change == "sort":
+        await page.select_option("#sort", "co")
+    elif change == "onlyNew":
+        await page.click("#onlyNew")
+    else:
+        await page.fill("#q", "   ")
+    assert await hero(page) == f"{HIRING_COMPANIES} new this week."
+
+
+async def test_the_focus_goes_to_the_list_heading_when_the_chosen_circle_goes(page: Page, crowd: Path) -> None:
+    await open_page(page, crowd, 1650)
+    await page.select_option("#company", "Company number 00 with a rather long name that must fit")
+    await pick_level(page, "Not specified")  # nothing new matches: only the chosen company's circle is left
+    await page.locator("#stories .story").focus()
+    await page.keyboard.press("Enter")  # turns the company off, and the circle with it
+    assert await page.evaluate("document.activeElement.id") == "list-h"
