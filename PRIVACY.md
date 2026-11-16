@@ -7,7 +7,7 @@ This is a plain statement of what the Misra dashboard does with data. It describ
 ## The short version
 
 - Signing in is optional and voluntary. Without it the dashboard works the same, and nothing about you is kept by us.
-- If you sign in with Google, we keep your email address, the jobs you star or mark "Not for me", and your saved filters. If you also turn on job alerts, we keep its settings (see "What we store"). Nothing else.
+- If you sign in with Google, we keep your email address, the jobs you star or mark "Not for me", and your saved filters. If you also turn on job alerts, we keep their settings (see "What we store"). Nothing else.
 - We never store a CV. The dashboard has no place to upload one.
 - Only you, and the maintainer who runs the database, can see what your account holds.
 - A daily backup copy of your account data is kept in a private repository for up to 30 days. If you delete your account, it leaves the backups within that time.

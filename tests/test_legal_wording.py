@@ -162,7 +162,7 @@ def test_the_digest_is_described_in_the_present_tense_as_it_is_built() -> None:
         "Deleting your account removes all of it, including that record.",
     ):
         assert phrase in settings, phrase
-    assert 'we keep its settings (see "What we store")' in sections(text)["The short version"]
+    assert 'we keep their settings (see "What we store")' in sections(text)["The short version"]
 
 
 def test_the_signup_is_open_so_the_privacy_notice_must_describe_a_live_digest() -> None:
