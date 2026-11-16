@@ -607,6 +607,18 @@ async def test_an_explicit_change_after_a_failed_load_is_saved(page: Page, site:
     await expect(page.locator("#syncNote")).to_have_text("")  # the account's filters are known now: what was just saved
 
 
+async def test_signing_out_ends_the_offer_to_undo_a_reset(page: Page, site: Path) -> None:
+    prefs = PrefsBackend({})
+    await sign_in(page, site, ChoicesBackend(), prefs, local={"filters": {**DEFAULTS, "q": "browser"}})
+    await page.click("#importNo")
+    await page.click(".chip[data-group=levels][data-value=Junior]")
+    await page.click("#reset")
+    await expect(page.locator("#undoReset")).to_have_count(1)
+    await page.click("#signOut")
+    await page.wait_for_selector("#signIn")
+    await expect(page.locator("#undoReset")).to_have_count(0)  # it would put the account's filters in this browser
+
+
 async def test_signing_out_with_an_unsent_filter_change_says_so_and_keeps_it(page: Page, site: Path) -> None:
     prefs = PrefsBackend({})
     auth = await sign_in(page, site, ChoicesBackend(), prefs, local={"filters": {**DEFAULTS, "q": "browser"}})

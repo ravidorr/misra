@@ -1060,6 +1060,7 @@ function select(f) {
 }
 
 function sync() {
+  hideUndo(); /* every change to F, from the reader or from the account, ends the offer of an undo (reset sets it after) */
   $('q').value = F.q;
   $('company').value = F.company;
   $('loc').value = F.loc;
@@ -1384,7 +1385,6 @@ function render(focusIdx) {
 }
 
 function update() {
-  hideUndo();
   page = 0;
   if (account) queueFilters(account); /* the account's filters; the browser's own are left alone while signed in */
   else lsSet(LS_F, F);
