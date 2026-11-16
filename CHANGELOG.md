@@ -12,6 +12,17 @@ All notable changes are documented here. Format follows [Keep a Changelog](https
 - The audit behind it, on the stored database (6,793 open jobs): 150 open jobs of 16 companies share their link with at least one other job (Coralogix 23, VAST Data 20, Checkmarx 18, Bizzabo 12, Stampli 12, UVeye 11, OX Security 10, Port 10, Allot 8, Nova 6, Sunbit 6, Wiliot 4, Tufin 3, Zenity 3, Ceragon 2, Upwind 2), and seven more have a job on the careers page alone (Claroty, Qodo, Global-e, Cycode, Cynet, BlueWhite, Elementor). On the live feeds of the 77 Comeet companies, 158 of 1,767 jobs of 24 companies change link, and none of them shares a link with another job afterwards. No other adapter is affected: the other API adapters build the link from the job's own id or take the job's own link, `comeet_page` and the browser crawler take the link of the job's card, and the stored jobs of those companies share no link.
 - Only the link changes. The job's key is still `(company, job_id)` with the Comeet uid as the id, so a job is not new, is not closed and reopened, keeps its `first_seen` and its `reported` flag, and is not announced again (a test crawls a stored job with the careers page as its link and checks the row). The stored links, and the Supabase `jobs.url` (the sync upserts on `(company, job_id)` and merges the columns), are updated by the next daily crawl and sync, with no migration.
 
+## [0.46.0] - 2026-11-16
+
+### Added
+
+- A "DevOps & SRE" role type, right after R&D in `ROLE_TYPES` (`classify.py`). It matches DevOps, DevSecOps, SRE, site reliability, CI/CD, and "platform", "infrastructure" (or "infra"), "cloud", "release", "build", "kubernetes" (or "k8s") and "production" right before "engineer" ("Data Platform Engineer", "IT Infrastructure Engineer" and "Cross-Platform Engineer" do not; neither does a prefix inside a longer word). "platform", "cloud" and "infrastructure" alone do not match ("Cloud Solutions Architect", "Customer Platform Manager"). The dashboard filters, quick chips and Filters sheet, the `search_jobs` and `list_filters` assistant tools, the `data-role-types` hooks and the digest filter all read `ROLE_TYPE_NAMES`, so they list it with no other change.
+
+### Changed
+
+- DevOps and SRE titles move out of R&D: `devops|sre|site reliability` left the R&D patterns, and R&D's generic "engineer" pattern skips the titles above. A title another R&D pattern also matches (a developer, a tech lead, back end) keeps both types. On the 6,758 open jobs of 2026-11-16, 116 moved out of R&D; 134 are now DevOps & SRE (17 of them also R&D); R&D went from 2,373 to 2,257; the share of jobs not in Other went from 75.48% to 75.50%.
+- A saved filter or email alert that lists "R&D" no longer matches the DevOps roles: add "DevOps & SRE" to it. Only one real account exists today. No migration: `jobs.role_types` is `text[]` and the daily sync rewrites every open job, so the live Supabase rows change at the next sync.
+
 ## [0.45.0] - 2026-11-16
 
 ### Changed

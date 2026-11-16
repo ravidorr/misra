@@ -477,6 +477,23 @@ async def test_a_wide_screen_has_the_filters_in_the_page_and_no_filters_button(p
     assert await lines_of_stories(page) == 1  # "Hiring now" is one line here too
 
 
+@pytest.mark.parametrize("width", [320, 393])
+async def test_the_devops_and_sre_chip_is_listed_filters_and_fits_a_phone(page: Page, crowd: Path, width: int) -> None:
+    """The role types come from classify.ROLE_TYPE_NAMES, so the extra chip needs no markup; it must not widen the page.
+    The crowd has no DevOps role, so choosing the chip leaves nothing."""
+    await open_page(page, crowd, width)
+    await open_sheet(page)
+    chip = page.locator('.chip[data-group=types][data-value="DevOps & SRE"]')
+    names = await page.locator(".chip[data-group=types]").evaluate_all("els => els.map(e => e.dataset.value)")
+    assert names.index("DevOps & SRE") == names.index("R&D") + 1
+    assert await chip.is_visible()
+    assert await page.evaluate(NO_SIDEWAYS)
+    await chip.click()
+    assert await chip.get_attribute("aria-pressed") == "true"
+    assert await listed(page) == 0
+    assert await page.evaluate(NO_SIDEWAYS)
+
+
 async def test_the_sheet_follows_the_window_between_a_phone_and_a_desktop(page: Page, crowd: Path) -> None:
     await open_page(page, crowd, 375)
     sheet = page.locator(SHEET)

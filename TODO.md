@@ -18,24 +18,6 @@ Observations about live sites below come from checks made on 2026-11-14 and may 
   - Done when: the PR is merged, `npm run lint` and `npm run test:coverage` pass, and you have decided on the legal
     wording it left for you.
 
-- [ ] **Add a "DevOps & SRE" role type.** Trigger: DevOps, SRE, platform and infrastructure engineers sit inside
-  "R&D" today (`classify.py` matches `devops|\bsre\b|site reliability` under R&D), so nobody can filter for them or get
-  them in a job alert on their own.
-  - Where: `ROLE_TYPES` in `classify.py` (a data table in display order: a new type is one entry, and `ROLE_TYPE_NAMES`
-    and the dashboard filter list follow from it); the classifier tests in `tests/` (the fixture of real titles); the
-    role-type lists in `PRD.md` (FR-9 and the decisions log) and `PLAN.md` ("Decisions made in planning"). The names
-    reach the Supabase `jobs.role_types` column through `sync_supabase.py` and the digest filter in
-    `send_digests.py`; no migration is needed (the column is `text[]` and the daily sync rewrites every open job).
-  - How: add "DevOps & SRE" after "R&D" with patterns for DevOps, SRE, site reliability, platform engineer,
-    infrastructure engineer, cloud engineer, release or build engineer and DevSecOps. Decide whether those titles stay
-    in R&D as well (a job may have several types) or move out of it; say which in the PR. Keep names with `&` in the
-    style of "Data & AI" and "Sales & BD". Check that a saved filter or alert that lists "R&D" still behaves as the
-    owner expects, and that the Filters sheet, the quick chips and the digest list the new type. Report the share of
-    jobs not in "Other" before and after (`classify.py` prints it).
-  - Done when: titles such as "DevOps Engineer", "Senior SRE" and "Platform Engineer" are "DevOps & SRE", the
-    dashboard filter and a job alert can select it, the share in "Other" does not rise, and `npm run lint` and
-    `npm run test:coverage` pass. A change to `classify.py` needs a version bump and a changelog entry.
-
 ## Yearly security review
 
 - [ ] **Do the yearly security review by 2027-11-15, then every year.** Trigger: the date. Where: the
