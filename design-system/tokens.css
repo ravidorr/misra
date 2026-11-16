@@ -46,7 +46,6 @@
   /* The logo keeps its colors in both themes. */
   --mark-disc: #d4ff4f;
   --mark-ink: #111;
-  --mark-spark: #6c47ff;
 }
 
 @media (prefers-color-scheme: dark) {

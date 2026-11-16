@@ -282,7 +282,12 @@ class FakeSupabase:
         if "hash:details->>text_sha256" in params["select"]:  # the stored fingerprint of the description, or null
             return FakeHttpResponse(
                 data=[
-                    {"company": c, "job_id": j, "hash": (self.table[(c, j)].get("details") or {}).get("text_sha256")}
+                    {
+                        "company": c,
+                        "job_id": j,
+                        "hash": (self.table[(c, j)].get("details") or {}).get("text_sha256"),
+                        "snippet": self.table[(c, j)].get("snippet"),
+                    }
                     for c, j in window
                 ]
             )

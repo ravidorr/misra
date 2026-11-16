@@ -1,4 +1,4 @@
-"""The Misra mark is a lime disc with a violet spark and an ink pulse. These tests pin that assignment in every place
+"""The Misra mark is a lime disc with an ink pulse, and nothing else. These tests pin that assignment in every place
 the colors are fixed, so it cannot flip back unnoticed: the design tokens, the standalone SVG (the source of the
 favicon) and the dashboard styles that paint the header logo."""
 
@@ -22,33 +22,33 @@ def token(name: str) -> str:
     return values[0]
 
 
-def test_disc_is_lime_and_spark_is_violet() -> None:
+def test_disc_is_lime_and_ink_is_black() -> None:
     assert token("mark-disc") == token("lime") == "#d4ff4f"
-    assert token("mark-spark") == "#6c47ff"
     assert token("mark-ink") == "#111"
+    assert "--mark-spark" not in TOKENS
 
 
-def test_mark_svg_has_lime_disc_and_violet_spark() -> None:
+def test_mark_svg_is_a_lime_disc_with_an_ink_pulse_and_no_spark() -> None:
     disc = re.search(r"<circle[^>]*>", MARK)
     assert disc is not None
     assert 'fill="#d4ff4f"' in disc[0]
-    spark = [p for p in re.findall(r"<path[^>]*>", MARK) if 'fill="none"' not in p]
-    pulse = [p for p in re.findall(r"<path[^>]*>", MARK) if 'fill="none"' in p]
-    assert len(spark) == len(pulse) == 1
-    assert 'fill="#6c47ff"' in spark[0]
-    assert 'stroke="#111"' in pulse[0]
-    assert MARK.count("#d4ff4f") == MARK.count("#6c47ff") == 1
+    paths = re.findall(r"<path[^>]*>", MARK)
+    assert len(paths) == 1
+    assert 'fill="none"' in paths[0]
+    assert 'stroke="#111"' in paths[0]
+    assert MARK.count("#d4ff4f") == 1
+    assert "#6c47ff" not in MARK
 
 
 def test_header_logo_paints_with_the_mark_tokens() -> None:
     css = (REPO / "templates" / "dashboard.css").read_text(encoding="utf-8")
-    for part in ("disc", "spark"):
-        rule = re.search(rf"\.mark-{part}\s*\{{([^}}]*)\}}", css)
-        assert rule is not None
-        assert re.search(rf"(^|;|\s)fill:\s*var\(--mark-{part}\);", rule[1])
+    rule = re.search(r"\.mark-disc\s*\{([^}]*)\}", css)
+    assert rule is not None
+    assert re.search(r"(^|;|\s)fill:\s*var\(--mark-disc\);", rule[1])
+    assert "mark-spark" not in css
     page = (REPO / "templates" / "dashboard.html").read_text(encoding="utf-8")
     assert re.search(r'<circle class="mark-disc"', page)
-    assert re.search(r'<path class="mark-spark"', page)
+    assert "mark-spark" not in page
 
 
 def test_apple_touch_icon_is_a_180_px_png() -> None:
@@ -87,7 +87,7 @@ def paeth(a: int, b: int, c: int) -> int:
     return a if pa <= pb and pa <= pc else (b if pb <= pc else c)
 
 
-def test_apple_touch_icon_has_a_lime_disc_and_a_violet_spark() -> None:
+def test_apple_touch_icon_has_a_lime_disc_and_no_spark() -> None:
     rows = decode_png_rgba(APPLE_TOUCH_ICON.read_bytes())
 
     def pixel(x: int, y: int) -> str:
@@ -95,5 +95,5 @@ def test_apple_touch_icon_has_a_lime_disc_and_a_violet_spark() -> None:
 
     scale = APPLE_TOUCH_SIZE / 64
     assert pixel(round(32 * scale), round(53 * scale)) == "#d4ff4f"  # the disc, below the pulse
-    assert pixel(round(47 * scale), round(15 * scale)) == "#6c47ff"  # the middle of the spark
+    assert pixel(round(47 * scale), round(15 * scale)) == "#d4ff4f"  # where the spark was: bare disc
     assert pixel(1, 1) == "#ffffff"  # opaque white corners
