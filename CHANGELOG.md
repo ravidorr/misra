@@ -8,11 +8,19 @@ All notable changes are documented here. Format follows [Keep a Changelog](https
 
 ### Changed
 
-- The Misra logo mark has a lime disc and a violet spark (it was the other way round), which matches the colors of the app. The ink pulse line and ring are unchanged: ink on lime is about 17:1, the violet spark on the lime disc is 4.7:1 and the violet spark on the dark page is 3.5:1 (the ink outline of the spark is 3.6:1 against violet), so no token other than `--mark-disc` and `--mark-spark` changed (they swap values; the dark theme does not redefine them). `design-system/assets/mark.svg`, the new `design-system/assets/apple-touch-icon.png` (180 px, white background, rendered from the SVG) and the design-system README follow.
+- The Misra logo mark has a lime disc and a violet spark (it was the other way round), which matches the colors of the app. The ink pulse line and ring are unchanged: ink on lime is about 16:1, the violet spark on the lime disc is 4.6:1 and the violet spark on the dark page is 3.5:1 (the ink outline of the spark is 3.6:1 against violet), so no token other than `--mark-disc` and `--mark-spark` changed (they swap values; the dark theme does not redefine them). `design-system/assets/mark.svg`, the new `design-system/assets/apple-touch-icon.png` (180 px, white background, rendered from the SVG) and the design-system README follow.
 
 ### Fixed
 
 - `docs/favicon.svg` and `docs/apple-touch-icon.png` were committed by hand and no build produced them, so a logo change could not reach the site through `publish-docs`. `build_dashboard.py` now copies them from `design-system/assets/` (`ICON_FILES`), and the daily workflow stages them. New tests pin the lime disc and violet spark in the tokens, the SVG and the header styles, and check that the built icons are the sources.
+
+## [0.34.0] - 2026-11-15
+
+### Changed
+
+- The maintainer digest email (`send_email.py`, built by `digest.py`) no longer has the "Not crawled properly (N)" section: it holds the new Israel jobs only. It is no longer sent on a day with no new jobs, so the "Job crawl alert: N new" email (a day with only new crawl problems) is gone too. `render` lost its `gaps` argument and the unused `GAP_LABEL` and `GAP_NOTE_MAX` are removed.
+- Crawl problems are not silent: the digest step prints one line to the job log, counts and company names only (for example `coverage gaps: 2 (1 new): failing 1 (Acme); held 1 (Beta)`), and marks the gaps as logged, so "new" still means the first day; a new gap is printed as a `::warning::` annotation of the run. The detection (crawl guards, closing rules, the dashboard's coverage gap card) and the failure alert of `send_alert.py` are unchanged; a broken coverage check still turns the step red.
+- Tests: the digest never contains the section even with failing, held and believed-drop companies in the crawl log; the log line; a gap-only day sends nothing; the subscriber digest already had its own test that it has no coverage content.
 
 ## [0.33.0] - 2026-11-15
 
