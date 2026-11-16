@@ -506,7 +506,7 @@ async def test_a_notice_and_a_card_have_the_same_border_radius_and_shadow(page: 
         " return [s.borderTopWidth, s.borderTopStyle, s.borderTopColor, s.borderTopLeftRadius, s.boxShadow]; }"
     )
     card = await page.locator("#list article").first.evaluate(styles)
-    gaps = await page.locator("#gaps").evaluate(styles)  # a notice
+    gaps = await page.locator("#gapsCard").evaluate(styles)  # a notice
     assert card == gaps
     await page.evaluate("document.querySelector('#authMessage').innerHTML = '<p class=\"notice\">Deleted.</p>'")
     assert await page.locator("#authMessage .notice").evaluate(styles) == card
@@ -528,3 +528,27 @@ async def test_a_card_on_a_phone_shows_the_title_and_apply_before_the_tags(page:
     assert tags is not None
     assert apply is not None
     assert tags["y"] < apply["y"]
+
+
+@pytest.mark.parametrize("scheme", ["light", "dark"])
+@pytest.mark.parametrize("width", [320, 375, 393, 1650])
+async def test_report_a_site_is_in_view_with_the_coverage_card_closed_and_open(
+    page: Page, crowd: Path, width: int, scheme: str
+) -> None:
+    await open_page(page, crowd, width, scheme=scheme)
+    button = page.locator("#gapsCard #reportOpen")
+    assert await page.locator("#gaps").get_attribute("open") is None
+    await button.scroll_into_view_if_needed()
+    await expect(button).to_be_visible()  # closed: the list is hidden, the report row is not
+    box = await button.bounding_box()
+    assert box is not None
+    assert box["height"] >= TAP
+    assert 0 <= box["x"] <= box["x"] + box["width"] <= width
+    assert await page.evaluate(NO_SIDEWAYS)
+    await page.locator("#gaps-title").click()
+    await expect(page.locator("#gaps .gap-part").first).to_be_visible()
+    assert await page.evaluate(NO_SIDEWAYS)
+    below = await page.locator("#gaps").evaluate("d => d.getBoundingClientRect().bottom")
+    opened = await button.bounding_box()
+    assert opened is not None
+    assert opened["y"] >= below - 1  # the row stays under the list

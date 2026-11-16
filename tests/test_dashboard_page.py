@@ -42,12 +42,16 @@ USER_ID = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
 EMAIL = "ann@test.example"
 NAME = "Ann Example"
 PHOTO = "https://photos.test/ann.png"
-GAP_GROUPS = [
-    ("Blocks automated access", 1),
-    ("Site down, parked or unreachable", 1),
-    ("Roles are listed, but we cannot read them yet", 1),
-    ("No job feed found yet", 1),
-]
+GUARDED_NOTE = "robots.txt does not allow it; skipped for 2 days, its roles are kept for up to 7 days and then closed"
+# What the card shows: two coarse parts, never the eight internal reasons.
+SITES = {
+    "Walled": "https://walled.test/jobs",  # blocked: the careers page itself
+    "Parked": "https://parked.test",  # no careers address: the own site
+    "LongName": "https://long.test/careers",
+    "Nowhere": "https://nowhere.test/jobs",
+    "Guarded": "https://guarded.test/careers",
+}
+GAP_PARTS = [("We choose not to read these", 1), ("We cannot read these yet", 4)]
 
 
 @pytest.fixture
@@ -78,7 +82,8 @@ def build_site(db: sqlite3.Connection, workdir: Path, fill: Callable[[sqlite3.Co
         "name,domain,careers_url,segment,reason,note\r\n"
         "Parked,parked.test,,deeptech,site_unusable,Domain parked at GoDaddy\r\n"
         f'LongName,long.test,https://long.test/careers,deeptech,needs_reader,"{LONG_NOTE}"\r\n'
-        "Walled,walled.test,https://walled.test/jobs,multinational,bot_protection,\r\n",
+        "Walled,walled.test,https://walled.test/jobs,multinational,bot_protection,\r\n"
+        f'Guarded,guarded.test,https://guarded.test/careers,deeptech,robots_disallowed,"{GUARDED_NOTE}"\r\n',
         encoding="utf-8",
     )
     if fill is not None:
@@ -630,22 +635,49 @@ async def open_gaps(page: Page) -> None:
     await page.evaluate("document.querySelectorAll('#gaps, #gaps details').forEach(d => { d.open = true; })")
 
 
-async def test_the_coverage_gap_card_counts_the_sites_by_reason(page: Page, site: Path) -> None:
+async def test_the_coverage_gap_card_has_two_parts_and_no_internal_reasons(page: Page, site: Path) -> None:
     await serve(page, site)
+    await open_gaps(page)
     assert (
-        await page.locator("#gaps-title").inner_text() == "Coverage gaps: 4 companies whose roles may be missing or old"
+        await page.locator("#gaps-title").inner_text() == "Coverage gaps: 5 companies whose roles may be missing or old"
     )
+    assert await page.locator("#gaps details").count() == 0  # no group to open one by one
     shown = []
-    for group in await page.locator("#gaps details.gap-group").all():
-        label = await group.locator("summary span").first.text_content()
-        visible = await group.locator("summary .gap-count").text_content()
-        listed = await group.locator("li").count()
-        assert (visible, str(listed)) == (await group.get_attribute("data-count"), visible)
+    for part in await page.locator("#gaps .gap-part").all():
+        label = await part.locator(".gap-part-title span").first.text_content()
+        visible = await part.locator(".gap-count").text_content()
+        assert (visible, visible) == (await part.get_attribute("data-count"), str(await part.locator("li").count()))
         shown.append((label, int(visible)))
-    assert shown == GAP_GROUPS
-    assert await page.locator("[data-reason=site_unusable] li b").text_content() == "Parked (opens in a new tab)"
-    assert await page.locator("[data-reason=site_unusable] li .gap-why").text_content() == "Domain parked at GoDaddy"
-    assert await page.locator("[data-reason=bot_protection] li").text_content() == "Walled (opens in a new tab)"
+    assert shown == GAP_PARTS
+    text = await page.locator("#gaps").inner_text()
+    for internal in ("Blocks automated access", "Site down", "No job feed found yet", "Failing in the latest crawl"):
+        assert internal not in text
+    # the reason stays in the page for agents
+    assert await page.locator("li[data-company=Parked]").get_attribute("data-reason") == "site_unusable"
+    assert await page.locator("li[data-company=Walled]").text_content() == "Walled (opens in a new tab)"
+    assert await page.locator("[data-part=cannot-read] .gap-why").count() == 0
+    # the cards are in alphabetical order inside a part
+    names = await page.locator("[data-part=cannot-read] li").evaluate_all("els => els.map(e => e.dataset.company)")
+    assert names == ["LongName", "Nowhere", "Parked", "Walled"]
+
+
+async def test_the_coverage_gap_card_says_in_plain_words_which_sites_we_choose_not_to_read(
+    page: Page, site: Path
+) -> None:
+    await serve(page, site)
+    await open_gaps(page)
+    skipped = page.locator("[data-part=skipped]")
+    assert await skipped.locator("h3 span").first.inner_text() == "We choose not to read these"
+    note = await skipped.locator(".gap-part-note").inner_text()
+    assert "robots.txt does not allow automated access" in note
+    assert "kept for up to 7 days and then closed" in note
+    card = skipped.locator("li")
+    assert await card.get_attribute("data-company") == "Guarded"
+    assert await card.get_attribute("data-reason") == "robots_disallowed"
+    assert await card.locator(".gap-why").text_content() == GUARDED_NOTE
+    assert await skipped.locator("a").get_attribute("href") == "https://guarded.test/careers"
+    unread = await page.locator("[data-part=cannot-read] .gap-part-note").inner_text()
+    assert unread == "Their roles may be missing or old."
 
 
 async def test_every_site_on_the_coverage_gap_card_is_a_safe_link_that_the_keyboard_reaches(
@@ -653,8 +685,8 @@ async def test_every_site_on_the_coverage_gap_card_is_a_safe_link_that_the_keybo
 ) -> None:
     await serve(page, site)
     await open_gaps(page)
-    links = page.locator("#gaps .gap-sites li a")
-    assert await page.locator("#gaps .gap-sites li").count() == await links.count() == len(GAP_GROUPS)
+    links = page.locator("#gaps .gap-list li a")
+    assert await page.locator("#gaps .gap-list li").count() == await links.count() == len(SITES)
     found = {}
     for link in await links.all():
         name = (await link.text_content() or "").replace(" (opens in a new tab)", "")
@@ -666,12 +698,8 @@ async def test_every_site_on_the_coverage_gap_card_is_a_safe_link_that_the_keybo
         box = await link.bounding_box()
         assert box is not None
         assert box["height"] >= TAP
-    assert found == {
-        "Walled": "https://walled.test/jobs",  # blocked: the careers page itself
-        "Parked": "https://parked.test",  # no careers address: the own site
-        "LongName": "https://long.test/careers",
-        "Nowhere": "https://nowhere.test/jobs",
-    }
+        assert box["width"] >= TAP
+    assert found == SITES
     assert all(href is not None and href.startswith("https://") for href in found.values())
     # Tab reaches every link, in order, and the focus is drawn
     await page.locator("#gaps-title").focus()
@@ -679,7 +707,7 @@ async def test_every_site_on_the_coverage_gap_card_is_a_safe_link_that_the_keybo
     for _ in range(40):
         await page.keyboard.press("Tab")
         active = await page.evaluate(
-            "document.activeElement.matches('.gap-sites a') && document.activeElement.getAttribute('href')"
+            "document.activeElement.matches('.gap-list a') && document.activeElement.getAttribute('href')"
         )
         if active:
             reached.append(active)
@@ -697,36 +725,54 @@ async def test_a_site_without_an_https_address_is_shown_as_plain_text(page: Page
     (site / "index.html").write_text(html, encoding="utf-8")
     await serve(page, site)
     await open_gaps(page)
-    assert await page.locator("#gaps .gap-sites li a").count() == len(GAP_GROUPS) - 1
-    assert await page.locator("[data-reason=bot_protection] li b").text_content() == "Walled"
+    assert await page.locator("#gaps .gap-list li a").count() == len(SITES) - 1
+    assert await page.locator("li[data-company=Walled] b").text_content() == "Walled"
 
 
 async def test_the_coverage_gap_card_opens_and_closes_and_says_so(page: Page, site: Path) -> None:
     await serve(page, site)
-    await page.locator("#gaps-title").click()
-    group = page.locator("[data-reason=site_unusable]")
-    assert await group.evaluate("d => d.open") is False
+    details = page.locator("#gaps")
     marker = "d => getComputedStyle(d.querySelector('summary'), '::before').content"
-    assert await group.evaluate(marker) == '"\u25b8"'
-    await group.locator("summary").click()
-    assert await group.evaluate("d => d.open") is True
-    assert await group.evaluate(marker) == '"\u25be"'
+    assert await details.evaluate("d => d.open") is False
+    assert await details.evaluate(marker) == '"\u25b8"'
+    await page.locator("#gaps-title").click()
+    assert await details.evaluate("d => d.open") is True
+    assert await details.evaluate(marker) == '"\u25be"'
+    await page.locator("#gaps-title").click()
+    assert await details.evaluate("d => d.open") is False
 
 
-async def test_the_coverage_gap_card_reads_well_on_a_phone(page: Page, site: Path) -> None:
-    await page.set_viewport_size(PHONE)
+async def test_report_a_site_stays_in_view_while_the_coverage_gap_card_is_closed(page: Page, site: Path) -> None:
+    await serve(page, site)
+    assert await page.locator("#gaps").evaluate("d => d.open") is False
+    button = page.locator("#gapsCard #reportOpen")
+    await expect(button).to_be_visible()
+    assert (
+        await page.locator("#gapReportText").inner_text()
+        == "Is a company missing from this list? Tell us where it hires."
+    )
+    assert await page.locator("#gaps .gap-part").first.is_hidden()  # the list is closed, the report row is not
+
+
+@pytest.mark.parametrize("width", [320, 393])
+async def test_the_coverage_gap_card_reads_well_on_a_phone(page: Page, site: Path, width: int) -> None:
+    await page.set_viewport_size({"width": width, "height": PHONE["height"]})
     await serve(page, site)
     await open_gaps(page)
     assert await page.evaluate("document.documentElement.scrollWidth <= document.documentElement.clientWidth")
-    summaries = await page.locator("#gaps summary").all()
-    assert len(summaries) == 1 + len(GAP_GROUPS)
-    for summary in summaries:
-        box = await summary.bounding_box()
+    summary = await page.locator("#gaps summary").bounding_box()
+    assert summary is not None
+    assert summary["height"] >= TAP
+    for note in await page.locator("#gaps .gap-why, #gaps .gap-part-note").all():
+        box = await note.bounding_box()
+        assert box is not None
+        assert box["x"] >= 0
+        assert box["x"] + box["width"] <= width
+    for card in await page.locator("#gaps .gap-card").all():
+        box = await card.bounding_box()
         assert box is not None
         assert box["height"] >= TAP
-    note = await page.locator("[data-reason=needs_reader] .gap-why").bounding_box()
-    assert note is not None
-    assert note["x"] + note["width"] <= PHONE["width"]
+        assert box["x"] + box["width"] <= width
 
 
 # ---- Filters: level, role type, region and place (PLAN 3.4; FR-3 AC 8 to 10, FR-9 AC 1, 2, 7 and 8) ----

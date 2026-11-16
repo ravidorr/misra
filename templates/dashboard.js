@@ -1578,21 +1578,37 @@ $('file').addEventListener('change', (e) => {
   reader.readAsText(file);
 });
 
-const gaps = DATA.gaps ?? { blocked: [], untracked: [], total: 0, groups: [] };
+const gaps = DATA.gaps ?? { blocked: [], untracked: [], total: 0, groups: [], closeDays: 0 };
 {
-  /* The card is always there: "Report a site" (report.js) lives on it, even when no company is known to be missing. */
-  const el = $('gaps');
-  const report = $('gapReport');
+  /* The card is always there: "Report a site" (report.js) sits under the list and stays in view while the list is
+     closed, even when no company is known to be missing. The reader gets two lists, not the internal reasons: the
+     companies we choose not to read (their robots.txt does not allow it) first, then the ones we cannot read yet.
+     Each company keeps its reason in data-reason, and the reasons stay in the page data. */
+  const parts = [
+    {
+      part: 'skipped',
+      title: 'We choose not to read these',
+      note: `Their robots.txt does not allow automated access, so we respect it. Roles we already had are kept for up to ${gaps.closeDays} days and then closed.`,
+      sites: [],
+    },
+    {
+      part: 'cannot-read',
+      title: 'We cannot read these yet',
+      note: 'Their roles may be missing or old.',
+      sites: [],
+    },
+  ];
+  for (const group of gaps.groups) {
+    const part = parts[group.reason === 'robots_disallowed' ? 0 : 1];
+    for (const site of group.sites) part.sites.push({ ...site, reason: group.reason });
+  }
   if (gaps.total > 0) {
     $('gaps-title').textContent = `Coverage gaps: ${gaps.total} companies whose roles may be missing or old`;
-    report.before(
-      h('p', { class: 'gaps-intro' }, [
-        'Each group says why we do not fully crawl these companies; open one to see them.',
-      ]),
-    );
-    for (const group of gaps.groups) {
-      const list = h('ul', { class: 'gap-sites' });
-      for (const site of group.sites) {
+    for (const part of parts.filter((p) => p.sites.length > 0)) {
+      part.sites.sort((a, b) => a.c.localeCompare(b.c, 'en', { sensitivity: 'base' }));
+      const heading = `gap-${part.part}-h`;
+      const list = h('ul', { class: 'gap-list', 'aria-labelledby': heading });
+      for (const site of part.sites) {
         /* The name is a link to the careers page (or the company's own site): https only, so nothing else is ever linked. */
         const name = site.url?.startsWith('https://')
           ? h('a', { class: 'gap-link', href: site.url, target: '_blank', rel: 'noopener noreferrer' }, [
@@ -1600,22 +1616,33 @@ const gaps = DATA.gaps ?? { blocked: [], untracked: [], total: 0, groups: [] };
               h('span', { class: 'sr-only', text: NEW_TAB }),
             ])
           : site.c;
-        list.append(h('li', {}, [h('b', {}, [name]), site.why ? h('span', { class: 'gap-why', text: site.why }) : null]));
+        /* Only a skipped company says why: it is the one fact the reader may want (roles close after the days). */
+        const why = part.part === 'skipped' && site.why ? h('span', { class: 'gap-why', text: site.why }) : null;
+        list.append(
+          h('li', { class: 'gap-card', 'data-company': site.c, 'data-reason': site.reason }, [
+            h('b', { class: 'gap-name' }, [name]),
+            why,
+          ]),
+        );
       }
-      report.before(
-        h('details', { class: 'gap-group', 'data-reason': group.reason, 'data-count': String(group.count) }, [
-          h('summary', {}, [h('span', { text: group.label }), h('span', { class: 'gap-count', text: String(group.count) })]),
+      $('gapParts').append(
+        h('section', { class: 'gap-part', 'data-part': part.part, 'data-count': String(part.sites.length) }, [
+          h('h3', { class: 'gap-part-title', id: heading }, [
+            h('span', { text: part.title }),
+            h('span', { class: 'gap-count', text: String(part.sites.length) }),
+          ]),
+          h('p', { class: 'gap-part-note', text: part.note }),
           list,
         ]),
       );
     }
   } else {
-    $('gaps-title').textContent = 'Is a company missing? Report a site';
+    $('gaps').hidden = true;
   }
-  el.hidden = false;
+  $('gapsCard').hidden = false;
 }
 
-/* The footer's "Coverage gaps" link: the card is a closed details, so open it before the jump. */
+/* The footer's "Coverage gaps" link: the details inside the card is closed, so open it before the jump. */
 document.addEventListener('click', (e) => {
   if (e.target.closest('a.foot-gaps')) $('gaps').open = true;
 });
