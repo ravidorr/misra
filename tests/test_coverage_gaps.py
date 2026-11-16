@@ -277,3 +277,14 @@ def test_the_crawl_itself_logs_no_gaps(
     monkeypatch.setattr(sys, "argv", ["run.py"])
     run.main()  # failed twice now, yet the crawl step stays quiet: the gaps have their own step
     assert "coverage gaps" not in capsys.readouterr().out
+
+
+def test_a_new_gap_beside_a_known_one_is_still_a_warning(
+    db: sqlite3.Connection, capsys: pytest.CaptureFixture[str]
+) -> None:
+    add_crawls(db, "Old", [(0, FAIL), (0, FAIL)])
+    run.log_coverage_gaps(db)
+    capsys.readouterr()
+    add_crawls(db, "New", [(0, FAIL), (0, FAIL)])
+    run.log_coverage_gaps(db)
+    assert capsys.readouterr().out.startswith("::warning::coverage gaps: 2 (1 new): ")

@@ -105,4 +105,6 @@ def test_the_gaps_step_follows_the_crawl_runs_after_it_and_fails_the_run_without
     assert re.search(r"timeout-minutes: \d+", step)
     assert "secrets." not in step  # it reads the committed database and needs nothing secret
     assert "gaps=${{ steps.gaps.outcome }}" in next(s for n, s in steps().items() if n.startswith("Email an alert"))
-    assert "steps.gaps" not in steps()["sync"]  # a broken check never blocks the sync, the digests or the commit
+    assert "continue-on-error" not in step
+    for name, other in steps().items():  # a broken check never blocks the sync, the digests, the build or the commit
+        assert name in ("gaps",) or name.startswith("Email an alert") or "steps.gaps" not in other, name

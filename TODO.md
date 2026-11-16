@@ -191,7 +191,7 @@ Observations about live sites below come from checks made on 2026-11-14 and may 
       requests; not investigated further.
   - **Bot protection.** Some pages answered 403, "Access Denied" or a browser check. Leave them and record it. Do not try
     to get around bot protection: a few pinned companies (Check Point, Papaya Global, Unity) are already blocked from the CI
-    runner this way and show up as gaps in the digest.
+    runner this way and show up as gaps on the dashboard and in the job log.
   - How to research a company:
     1. Find the real careers page, then look for the job board it uses: an embedded or linked Greenhouse, Lever, Ashby,
        Workable, SmartRecruiters, Comeet or Workday board (`discover.ATS_LINK` has the patterns, and the page's HTML,

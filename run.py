@@ -265,7 +265,7 @@ def coverage_gaps(c: sqlite3.Connection) -> list[dict[str, Any]]:
 
 
 def safe_coverage_gaps(c: sqlite3.Connection) -> tuple[list[dict[str, Any]], str]:
-    """(gaps, error): a problem in the gap check must not stop the crawl, so it comes back as text instead."""
+    """(gaps, error): a problem in the gap check comes back as text, so the gaps step can report it and go red."""
     try:
         return coverage_gaps(c), ""
     except (sqlite3.Error, ValueError, TypeError) as exc:
@@ -386,8 +386,8 @@ def main() -> None:  # noqa: PLR0912, PLR0915
                     (now, j["title"], j["location"], j["url"], name, j["job_id"]),
                 )
             else:
-                # a company seen for the first time gets a silent baseline (reported=1),
-                # so adding companies never floods the digest
+                # a company seen for the first time gets a silent baseline (reported=1). Nothing reads the column
+                # any more (send_digests.py goes by first_seen and the emailed table); it is kept for old databases
                 c.execute(
                     "INSERT INTO jobs(company,job_id,title,team,location,url,posted,first_seen,last_seen,reported) "
                     "VALUES(?,?,?,?,?,?,?,?,?,?)",
