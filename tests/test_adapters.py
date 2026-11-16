@@ -1679,7 +1679,7 @@ def test_amazon_keeps_the_description_and_the_qualifications_it_lists(monkeypatc
     job.update(
         description="Build<br/>things",
         basic_qualifications="<li>3 years</li>",
-        preferred_qualifications="",
+        preferred_qualifications="<li>Go</li>",
         job_family="Software",
         job_schedule_type="full-time",
     )
@@ -1687,7 +1687,9 @@ def test_amazon_keeps_the_description_and_the_qualifications_it_lists(monkeypatc
     fake_amz(monkeypatch, amz_answer([job, bare]))
     jobs = adapters.amazon("ISR")
     assert jobs is not None
-    assert jobs[0]["description"] == "Build\nthings\n\nBasic qualifications\n- 3 years"
+    assert (
+        jobs[0]["description"] == "Build\nthings\n\nBasic qualifications\n- 3 years\n\nPreferred qualifications\n- Go"
+    )
     assert jobs[0]["details"] == {"job_family": "Software", "employment_type": "full-time"}
     assert "description" not in jobs[1]
 

@@ -232,11 +232,18 @@ def push_texts(
     still goes, so one bad row costs its batch and not every description."""
     wanted = sorted(still_open & texts.keys())
     if not wanted:
+        if texts:  # the crawl left texts and none is for an open job: the keys do not match, which is worth a look
+            print(f"::warning::{len(texts)} descriptions were left by the crawl and none is for an open job")
         return 0, 0, 0
     try:
         stored = client.text_hashes()
-    except SyncError as exc:
-        print(f"::warning::the stored descriptions could not be read, so none is written: {exc}")
+    except (
+        SyncError,
+        ValueError,
+        KeyError,
+        TypeError,
+    ) as exc:  # an answer of another shape is no reason to fail the step
+        print(f"::warning::the stored descriptions could not be read, so none is written: {type(exc).__name__}")
         return 0, 0, len(wanted)
     fresh: list[dict[str, Any]] = []
     for company, job_id in wanted:

@@ -30,12 +30,13 @@ TRUNCATED = "description_truncated"  # the details key that records a text cut a
 HASH_KEY = "text_sha256"  # the details key the sync keeps the fingerprint of the stored text in
 WORK_FILE = "misra-descriptions.jsonl"
 # Elements whose content is never text for a reader: dropped with their content.
-_DROPPED = frozenset({"script", "style", "noscript", "template", "svg", "iframe", "object", "embed", "head", "title"})
+_DROPPED = frozenset({"script", "style", "noscript", "template", "svg", "iframe", "object", "head", "title"})
 _BLOCKS = frozenset(
     {"p", "div", "section", "article", "header", "footer", "ul", "ol", "table", "tr", "blockquote", "pre", "hr"}
     | {"h1", "h2", "h3", "h4", "h5", "h6"}
 )
-_TAG_LIKE = re.compile(r"</?[A-Za-z!][^>]*>")
+# A script, style or frame that came out of the text itself (escaped twice): dropped up to its end tag.
+_DANGEROUS = re.compile(r"<(script|style|iframe)\b.*?(?:</\1\s*>|\Z)", re.S | re.I)
 _SPACE = re.compile(r"[^\S\n]+")
 
 
@@ -70,7 +71,7 @@ def _tidy(raw: str) -> str:
     """Whitespace and control characters: no NUL or other control character (Postgres refuses NUL in text and one bad
     row would fail a whole batch), spaces collapsed, lines trimmed, at most one blank line in a row."""
     text = "".join(ch if ch == "\n" or unicodedata.category(ch) not in {"Cc", "Cs"} else " " for ch in raw)
-    lines = [_SPACE.sub(" ", line).strip() for line in text.replace("\N{NO-BREAK SPACE}", " ").splitlines()]
+    lines = [_SPACE.sub(" ", line).strip() for line in text.splitlines()]
     out: list[str] = []
     for line in lines:
         if line or (out and out[-1]):
@@ -85,17 +86,15 @@ def html_to_text(raw: Any) -> str:
         return ""
     if "<" not in raw and "&lt;" in raw:
         raw = html.unescape(raw)
-    for _ in range(2):  # a second pass takes out a tag that was escaped twice
-        parser = _Text()
-        try:
-            parser.feed(raw)
-            parser.close()
-        except Exception:  # a posting must never stop its company's crawl, whatever its markup is
-            return ""
-        raw = "".join(parser.parts)
-        if not _TAG_LIKE.search(raw):
-            break
-    return _tidy(_TAG_LIKE.sub(" ", raw))
+    parser = _Text()
+    try:
+        parser.feed(raw)
+        parser.close()
+    except Exception:  # a posting must never stop its company's crawl, whatever its markup is
+        return ""
+    # What is left is plain text: an angle bracket in it is a character a posting wrote (`List<T>`), not markup, and is
+    # kept; the consumer shows it as text. Only a script, style or frame escaped twice is taken out.
+    return _tidy(_DANGEROUS.sub(" ", "".join(parser.parts)))
 
 
 def plain_text(raw: Any) -> str:

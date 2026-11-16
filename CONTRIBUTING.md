@@ -247,7 +247,7 @@ PLAN.md step 7.1. Where the text of a posting lives, and how it gets there:
   second each on one host, and a new path to check against `robots.txt`), Phenom and Oracle HCM (the lists carry a teaser,
   not the text), `comeet_page`, JazzHR and BambooHR (a request per job), and SmartRecruiters (skipped by `robots.txt`).
 - **The text.** Plain text made from the site's HTML with the standard library: scripts, styles and embedded frames are
-  dropped with their content, no markup survives, paragraphs and list items keep their line breaks, control characters
+  dropped with their content, no tag survives (an angle bracket a posting wrote, such as `List<T>`, is kept as text, to be shown as text), paragraphs and list items keep their line breaks, control characters
   (NUL breaks a Postgres insert) are removed. At most 20,000 characters a job (`MAX_CHARS` in `descriptions.py`, cut at a
   word); a cut text is marked `description_truncated` in `details` and counted in the log. A value that is not text is no
   description: nothing in this path can stop a company's crawl.

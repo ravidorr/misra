@@ -1,4 +1,5 @@
 import json
+import tempfile
 from pathlib import Path
 from typing import Any
 
@@ -50,14 +51,14 @@ def test_escaped_html_is_unescaped_once_before_it_is_read() -> None:
     assert html_to_text("&lt;p&gt;Hi &amp;amp; bye&lt;/p&gt;&lt;script&gt;x()&lt;/script&gt;") == "Hi & bye"
 
 
-def test_a_tag_that_was_escaped_twice_does_not_survive() -> None:
-    text = html_to_text("<p>&lt;b&gt;bold&lt;/b&gt; and &lt;script&gt;x()&lt;/script&gt;</p>")
-    assert "<" not in text
-    assert text.startswith("bold and")
+def test_a_script_escaped_twice_is_taken_out_but_escaped_prose_stays() -> None:
+    assert html_to_text("<p>&lt;b&gt;bold&lt;/b&gt; and &lt;script&gt;x()&lt;/script&gt;</p>") == "<b>bold</b> and"
+    assert html_to_text("<p>&lt;SCRIPT&gt;never closed") == ""
+    assert html_to_text("&lt;p&gt;Use &amp;lt;vector&amp;gt; in C++&lt;/p&gt;") == "Use <vector> in C++"
 
 
-def test_a_tag_that_survives_two_readings_is_taken_out_at_the_end() -> None:
-    assert html_to_text("<p>&lt;u&gt;a &amp;lt;b&amp;gt;b</p>") == "a b"
+def test_a_void_embed_does_not_swallow_the_rest_of_the_posting() -> None:
+    assert html_to_text("<p>Intro</p><embed src=x><p>Requirements</p>") == "Intro\n\nRequirements"
 
 
 def test_a_less_than_sign_in_prose_stays() -> None:
@@ -95,6 +96,8 @@ def test_the_cap_cuts_at_a_space_near_the_limit_and_says_so() -> None:
     assert (cut, was_cut) == ("word word", True)  # not "word word w"
     assert cap("x" * 50, 12) == ("x" * 12, True)  # no space near: cut where it is
     assert cap("a\nb" * 10, 4)[1] is True
+    far = "a b" + "x" * 500
+    assert cap(far, 400) == (far[:400], True)  # the only space is far back: the cut stays at the cap
 
 
 def test_details_keep_short_text_flags_and_short_lists_only() -> None:
@@ -144,10 +147,14 @@ def test_the_work_file_is_outside_the_checkout_and_in_the_runner_temp_directory(
 ) -> None:
     monkeypatch.setenv("RUNNER_TEMP", str(tmp_path))
     assert work_path() == tmp_path / descriptions.WORK_FILE
-    monkeypatch.delenv("RUNNER_TEMP")
-    assert not work_path().is_relative_to(REPO)  # the system's temporary directory, never the repository
-    monkeypatch.setenv("RUNNER_TEMP", "")
-    assert not work_path().is_relative_to(REPO)
+    for unset in (None, ""):
+        if unset is None:
+            monkeypatch.delenv("RUNNER_TEMP")
+        else:
+            monkeypatch.setenv("RUNNER_TEMP", unset)
+        assert work_path() == Path(tempfile.gettempdir()) / descriptions.WORK_FILE  # never the checkout
+        assert work_path().is_absolute()
+        assert not work_path().is_relative_to(REPO)
 
 
 def test_the_work_file_round_trips_and_is_replaced_whole(tmp_path: Path) -> None:

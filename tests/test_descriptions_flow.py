@@ -64,7 +64,9 @@ def test_the_crawl_leaves_the_texts_in_the_work_file_and_never_in_the_database(
         {"acme": [posting("1"), posting("2", None)], "plain": [posting("p1", None)]},
     )
     assert read_work_file() == {("Acme", "1"): (SENTINEL, {"employment_type": "Full-time"})}
-    for path in [*(workdir / "data").glob("jobs.db*"), *(workdir / "docs").rglob("*")]:  # database, journal, WAL, docs
+    files = [f for f in workdir.rglob("*") if f.is_file()]  # the database, journal, WAL, docs, anything run.py wrote
+    assert any(f.name == "jobs.db" for f in files)
+    for path in files:
         assert SENTINEL.encode() not in path.read_bytes()
     check = sqlite3.connect(run.DB)
     columns = {c[1] for c in check.execute("PRAGMA table_info(jobs)")}
@@ -315,8 +317,7 @@ def test_the_publish_docs_workflow_stages_docs_only_and_no_description_file() ->
     assert all("description" not in a and not a.startswith(("-A", ".", "data")) for a in adds)
 
 
-def test_the_work_file_is_not_written_by_any_workflow_step_into_the_checkout() -> None:
-    assert descriptions.WORK_FILE not in WORKFLOW
+def test_the_crawl_step_has_no_environment_so_no_secret_reaches_it() -> None:
     crawl_step = WORKFLOW.split("name: Crawl and diff")[1].split("      - name:")[0]
     assert "env:" not in crawl_step  # no secret, and no variable, reaches the crawl
 
@@ -329,3 +330,28 @@ def test_the_dashboard_and_the_digest_read_named_columns_so_a_page_load_never_ca
         assert "description" not in named
         assert "details" not in named
     assert "select=*" not in dashboard
+
+
+def test_a_hash_read_of_an_unexpected_shape_is_a_warning_and_not_a_crash(
+    seeded: sqlite3.Connection, capsys: pytest.CaptureFixture[str]
+) -> None:
+    work({("Acme", "1"): "Text one"})
+    fake = FakeSupabase()
+    real = fake.request
+
+    def request(method: str, url: str, **kw: Any) -> FakeHttpResponse:
+        if method == "GET" and "hash:" in str(kw["params"].get("select")):
+            return FakeHttpResponse(data=[{"unexpected": 1}])
+        return real(method, url, **kw)
+
+    fake.request = request  # type: ignore[method-assign]
+    assert sync(seeded, client(fake)).texts_failed == 1
+    assert "could not be read, so none is written: KeyError" in capsys.readouterr().out
+
+
+def test_texts_that_match_no_open_job_are_a_warning(
+    seeded: sqlite3.Connection, capsys: pytest.CaptureFixture[str]
+) -> None:
+    work({("Nobody", "1"): "Text"})
+    sync(seeded, client(FakeSupabase()))
+    assert "1 descriptions were left by the crawl and none is for an open job" in capsys.readouterr().out
