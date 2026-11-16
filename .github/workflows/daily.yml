@@ -2,7 +2,13 @@ name: daily-job-digest
 
 on:
   schedule:
-    - cron: "30 4 * * *"   # 04:30 UTC = 06:30/07:30 Israel time
+    # GitHub delays or drops scheduled runs when many workflows start at once, which happens at the top of the hour and
+    # at :30 (it dropped the whole 2026-11-16 run and has started others about 7 hours late). So neither time is on
+    # :00 or :30, and there are two: the first is the real one, the second is a later try that the guard job below skips
+    # when a scheduled run already finished green that UTC day.
+    # 04:23 UTC = 06:23/07:23 Israel time (winter/summer); 09:53 UTC = 11:53/12:53 Israel time.
+    - cron: "23 4 * * *"
+    - cron: "53 9 * * *"
   workflow_dispatch:
     inputs:
       digest_dry_run:
@@ -25,7 +31,46 @@ env:
   LEGACY_MAINTAINER_DIGEST: "true"
 
 jobs:
+  guard:
+    # Decides whether a scheduled run has anything to do. It holds no secret, checks nothing out and writes nothing: it
+    # only asks the Actions API whether a scheduled run of this workflow already finished green today (UTC). A manual
+    # run skips this job and is never skipped. If the question fails, the answer is "do not skip" (fail open): a double
+    # run is harmless (the digest records what it emailed and the crawl is idempotent), a missed day is not.
+    # Only scheduled runs count: a manual run may have been a dry run that sent nothing. The run job below is skipped,
+    # not failed, when this says skip, so the failure alert (a step of that job) does not fire.
+    if: ${{ github.event_name == 'schedule' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      actions: read
+      contents: read
+    outputs:
+      skip: ${{ steps.check.outputs.skip }}
+    steps:
+      - name: Look for a green scheduled run today
+        id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -uo pipefail
+          skip=false
+          today="$(date -u +%F)"
+          if count="$(gh api -X GET "repos/${GITHUB_REPOSITORY}/actions/workflows/daily.yml/runs" \
+              -f event=schedule -f status=success -f "created=>=${today}" -f per_page=1 --jq .total_count)" \
+              && [[ "$count" =~ ^[0-9]+$ ]]; then
+            if [ "$count" -gt 0 ]; then
+              skip=true
+            fi
+            echo "green scheduled runs on ${today} (UTC): ${count}; skip=${skip}"
+          else
+            echo "::warning::could not read the earlier runs; running the job anyway"
+          fi
+          echo "skip=${skip}" >> "$GITHUB_OUTPUT"
   run:
+    needs: guard
+    # Runs on a manual start always. On a scheduled start it runs unless the guard said skip. !cancelled() and the
+    # "!= 'true'" test keep it running if the guard failed or produced nothing (fail open).
+    if: ${{ !cancelled() && (github.event_name != 'schedule' || needs.guard.outputs.skip != 'true') }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:

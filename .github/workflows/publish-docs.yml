@@ -21,7 +21,7 @@ on:
 # in line and never cancel a run that has started. GitHub keeps one waiting run per group, and a newer waiting run
 # replaces the older one. For two publish runs that is harmless (every run builds the latest main). The one bad case
 # is a daily run waiting behind a publish run when a second publish run is queued: the daily run is then dropped.
-# That needs two queued runs in the few minutes around 04:30 UTC; the alternative, separate groups, would let the two
+# That needs two queued runs in the few minutes around 04:23 or 09:53 UTC; the alternative, separate groups, would let the two
 # workflows push docs/ at the same time, which is worse (the daily run could lose its push and its data commit).
 concurrency:
   group: daily-job-digest
