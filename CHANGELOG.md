@@ -4,6 +4,14 @@ All notable changes are documented here. Format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
+## [0.48.0] - 2026-11-16
+
+### Fixed
+
+- A Comeet job no longer links to its company's general careers page. The `comeet` adapter took `url_active_page` (the company's own page for the job) whenever it was set, but for some jobs that field is the careers page itself (Claroty "Tech Lead Platform Software Engineer" -> `claroty.com/open-positions`, Qodo "Bookkeeper" -> `qodo.ai/careers`), or one page that several jobs, or one job in several places, share. `url_active_page` is now kept only when it is the page of that one job; otherwise the job's own Comeet page (`url_comeet_hosted_page`, `comeet.com/jobs/<name>/<uid>/<title>/<position uid>`) is the link. A page is not one job's when more than one job of the feed points to it, when it is the home page, when it is above another job's page (`/careers` above `/careers/co/boston/AB.123/`), or when it is named as the list of jobs (`/careers`, `/jobs`, `/open-positions`). A page with the job in its path or its query (`?job=AB.123`) is kept, and tracking parameters (`t`, `utm_*`, `Share`, `gh_src` and the like) never make two links differ. Without a Comeet page the company's page is still used.
+- The audit behind it, on the stored database (6,793 open jobs): 150 open jobs of 16 companies share their link with at least one other job (Coralogix 23, VAST Data 20, Checkmarx 18, Bizzabo 12, Stampli 12, UVeye 11, OX Security 10, Port 10, Allot 8, Nova 6, Sunbit 6, Wiliot 4, Tufin 3, Zenity 3, Ceragon 2, Upwind 2), and seven more have a job on the careers page alone (Claroty, Qodo, Global-e, Cycode, Cynet, BlueWhite, Elementor). On the live feeds of the 77 Comeet companies, 158 of 1,767 jobs of 24 companies change link, and none of them shares a link with another job afterwards. No other adapter is affected: the other API adapters build the link from the job's own id or take the job's own link, `comeet_page` and the browser crawler take the link of the job's card, and the stored jobs of those companies share no link.
+- Only the link changes. The job's key is still `(company, job_id)` with the Comeet uid as the id, so a job is not new, is not closed and reopened, keeps its `first_seen` and its `reported` flag, and is not announced again (a test crawls a stored job with the careers page as its link and checks the row). The stored links, and the Supabase `jobs.url` (the sync upserts on `(company, job_id)` and merges the columns), are updated by the next daily crawl and sync, with no migration.
+
 ## [0.45.0] - 2026-11-16
 
 ### Changed

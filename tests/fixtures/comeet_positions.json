@@ -1,0 +1,342 @@
+{
+ "Claroty": {
+  "slug": "Claroty/F2.004",
+  "positions": [
+   {
+    "uid": "CE.079",
+    "name": "AI Platform- Software Engineer Team Leader",
+    "department": "Software Engineering",
+    "location": {
+     "name": "Israel",
+     "country": "IL",
+     "city": "Tel Aviv",
+     "state": "",
+     "postal_code": "",
+     "street_name": "3 Tozeret Ha'aretz St., Tel Aviv, Southern Building, Floor 13",
+     "arrival_instructions": "<p><span>You can park at Ha-Solelim 4 parking lot and collect a parking sticker from the reception.<br/><br/></span><br/></p>",
+     "street_number": null,
+     "timezone": "Asia/Jerusalem",
+     "location_uid": "38.10A",
+     "is_remote": true
+    },
+    "time_updated": "2026-11-16T11:55:55Z",
+    "url_active_page": "https://claroty.com/open-positions/CE.079",
+    "url_comeet_hosted_page": "https://www.comeet.com/jobs/Claroty/F2.004/ai-platform--software-engineer-team-leader/CE.079"
+   },
+   {
+    "uid": "58.479",
+    "name": "Backend Platform Engineer",
+    "department": "Software Engineering",
+    "location": {
+     "name": "Israel",
+     "country": "IL",
+     "city": "Tel Aviv",
+     "state": "",
+     "postal_code": "",
+     "street_name": "3 Tozeret Ha'aretz St., Tel Aviv, Southern Building, Floor 13",
+     "arrival_instructions": "<p><span>You can park at Ha-Solelim 4 parking lot and collect a parking sticker from the reception.<br/><br/></span><br/></p>",
+     "street_number": null,
+     "timezone": "Asia/Jerusalem",
+     "location_uid": "38.10A",
+     "is_remote": true
+    },
+    "time_updated": "2026-11-16T12:48:23Z",
+    "url_active_page": "https://claroty.com/open-positions/58.479",
+    "url_comeet_hosted_page": "https://www.comeet.com/jobs/Claroty/F2.004/backend-platform-engineer/58.479"
+   },
+   {
+    "uid": "EE.471",
+    "name": "Bookkeeper (Temporary – Maternity Leave Cover)",
+    "department": "Finance",
+    "location": {
+     "name": "Israel",
+     "country": "IL",
+     "city": "Tel Aviv",
+     "state": "",
+     "postal_code": "",
+     "street_name": "3 Tozeret Ha'aretz St., Tel Aviv, Southern Building, Floor 13",
+     "arrival_instructions": "<p><span>You can park at Ha-Solelim 4 parking lot and collect a parking sticker from the reception.<br/><br/></span><br/></p>",
+     "street_number": null,
+     "timezone": "Asia/Jerusalem",
+     "location_uid": "38.10A",
+     "is_remote": true
+    },
+    "time_updated": "2026-11-16T08:52:35Z",
+    "url_active_page": "https://claroty.com/open-positions/EE.471?Share&employee",
+    "url_comeet_hosted_page": "https://www.comeet.com/jobs/Claroty/F2.004/bookkeeper-temporary--maternity-leave-cover/EE.471"
+   },
+   {
+    "uid": "25.57D",
+    "name": "Tech Lead Platform Software Engineer",
+    "department": "Software Engineering",
+    "location": {
+     "name": "Israel",
+     "country": "IL",
+     "city": "Tel Aviv",
+     "state": "",
+     "postal_code": "",
+     "street_name": "3 Tozeret Ha'aretz St., Tel Aviv, Southern Building, Floor 13",
+     "arrival_instructions": "<p><span>You can park at Ha-Solelim 4 parking lot and collect a parking sticker from the reception.<br/><br/></span><br/></p>",
+     "street_number": null,
+     "timezone": "Asia/Jerusalem",
+     "location_uid": "38.10A",
+     "is_remote": true
+    },
+    "time_updated": "2026-11-16T12:18:16Z",
+    "url_active_page": "https://claroty.com/open-positions",
+    "url_comeet_hosted_page": "https://www.comeet.com/jobs/Claroty/F2.004/tech-lead-platform-software-engineer/25.57D"
+   }
+  ]
+ },
+ "Qodo": {
+  "slug": "qodo/B8.00B",
+  "positions": [
+   {
+    "uid": "55.57C",
+    "name": "Bookkeeper",
+    "department": "Finance",
+    "location": {
+     "name": "Tel-Aviv",
+     "country": "IL",
+     "city": "Tel Aviv-Yafo",
+     "state": "Tel Aviv District",
+     "postal_code": "",
+     "street_name": "HaArba'a Street 21, Platinum Tower, floor 18.",
+     "arrival_instructions": "<p><span><span><span>Parking- <a href=\"https://waze.com/ul/hsv8wrw760\" target=\"\">'Platinum' building car park</a>. <span>Please park in any available spot marked 'Visitors' and don’t forget to take a parking ticket from us before you leave.</span></span><br/></span></span></p>",
+     "street_number": "21",
+     "timezone": "Asia/Jerusalem",
+     "location_uid": "7E.303",
+     "is_remote": true
+    },
+    "time_updated": "2026-11-16T12:02:01Z",
+    "url_active_page": "https://www.qodo.ai/careers",
+    "url_comeet_hosted_page": "https://www.comeet.com/jobs/qodo/B8.00B/bookkeeper/55.57C"
+   },
+   {
+    "uid": "CE.A69",
+    "name": "Forward Deployed Engineer",
+    "department": "Engineering",
+    "location": {
+     "name": "Boston",
+     "country": "US",
+     "city": "Boston",
+     "state": "MA",
+     "postal_code": "02111",
+     "street_name": "1 Lincoln Street",
+     "arrival_instructions": null,
+     "street_number": "1",
+     "timezone": "America/New_York",
+     "location_uid": "7B.508",
+     "is_remote": true
+    },
+    "time_updated": "2026-11-13T21:57:56Z",
+    "url_active_page": "https://www.qodo.ai/careers/co/boston/CE.A69/forward-deployed-engineer/all/",
+    "url_comeet_hosted_page": "https://www.comeet.com/jobs/qodo/B8.00B/forward-deployed-engineer/CE.A69"
+   }
+  ]
+ },
+ "Bizzabo": {
+  "slug": "bizzabo/A5.000",
+  "positions": [
+   {
+    "uid": "73.472",
+    "name": "Product Marketing Lead",
+    "department": "Marketing",
+    "location": {
+     "name": "New York",
+     "country": "US",
+     "city": "New York",
+     "state": "NY",
+     "postal_code": "10013",
+     "street_name": "12 Vestry Street",
+     "arrival_instructions": "<p></p><p style=\"text-align: left;\">Please note - our office is located in WeWork. Check in with the front desk and p<span style=\"font-size: 14px;\">lease call/text Federico when you arrive for instructions on where to go - </span></p><p style=\"text-align: left;\"><a target=\"_blank\" href=\"http://tel:8452353603/\" rel=\"noopener noreferrer\" style=\"text-align: left;\"></a><a target=\"_blank\" href=\"http://tel:2019895076\" rel=\"noopener noreferrer\" style=\"text-align: left;\"><u>201-989-5076</u></a></p><p></p><p><br/></p>",
+     "street_number": "12",
+     "timezone": "America/New_York",
+     "location_uid": "0C.103",
+     "is_remote": true
+    },
+    "time_updated": "2026-11-09T12:28:00Z",
+    "url_active_page": "https://www.bizzabo.com/careers",
+    "url_comeet_hosted_page": "https://www.comeet.com/jobs/bizzabo/A5.000/product-marketing-lead/73.472"
+   },
+   {
+    "uid": "73.472-0C.403",
+    "name": "Product Marketing Lead",
+    "department": "Marketing",
+    "location": {
+     "name": "Washington D.C.",
+     "country": "US",
+     "city": "Washington D.C.",
+     "state": "MD",
+     "postal_code": null,
+     "street_name": null,
+     "arrival_instructions": null,
+     "street_number": null,
+     "timezone": "America/New_York",
+     "location_uid": "0C.403",
+     "is_remote": true
+    },
+    "time_updated": "2026-11-09T12:28:00Z",
+    "url_active_page": "https://www.bizzabo.com/careers",
+    "url_comeet_hosted_page": "https://www.comeet.com/jobs/bizzabo/A5.000/product-marketing-lead/73.472-0C.403"
+   },
+   {
+    "uid": "73.472-0C.404",
+    "name": "Product Marketing Lead",
+    "department": "Marketing",
+    "location": {
+     "name": "Connecticut",
+     "country": "US",
+     "city": "Stamford",
+     "state": "CT",
+     "postal_code": null,
+     "street_name": null,
+     "arrival_instructions": null,
+     "street_number": null,
+     "timezone": "America/New_York",
+     "location_uid": "0C.404",
+     "is_remote": true
+    },
+    "time_updated": "2026-11-09T12:28:00Z",
+    "url_active_page": "https://www.bizzabo.com/careers",
+    "url_comeet_hosted_page": "https://www.comeet.com/jobs/bizzabo/A5.000/product-marketing-lead/73.472-0C.404"
+   }
+  ]
+ },
+ "Checkmarx": {
+  "slug": "checkmarx/C0.008",
+  "positions": [
+   {
+    "uid": "46.474",
+    "name": "Director of Sales - East",
+    "department": "Sales",
+    "location": {
+     "name": "US - New York",
+     "country": "US",
+     "city": "New York City",
+     "state": "NY",
+     "postal_code": null,
+     "street_name": null,
+     "arrival_instructions": null,
+     "street_number": null,
+     "timezone": "America/New_York",
+     "location_uid": "EC.503",
+     "is_remote": true
+    },
+    "time_updated": "2026-11-14T13:15:01Z",
+    "url_active_page": "https://checkmarx.com/job-openings/position/46.474",
+    "url_comeet_hosted_page": "https://www.comeet.com/jobs/checkmarx/C0.008/director-of-sales---east/46.474"
+   },
+   {
+    "uid": "46.474-02.400",
+    "name": "Director of Sales - East",
+    "department": "Sales",
+    "location": {
+     "name": "US - Georgia",
+     "country": "US",
+     "city": "Atlanta",
+     "state": "GA",
+     "postal_code": null,
+     "street_name": null,
+     "arrival_instructions": null,
+     "street_number": null,
+     "timezone": "America/New_York",
+     "location_uid": "02.400",
+     "is_remote": true
+    },
+    "time_updated": "2026-11-14T13:15:01Z",
+    "url_active_page": "https://checkmarx.com/job-openings/position/46.474",
+    "url_comeet_hosted_page": "https://www.comeet.com/jobs/checkmarx/C0.008/director-of-sales---east/46.474-02.400"
+   },
+   {
+    "uid": "46.474-25.101",
+    "name": "Director of Sales - East",
+    "department": "Sales",
+    "location": {
+     "name": "USA - Florida",
+     "country": "US",
+     "city": "Miami",
+     "state": "FL",
+     "postal_code": null,
+     "street_name": null,
+     "arrival_instructions": null,
+     "street_number": null,
+     "timezone": "America/Iqaluit",
+     "location_uid": "25.101",
+     "is_remote": true
+    },
+    "time_updated": "2026-11-14T13:15:01Z",
+    "url_active_page": "https://checkmarx.com/job-openings/position/46.474",
+    "url_comeet_hosted_page": "https://www.comeet.com/jobs/checkmarx/C0.008/director-of-sales---east/46.474-25.101"
+   }
+  ]
+ },
+ "Sunbit": {
+  "slug": "sunbit/37.001",
+  "positions": [
+   {
+    "uid": "DD.471",
+    "name": "Account Coordinator, Dental",
+    "department": "Ops Support - Activation",
+    "location": {
+     "name": "Las Vegas, Nevada",
+     "country": "US",
+     "city": "Las Vegas",
+     "state": "NV",
+     "postal_code": "89119",
+     "street_name": "6750 Via Austi Parkway, 4th floor",
+     "arrival_instructions": "<p><span>Please park in any uncovered parking space in the lot. </span>You will then take the elevator up to the 4th floor where you will check in with Security. </p><p></p>",
+     "street_number": "6750",
+     "timezone": "America/Los_Angeles",
+     "location_uid": "2C.309",
+     "is_remote": false
+    },
+    "time_updated": "2026-11-10T02:03:13Z",
+    "url_active_page": "https://sunbit.com/careers/?job=DD.471",
+    "url_comeet_hosted_page": "https://www.comeet.com/jobs/sunbit/37.001/account-coordinator-dental/DD.471"
+   },
+   {
+    "uid": "3A.D6A",
+    "name": "Account Specialist (Onboarding), Dental",
+    "department": "Ops Support - Activation",
+    "location": {
+     "name": "Los Angeles HQ",
+     "country": "US",
+     "city": "Los Angeles",
+     "state": "CA",
+     "postal_code": "90024",
+     "street_name": "10940 Wilshire Boulevard Suite 1850",
+     "arrival_instructions": "<p><span></span></p><p>The &#34;entrance&#34; to the building is from Ashton -- 1 block south of Wilshire. You will drive into the porto cochere, and valet park your car. We will validate your parking. </p><br/><br/><p><b>Our office suite reception is on the 18th floor (suite 1850).</b></p><span><br/><br/><br/><br/><br/><br/><br/><br/><br/></span><p>The &#34;entrance&#34; to the building is from Ashton -- 1 block south of Wilshire. You will drive into the porto cochere, and valet park your car. We will validate your parking. </p><br/><br/><br/><p><b>Our office suite reception is on the 18th floor (suite 1850).</b></p><br/><br/><br/><br/><br/><br/><br/><br/><br/><br/><br/><br/><br/><p>The &#34;entrance&#34; to the building is from Ashton -- 1 block south of Wilshire. You will drive into the porto cochere, and valet park your car. We will validate your parking. </p><p><br/></p><p><br/></p><p><br/></p><p><b>Our office suite reception is on the 18th floor (suite 1850).</b></p><p><br/></p><p><br/></p><p><span><br/><br/><br/><br/><br/><br/><br/><br/><br/><br/><br/></span></p><p>The &#34;entrance&#34; to the building is from Ashton -- 1 block south of Wilshire. You will drive into the porto cochere, and valet park your car. We will validate your parking. </p><p><br/></p><p><br/></p><p><br/></p><p><b>Our office suite reception is on the 18th floor (suite 1850).</b></p><p><br/></p><p><br/></p><p><br/></p><p><span><br/><br/><br/><br/><br/><br/><br/><br/><br/><br/><br/></span></p><p>The &#34;entrance&#34; to the building is from Ashton -- 1 block south of Wilshire. You will drive into the porto cochere, and valet park your car. We will validate your parking. </p><p><br/></p><p><br/></p><p><br/></p><p><b>Our office suite reception is on the 18th floor (suite 1850).</b></p><p><br/></p><p><br/></p><p><br/></p>",
+     "street_number": "10940",
+     "timezone": "America/Los_Angeles",
+     "location_uid": "2C.30A",
+     "is_remote": true
+    },
+    "time_updated": "2026-11-04T03:15:39Z",
+    "url_active_page": "https://sunbit.com/careers/?job=3A.D6A",
+    "url_comeet_hosted_page": "https://www.comeet.com/jobs/sunbit/37.001/account-specialist-onboarding-dental/3A.D6A"
+   },
+   {
+    "uid": "0A.47A",
+    "name": "AI Specialist, Finance",
+    "department": "Finance & Acctg",
+    "location": {
+     "name": "New Jersey-Hybrid",
+     "country": "US",
+     "city": "Jersey City",
+     "state": "NJ",
+     "postal_code": null,
+     "street_name": null,
+     "arrival_instructions": null,
+     "street_number": null,
+     "timezone": "America/Iqaluit",
+     "location_uid": "3F.604",
+     "is_remote": true
+    },
+    "time_updated": "2026-11-13T22:48:55Z",
+    "url_active_page": "https://sunbit.com/careers/?job=0A.47A",
+    "url_comeet_hosted_page": "https://www.comeet.com/jobs/sunbit/37.001/ai-specialist-finance/0A.47A"
+   }
+  ]
+ }
+}
