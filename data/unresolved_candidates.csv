@@ -80,5 +80,5 @@ Cloudflare,cloudflare.com,https://www.cloudflare.com/careers/,multinational,need
 Rapid7,rapid7.com,https://careers.rapid7.com/,multinational,needs_reader,"Own jobs platform (/jobs/<slug>-<uuid>); its location filter is ignored, so the page is a worldwide list"
 Booking.com,booking.com,https://careers.booking.com,multinational,bot_protection,The iCIMS board answers 403; the careers site has no feed
 Uber,uber.com,,multinational,no_careers_url,Blocks plain requests (403)
-Align Technology,aligntech.com,https://jobs.aligntech.com,multinational,no_feed_found,No feed found in the page HTML
+Align Technology,aligntech.com,https://jobs.aligntech.com,multinational,needs_reader,"Pinpoint board with a jobs.rss feed, no adapter for one company"
 Keysight,keysight.com,,multinational,no_careers_url,

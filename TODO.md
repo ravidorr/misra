@@ -144,7 +144,8 @@ Observations about live sites below come from checks made on 2026-11-14 and may 
       and the crawler reads its "Join Talent Network" link as a job, so it is not pinned; pin it once it lists one.
     - eBay (`careers.ebayinc.com`), Walmart Global Tech (`careers.walmart.com`, a timeout), Siemens
       (`jobs.siemens.com`, no DNS answer), Align Technology (`jobs.aligntech.com`) and Rapid7
-      (`careers.rapid7.com/jobs/search`): no feed found in the page HTML; not investigated further.
+      (`careers.rapid7.com/jobs/search`): no feed found in the page HTML; Align and Rapid7 were looked at again on
+      2026-11-16 (third batch, below).
     - Done on 2026-11-14: new adapters `oraclehcm` (Oracle, JPMorgan Chase, Dell, American Express, Nokia), `amazon`
       and `phenom` (Cisco, GE HealthCare, Mastercard); Workday pins (Salesforce, Cadence, Edwards, Adobe, Zoom,
       Marvell, Medtronic, KLA, Kyndryl, Workday, then Broadcom and Philips once the adapter read a country value with
