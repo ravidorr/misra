@@ -708,10 +708,14 @@ html:has(.sheet:modal) {
   font-variant-numeric: tabular-nums;
 }
 
-/* The link to the coverage gaps card sits in a sentence but is a 44px target like the footer links: the padding makes the
-   target tall without making the line of text taller. */
+/* The link to the coverage gaps card sits in a sentence but is a 44px target like the footer links: a real box of its
+   own, so it never covers the text around it. */
 .foot-gaps {
-  padding-block: var(--space-4);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: var(--tap);
+  min-height: var(--tap);
 }
 
 .foot-links {
