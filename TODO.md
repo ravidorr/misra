@@ -2,7 +2,7 @@
 
 Open work, as of 2026-11-14. Each item says what triggers it, how to do it and when it is done. When one is finished,
 delete it and update the counts in the others: the 85 and the four segment counts in the research item (a pin removes
-one row from one segment), its "(28)" if the company had no careers URL, else its "(57 today)".
+one row from one segment), its "(28)" if the company had no careers URL, else its "(56 today)".
 An item with a screenshot in `todo-images/` goes with it: delete the image file in the same PR.
 Observations about live sites below come from checks made on 2026-11-14 and may have changed.
 
@@ -88,10 +88,10 @@ Observations about live sites below come from checks made on 2026-11-14 and may 
 
 ## Research the remaining unresolved companies
 
-- [ ] `data/unresolved_candidates.csv` lists 84 researched companies with no usable job feed (as of 2026-11-14: 24
-  multinational, 36 deeptech, 12 cyber_infra, 12 biz_software). Each needs
+- [ ] `data/unresolved_candidates.csv` lists 83 researched companies with no usable job feed (as of 2026-11-14: 24
+  multinational, 36 deeptech, 12 cyber_infra, 11 biz_software). Each needs
   its own research; there is no batch fix left. Every observation about a live site below is from the checks of
-  2026-11-14, a crawl of the 105 rows that had a careers URL that day (57 today) and a scan of their rendered pages. The
+  2026-11-14, a crawl of the 105 rows that had a careers URL that day (56 today) and a scan of their rendered pages. The
   remaining work falls into these groups:
   - **No careers URL (27).** Status `not_found` in `data/new/*_companies.json`: Upsolver, Speedata,
     Teramount, X-Globe, Q Factor, Gilat, Siklu, Silicom, Sight Diagnostics, Brainsway, EarlySign, Diagnostic Robotics,
@@ -121,8 +121,8 @@ Observations about live sites below come from checks made on 2026-11-14 and may 
       not be recognised. The adapter would need to read the offices (`?content=true`) first.
   - **The page returned links, not jobs.** Checked on 2026-11-14: Ex Libris links to `careers.clarivate.com`, a
     worldwide Phenom board of its parent Clarivate (not Ex Libris only); Ormat's list is a ViziRecruiter board
-    (`vizi.vizirecruiter.com/OrmatTechnologiesInc-4638`, one company so no adapter); Optibus has no feed in its page or
-    network requests; REE Automotive is in the next group.
+    (`vizi.vizirecruiter.com/OrmatTechnologiesInc-4638`, one company so no adapter); Optibus is a Comeet plugin
+    page, done on 2026-11-16 below; REE Automotive is in the next group.
   - **Large multinational boards that show a worldwide first page.** Google, Intuit, Apple, IBM
     and others returned jobs, but almost none in Israel (Apple's page had one), because the page is a worldwide search.
     They need a career address filtered to Israel (as `citi.eightfold.ai/careers?location=Israel` is) with `israel_only`,
@@ -176,6 +176,8 @@ Observations about live sites below come from checks made on 2026-11-14 and may 
     Converge Bio (`convergebio/CA.00D`: the real domain is `converge-bio.com`, not `convergebio.com`; its `/careers`
     page is a Framer page that loads the Comeet widget, with `company-uid` `CA.00D` in the source; the board answers
     under the name `convergebio` and lists no job today, `israel_only` so the first Israel job is reported as new).
+    Optibus (`https://optibus.com/company/careers/jobs/` with `comeet_page`, `israel_only`: the careers page only links
+    to this plugin page, which lists 6 jobs, 1 in Tel Aviv).
     Nano Dimension (`nanodimension/62.003`: the `comeet_uid` is in the source of `nano-di.com/job-openings`, a Comeet
     plugin page the `comeet_page` adapter cannot read; the board holds 4 jobs, none in Israel, `israel_only`).
     Not done, and why (checked on 2026-11-14, or 2026-11-16 where dated; do not repeat):
