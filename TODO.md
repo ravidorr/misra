@@ -82,14 +82,14 @@ Observations about live sites below come from checks made on 2026-11-14 and may 
 
 ## Research the remaining unresolved companies
 
-- [ ] `data/unresolved_candidates.csv` lists 85 researched companies with no usable job feed (as of 2026-11-14: 24
-  multinational, 37 deeptech, 12 cyber_infra, 12 biz_software). Each needs
+- [ ] `data/unresolved_candidates.csv` lists 84 researched companies with no usable job feed (as of 2026-11-14: 24
+  multinational, 36 deeptech, 12 cyber_infra, 12 biz_software). Each needs
   its own research; there is no batch fix left. Every observation about a live site below is from the checks of
   2026-11-14, a crawl of the 105 rows that had a careers URL that day (57 today) and a scan of their rendered pages. The
   remaining work falls into these groups:
-  - **No careers URL (28).** Status `not_found` in `data/new/*_companies.json`: Upsolver, Speedata,
+  - **No careers URL (27).** Status `not_found` in `data/new/*_companies.json`: Upsolver, Speedata,
     Teramount, X-Globe, Q Factor, Gilat, Siklu, Silicom, Sight Diagnostics, Brainsway, EarlySign, Diagnostic Robotics,
-    Tevel Aerobotics, CytoReason, Converge Bio, SolarEdge, Watergen, Stratasys, AIR, Intel, SAP, eBay,
+    Tevel Aerobotics, CytoReason, SolarEdge, Watergen, Stratasys, AIR, Intel, SAP, eBay,
     Autodesk, Akamai, Ford, Ericsson, Uber, Keysight. Find the real
     career page first, then continue with the groups below. The large multinationals will need a location-filtered
     address or their ATS (see the last group).
@@ -167,6 +167,9 @@ Observations about live sites below come from checks made on 2026-11-14 and may 
     "We don't have any open positions" today, so the first Israel job is reported as new).
     On 2026-11-16, Ceva (`ceva/76.005`, found in the job-page source of its own `/career/` site; the page names the
     account SNC but the board answered under the name `ceva`, not `SNC`; 25 jobs, 14 in Israel, `israel_only`).
+    Converge Bio (`convergebio/CA.00D`: the real domain is `converge-bio.com`, not `convergebio.com`; its `/careers`
+    page is a Framer page that loads the Comeet widget, with `company-uid` `CA.00D` in the source; the board answers
+    under the name `convergebio` and lists no job today, `israel_only` so the first Israel job is reported as new).
     Nano Dimension (`nanodimension/62.003`: the `comeet_uid` is in the source of `nano-di.com/job-openings`, a Comeet
     plugin page the `comeet_page` adapter cannot read; the board holds 4 jobs, none in Israel, `israel_only`).
     Not done, and why (checked on 2026-11-14, or 2026-11-16 where dated; do not repeat):
@@ -198,7 +201,8 @@ Observations about live sites below come from checks made on 2026-11-14 and may 
       reading them would find no job. Pliops and Ericsson are unchanged. The homepages of Gilat (307 without a
       redirect target), Silicom (redirects to `silicom-usa.com`), Sight Diagnostics, Tevel, Watergen, AIR and X-Globe
       show no careers link and `/careers`, `/career`, `/jobs` answer 404; Upsolver answers 403 (bot protection);
-      Brainsway's careers page is its LinkedIn page; Teramount, Q Factor, EarlySign and Converge Bio do not answer.
+      Brainsway's careers page is its LinkedIn page; Teramount, Q Factor and EarlySign do not answer (Converge
+      Bio's real domain is `converge-bio.com`: done above).
       A scan of the careers pages and their job links for ATS markers found only Nano Dimension (done above).
     - Dead or unusable: Jelly Button Games, Kahun, Nucleai and Quantum Art (domain parked at GoDaddy), Satixfy (now an
       MDA Space page), Line 5 (needs a login), lakeFS and Quantum Art (403 or "Access Denied": bot protection), Radware
