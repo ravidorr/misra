@@ -30,6 +30,8 @@ from tests.test_dashboard_page import (
     USER_ID,
     WEBMCP,
     AuthBackend,
+    account_action,
+    account_action_by_keyboard,
     build_site,
     serve,
     site,  # noqa: F401  (a fixture)
@@ -222,11 +224,11 @@ async def signed_in(page: Page, docs: Path, world: World, *, wait: bool = True) 
 
 async def settled(page: Page) -> None:
     """The button carries the state once the row was read."""
-    await page.wait_for_selector("#digestOpen:not([data-digest-state=loading])")
+    await page.wait_for_selector("#digestOpen:not([data-digest-state=loading])", state="attached")
 
 
 async def open_dialog(page: Page) -> None:
-    await page.click("#digestOpen")
+    await account_action(page, "#digestOpen")
     await expect(page.locator(DIALOG)).to_be_visible()
     await page.wait_for_selector("#digestDialog:not([data-state=loading])")
 
@@ -266,12 +268,12 @@ async def test_fr8_ac1_a_signed_in_user_has_a_daily_email_button_that_opens_the_
     world = World()
     problems = await signed_in(page, digest_site, world)
     button = page.locator("#digestOpen")
-    assert await button.inner_text() == "Job alerts"
+    assert await button.text_content() == "Job alerts"
     assert await button.get_attribute("aria-haspopup") == "dialog"
     assert await button.get_attribute("data-digest") == "open"
     assert await button.get_attribute("data-digest-state") == "off"
     await expect(page.locator(DIALOG)).to_be_hidden()
-    await button.click()
+    await account_action(page, "#digestOpen")
     dialog = page.locator(DIALOG)
     await expect(dialog).to_be_visible()
     assert await dialog.get_attribute("aria-labelledby") == "digestTitle"
@@ -490,7 +492,7 @@ async def test_fr8_ac2_later_changes_to_the_dashboard_filters_do_not_change_the_
     await page.fill("#q", "designer")
     await choose(page, "levels", "Junior")
     await choose(page, "regions", "Tel Aviv area")
-    await page.click("#digestOpen")
+    await account_action(page, "#digestOpen")
     await page.wait_for_selector("#digestDialog[data-state=waiting]")
     assert await lines(page) == ["Levels: Intern"]
     assert world.row["filters"] == saved
@@ -710,7 +712,7 @@ async def test_settings_that_cannot_be_read_say_so_and_can_be_tried_again(
     world = World(stored("on"))
     world.table_mode = mode
     await signed_in(page, digest_site, world, wait=False)
-    await page.click("#digestOpen")
+    await account_action(page, "#digestOpen")
     await expect(page.locator("#digestError")).to_contain_text(
         "We could not read your email settings. Nothing was changed."
     )
@@ -732,7 +734,7 @@ async def test_when_the_settings_cannot_be_read_the_dialog_can_still_be_closed_a
     world.table_mode = "read_down"
     await page.set_viewport_size(PHONE)
     await signed_in(page, digest_site, world, wait=False)
-    await page.click("#digestOpen")
+    await account_action(page, "#digestOpen")
     await expect(page.locator("#digestError")).to_be_visible()
     assert await page.locator("#digestForm").is_hidden()
     close = page.locator("#digestClose")
@@ -743,9 +745,9 @@ async def test_when_the_settings_cannot_be_read_the_dialog_can_still_be_closed_a
     assert size["width"] >= TAP
     await close.click()
     await expect(page.locator(DIALOG)).to_be_hidden()
-    assert await page.evaluate("document.activeElement.id") == "digestOpen"  # the focus goes back
+    assert await page.evaluate("document.activeElement.id") == "accountMenuButton"  # the focus goes back
     # opened again it can be tried again, and then Close still works
-    await page.click("#digestOpen")
+    await account_action(page, "#digestOpen")
     await expect(page.locator("#digestRetry")).to_be_visible()
     world.table_mode = "ok"
     await page.click("#digestRetry")
@@ -800,7 +802,7 @@ async def test_the_focus_goes_to_the_outcome_when_the_pressed_button_goes_away(p
     assert await page.evaluate("document.activeElement.id") in {"digestSend", "digestNote"}
     world.row = stored("on")
     await page.click("#digestClose")
-    await page.click("#digestOpen")
+    await account_action(page, "#digestOpen")
     await page.wait_for_selector("#digestDialog[data-state=on]")
     await page.click("#digestOff")
     await expect(page.locator("#digestNote")).to_contain_text("The email is off")
@@ -823,7 +825,7 @@ async def test_signing_out_closes_the_dialog_and_forgets_the_settings(page: Page
         "globalThis.misraAccount = { client: { from: () => { throw new Error('x'); } }, userId: 'other', email: null };"
         "document.dispatchEvent(new CustomEvent('misra:account'))"
     )
-    await page.wait_for_selector("#digestOpen[data-digest-state=unknown]")
+    await page.wait_for_selector("#digestOpen[data-digest-state=unknown]", state="attached")
     assert await page.locator("#digestForm").is_hidden()  # nothing of the earlier account is shown or kept
     assert OTHER not in await page.locator("#digestState").inner_text()
 
@@ -910,6 +912,8 @@ async def test_the_dialog_reads_well_on_a_phone_and_every_control_is_big_enough(
             assert round(size["height"]) >= TAP, selector
     button = await page.locator("#digestClose").bounding_box()
     assert button is not None
+    await page.click("#digestClose")
+    await page.click("#accountMenuButton")
     assert await page.evaluate("document.getElementById('digestOpen').getBoundingClientRect().width") > 0
 
 
@@ -999,8 +1003,7 @@ async def test_with_the_switch_off_the_page_has_no_agreement_line(page: Page, re
 async def test_the_dialog_works_from_the_keyboard_and_gives_the_focus_back(page: Page, digest_site: Path) -> None:
     world = World()
     await signed_in(page, digest_site, world)
-    await page.focus("#digestOpen")
-    await page.keyboard.press("Enter")
+    await account_action_by_keyboard(page, "#digestOpen")
     await expect(page.locator(DIALOG)).to_be_visible()
     await page.wait_for_selector("#digestDialog[data-state=off]")
     seen = []
@@ -1021,9 +1024,8 @@ async def test_the_dialog_works_from_the_keyboard_and_gives_the_focus_back(page:
     ]
     await page.keyboard.press("Escape")
     await expect(page.locator(DIALOG)).to_be_hidden()
-    assert await page.evaluate("document.activeElement.id") == "digestOpen"
-    await page.focus("#digestOpen")
-    await page.keyboard.press("Enter")
+    assert await page.evaluate("document.activeElement.id") == "accountMenuButton"
+    await account_action_by_keyboard(page, "#digestOpen")
     await page.fill("#digestAddress", EMAIL)
     await page.keyboard.press("Enter")  # submitting the form from a field turns it on
     await expect(page.locator("#digestNote")).to_contain_text("for a confirmation link")
