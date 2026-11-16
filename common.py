@@ -1,6 +1,8 @@
 import csv
 import datetime
+import os
 import re
+import sqlite3
 import threading
 import time
 from typing import Any, cast
@@ -8,7 +10,7 @@ from urllib.parse import unquote, urlsplit
 
 import requests
 
-VERSION = "0.50.2"  # equal to the version in package.json and pyproject.toml (a test checks it)
+VERSION = "0.51.0"  # equal to the version in package.json and pyproject.toml (a test checks it)
 SITE_URL = "https://ravidorr.github.io/misra/"
 CONTACT = "raanan@avidor.org"
 ROBOTS_TOKEN = "Misra"  # the product token that robots.txt groups name
@@ -25,7 +27,17 @@ DROP_BELIEVED = f"drop believed after {DROP_HOLD_DAYS} held days"  # note prefix
 
 # robots.txt (the lawyer's answer, PLAN.md step 6.6). One switch: False logs what would be skipped and skips nothing.
 ROBOTS_ENFORCED = True
-DB = "data/jobs.db"  # the SQLite history
+DB = "data/jobs.db"  # a per-run scratch file, rebuilt from Supabase by `sync_supabase.py --pull`; never committed
+CRAWL_LOG_DAYS = 90  # Supabase keeps this many days of crawl log (the crawl reads it all back each run)
+# `crawl_log.id` is Supabase's id: the pull fills it, so a row with none is one of this run (the sync still writes it).
+SCHEMA = """
+CREATE TABLE IF NOT EXISTS jobs(
+  company TEXT, job_id TEXT, title TEXT, team TEXT, location TEXT, url TEXT, posted TEXT,
+  first_seen TEXT, last_seen TEXT, status TEXT DEFAULT 'open', reported INTEGER DEFAULT 0,
+  PRIMARY KEY(company, job_id));
+CREATE TABLE IF NOT EXISTS crawl_log(
+  ts TEXT, company TEXT, ats TEXT, ok INTEGER, n_jobs INTEGER, note TEXT, id INTEGER);
+"""
 ROBOTS_NOTE = "robots.txt does not allow it"  # crawl log note prefix of a company skipped because of robots.txt
 ROBOTS_CLOSE_DAYS = 7  # a company skipped by robots.txt on every run for this many days gets its open jobs closed
 ROBOTS_TIMEOUT = 10
@@ -88,6 +100,15 @@ def load_excluded(path: str = EXCLUDED) -> list[str]:
             raise ExclusionError(f"{path} line {number}: date_added is not a YYYY-MM-DD date") from None
         names.append(name)
     return names
+
+
+def open_history() -> sqlite3.Connection:
+    """The scratch history written by `sync_supabase.py --pull`. A missing file stops the caller: connecting would
+    create an empty one, and a crawl or a dashboard built from an empty history looks like a company that closed
+    everything."""
+    if not os.path.exists(DB):
+        raise SystemExit(f"{DB} is missing: run `python sync_supabase.py --pull` first (it rebuilds it from Supabase)")
+    return sqlite3.connect(DB)
 
 
 def is_excluded(name: str, excluded: list[str]) -> bool:

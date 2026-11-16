@@ -36,7 +36,8 @@ and it goes on an exclusion list, so it is never crawled again. `TERMS.md` promi
    message. The date is `YYYY-MM-DD`. Never delete a row: the list is what keeps a company from coming back.
 3. Merge it through a draft PR (`main` is protected: `gh pr ready` then `gh pr merge --admin --squash`).
 4. Run the daily workflow from `main` (Actions, `daily-job-digest`, Run workflow). It does the rest in one run: the crawl
-   step skips the company and deletes its jobs from `data/jobs.db`; the sync step deletes its rows from Supabase `jobs`,
+   step skips the company and deletes its jobs and crawl log from the scratch history `data/jobs.db` (pulled from
+   Supabase at the start of the run); the sync step deletes its rows from Supabase `jobs` and `crawl_log`,
    and the stars and discards (`user_jobs`, which keep a title and a link) and emailed keys (`emailed`) of every user,
    by exact name; the build drops it from `docs/jobs.json`, `docs/jobs.jsonld` and the coverage gap card; the commit step
    publishes. A user's star for that company is deleted too: the removal is complete, and the star row would keep the
@@ -49,7 +50,7 @@ All of these hold after the run:
 
 - The log of the crawl step has `exclusion list: deleted <n> jobs of Acme` (a later run has no such line: there is
   nothing left), and the sync step has `Supabase: exclusion list, deleted {...} for Acme`.
-- `sqlite3 data/jobs.db "select count(*) from jobs where company='Acme'"` prints `0` on the new commit of `main`.
+- In the Supabase SQL editor, `select (select count(*) from public.jobs where company = 'Acme') as jobs, (select count(*) from public.crawl_log where company = 'Acme') as crawl_log` prints `0` and `0` (the history lives there since step 9.1; the repository holds no copy of it any more, only the old commits of `data/jobs.db`).
 - `curl -s https://ravidorr.github.io/misra/jobs.json | grep -c Acme` and the same for `jobs.jsonld` print `0` once
   GitHub Pages has published (a minute or two).
 - In the Supabase SQL editor,
@@ -68,7 +69,7 @@ All of these hold after the run:
   say who must not be crawled. `tests/test_politeness.py` reads the real file, so CI catches a typo before it merges.
 - At most 3 companies that still have data are deleted in one run; more is refused before anything is deleted. Add them
   in separate runs.
-- Earlier commits of `data/jobs.db` and `docs/jobs.json` still hold the old links. A removal request does not rewrite
+- Earlier commits of `data/jobs.db` (it was committed until step 9.1) and `docs/jobs.json` still hold the old links. A removal request does not rewrite
   history; if a company insists, that is a separate decision.
 - With a non-empty list and empty Supabase secrets the sync step fails on purpose: a removal must not look done.
 - Nothing here is applied to the Supabase project by hand: no migration is involved, and the service-role key that the
@@ -100,9 +101,9 @@ All of these hold after the run:
 - A company skipped because of `robots.txt` on every run for 7 days in a row (`ROBOTS_CLOSE_DAYS` in `common.py`) gets
   its open jobs closed, by the same close the crawl uses, so the Supabase sync marks them closed and a later successful
   crawl reopens them. Not earlier: a temporary `robots.txt` glitch at a host must not wipe the jobs and bring them back
-  as new. The first skipped day of the streak is kept in the table `robots_skips(company, since)` of `data/jobs.db`
-  (created with `CREATE TABLE IF NOT EXISTS`), and a company that is not skipped in a run (crawled, failed another
-  way, or off the list) loses its row, so the week starts again. The rule never applies to failures, to excluded
+  as new. The streak is read from the crawl log: it is the company's latest crawls that carry the robots.txt note,
+  and it starts on the day of the first of them, so any other result (crawled, held or failed) ends it and the week
+  starts again (nothing else is stored: the history is rebuilt from Supabase on every run). The rule never applies to failures, to excluded
   companies (they have their own removal path) or to a name with any other result in the same run (a second board that crawled or failed). The run logs counts only.
 
 ### Known limits
@@ -151,7 +152,7 @@ Notes on the table:
 
 ### Real data against the limits
 
-- `data/jobs.db` is 3,067,904 bytes (about 3 MB) on 2026-11-15, holding 6,766 open and 2,722 closed jobs (9,488 rows).
+- `data/jobs.db` was 3,067,904 bytes (about 3 MB) on 2026-11-15, holding 6,766 open and 2,722 closed jobs (9,488 rows). Since step 9.1 it is a scratch file rebuilt from Supabase on every run, so it no longer grows the repository.
 - Supabase holds every open job (6,773 at the last two live syncs on 2026-11-14, from PLAN.md step 2.2) and, since the
   sync marks a missing job `closed` and never deletes it, every job that has closed since: those rows pile up, so the
   trim plan (step 7.4) must cover closed jobs too. The size of
@@ -165,7 +166,7 @@ Notes on the table:
   page does not say which). Tens of users are far below it; thousands of visitors a
   month would not be.
 - Full descriptions (PLAN.md step 7.1) live in Supabase only, so they cost the free 500 MB database and nothing in the
-  repository: `data/jobs.db` stays about 3 MB. Measured on 2026-11-16 on live samples of the feeds (one board each, counts
+  repository: the scratch `data/jobs.db` stays about 3 MB. Measured on 2026-11-16 on live samples of the feeds (one board each, counts
   and sizes only, no text kept): the text of a job is 2,400 to 5,400 characters on average (Greenhouse 4,266, Lever 2,369,
   Ashby 2,900, Workable 5,439, Comeet 3,461, Amazon 3,959) and 4,300 to 12,400 at most, nowhere near the 20,000-character
   cap, and it is almost all ASCII (1 byte a character; Hebrew would be 2). Weighted by the open jobs of those feeds
@@ -197,9 +198,11 @@ Notes on the table:
   the roles." and a notice "The roles could not be loaded" with a "Try again" button (`showLoadError` in
   `templates/dashboard.js`). There is no offline copy of the jobs by design (PRD constraint), so nothing else is shown.
   Signing in, stars and the site report fail the same way until the project is restored.
-- Backups: the free plan has none, so the repository is the only copy of the history (`data/jobs.db`), and the daily
-  export (below, "Backups of the account tables") is the only copy of the user data (stars, discards, filters, email
-  settings): a private repository, at most 28 days of history, restorable with `restore_accounts.py`.
+- Backups: the free plan has none, so the daily export (below, "Backups of the account tables") is the only copy of the
+  user data (stars, discards, filters, email settings) and, since step 9.1, of the job history (`jobs`, open and closed,
+  and `crawl_log`; the text of the postings is not exported, the next crawl writes it again): a private repository, at
+  most 28 days of history, restorable with `restore_accounts.py`. The old commits of `data/jobs.db` in this repository
+  hold the history up to the move.
 
 ### Upgrade triggers
 
@@ -213,7 +216,7 @@ Move to a paid plan, or trim, when any of these is true:
   has the arithmetic and the subscriber count query.
 - A pause happens, or the "about to pause" warning arrives twice. The account tables are backed up daily (below); move
   to a plan with backups if that export ever stops being enough (a restore that is too slow, or a need for point-in-time recovery).
-- The repository passes 800 MB (80% of the recommended 1 GB), or `data/jobs.db` passes 50 MB (GitHub's warning size).
+- The repository passes 800 MB (80% of the recommended 1 GB).
 
 ## Job descriptions
 
@@ -293,12 +296,12 @@ PLAN.md step 7.1. Where the text of a posting lives, and how it gets there:
 
 - **Schedule.** Three starts a day, the third from outside GitHub (see "The third start" below). Two are scheduled: 04:23 UTC (06:23 or 07:23 in Israel) is the real run, and 09:53 UTC (11:53 or 12:53) is a second try for a day when GitHub drops or badly delays the first (it dropped the whole run on 2026-11-16, and has started others about 7 hours late). Neither is on :00 or :30, the minutes GitHub is busiest. The `guard` job runs first on a scheduled start and on a start from cron-job.org, uses no secret and writes nothing: it asks the Actions API for a green run of this workflow created today (UTC) that was scheduled or was started by cron-job.org. If there is one, the `run` job is skipped; if there is none, or the question fails, it runs (fail open: a double run is harmless, because the digest records what it emailed and the crawl is idempotent). Any other manual start skips the guard and always runs. Other manual runs do not count as "already ran", since one may have been a dry run.
 - **Reading the Actions tab.** On a normal day the 04:23 run is green and the 09:53 run shows `guard` green and `run` skipped (grey "skipped", not a failure, and no alert email). A 09:53 run in which `run` did the work means the 04:23 run never started or failed. Two runs close together can also happen when GitHub starts the first one late. Both runs share the concurrency group `daily-job-digest` with `publish-docs`, so a started run is never cancelled, but GitHub keeps only one waiting run per group: if the 09:53 run waits behind a running `publish-docs` and another run is then queued, the older waiting run is dropped. If the dropped run is the second try and the later run is a `publish-docs` run (which only rebuilds `docs/`), the day gets no crawl and no digest, and no alert fires (the alert is a step of the `run` job, which never started). That needs the 04:23 run to have been lost too, a `publish-docs` run in progress at 09:53 and a second one queued behind it, so it is rare, and the cron-job.org start at about 10:30 UTC then picks the day up (the guard does not skip it, since no green scheduled run exists). The group is still shared on purpose (separate groups could let two runs push to `main` at the same time). If that start is lost as well, the Actions tab is the only signal: start the run by hand.
-- **The third start (cron-job.org).** The two scheduled starts both depend on GitHub's own scheduler, which lost the whole 2026-11-16 run. So a job at cron-job.org also starts the workflow, at about 10:30 UTC, after the second try: it sends `POST /repos/ravidorr/misra/actions/workflows/daily.yml/dispatches` with the body `{"ref":"main","inputs":{"source":"cron-job.org"}}`, using a fine-grained token (see `SECURITY.md`). The workflow declares the `source` input for this, because GitHub refuses an input it does not know, and its `run-name` titles such a run `daily-job-digest (cron-job.org)` (scheduled runs are `daily-job-digest (scheduled)`, other manual runs `daily-job-digest (manual)`). A dry run (`digest_dry_run`) never gets that title, so it never counts, and the guard counts only runs on `main`. The guard finds those runs by that title, since the runs API does not return the inputs. On a normal day the guard is green and `run` is skipped (grey, no alert), like the 09:53 try. When it did the work, the Actions tab shows `daily-job-digest (cron-job.org)` with a green `run`, and the first two starts were lost or did not finish green. If cron-job.org cannot start the run (wrong or expired token, GitHub down), it emails the maintainer; a 204 answer means GitHub accepted it. A disabled workflow raises no alert and shows only as a missing daily commit of `data/jobs.db`.
+- **The third start (cron-job.org).** The two scheduled starts both depend on GitHub's own scheduler, which lost the whole 2026-11-16 run. So a job at cron-job.org also starts the workflow, at about 10:30 UTC, after the second try: it sends `POST /repos/ravidorr/misra/actions/workflows/daily.yml/dispatches` with the body `{"ref":"main","inputs":{"source":"cron-job.org"}}`, using a fine-grained token (see `SECURITY.md`). The workflow declares the `source` input for this, because GitHub refuses an input it does not know, and its `run-name` titles such a run `daily-job-digest (cron-job.org)` (scheduled runs are `daily-job-digest (scheduled)`, other manual runs `daily-job-digest (manual)`). A dry run (`digest_dry_run`) never gets that title, so it never counts, and the guard counts only runs on `main`. The guard finds those runs by that title, since the runs API does not return the inputs. On a normal day the guard is green and `run` is skipped (grey, no alert), like the 09:53 try. When it did the work, the Actions tab shows `daily-job-digest (cron-job.org)` with a green `run`, and the first two starts were lost or did not finish green. If cron-job.org cannot start the run (wrong or expired token, GitHub down), it emails the maintainer; a 204 answer means GitHub accepted it. A disabled workflow raises no alert and shows only as a missing daily commit of `docs/`.
 - **Secrets.** `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `RESEND_API_KEY` and `UNSUBSCRIBE_SECRET` are set on that step only (the sync step also has the first two), never on the job and never during the crawl. All four empty: the step prints a message and exits 0; some empty: it fails and names them.
 - **Failure.** The step runs only after a good sync (the job alerts and the dashboard then read the same rows). If it fails, the run is red, the build and the data commit still run, and the failure email (`send_alert.py`) goes to the maintainer; its `STEPS` line shows `digests=failure`.
-- **Dry run.** Start the workflow by hand (Actions, "daily-job-digest", Run workflow, leaving `source` empty) with `digest_dry_run` ticked: the job alerts step gets `--dry-run`, sends nothing and records nothing, and its log holds counts only (the Actions logs are public). Note that a manual run still crawls, still commits and pushes `data/jobs.db` and `docs/` to `main`.
+- **Dry run.** Start the workflow by hand (Actions, "daily-job-digest", Run workflow, leaving `source` empty) with `digest_dry_run` ticked: the job alerts step gets `--dry-run`, sends nothing and records nothing, and its log holds counts only (the Actions logs are public). Note that a manual run still crawls, still writes the jobs and the crawl log to Supabase and still commits and pushes `docs/` to `main`.
 - **One sender.** `send_digests.py` is the only sender of job alerts. The maintainer's own single-recipient email (`send_email.py`, through Gmail) and the selection logic of `digest.py` that FR-9 replaced were removed in v0.47.0, after the maintainer, an ordinary subscriber, received a job alert from `send_digests.py`. Signups are open (PLAN.md step 6.6, v0.31.0: the build constant `DIGEST_SIGNUP_ENABLED = True` and the function secret of the same name `true`; to close them again unset the secret, and never set the build constant back to `False` once anyone has subscribed, because that also removes "Turn the email off" from the page).
-- **Crawl problems are in the log, not in an email.** The workflow step "Log the coverage gaps" (`python run.py --gaps`, right after the crawl) prints one line of counts and company names, `coverage gaps: N (M new): failing ... held ...`, when any company is failing (its last two crawls failed), held after a sharp drop, or closed after a believed sharp drop. A gap that is new, because the log has not carried it before, makes the line a `::warning::` annotation on the run; the `gap_alerts` table in `data/jobs.db` marks the gaps already logged, so one outage is new once. A broken check prints `::warning::coverage check failed, ...` and fails that step, so the run is red and the failure email goes out; the sync, the digests and the commit still run (`always()`). Read the line in that step of the run, or on the coverage gap card of the dashboard.
+- **Crawl problems are in the log, not in an email.** The workflow step "Log the coverage gaps" (`python run.py --gaps`, right after the crawl) prints one line of counts and company names, `coverage gaps: N (M new): failing ... held ...`, when any company is failing (its last two crawls failed), held after a sharp drop, or closed after a believed sharp drop. A gap that is new makes the line a `::warning::` annotation on the run: it began on the newest crawl day or the day before, so an outage is new on the crawl that finds it (nothing remembers what was logged: the history is rebuilt from Supabase on every run, so a gap that is still there days later is a plain line). A broken check prints `::warning::coverage check failed, ...` and fails that step, so the run is red and the failure email goes out; the sync, the digests and the commit still run (`always()`). Read the line in that step of the run, or on the coverage gap card of the dashboard.
 - **Gmail is for the failure alert only.** `send_alert.py` is the only user of `GMAIL_USER`, `GMAIL_APP_PASSWORD` and `DIGEST_TO` (the alert's recipient; empty means the sender). All three stay as Actions secrets.
 
 ### Resend volume
@@ -359,12 +362,12 @@ where status = 'open';
 
 Accepted sites are not in Supabase: a report is only an email, and accepting it adds a row to `data/seed_companies.csv` (see "Reported sites"). Count the additions of the month from git, for example `git log --since=2026-11-01 --until=2026-12-01 -p --format= -- data/seed_companies.csv | grep -c '^+[^+]'`, and compare with the number of report emails received.
 
-## Backups of the account tables
+## Backups of the account tables and the job history
 
-Supabase Free has no backups, so the daily workflow (`.github/workflows/daily.yml`, step `backup`, PLAN.md step 9.1) copies the account tables to a private repository, `ravidorr/misra-backups` (branch `main`). This repository is public: no account data may be committed to it, logged, uploaded as an artifact or left in the checkout.
+Supabase Free has no backups, so the daily workflow (`.github/workflows/daily.yml`, step `backup`, PLAN.md step 9.1) copies the account tables and the job history to a private repository, `ravidorr/misra-backups` (branch `main`). This repository is public: no account data may be committed to it, logged, uploaded as an artifact or left in the checkout.
 
-- **What.** `export_accounts.py` reads every row of `profiles`, `user_prefs`, `user_jobs`, `subscriptions` and `emailed`, all columns (the confirmation and unsubscribe token hashes too), with the service-role key, and writes one `<table>.json` per table: one row per line, keys sorted, rows sorted by primary key, so a day's diff is only what changed. Not exported: `jobs` and `crawl_log` (the crawl rebuilds them), the abuse counters (`report_*`, `confirm_*`, short-lived) and Supabase's own `auth` tables. A test fails when a column or an account table in the migrations is missing from the export (`tests/test_export_accounts.py`).
-- **Where it runs.** After the deploy push, so it never delays the data. It runs on every run, even when the crawl failed. It writes into a temporary directory under `RUNNER_TEMP`, outside the checkout (the module refuses a directory inside the repository), and then `publish_backup.py` clones the backup repository, replaces the five files, commits only when something changed ("backup 2026-11-16: profiles 3, user_prefs 3, ... (n rows)", counts only) and pushes to `main`. The Actions log shows counts only.
+- **What.** `export_accounts.py` reads every row of `profiles`, `user_prefs`, `user_jobs`, `subscriptions` and `emailed`, all columns (the confirmation and unsubscribe token hashes too), with the service-role key, and writes one `<table>.json` per table: one row per line, keys sorted, rows sorted by primary key, so a day's diff is only what changed. The job history goes with them since step 9.1, when Supabase became its only home: `jobs` (open and closed, every column except `description`, `details` and `snippet`: the text of a posting never leaves Supabase, a backup would outlive the 30-day trim of closed jobs' text, and the next crawl writes it again for every open job) and `crawl_log`. Not exported: the abuse counters (`report_*`, `confirm_*`, short-lived) and Supabase's own `auth` tables. A test fails when a column or an account table in the migrations is missing from the export (`tests/test_export_accounts.py`), and when a text column could be read.
+- **Where it runs.** After the deploy push, so it never delays the data. It runs on every run, even when the crawl failed. It writes into a temporary directory under `RUNNER_TEMP`, outside the checkout (the module refuses a directory inside the repository), and then `publish_backup.py` clones the backup repository, replaces the seven files, commits only when something changed ("backup 2026-11-16: profiles 3, user_prefs 3, ... jobs 9722, crawl_log 7536 (n rows)", counts only) and pushes to `main`. The Actions log shows counts only.
 - **Secrets.** `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` (also on the sync and digest steps) and `BACKUP_DEPLOY_KEY` are set on the backup step only. `BACKUP_DEPLOY_KEY` is the private half of a read-write deploy key of `ravidorr/misra-backups`; it is written to disk only in that step, by `scripts/backup-key.sh`, in a file with a unique name, used through `GIT_SSH_COMMAND` with `IdentitiesOnly=yes` and no agent, and removed with the work directory when the step ends. No checkout gets `ssh-key:`. `tests/test_backup_workflow.py` pins all of it. The deploy key belongs to that one repository and reaches no other, and a deploy key has no expiry date, so rotate it by hand at the yearly review (by 2027-11-15, `SECURITY.md`): make a new key pair, add it to the deploy keys of `ravidorr/misra-backups`, update the Actions secret, run the workflow once, then delete the old key in the repository's deploy keys.
 - **Guards.** The export fails when a table has columns that are not in `TABLES` (the day a migration adds one) or when `profiles` is empty beside non-empty tables (a wrong key sees nothing). `publish_backup.py` refuses to commit, and never replaces the history, when a table that held 5 or more rows now holds under half of them; if that is real, run it by hand with `--allow-shrink`.
 - **Failure.** The step fails (non-zero) when a secret is empty, a table cannot be read, a table keeps changing under the read (three tries), git cannot clone or push. The run goes red and the maintainer alert (`send_alert.py`) lists `backup=failure`. Nothing is written for a table that failed: every table is read before any file is written.
@@ -375,8 +378,8 @@ Supabase Free has no backups, so the daily workflow (`.github/workflows/daily.ym
 
 1. Clone the backup repository to a directory outside this checkout: `git clone --depth 1 git@github.com:ravidorr/misra-backups.git ~/misra-backup` (the latest commit only: an older one would bring back accounts deleted since). The clone holds plaintext email addresses: delete it as soon as the restore is done (or the test is over), so that no copy sits on a disk outside the 30-day rotation (`SECURITY.md`). The repository is private; the files are not encrypted by us.
 2. `python restore_accounts.py ~/misra-backup ~/restore.sql` (add `--exclude-user-ids=<file>`, one id per line, for the people who deleted their account after the backup: they are left out of every table; `--create-auth-users` refuses to run without it, an empty file meaning nobody left; add `--pause-subscriptions` to mark every still-active subscription unsubscribed so that nobody who opted out after the backup is emailed; and for a NEW Supabase project use `--create-auth-users` that has no `auth.users` rows: it creates a bare row, id and email from `profiles`, for each one that is missing, and each person then signs in with Google as before). **Without `--create-auth-users` (the live project, where `auth.users` is intact) the script restores only the rows of people who still have an `auth.users` row**: each insert is filtered by the database itself (`where exists (select 1 from auth.users u where u.id = r.user_id)`, on the exported user id, no email involved), so an account deleted after the snapshot is skipped in every table and is never brought back, and the run does not fail on it. Use `--create-auth-users` only in a fresh project: it recreates the sign-in rows, so it cannot tell who deleted their account, and it refuses to run without `--exclude-user-ids`. The script is written readable by you only and holds everyone's data: delete it after use.
-3. Read it, then run it in the SQL editor of the project (or `psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -1 -f ~/restore.sql`). It is one transaction, inserts in foreign-key order, uses `on conflict do nothing` (running it twice, or into a project that already has some of the rows, changes nothing that exists, and it deletes nothing), and switches the five tables' own triggers off while it runs and on again at the end, so the restored rows keep their timestamps and the consent record.
-4. Check the counts against the log line of the backup commit (in the live project the counts of the script are the upper bound: the people who deleted their account since are the difference, and you never need their emails to know that), and run the daily workflow once (the sync restores the `jobs` table).
+3. Read it, then run it in the SQL editor of the project (or `psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -1 -f ~/restore.sql`). It is one transaction, inserts in foreign-key order, uses `on conflict do nothing` (running it twice, or into a project that already has some of the rows, changes nothing that exists, and it deletes nothing), and switches the seven tables' own triggers off while it runs and on again at the end, so the restored rows keep their timestamps and the consent record. `jobs` and `crawl_log` hold no user, so every row of them goes in (never overwriting one that exists); a crawl log row keeps its `id` and the id sequence is moved past the largest one.
+4. Check the counts against the log line of the backup commit (in the live project the counts of the script are the upper bound: the people who deleted their account since are the difference, and you never need their emails to know that), and run the daily workflow once: the job texts are not in the backup, so that run's sync writes them again for every open job.
 5. Undo what the backup cannot know. In the live project, accounts deleted after the snapshot are already skipped (step 2). Anyone who unsubscribed after the time of the backup commit comes back from it (and, in a fresh project with `--create-auth-users`, so does anyone who deleted their account): before the next job alerts run, delete those accounts again and mark those subscriptions unsubscribed (find them in Supabase's auth logs and the `unsubscribe` and `delete-account` function logs for that window, or from any request the maintainer received by email). A restored `subscriptions` row of a person who had unsubscribed that day is a person who would be emailed against their wish. If the window cannot be checked, do not send job alerts until it can.
 
 ### Rehearsal, 2026-11-15
@@ -391,6 +394,81 @@ What was run, against a local Postgres 17 (`postgres:17-alpine` in Docker, datab
 6. Deleted accounts (second rehearsal, 2026-11-15, same kind of local Postgres 17 with the committed migrations): two users, `profiles` and `user_prefs` rows for both, exported to JSON, then one user deleted from `auth.users` (the foreign keys cascade) and the public tables emptied. The script made without `--create-auth-users` restored the remaining user's rows and skipped the deleted user's in both tables (and the run did not fail), and no trigger was left disabled. `tests/test_restore_accounts.py` pins the filter in the SQL of every table.
 
 Not covered, and said plainly: the real PostgREST endpoint and a real Supabase project were not used (no key was used or printed), so the read path with a real response shape, and `--create-auth-users` against Supabase's real `auth.users` and its sign-in linking, are unproven; the force-push retention step was tested against local bare repositories, not GitHub. First live checks: after the first daily run with `BACKUP_DEPLOY_KEY` set, look at `ravidorr/misra-backups` (one commit per day with changes, files `*.json`), and rehearse a restore into a scratch Supabase project.
+
+## The history lives in Supabase
+
+PLAN.md step 9.1. The crawl's history (`jobs`, open and closed, and `crawl_log`) is in Supabase and nowhere else; `data/jobs.db` is a per-run scratch file that is not committed (it is in `.gitignore`).
+
+- **A run.** `sync_supabase.py --pull` (the first step after the deploy-key check) rebuilds `data/jobs.db` from Supabase: every row of `jobs` without the text of the postings, and the whole `crawl_log`, each row with its Supabase id. It reads through the export's `Source`, which checks every table against its exact row count and reads it again when it changed under the read. The crawl, the coverage-gap step and the dashboard build then work on that file exactly as before; the sync step writes the open jobs, the closed ones and the descriptions as before and the log rows that have no id yet (this run's), and deletes the log older than 90 days (`CRAWL_LOG_DAYS`, so the table, the pull and the backup stay a fixed size). Nothing else is remembered between runs: a robots.txt streak and a "new" coverage gap are read from the crawl log.
+- **It fails closed.** A pull that cannot read Supabase, finds an empty `jobs` table or has no secret exits non-zero, so the run goes red and the alert says `pull=failure`; the crawl does not start, and the dashboard is not built or published from nothing. An empty `jobs` table is refused on purpose: a crawl that started from nothing would take every job for a new one, upsert them with a new `first_seen` and the digest would email them all. To start a new project, restore the backup first (below). A missing `data/jobs.db` stops the crawl and the build (`common.open_history`).
+- **The key.** The service-role key is on the pull, sync, digest and backup steps of the daily workflow and on the pull step of `publish-docs` (the dashboard build needs the history); the crawl never has it. No migration was needed for the move: `crawl_log` already existed with the service role as its only reader.
+- **The dashboard files are the only thing committed.** The daily workflow pushes `docs/` with the deploy key, as before, so the `protect-main` ruleset (the deploy key as its bypass actor) does not change. The first build after the move may reorder `docs/jobs.json` once: the open jobs are now listed by company and job id.
+- **What the old history was.** The commits of `data/jobs.db` up to the move stay in git, so a company that asks for its jobs to be erased from the history has that limit (see "Removing a company on request").
+
+### The move, once
+
+Before the first run of the new code, copy what Supabase does not have yet from the last committed `data/jobs.db`: the jobs that closed before the sync began (2026-11-15) and the crawl log. Without it the first run still works (every open job is in Supabase, the log only starts later: a sharp drop is believed three days late, a failing company shows after two crawls, "last good crawl" on the coverage card says "never") but that history is gone from the live data. Do it in this order, with the service-role key from the Supabase dashboard (never in chat):
+
+1. Merge nothing yet. Take the last committed database: `git show origin/main:data/jobs.db > ~/old-jobs.db` (the file exists in `main` until the PR of step 9.1 merges).
+2. Save this as `seed_history.py` in the repository root (not committed) and run it: `SUPABASE_URL=... SUPABASE_SERVICE_ROLE_KEY=... .venv/bin/python seed_history.py ~/old-jobs.db`. It refuses to run when `crawl_log` in Supabase is not empty, never touches an open job and writes only what is missing:
+
+   ```python
+   """One-off for the move of the history to Supabase (PLAN.md step 9.1): copy the closed jobs and the crawl log of the last
+   committed data/jobs.db into Supabase. Run from the repository root with SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY set:
+       python seed_history.py <the old data/jobs.db>
+   Open jobs are not touched (the daily sync owns them). Writes only when the crawl log in Supabase is still empty."""
+
+   import os
+   import sqlite3
+   import sys
+
+   import requests
+
+   import classify
+   import regions
+   import sync_supabase as s
+
+   client = s.Client(requests.Session(), os.environ["SUPABASE_URL"], os.environ["SUPABASE_SERVICE_ROLE_KEY"])
+   old = sqlite3.connect(sys.argv[1])
+   if client.call("GET", {"select": "id", "limit": 1}, table="crawl_log").json():
+       sys.exit("crawl_log in Supabase is not empty: the history was moved already, nothing written")
+   closed = []
+   for values in old.execute(f"SELECT {', '.join(s.HISTORY_COLUMNS)} FROM jobs WHERE status='closed'"):
+       row = dict(zip(s.HISTORY_COLUMNS, values, strict=True))
+       place = regions.place(row["location"])
+       row.update(
+           posted=row["posted"] or None,
+           level=classify.level(row["title"] or ""),
+           role_types=classify.role_types(row["title"] or ""),
+           regions=list(place.regions),
+           locations=list(place.locations),
+       )
+       closed.append(row)
+   open_keys = client.open_keys()
+   closed = [row for row in closed if (row["company"], row["job_id"]) not in open_keys]  # never turn an open job closed
+   client.upsert(closed)
+   query = f"SELECT {', '.join(s.LOG_COLUMNS)} FROM crawl_log ORDER BY rowid"
+   log = [dict(zip(s.LOG_COLUMNS, v, strict=True)) for v in old.execute(query)]
+   for start in range(0, len(log), s.BATCH):
+       client.call("POST", {}, log[start : start + s.BATCH], table="crawl_log", prefer="return=minimal")
+   print(f"seeded {len(closed)} closed jobs and {len(log)} crawl log rows")
+   ```
+
+3. It prints `seeded N closed jobs and M crawl log rows`. Check in the SQL editor: `select count(*) from public.crawl_log` is M, and `select count(*) filter (where status = 'closed') from public.jobs` went up by about N.
+4. Merge the PR, then start the workflow by hand with `digest_dry_run` ticked: the pull should say `pulled <jobs> jobs and <log> crawl log rows`, the sync `<n> crawl log rows written`, and `docs/` changes only by the ordering and the build time. Then delete `seed_history.py` and `~/old-jobs.db`.
+
+### Rehearsal, 2026-11-17
+
+Run against a local Postgres 17 built from the committed migrations plus the Supabase stub, behind a throwaway stand-in for PostgREST (about 100 lines over `psql`: filters, `order`, `limit` and `offset`, `Content-Range` with the exact count, upsert with `on_conflict`, `return=representation` deletes, `rpc` calls), with the real data of the last committed `data/jobs.db` (9,721 jobs, 6,560 log rows) as the history and a stand-in for the crawl that returned each company's open jobs (the five SmartRecruiters companies skipped for `robots.txt`):
+
+1. Seed (the script above, in the PostgREST form, and, separately, `restore_accounts.py` from export-format files built from the old database): 2,913 closed jobs and 6,560 log rows in; a second run refuses (the log is not empty), the restore run twice changes nothing.
+2. `--pull` rebuilt a file whose `jobs` and `crawl_log` (order included) were identical to the old database's. A crawl without the file stopped with the "is missing" message.
+3. A steady day (nothing changed): the sync upserted 6,808 open jobs, wrote 6,769 descriptions and 244 log rows; a second sync wrote nothing (all texts unchanged, no log rows). `build_dashboard.py` gave the same 6,808 jobs as the committed `docs/jobs.json` (only the failing-company flags differ, because the stand-in crawl succeeded for companies that were failing then), the same `firstDay` data and the same coverage page data; a second build was byte-identical.
+4. A day with changes: one new job at one company, one fewer at another, one company failing. The new job was in Supabase with its `first_seen` and its text, the missing job was closed, the failing company's jobs stayed open, its log row said `request failed`, and `::warning::coverage gaps: 1 (1 new): failing 1 (monday.com)` was logged. A fresh pull gave a history equal to the file the run had just left.
+5. Export, then restore into a second, empty database: 9,722 jobs (2,914 closed) and 7,536 log rows, the same counts as the first; the export held no `description`, `details` or `snippet` key and no description text; a second restore changed nothing; the next crawl in the restored project wrote 6,641 descriptions; the id sequence continued after the largest log id; no trigger was left disabled.
+6. Failures: with Supabase unreachable, with an empty `jobs` table and with an empty secret the pull exits non-zero and writes no file.
+
+Not covered, and said plainly: a real PostgREST and a real Supabase project (the stand-in is not PostgREST, so a response header or a filter that behaves differently there is unproven), a real GitHub Actions run (the workflow steps are pinned by tests and the first live run after the move is the check), and the browser crawl, which was replaced by the stand-in. First live checks: the first daily run after the move (the log lines above; `docs/` committed; a `backup` commit in `ravidorr/misra-backups` with `jobs` and `crawl_log` counts), and a restore of that backup into a scratch Supabase project.
 
 ## Reported sites
 

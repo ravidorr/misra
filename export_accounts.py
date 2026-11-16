@@ -1,9 +1,13 @@
-"""Export the account tables of Supabase to JSON files, one per table (PLAN.md step 9.1, the restore path).
+"""Export the tables of Supabase to JSON files, one per table (PLAN.md step 9.1, the restore path).
 
 `python export_accounts.py <directory>` reads every row of the tables that hold personal data or choices with the
 service-role key (PostgREST over HTTPS, all columns, including the token hash columns) and writes `<table>.json` into
 the directory: one row per line, keys sorted, rows sorted by primary key, so a day's diff holds only what changed. The
-public `jobs` table is not exported (the crawl rebuilds it) and neither are the short-lived abuse counters.
+job history goes with them: `jobs` (open and closed, every column but the text of the posting) and `crawl_log`. Supabase
+is their only home since step 9.1 (the crawl rebuilds a scratch SQLite file from it each run), so the export is their
+backup. The text (`description`, `details`, `snippet`) is left out on purpose: it lives in Supabase only, it is trimmed
+30 days after a job closes and a backup would outlive that, and the next crawl writes it again for every open job.
+The short-lived abuse counters are not exported either.
 
 Env: SUPABASE_URL (https://<ref>.supabase.co) and SUPABASE_SERVICE_ROLE_KEY. Unlike the sync, an empty value is an
 error, not a skip: a backup that quietly does not run is worse than a red run.
@@ -36,7 +40,8 @@ FILE_MODE, DIR_MODE = 0o600, 0o700
 class Table:
     name: str
     key: tuple[str, ...]  # the primary key, in the order the rows are sorted
-    columns: tuple[str, ...]  # every column of the table, in the migrations' order
+    columns: tuple[str, ...]  # every column of the table (of `jobs`: every one but the text), in the migrations' order
+    account: bool = True  # personal data of a user (read whole, `select=*`); False is the public job history
 
 
 # In foreign-key order (all of them point at auth.users only). Keep the columns equal to the migrations: a test reads
@@ -69,6 +74,32 @@ TABLES = (
     ),
     Table("emailed", ("user_id", "company", "job_id"), ("user_id", "company", "job_id", "emailed_at")),
 )
+# The job history, after the account tables: it points at no user. Columns are named in the request, so the text of a
+# posting is never read.
+JOBS = Table(
+    "jobs",
+    ("company", "job_id"),
+    (
+        "company",
+        "job_id",
+        "title",
+        "team",
+        "location",
+        "url",
+        "posted",
+        "first_seen",
+        "last_seen",
+        "status",
+        "level",
+        "role_types",
+        "regions",
+        "locations",
+    ),
+    account=False,
+)
+CRAWL_LOG = Table("crawl_log", ("id",), ("id", "ts", "company", "ats", "ok", "n_jobs", "note"), account=False)
+JOB_TABLES = (JOBS, CRAWL_LOG)
+ALL_TABLES = (*TABLES, *JOB_TABLES)
 DIRECTORY_REFUSED = "refusing to write personal data inside the repository checkout; use a directory outside it"
 
 
@@ -99,8 +130,9 @@ def outside_repository(path: Path) -> Path:
     return resolved
 
 
-def pk(table: Table, row: Mapping[str, Any]) -> tuple[str, ...]:
-    return tuple(str(row[column]) for column in table.key)
+def pk(table: Table, row: Mapping[str, Any]) -> tuple[Any, ...]:
+    """The primary key as the database gives it (text, or a number for `crawl_log.id`, which sorts as a number)."""
+    return tuple(row[column] for column in table.key)
 
 
 class Source:
@@ -116,7 +148,7 @@ class Source:
     def page(self, table: Table, offset: int) -> tuple[list[dict[str, Any]], int]:
         """One page of rows and the table's total row count from the Content-Range header."""
         params: dict[str, str | int] = {
-            "select": "*",
+            "select": "*" if table.account else ",".join(table.columns),
             "order": ",".join(f"{column}.asc" for column in table.key),
             "limit": PAGE,
             "offset": offset,
@@ -198,7 +230,7 @@ def write_files(directory: Path, data: Mapping[str, Sequence[Mapping[str, Any]]]
 
 
 def orphans(data: Mapping[str, Sequence[Mapping[str, Any]]]) -> int:
-    """Rows of the other tables whose user has no row in `profiles`: a person who signed in between the reads."""
+    """Rows of the other account tables whose user has no row in `profiles`: someone who signed in between the reads."""
     known = {row["user_id"] for row in data["profiles"]}
     return sum(1 for name, rows in data.items() if name != "profiles" for row in rows if row["user_id"] not in known)
 
@@ -209,10 +241,11 @@ def export(source: Source, directory: Path) -> dict[str, int]:
     times), and the export fails rather than write a set the restore could not rebuild the users from."""
     directory = outside_repository(directory)
     for _ in range(ATTEMPTS):
-        data = {table.name: source.read(table) for table in TABLES}
-        if not data["profiles"] and any(data[name] for name in data):  # a wrong key sees nothing through RLS
+        accounts = {table.name: source.read(table) for table in TABLES}
+        if not accounts["profiles"] and any(accounts.values()):  # a wrong key sees nothing through RLS
             raise ExportError("profiles is empty but other tables are not: the key may be wrong, nothing was written")
-        if not orphans(data):
+        if not orphans(accounts):
+            data = {**accounts, **{table.name: source.read(table) for table in JOB_TABLES}}
             write_files(directory, data)
             return {name: len(rows) for name, rows in data.items()}
     raise ExportError(f"rows of users without a profile kept appearing, {ATTEMPTS} times: try again")

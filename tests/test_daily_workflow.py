@@ -62,9 +62,10 @@ def test_the_digest_step_is_the_only_step_with_the_resend_and_unsubscribe_secret
             assert used == set(DIGEST_SECRETS)
         else:
             assert not used & {"RESEND_API_KEY", "UNSUBSCRIBE_SECRET"}, name
-    # the service-role key is shared with the sync step and the backup step (test_backup_workflow.py), nothing else
+    # the service-role key is shared with the pull step, the sync step and the backup step (test_backup_workflow.py),
+    # nothing else: never the crawl, which runs third-party pages in a browser
     holders = {name for name, step in steps().items() if "SUPABASE_SERVICE_ROLE_KEY" in step}
-    assert holders == {"sync", "digests", "backup"}
+    assert holders == {"pull", "sync", "digests", "backup"}
 
 
 def test_no_secret_is_set_at_the_workflow_or_job_level_and_the_crawl_has_no_env() -> None:
@@ -84,11 +85,12 @@ def test_the_dry_run_input_is_a_boolean_that_only_adds_the_flag() -> None:
 
 def test_a_failed_digest_still_builds_and_commits_and_triggers_the_alert() -> None:
     all_steps = steps()
-    assert "always() && steps.checkout.outcome == 'success'" in all_steps["Build dashboard"]
+    assert "always() && steps.pull.outcome == 'success'" in all_steps["Build dashboard"]
     assert "always() && steps.checkout.outcome == 'success'" in all_steps["commit"]
     alert = next(step for name, step in all_steps.items() if name.startswith("Email an alert"))
     assert "failure() || cancelled()" in alert
     assert "digests=${{ steps.digests.outcome }}" in alert
+    assert "pull=${{ steps.pull.outcome }}" in alert
     assert "digest=${{ steps.digest.outcome }}" not in alert  # the legacy step is gone
     assert "python3 send_alert.py" in alert
 
@@ -330,3 +332,22 @@ def test_the_guard_asks_for_green_runs_created_today_and_for_no_one_event(tmp_pa
     for part in ("-X GET", "status=success", f"created=>={today}", "per_page=100", "/actions/workflows/daily.yml/runs"):
         assert part in asked, part
     assert "event=" not in asked
+
+
+def test_the_history_is_pulled_from_supabase_before_the_crawl() -> None:
+    """PLAN.md step 9.1: data/jobs.db is a scratch file. The crawl runs only after a good pull (a step without `if` is
+    skipped after a failure), and the crawl, the sync and the dashboard build work on the file the pull wrote."""
+    ids = order()
+    assert ids.index("verify") < ids.index("pull") < ids.index("crawl") < ids.index("sync")
+    pull = steps()["pull"]
+    assert "run: python sync_supabase.py --pull\n" in pull
+    assert set(SECRET_REF.findall(pull)) == {"SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY"}
+    assert "if:" not in pull and "if:" not in steps()["crawl"]  # a failed pull stops the crawl
+    assert "continue-on-error" not in pull
+    assert "git add" not in pull
+
+
+def test_nothing_commits_or_uploads_the_history() -> None:
+    assert "data/jobs.db" not in steps()["commit"]
+    assert "upload-artifact" not in WORKFLOW
+    assert "integrity_check" not in WORKFLOW

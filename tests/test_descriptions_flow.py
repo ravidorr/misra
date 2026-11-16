@@ -304,7 +304,8 @@ def staged_paths(workflow: str) -> list[str]:
 
 def test_the_daily_workflow_stages_an_explicit_list_with_nothing_that_can_carry_a_description() -> None:
     paths = staged_paths(WORKFLOW)
-    assert "data/jobs.db" in paths
+    assert paths  # the dashboard files; the history (data/jobs.db) is a scratch file and is not committed any more
+    assert not [p for p in paths if p.startswith("data/")]
     assert not [p for p in paths if p in {".", "-A", "--all", "data", "data/", "docs", "docs/"} or "*" in p]
     assert not [p for p in paths if "description" in p]
     assert re.findall(r"git add (\S+)", WORKFLOW) == ['"$f"']  # the only `git add` is the one in the loop

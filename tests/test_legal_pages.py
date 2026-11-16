@@ -457,13 +457,22 @@ def test_the_publish_workflow_waits_for_the_daily_run_and_never_cancels_it() -> 
     assert publish[1] == daily[1]
 
 
-def test_the_publish_workflow_builds_only_and_touches_only_docs() -> None:
+def test_the_publish_workflow_pulls_and_builds_only_and_touches_only_docs() -> None:
     text = workflow("publish-docs.yml")
-    runs = re.findall(r"python (\S+)", text)
-    assert runs == ["build_dashboard.py"]  # no crawl, no email, no sync
-    for forbidden in ("run.py", "send_email", "sync_supabase", "playwright", "SUPABASE", "GMAIL", "RESEND", "ssh-key:"):
+    runs = re.findall(r"python (\S+(?: --pull)?)", text)
+    assert runs == ["sync_supabase.py --pull", "build_dashboard.py"]  # the history, then the build: no crawl, no sync
+    for forbidden in ("run.py", "send_email", "playwright", "GMAIL", "RESEND", "ssh-key:"):
         assert forbidden not in text, forbidden
-    assert re.findall(r"secrets\.([A-Z_]+)", text) == ["DEPLOY_KEY", "DEPLOY_KEY"]  # the key and nothing else
+    # the deploy key, and the read of the history in its own step (never in the build or the push)
+    assert re.findall(r"secrets\.([A-Z_]+)", text) == [
+        "DEPLOY_KEY",
+        "SUPABASE_URL",
+        "SUPABASE_SERVICE_ROLE_KEY",
+        "DEPLOY_KEY",
+    ]
+    pull = next(step for step in text.split("      - ") if "sync_supabase.py --pull" in step)
+    assert "DEPLOY_KEY" not in pull
+    assert text.index("sync_supabase.py --pull") < text.index("build_dashboard.py")
     assert "git add --all -- docs\n" in text
     assert "git add data" not in text
     assert text.count("git push") == 1

@@ -354,9 +354,11 @@ Technical direction agreed so far. These are inputs to the step plan, not requir
 - Get there in steps. Today every open job (not only the Israeli ones, so the signed-out dashboard stays whole) is copied
   from SQLite into Supabase after each daily run, and the dashboard reads them from there. Descriptions are not collected
   yet; when they are, search and the assistant read them from that copy (the dashboard shows only the snippet). Move the crawl itself over once that
-  works.
+  works. Done in `PLAN.md` step 9.1: a run pulls the history from Supabase into a scratch file, crawls, and writes the
+  result back; nothing of the history is kept in the repository.
 - Before SQLite is retired, keep a regular export of the data into the repository, so the history and a restore path
-  are not lost.
+  are not lost. Done in `PLAN.md` step 9.1: the export (accounts, `jobs` without the text, `crawl_log`) goes to the private
+  backup repository, not this public one (it holds personal data); `data/jobs.db` is no longer committed.
 - Check the free-tier limits (database size, backups, project pausing) against the real data size before the move.
   PLAN.md step 0.2 writes them down in `CONTRIBUTING.md`, checked on the day from the providers' own pages.
 - The backend choice is made: Supabase, project region EU (Ireland), in use since 2026-11-14.

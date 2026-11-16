@@ -1,6 +1,6 @@
 # misra
 
-> Daily batch pipeline that crawls career pages, keeps history in SQLite, and emails job alerts. Runs on GitHub Actions; there is no server or API. The only UI is a static dashboard.
+> Daily batch pipeline that crawls career pages, keeps its history in Supabase, and emails job alerts. Runs on GitHub Actions; there is no server or API. The only UI is a static dashboard.
 
 ## Project
 

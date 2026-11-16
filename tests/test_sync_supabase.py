@@ -1,13 +1,15 @@
 import runpy
 import sqlite3
 import sys
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 from typing import Any
 
 import pytest
 import requests
 
 import classify
+import common
+import export_accounts
 import sync_supabase
 from sync_supabase import Client, Result, SyncError, sync
 from tests.conftest import add_job
@@ -114,7 +116,7 @@ def test_large_runs_go_in_batches_and_read_every_page(db: sqlite3.Connection, mo
     assert sync(db, client(fake)) == Result(upserted=2, closed=3)
     sizes = [len(c["json"]) for c in fake.calls if c["method"] == "POST"]
     assert sizes == [2, 2, 1]  # two rows, then the three closes in batches of two and one
-    assert [c["params"]["offset"] for c in fake.calls if c["method"] == "GET"] == [
+    assert [c["params"]["offset"] for c in fake.calls if c["method"] == "GET" and c["url"].endswith("/jobs")] == [
         0,
         2,
         4,
@@ -247,15 +249,17 @@ def test_quality_report_has_both_shares(jobs: sqlite3.Connection) -> None:
         {"SUPABASE_URL": URL, "SUPABASE_SERVICE_ROLE_KEY": " \n"},
     ],
 )
-def test_main_is_skipped_cleanly_without_the_secrets(
-    env: dict[str, str], monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], workdir: Any
+def test_main_fails_without_the_secrets_it_is_not_a_skip(
+    env: dict[str, str], monkeypatch: pytest.MonkeyPatch, workdir: Any
 ) -> None:
     for name in ("SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY"):
         monkeypatch.delenv(name, raising=False)
     for name, value in env.items():
         monkeypatch.setenv(name, value)
-    sync_supabase.main()
-    assert capsys.readouterr().out.strip() == sync_supabase.SKIP_MESSAGE
+    with pytest.raises(SystemExit, match="the history lives in Supabase"):
+        sync_supabase.main([])
+    with pytest.raises(SystemExit, match="the history lives in Supabase"):
+        sync_supabase.main(["--pull"])
 
 
 def test_main_syncs_and_prints_the_log(
@@ -291,23 +295,23 @@ def test_main_exits_non_zero_when_the_sync_fails(
 def test_running_the_module_is_main(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
     monkeypatch.setenv("SUPABASE_URL", "")
     monkeypatch.setenv("SUPABASE_SERVICE_ROLE_KEY", "")
+    monkeypatch.setattr(sys, "argv", ["sync_supabase.py"])
     monkeypatch.delitem(sys.modules, "sync_supabase", raising=False)
-    runpy.run_module("sync_supabase", run_name="__main__")
-    assert sync_supabase.SKIP_MESSAGE in capsys.readouterr().out
+    with pytest.raises(SystemExit, match="the history lives in Supabase"):
+        runpy.run_module("sync_supabase", run_name="__main__")
 
 
-def test_main_fails_when_the_list_has_companies_but_the_secrets_are_empty(
+def test_main_stops_on_a_bad_exclusion_list_before_it_sends_anything(
     monkeypatch: pytest.MonkeyPatch, workdir: Any
 ) -> None:
-    for name in ("SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY"):
-        monkeypatch.delenv(name, raising=False)
-    path = workdir / "data" / "excluded_companies.csv"
-    path.write_text("company,reason,date_added\nAcme,asked,2026-11-20\n", encoding="utf-8")
-    with pytest.raises(SystemExit, match="secrets are empty"):
-        sync_supabase.main()
-    path.write_text("company,reason\n", encoding="utf-8")
+    fake = FakeSupabase()
+    monkeypatch.setenv("SUPABASE_URL", URL)
+    monkeypatch.setenv("SUPABASE_SERVICE_ROLE_KEY", KEY)
+    monkeypatch.setattr(sync_supabase.requests, "Session", lambda: fake)
+    (workdir / "data" / "excluded_companies.csv").write_text("company,reason\n", encoding="utf-8")
     with pytest.raises(SystemExit, match="header"):
-        sync_supabase.main()
+        sync_supabase.main([])
+    assert not fake.calls
 
 
 # ---- the daily cleanup of the report-site spam-guard counters ----
@@ -376,3 +380,254 @@ def test_main_exits_non_zero_when_the_cleanup_fails_after_a_good_sync(
         sync_supabase.main()
     assert ("Beta", "9") in fake.table  # the jobs were already synced
     assert "3 open jobs upserted" in capsys.readouterr().out
+
+
+# ---- the history lives in Supabase (PLAN.md step 9.1): the pull, the crawl log, the retention ----
+
+
+def log_row(ts: str, company: str = "Acme", ok: int = 1, note: str | None = "") -> tuple[Any, ...]:
+    return (ts, company, "greenhouse", ok, 3, note)
+
+
+def add_log(db: sqlite3.Connection, *rows: tuple[Any, ...], pulled: bool = False) -> None:
+    """Crawl log rows of the history: `pulled` ones carry the id Supabase gave them, the others are this run's."""
+    db.executemany(
+        "INSERT INTO crawl_log(ts,company,ats,ok,n_jobs,note,id) VALUES(?,?,?,?,?,?,?)",
+        [(*row, 7 if pulled else None) for row in rows],
+    )
+    db.commit()
+
+
+def test_only_the_crawl_log_rows_of_this_run_are_written_and_then_marked_as_written(jobs: sqlite3.Connection) -> None:
+    add_log(jobs, log_row("2026-11-15T04:30:00"), pulled=True)  # what the pull brought: Supabase has it
+    add_log(jobs, log_row("2026-11-16T04:30:00", "Beta", 0, "boom"))
+    fake = FakeSupabase()
+    result = sync(jobs, client(fake))
+    assert result.logged == 1
+    assert fake.others["crawl_log"] == [
+        {"ts": "2026-11-16T04:30:00", "company": "Beta", "ats": "greenhouse", "ok": 0, "n_jobs": 3, "note": "boom"}
+    ]
+    assert sync(jobs, client(fake)).logged == 0  # a second sync of the same file writes nothing more
+    assert len(fake.others["crawl_log"]) == 1
+    assert jobs.execute("SELECT COUNT(*) FROM crawl_log WHERE id IS NULL").fetchone() == (0,)
+
+
+def test_a_log_row_in_supabase_with_any_ts_cannot_hold_back_this_runs_rows(jobs: sqlite3.Connection) -> None:
+    """The rows to write are the ones with no id, not the ones newer than something: a wrong clock or a stray row in
+    Supabase must not silence the log."""
+    add_log(jobs, log_row("2026-11-16T04:30:00"))
+    fake = FakeSupabase()
+    fake.others["crawl_log"].append({"ts": "zzz-from-the-future", "company": "Acme"})
+    assert sync(jobs, client(fake)).logged == 1
+
+
+def test_a_crawl_log_goes_in_batches(jobs: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(sync_supabase, "BATCH", 2)
+    rows_written = [log_row(f"2026-11-16T04:3{n}:00") for n in range(5)]
+    add_log(jobs, *rows_written)
+    fake = FakeSupabase()
+    assert sync(jobs, client(fake)).logged == len(rows_written)
+    posts = [c for c in fake.calls if c["method"] == "POST" and c["url"].endswith("/crawl_log")]
+    assert [len(c["json"]) for c in posts] == [2, 2, 1]
+    assert all(c["headers"]["Prefer"] == "return=minimal" for c in posts)  # no conflict key: a plain insert
+
+
+def test_the_crawl_log_is_written_after_the_jobs(jobs: sqlite3.Connection) -> None:
+    add_log(jobs, log_row("2026-11-16T04:30:00"))
+    fake = FakeSupabase()
+    sync(jobs, client(fake))
+    urls = [c["url"].rsplit("/", 1)[1] for c in fake.calls]
+    assert urls.index("crawl_log") > max(i for i, url in enumerate(urls) if url == "jobs")
+
+
+def test_a_crawl_log_that_cannot_be_written_fails_the_sync(jobs: sqlite3.Connection) -> None:
+    add_log(jobs, log_row("2026-11-16T04:30:00"))
+    fake = FakeSupabase()
+    real = fake.request
+
+    def refuse(method: str, url: str, **kw: Any) -> FakeHttpResponse:
+        if method == "POST" and url.endswith("/crawl_log"):
+            return FakeHttpResponse(status_code=400, text="column note does not exist")
+        return real(method, url, **kw)
+
+    fake.request = refuse  # type: ignore[method-assign]
+    with pytest.raises(SyncError, match="POST crawl_log failed: HTTP 400"):
+        sync(jobs, client(fake))
+    assert ("Acme", "1") in fake.table  # the jobs were stored before it
+    assert jobs.execute("SELECT COUNT(*) FROM crawl_log WHERE id IS NULL").fetchone() == (1,)  # still to be written
+
+
+def test_the_old_crawl_log_is_deleted_by_day_and_a_failure_is_only_a_warning(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    fake = FakeSupabase()
+    day = date(2026, 11, 16)
+    cutoff = (day - timedelta(days=sync_supabase.CRAWL_LOG_DAYS)).isoformat()
+    fake.others["crawl_log"] = [{"ts": f"{cutoff}T23:59:00"}, {"ts": "2026-01-01T00:00:00"}, {"ts": "2026-11-16T04:30"}]
+    sync_supabase.trim_crawl_log(client(fake), day)
+    assert [row["ts"] for row in fake.others["crawl_log"]] == [f"{cutoff}T23:59:00", "2026-11-16T04:30"]
+    assert fake.calls[0]["params"] == {"ts": f"lt.{cutoff}"}
+    failing = FakeSupabase(fail_on="DELETE")
+    sync_supabase.trim_crawl_log(client(failing), day)
+    assert (
+        "::warning::the old crawl log could not be trimmed: DELETE crawl_log failed: HTTP 500"
+        in capsys.readouterr().out
+    )
+
+
+def test_the_exclusion_list_deletes_the_crawl_log_of_the_company_too(jobs: sqlite3.Connection) -> None:
+    fake = FakeSupabase()
+    fake.others["crawl_log"] = [
+        {"ts": "2026-11-16T04:30", "company": "Acme"},
+        {"ts": "2026-11-16T04:30", "company": "Beta"},
+    ]
+    sync(jobs, client(fake), ["Acme"])
+    assert [row["company"] for row in fake.others["crawl_log"]] == ["Beta"]
+
+
+def test_main_writes_the_log_and_trims_it(
+    jobs: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    add_log(jobs, log_row("2026-11-16T04:30:00"))
+    fake = FakeSupabase()
+    monkeypatch.setenv("SUPABASE_URL", URL)
+    monkeypatch.setenv("SUPABASE_SERVICE_ROLE_KEY", KEY)
+    monkeypatch.setattr(sync_supabase.requests, "Session", lambda: fake)
+    sync_supabase.main([])
+    assert "Supabase: 1 crawl log rows written" in capsys.readouterr().out
+    assert any(c["method"] == "DELETE" and c["params"].get("ts", "").startswith("lt.") for c in fake.calls)
+
+
+# the pull
+
+
+class Pages:
+    """PostgREST for the pull: the export's `Source` reads ordered pages with a Content-Range total."""
+
+    def __init__(self, tables: dict[str, list[dict[str, Any]]]) -> None:
+        self.tables = tables
+        self.calls: list[dict[str, Any]] = []
+
+    def request(self, method: str, url: str, **kw: Any) -> Any:
+        self.calls.append({"method": method, "url": url, **kw})
+        rows = self.tables[url.rsplit("/", 1)[1]]
+        offset, limit = kw["params"]["offset"], kw["params"]["limit"]
+        window = rows[offset : offset + limit]
+        return type(
+            "Answer",
+            (),
+            {
+                "status_code": 200,
+                "headers": {"Content-Range": f"{offset}-{offset + len(window) - 1}/{len(rows)}"},
+                "json": lambda self_: window,
+            },
+        )()
+
+
+def job_row(company: str, job_id: str, status: str = "open", **more: Any) -> dict[str, Any]:
+    row: dict[str, Any] = dict.fromkeys(export_accounts.JOBS.columns)
+    return {**row, "company": company, "job_id": job_id, "title": "T", "status": status, "role_types": [], **more}
+
+
+def log_json(n: int, ts: str, company: str = "Acme", note: str | None = None) -> dict[str, Any]:
+    return {"id": n, "ts": ts, "company": company, "ats": "lever", "ok": 1, "n_jobs": 4, "note": note}
+
+
+def pull_from(tables: dict[str, list[dict[str, Any]]], path: Any) -> tuple[int, int]:
+    return sync_supabase.pull(export_accounts.Source(Pages(tables), URL, KEY), str(path))  # type: ignore[arg-type]
+
+
+def test_the_pull_rebuilds_the_history_with_the_closed_jobs_and_the_whole_log(tmp_path: Any) -> None:
+    tables = {
+        "jobs": [job_row("Acme", "1", first_seen="2026-11-01T04:00:00"), job_row("Acme", "0", "closed", url="u")],
+        "crawl_log": [log_json(1, "2026-11-15T04:00:00", note="x"), log_json(2, "2026-11-16T04:00:00")],
+    }
+    path = tmp_path / "jobs.db"
+    assert pull_from(tables, path) == (2, 2)
+    check = sqlite3.connect(path)
+    assert check.execute("SELECT company, job_id, status, first_seen, url FROM jobs ORDER BY job_id").fetchall() == [
+        ("Acme", "0", "closed", None, "u"),
+        ("Acme", "1", "open", "2026-11-01T04:00:00", None),
+    ]
+    assert check.execute("SELECT ts, ats, ok, n_jobs, note, id FROM crawl_log ORDER BY ts").fetchall() == [
+        ("2026-11-15T04:00:00", "lever", 1, 4, "x", 1),  # every pulled row keeps its Supabase id
+        ("2026-11-16T04:00:00", "lever", 1, 4, None, 2),
+    ]
+    assert not (tmp_path / "jobs.db.part").exists()
+
+
+def test_the_history_never_holds_the_text_of_a_posting(tmp_path: Any) -> None:
+    pages = Pages({"jobs": [job_row("Acme", "1")], "crawl_log": []})
+    sync_supabase.pull(export_accounts.Source(pages, URL, KEY), str(tmp_path / "jobs.db"))  # type: ignore[arg-type]
+    asked = pages.calls[0]["params"]["select"].split(",")
+    assert not {"description", "details", "snippet"} & set(asked)
+    columns = [r[1] for r in sqlite3.connect(tmp_path / "jobs.db").execute("PRAGMA table_info(jobs)")]
+    assert not {"description", "details", "snippet"} & set(columns)
+
+
+def test_an_empty_jobs_table_is_refused_and_the_old_file_is_left_alone(tmp_path: Any) -> None:
+    path = tmp_path / "jobs.db"
+    path.write_text("previous", encoding="utf-8")
+    with pytest.raises(SyncError, match="Supabase holds no jobs"):
+        pull_from({"jobs": [], "crawl_log": [log_json(1, "2026-11-16T04:00:00")]}, path)
+    assert path.read_text(encoding="utf-8") == "previous"
+    assert not (tmp_path / "jobs.db.part").exists()
+
+
+def test_an_empty_crawl_log_is_fine_the_first_days(tmp_path: Any) -> None:
+    assert pull_from({"jobs": [job_row("Acme", "1")], "crawl_log": []}, tmp_path / "jobs.db") == (1, 0)
+
+
+def test_a_stale_scratch_file_and_a_previous_history_are_replaced_whole(tmp_path: Any) -> None:
+    path = tmp_path / "jobs.db"
+    (tmp_path / "jobs.db.part").write_text("left behind", encoding="utf-8")
+    pull_from({"jobs": [job_row("Old", "1")], "crawl_log": []}, path)
+    pull_from({"jobs": [job_row("New", "1")], "crawl_log": []}, path)
+    assert sqlite3.connect(path).execute("SELECT company FROM jobs").fetchall() == [("New",)]
+
+
+def test_a_table_that_cannot_be_read_leaves_no_file(tmp_path: Any) -> None:
+    class Down:
+        def request(self, *_a: Any, **_k: Any) -> Any:
+            raise requests.ConnectionError("down")
+
+    with pytest.raises(export_accounts.ExportError, match="reading jobs failed"):
+        sync_supabase.pull(export_accounts.Source(Down(), URL, KEY), str(tmp_path / "jobs.db"))  # type: ignore[arg-type]
+    assert not list(tmp_path.iterdir())
+
+
+def test_main_pull_writes_the_file_and_prints_counts_only(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], workdir: Any
+) -> None:
+    (workdir / "data" / "jobs.db").unlink()
+    pages = Pages({"jobs": [job_row("Acme", "1")], "crawl_log": [log_json(1, "2026-11-16T04:00:00")]})
+    monkeypatch.setenv("SUPABASE_URL", URL)
+    monkeypatch.setenv("SUPABASE_SERVICE_ROLE_KEY", KEY)
+    monkeypatch.setattr(sync_supabase.requests, "Session", lambda: pages)
+    sync_supabase.main(["--pull"])
+    out = capsys.readouterr().out
+    assert out.strip() == "Supabase: pulled 1 jobs and 1 crawl log rows into data/jobs.db"
+    assert (workdir / "data" / "jobs.db").exists()
+    assert pages.calls[0]["headers"]["apikey"] == KEY
+    assert KEY not in out
+
+
+def test_main_pull_fails_with_the_reason_and_no_secret(monkeypatch: pytest.MonkeyPatch, workdir: Any) -> None:
+    (workdir / "data" / "jobs.db").unlink()
+    monkeypatch.setenv("SUPABASE_URL", URL)
+    monkeypatch.setenv("SUPABASE_SERVICE_ROLE_KEY", KEY)
+    monkeypatch.setattr(sync_supabase.requests, "Session", lambda: Pages({"jobs": [], "crawl_log": []}))
+    with pytest.raises(SystemExit) as info:
+        sync_supabase.main(["--pull"])
+    assert str(info.value).startswith("Supabase pull failed: Supabase holds no jobs")
+    assert KEY not in str(info.value)
+    assert not (workdir / "data" / "jobs.db").exists()
+
+
+def test_the_crawl_and_the_dashboard_refuse_a_missing_history(workdir: Any) -> None:
+    (workdir / "data" / "jobs.db").unlink()
+    with pytest.raises(SystemExit, match=r"data/jobs\.db is missing: run `python sync_supabase\.py --pull`"):
+        sync_supabase.open_history()
+    with pytest.raises(SystemExit, match="is missing"):
+        common.open_history()
+    assert not (workdir / "data" / "jobs.db").exists()  # looking never creates an empty one

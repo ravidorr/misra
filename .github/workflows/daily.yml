@@ -107,6 +107,17 @@ jobs:
         with:
           python-version: "3.12"
       - run: pip install requests playwright==1.65.0 markdown-it-py==4.0.0
+      - name: Pull the history from Supabase
+        id: pull
+        timeout-minutes: 10
+        # The history lives in Supabase (PLAN.md step 9.1); data/jobs.db is a scratch file rebuilt here on every run and
+        # never committed. This step, the sync, the digests and the backup are the only ones that hold the service-role
+        # key: the crawl, which runs third-party pages in a browser, never does. An empty secret or an empty `jobs` table fails
+        # the step, so the crawl (and everything after it that needs the history) does not run.
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: python sync_supabase.py --pull
       - run: playwright install --with-deps chromium
       - name: Crawl and diff
         id: crawl
@@ -124,7 +135,7 @@ jobs:
         if: ${{ always() && steps.crawl.outcome == 'success' }}
         timeout-minutes: 10
         env:
-          # Exposed to this step only, after the crawl. Unset secrets arrive empty and the script skips with exit 0.
+          # Exposed to this step only, after the crawl. An unset secret arrives empty and fails the step.
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: python sync_supabase.py
@@ -144,9 +155,10 @@ jobs:
           DRY_RUN_FLAG: ${{ inputs.digest_dry_run && '--dry-run' || '' }}
         run: python send_digests.py $DRY_RUN_FLAG
       - name: Build dashboard
-        if: ${{ always() && steps.checkout.outcome == 'success' }}
+        # Needs the pulled history: without it the build would stop on the missing file, and must not publish less.
+        if: ${{ always() && steps.pull.outcome == 'success' }}
         run: python build_dashboard.py
-      - name: Commit database and dashboard
+      - name: Commit the dashboard
         id: commit
         if: ${{ always() && steps.checkout.outcome == 'success' }}
         env:
@@ -155,10 +167,9 @@ jobs:
         run: |
           set -euo pipefail
           [ "$GITHUB_REF" = "refs/heads/main" ] || { echo "refusing to push from $GITHUB_REF" >&2; exit 1; }
-          python3 -c "import sqlite3,sys; r=sqlite3.connect('data/jobs.db').execute('pragma integrity_check').fetchone()[0]; sys.exit(0 if r == 'ok' else 'integrity_check: ' + r)"
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          for f in data/jobs.db docs/index.html docs/dashboard.css docs/dashboard.js docs/auth.js docs/report.js docs/digest.js docs/email.html docs/email.js docs/supabase.js docs/theme.js docs/jobs.json docs/jobs.jsonld docs/privacy.html docs/terms.html docs/security.html docs/favicon.svg docs/apple-touch-icon.png; do
+          for f in docs/index.html docs/dashboard.css docs/dashboard.js docs/auth.js docs/report.js docs/digest.js docs/email.html docs/email.js docs/supabase.js docs/theme.js docs/jobs.json docs/jobs.jsonld docs/privacy.html docs/terms.html docs/security.html docs/favicon.svg docs/apple-touch-icon.png; do
             if [ -f "$f" ]; then
               git add "$f"
             fi
@@ -177,15 +188,8 @@ jobs:
             git rebase --abort 2>/dev/null || true
             sleep $((attempt * 5))
           done
-          echo "push to main failed after 3 attempts; the database is kept as the jobs-db artifact" >&2
+          echo "push to main failed after 3 attempts; the data is already in Supabase, the next run rebuilds docs/" >&2
           exit 1
-      - name: Keep the database if the push failed
-        if: ${{ failure() && steps.commit.outcome == 'failure' }}
-        uses: actions/upload-artifact@v7
-        with:
-          name: jobs-db
-          path: data/jobs.db
-          retention-days: 7
       - name: Back up the account tables to the private backup repository
         id: backup
         # After the data commit, so a slow or failed backup never delays or blocks the deploy; and independent of the
@@ -223,5 +227,5 @@ jobs:
           GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
           DIGEST_TO: ${{ secrets.DIGEST_TO }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-          STEPS: verify=${{ steps.verify.outcome }} crawl=${{ steps.crawl.outcome }} gaps=${{ steps.gaps.outcome }} sync=${{ steps.sync.outcome }} digests=${{ steps.digests.outcome }} commit=${{ steps.commit.outcome }} backup=${{ steps.backup.outcome }}
+          STEPS: verify=${{ steps.verify.outcome }} pull=${{ steps.pull.outcome }} crawl=${{ steps.crawl.outcome }} gaps=${{ steps.gaps.outcome }} sync=${{ steps.sync.outcome }} digests=${{ steps.digests.outcome }} commit=${{ steps.commit.outcome }} backup=${{ steps.backup.outcome }}
         run: python3 send_alert.py "$RUN_URL"

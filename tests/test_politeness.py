@@ -32,8 +32,8 @@ ROOT = Path(__file__).resolve().parents[1]
 HEADER = "company,reason,date_added\n"
 TEST_DELAY = 5.0
 FAR = 100  # seconds: a host that was used just now, for a wait that cannot be an accident
-ACME_ROWS = 4  # two jobs, one star, one emailed key
-THREE_DELETES = 3  # user_jobs, emailed, jobs
+ACME_ROWS = 5  # two jobs, one star, one emailed key, one crawl log row
+FOUR_DELETES = 4  # user_jobs, emailed, jobs, crawl_log
 
 
 def waits_turns(wait: float, turns: int) -> bool:
@@ -670,9 +670,6 @@ def test_an_excluded_company_is_never_crawled_and_its_data_is_deleted(
         add_job(conn, name, "old", "Old job")
     add_crawls(conn, "Acme", [(1, "")], ats="fake")
     add_crawls(conn, "Acme Corp", [(1, "")], ats="fake")
-    conn.execute("CREATE TABLE gap_alerts(company TEXT, since TEXT, kind TEXT)")
-    conn.execute("INSERT INTO gap_alerts VALUES('Acme', 'x', 'failing')")
-    conn.execute("INSERT INTO gap_alerts VALUES('Other', 'x', 'failing')")
     conn.commit()
     conn.close()
     write_json(workdir / "data" / "companies.json", [co("Acme"), co("Other")])
@@ -684,17 +681,7 @@ def test_an_excluded_company_is_never_crawled_and_its_data_is_deleted(
     left = {r[0] for r in check.execute("SELECT company FROM jobs")}
     assert left == {"Acme Corp", "Other"}  # deleted by the exact name only
     assert {r[0] for r in check.execute("SELECT company FROM crawl_log")} == {"Acme Corp", "Other"}
-    assert [r[0] for r in check.execute("SELECT company FROM gap_alerts")] == ["Other"]
     check.close()
-
-
-def test_the_purge_does_not_need_the_optional_tables(workdir: Path) -> None:
-    conn = run.init()
-    conn.execute("DROP TABLE crawl_log")
-    add_job(conn, "Acme", "1", "T")
-    assert run.purge_excluded(conn, ["Acme", "Nobody"]) == {"Acme": 1}
-    assert conn.execute("SELECT COUNT(*) FROM jobs").fetchone() == (0,)
-    conn.close()
 
 
 def test_the_purge_does_nothing_for_an_empty_list(db: sqlite3.Connection) -> None:
@@ -787,6 +774,7 @@ def fill(fake: FakeSupabase, company: str, jobs: int = 2) -> None:
         fake.table[(company, str(n))] = {"company": company, "job_id": str(n), "status": "open"}
     fake.others["user_jobs"].append({"company": company, "job_id": "0", "title": "kept title", "url": "https://x"})
     fake.others["emailed"].append({"company": company, "job_id": "0"})
+    fake.others["crawl_log"].append({"company": company, "ts": "2026-11-16T04:30:00"})
 
 
 @pytest.fixture
@@ -798,8 +786,8 @@ def local(db: sqlite3.Connection) -> sqlite3.Connection:
 def test_an_empty_list_sends_no_request_at_all(local: sqlite3.Connection) -> None:
     fake = FakeSupabase()
     assert sync_supabase.sync(local, supabase_client(fake), []).purged == 0
-    assert {c["method"] for c in fake.calls} == {"POST", "GET"}  # the upsert and the read of open rows, nothing else
-    assert all(c["url"].endswith("/jobs") and "company" not in c["params"] for c in fake.calls)
+    assert {c["method"] for c in fake.calls} == {"POST", "GET"}  # the upsert and the reads, nothing else
+    assert all(c["url"].endswith(("/jobs", "/crawl_log")) and "company" not in c["params"] for c in fake.calls)
 
 
 def test_the_purge_deletes_jobs_stars_and_emailed_keys_of_that_company_only(
@@ -813,11 +801,12 @@ def test_the_purge_deletes_jobs_stars_and_emailed_keys_of_that_company_only(
     assert {k[0] for k in fake.table} == {"Acme Corp", "acme", "Beta"}
     assert {r["company"] for r in fake.others["user_jobs"]} == {"Acme Corp", "acme", "Beta"}
     assert {r["company"] for r in fake.others["emailed"]} == {"Acme Corp", "acme", "Beta"}
+    assert {r["company"] for r in fake.others["crawl_log"]} == {"Acme Corp", "acme", "Beta"}
     out = capsys.readouterr().out
-    assert "deleted {'user_jobs': 1, 'emailed': 1, 'jobs': 2} for Acme" in out
+    assert "deleted {'user_jobs': 1, 'emailed': 1, 'jobs': 2, 'crawl_log': 1} for Acme" in out
     assert "kept title" not in out and KEY not in out  # counts only, never rows
     deletes = [c for c in fake.calls if c["method"] == "DELETE"]
-    assert len(deletes) == THREE_DELETES
+    assert len(deletes) == FOUR_DELETES
     assert all(c["params"]["company"] == "eq.Acme" for c in deletes)  # always filtered, by `eq`, never a pattern
     assert all(c["headers"]["Prefer"] == "return=representation" for c in deletes)
 
@@ -861,7 +850,7 @@ def test_names_without_rows_do_not_count_towards_the_limit(local: sqlite3.Connec
     for name in ("A1", "B2", "C3"):
         fill(fake, name, jobs=1)
     names = ["A1", "B2", "C3", "N1", "N2", "N3"]
-    assert sync_supabase.sync(local, supabase_client(fake), names).purged == THREE_DELETES * 3
+    assert sync_supabase.sync(local, supabase_client(fake), names).purged == FOUR_DELETES * 3
 
 
 @pytest.mark.parametrize("name", ["", "A", " Acme", "Acme "])
@@ -936,14 +925,6 @@ def test_a_list_that_spells_a_company_differently_stops_the_run_and_deletes_noth
     check.close()
 
 
-def test_the_purge_vacuums_so_deleted_rows_leave_no_trace(db: sqlite3.Connection) -> None:
-    add_job(db, "Acme", "1", "A very recognisable title")
-    db.commit()
-    assert run.purge_excluded(db, ["Acme"]) == {"Acme": 1}
-    with open(run.DB, "rb") as fh:
-        assert b"A very recognisable title" not in fh.read()
-
-
 def test_a_list_saved_by_excel_with_a_byte_order_mark_is_read(tmp_path: Path) -> None:
     path = tmp_path / "x.csv"
     path.write_text("\ufeff" + HEADER + "Acme,asked,2026-11-20\n", encoding="utf-8")
@@ -1000,7 +981,6 @@ def test_a_company_on_smartrecruiters_is_skipped_for_robots_txt_not_failed(
     assert ok == 0
     assert note == f"{ROBOTS_NOTE} (api.smartrecruiters.com)"
     assert check.execute("SELECT status FROM jobs WHERE company='Armis'").fetchone() == ("open",)  # not before 7 days
-    assert check.execute("SELECT company, since FROM robots_skips").fetchall() == [("Armis", time.strftime("%Y-%m-%d"))]
     check.close()
     assert run.coverage_gaps(run.init()) == []  # no alert for the maintainer
 
@@ -1029,26 +1009,14 @@ def seed_walled(*names: str) -> None:
 
 
 def start_streak(name: str, since: str) -> None:
+    """The first crawl of a robots.txt streak: a crawl log row of that day (the streak is read from the log)."""
     conn = run.init()
-    conn.execute("INSERT INTO robots_skips(company, since) VALUES(?,?)", (name, since))
+    conn.execute(
+        "INSERT INTO crawl_log(ts,company,ats,ok,n_jobs,note) VALUES(?,?,?,?,?,?)",
+        (f"{since}T06:00:00", name, "fake", 0, 0, ROBOTS_NOTE),
+    )
     conn.commit()
     conn.close()
-
-
-def test_the_schema_change_is_backwards_compatible(workdir: Path) -> None:
-    old = sqlite3.connect(run.DB)  # a database written before the table existed
-    old.executescript(
-        "CREATE TABLE jobs(company TEXT, job_id TEXT, title TEXT, team TEXT, location TEXT, url TEXT, posted TEXT,"
-        " first_seen TEXT, last_seen TEXT, status TEXT DEFAULT 'open', reported INTEGER DEFAULT 0,"
-        " PRIMARY KEY(company, job_id));"
-        "INSERT INTO jobs(company, job_id, title) VALUES('Old', '1', 'Kept');"
-    )
-    old.commit()
-    old.close()
-    run.init().close()
-    run.init().close()
-    assert rows("SELECT company, title FROM jobs") == [("Old", "Kept")]
-    assert rows("SELECT COUNT(*) FROM robots_skips") == [(0,)]
 
 
 def test_open_jobs_close_seven_days_after_the_first_skip_and_not_before(
@@ -1060,13 +1028,11 @@ def test_open_jobs_close_seven_days_after_the_first_skip_and_not_before(
     for day in range(1, 8):  # the first skip is on the 1st
         run_on(f"2026-11-{day:02d}", monkeypatch)
         assert rows("SELECT status FROM jobs WHERE company='Walled'") == [("open",)]
-    assert rows("SELECT since FROM robots_skips") == [("2026-11-01",)]
     capsys.readouterr()
     run_on("2026-11-08", monkeypatch)  # seven days after the first skipped run
     out = capsys.readouterr().out
     assert rows("SELECT status FROM jobs WHERE company='Walled'") == [("closed",)]
     assert "robots.txt: closed 1 jobs of 1 companies skipped for 7 days" in out
-    assert rows("SELECT company FROM robots_skips") == [("Walled",)]
     run_on("2026-11-09", monkeypatch)  # still skipped: nothing left to close, and the log says so
     assert "robots.txt: closed 0 jobs of 0 companies" in capsys.readouterr().out
 
@@ -1091,8 +1057,9 @@ def test_runs_within_a_day_do_not_move_the_start_of_the_streak(
     run_on("2026-11-01", monkeypatch)
     run_on("2026-11-01", monkeypatch)
     run_on("2026-11-02", monkeypatch)
-    assert rows("SELECT since FROM robots_skips") == [("2026-11-01",)]
     assert rows("SELECT status FROM jobs") == [("open",)]
+    run_on("2026-11-08", monkeypatch)  # seven days after the first run of the day, not after the last
+    assert rows("SELECT status FROM jobs") == [("closed",)]
 
 
 def test_one_run_that_is_not_a_skip_starts_the_week_again(
@@ -1102,13 +1069,10 @@ def test_one_run_that_is_not_a_skip_starts_the_week_again(
     write_json(workdir / "data" / "companies.json", [co("Walled")])
     common._robots["https://walled.test"] = [(False, "/")]
     run_on("2026-11-02", monkeypatch)
-    assert rows("SELECT since FROM robots_skips") == [("2026-11-02",)]
     common._robots["https://walled.test"] = None  # a temporary glitch ends: the host allows us again
     run_on("2026-11-06", monkeypatch)
-    assert rows("SELECT COUNT(*) FROM robots_skips") == [(0,)]
     common._robots["https://walled.test"] = [(False, "/")]
     run_on("2026-11-12", monkeypatch)  # skipped again, but the streak began on the 12th, not the 2nd
-    assert rows("SELECT since FROM robots_skips") == [("2026-11-12",)]
     assert rows("SELECT job_id, status FROM jobs ORDER BY job_id") == [("1", "open"), ("old", "closed")]
 
 
@@ -1122,7 +1086,6 @@ def test_a_failure_is_not_closed_by_the_rule_and_clears_the_streak(
     write_json(workdir / "data" / "companies.json", [co("Down")])
     run_on("2026-11-20", monkeypatch)
     assert rows("SELECT status FROM jobs") == [("open",)]
-    assert rows("SELECT COUNT(*) FROM robots_skips") == [(0,)]
 
 
 def test_a_company_crawled_this_run_is_not_a_skipped_one_even_when_a_namesake_board_is_skipped(
@@ -1134,7 +1097,6 @@ def test_a_company_crawled_this_run_is_not_a_skipped_one_even_when_a_namesake_bo
     common._robots["https://walled.test"] = [(False, "/")]
     run_on("2026-11-20", monkeypatch)
     assert rows("SELECT job_id, status FROM jobs ORDER BY job_id") == [("1", "open"), ("old", "closed")]
-    assert rows("SELECT COUNT(*) FROM robots_skips") == [(0,)]  # the streak is gone
 
 
 def test_the_rule_closes_only_the_due_company_and_a_later_crawl_reopens_its_jobs(
@@ -1154,19 +1116,12 @@ def test_the_rule_closes_only_the_due_company_and_a_later_crawl_reopens_its_jobs
     )
     run_on("2026-11-09", monkeypatch)
     assert rows("SELECT company, status FROM jobs ORDER BY company") == [("Other", "open"), ("Walled", "open")]
-    assert rows("SELECT COUNT(*) FROM robots_skips") == [(0,)]
-
-
-def test_a_garbled_start_day_never_closes_anything(workdir: Path) -> None:
-    seed_walled("Walled")
-    start_streak("Walled", "not a date")
-    conn = run.init()
-    assert run.track_robots_skips(conn, {"Walled"}, set(), "2026-11-20") == (0, 0)
-    assert conn.execute("SELECT status FROM jobs").fetchall() == [("open",)]
 
 
 def test_track_robots_skips_counts_and_takes_the_day_as_an_argument(workdir: Path) -> None:
     seed_walled("A", "B")
+    start_streak("A", "2026-11-01")
+    start_streak("B", "2026-11-01")
     conn = run.init()
     assert run.track_robots_skips(conn, {"A", "B"}, set(), "2026-11-01") == (0, 0)
     assert run.track_robots_skips(conn, {"A", "B"}, set(), "2026-11-07") == (0, 0)
@@ -1175,15 +1130,21 @@ def test_track_robots_skips_counts_and_takes_the_day_as_an_argument(workdir: Pat
         ("A", "closed"),
         ("B", "open"),
     ]
-    assert conn.execute("SELECT company FROM robots_skips").fetchall() == [("A",)]
 
 
-def test_an_excluded_company_loses_its_skip_row(workdir: Path) -> None:
+def test_the_streak_is_the_latest_crawls_with_the_robots_note_and_any_other_result_ends_it(workdir: Path) -> None:
+    seed_walled("A")
+    start_streak("A", "2026-11-01")
     conn = run.init()
-    conn.execute("INSERT INTO robots_skips(company, since) VALUES('Acme', '2026-11-01')")
-    conn.execute("INSERT INTO robots_skips(company, since) VALUES('Keep', '2026-11-01')")
-    run.purge_excluded(conn, ["Acme"])
-    assert conn.execute("SELECT company FROM robots_skips").fetchall() == [("Keep",)]
+    conn.execute(
+        "INSERT INTO crawl_log(ts,company,ats,ok,n_jobs,note) VALUES('2026-11-02T06:00:00','A','fake',1,3,NULL)"
+    )  # crawled in between: the streak starts again on the next skip
+    conn.execute(
+        "INSERT INTO crawl_log(ts,company,ats,ok,n_jobs,note) VALUES('2026-11-05T06:00:00','A','fake',0,0,?)",
+        (ROBOTS_NOTE,),
+    )
+    assert run.track_robots_skips(conn, {"A"}, set(), "2026-11-08") == (0, 0)  # three days, not seven
+    assert run.track_robots_skips(conn, {"A"}, set(), "2026-11-12") == (1, 1)  # seven days since the 5th
 
 
 def test_a_name_with_one_board_skipped_and_another_failing_is_not_closed_by_the_rule(
@@ -1198,7 +1159,6 @@ def test_a_name_with_one_board_skipped_and_another_failing_is_not_closed_by_the_
     write_json(workdir / "data" / "companies.json", [co("Twin", slug="walled"), co("Twin", slug="down")])
     run_on("2026-11-20", monkeypatch)
     assert rows("SELECT status FROM jobs") == [("open",)]
-    assert rows("SELECT COUNT(*) FROM robots_skips") == [(0,)]
 
 
 def test_a_browser_company_skipped_for_robots_closes_after_seven_days(
@@ -1230,7 +1190,6 @@ def test_switching_enforcement_off_clears_the_streaks_and_closes_nothing(
         ("1", "open"),
         ("old", "closed"),
     ]  # a normal crawl
-    assert rows("SELECT COUNT(*) FROM robots_skips") == [(0,)]
 
 
 def test_a_company_that_left_the_list_loses_its_streak_and_keeps_its_jobs(
@@ -1241,7 +1200,6 @@ def test_a_company_that_left_the_list_loses_its_streak_and_keeps_its_jobs(
     write_json(workdir / "data" / "companies.json", [co("Gone", status="blocked"), co("Here")])
     common._robots["https://here.test"] = [(False, "/")]
     run_on("2026-11-20", monkeypatch)
-    assert rows("SELECT company FROM robots_skips") == [("Here",)]
     assert rows("SELECT status FROM jobs WHERE company='Gone'") == [("open",)]
 
 
@@ -1256,7 +1214,6 @@ def test_a_held_crawl_clears_the_streak(workdir: Path, monkeypatch: pytest.Monke
     monkeypatch.setattr(run, "crawl_many", lambda urls: {key: [] for key in urls})
     run_on("2026-11-20", monkeypatch)
     assert rows("SELECT COUNT(*) FROM jobs WHERE status='open'") == [(run.DROP_MIN_OPEN,)]
-    assert rows("SELECT COUNT(*) FROM robots_skips") == [(0,)]
 
 
 def test_days_without_a_run_do_not_break_the_streak(
@@ -1343,7 +1300,7 @@ def test_a_delete_that_fails_half_way_is_finished_by_the_next_run(local: sqlite3
     assert not fake.others["user_jobs"] and not fake.others["emailed"]  # the stars went first
     assert fake.table  # the jobs are still there, so the next run still sees the company
     assert not [c for c in fake.calls if c["method"] == "POST"]
-    jobs_left = list(fake.table)
+    rows_left = len(fake.table) + len(fake.others["crawl_log"])  # the jobs and the crawl log are still there
     fake.request = real  # type: ignore[method-assign]
-    assert sync_supabase.sync(local, supabase_client(fake), ["Acme"]).purged == len(jobs_left)
+    assert sync_supabase.sync(local, supabase_client(fake), ["Acme"]).purged == rows_left
     assert not [key for key in fake.table if key[0] == "Acme"]

@@ -78,6 +78,7 @@ def workdir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     (tmp_path / "templates").mkdir()
     (tmp_path / "data" / "excluded_companies.csv").write_text("company,reason,date_added\n", encoding="utf-8")
     monkeypatch.chdir(tmp_path)
+    run.init().close()  # the pull's output: a daily run never starts without a history file
     return tmp_path
 
 

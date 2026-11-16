@@ -13,13 +13,16 @@ import pytest
 
 import export_accounts
 import publish_backup
-from export_accounts import TABLES, render
+from export_accounts import ALL_TABLES, render
 from publish_backup import MAX_AGE_DAYS, BackupError, counts, publish
 
 NOW = datetime.now(UTC)  # commits are really made now (unless a test sets the git dates), so the ages are real
 DAY = NOW.strftime("%Y-%m-%d")
 TWO_COMMITS, PROMISED_DAYS = 2, 30
 ANN, BOB = "ann@test.example", "bob@test.example"
+
+
+COUNTS_LINE = "profiles 2, user_prefs 0, user_jobs 0, subscriptions 0, emailed 0, jobs 0, crawl_log 0 (2 rows)"
 
 
 def run(directory: Path, *args: str) -> str:
@@ -31,7 +34,7 @@ def run(directory: Path, *args: str) -> str:
 
 def make_export(directory: Path, emails: tuple[str, ...] = (ANN, BOB)) -> Path:
     directory.mkdir(parents=True, exist_ok=True)
-    content: dict[str, list[dict[str, Any]]] = {table.name: [] for table in TABLES}
+    content: dict[str, list[dict[str, Any]]] = {table.name: [] for table in ALL_TABLES}
     content["profiles"] = [
         {"user_id": f"{n:08d}-0000-4000-8000-000000000000", "email": e} for n, e in enumerate(emails)
     ]
@@ -69,12 +72,12 @@ def test_the_first_publish_into_an_empty_remote_commits_the_files_with_a_counts_
     tmp_path: Path, remote: Path
 ) -> None:
     line = publish(make_export(tmp_path / "x"), str(remote), tmp_path / "w", NOW)
-    assert line == "backup committed: profiles 2, user_prefs 0, user_jobs 0, subscriptions 0, emailed 0 (2 rows)"
+    assert line == f"backup committed: {COUNTS_LINE}"
     assert history(remote) == [
-        f"backup {DAY}: profiles 2, user_prefs 0, user_jobs 0, subscriptions 0, emailed 0 (2 rows)"
+        f"backup {DAY}: profiles 2, user_prefs 0, user_jobs 0, subscriptions 0, emailed 0, jobs 0, crawl_log 0 (2 rows)"
     ]
     files = run(remote, "ls-tree", "--name-only", "main").split()
-    assert files == sorted(f"{table.name}.json" for table in TABLES)
+    assert files == sorted(f"{table.name}.json" for table in ALL_TABLES)
     shown = run(remote, "show", "main:profiles.json")
     assert ANN in shown  # the data is in the backup repository, and only there
     assert ANN not in history(remote)[0]
@@ -87,7 +90,7 @@ def test_an_identical_export_makes_no_commit(tmp_path: Path, remote: Path) -> No
     export = make_export(tmp_path / "x")
     publish(export, str(remote), tmp_path / "w1", NOW)
     line = publish(export, str(remote), tmp_path / "w2", NOW + timedelta(days=1))
-    assert line == "backup unchanged: profiles 2, user_prefs 0, user_jobs 0, subscriptions 0, emailed 0 (2 rows)"
+    assert line == f"backup unchanged: {COUNTS_LINE}"
     assert len(history(remote)) == 1
 
 
@@ -260,6 +263,8 @@ def test_counts_are_rows_per_table(tmp_path: Path) -> None:
         "user_jobs": 0,
         "subscriptions": 0,
         "emailed": 0,
+        "jobs": 0,
+        "crawl_log": 0,
     }
 
 
@@ -293,7 +298,7 @@ def test_running_the_module_reads_the_command_line(monkeypatch: pytest.MonkeyPat
 
 def big_export(directory: Path, rows: int) -> Path:
     directory.mkdir(parents=True, exist_ok=True)
-    for table in TABLES:
+    for table in ALL_TABLES:
         count = rows if table.name == "profiles" else 0
         content = [{"user_id": f"{n:08d}-0000-4000-8000-000000000000"} for n in range(count)]
         (directory / f"{table.name}.json").write_text(render(content), encoding="utf-8")
