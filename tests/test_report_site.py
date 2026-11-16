@@ -31,7 +31,10 @@ FAST_TIMEOUT = (
 )
 HOLD_SECONDS = 3
 TRIES = 2  # the failed request and the retry
-SERVER_FAULTS = {"company": "Enter the company name.", "link": "The link must start with https:// or http://."}
+SERVER_FAULTS = {
+    "company": "The name can be at most 100 characters.",
+    "link": "The link must start with https:// or http://.",
+}
 
 LIMITED = "as many reports as are allowed today, so this one was not sent"
 # (status, body, words the visitor must read). Every one says whether anything was sent.
@@ -173,7 +176,7 @@ async def test_fr7_ac2_the_form_asks_for_company_link_and_reason_and_needs_no_ac
     assert labels == ["Company", "Career page link", "Why it matters"]
     for name in ("company", "link", "why"):
         field = page.locator(f"[data-field={name}]")
-        assert await field.get_attribute("aria-required") == "true"
+        assert await field.get_attribute("aria-required") == ("true" if name == "link" else None)
         hint, error = await field.get_attribute("aria-describedby") or "", ""
         assert hint.split() == [f"report{name.capitalize()}Hint", f"report{name.capitalize()}Error"]
         assert error == ""
@@ -282,7 +285,7 @@ async def test_the_send_button_says_send_again_after_a_failed_check_following_a_
     await open_form(page)
     await send_good(page)
     await expect(page.locator("#reportError")).to_be_visible()
-    await page.fill("#reportCompany", "")
+    await page.fill("#reportLink", "")
     await page.click("#reportSend")
     assert await page.locator("#reportSend").inner_text() == "Send report"
     assert len(backend.requests) == 1
@@ -395,24 +398,28 @@ BAD_LINKS = [
 ]
 
 
-async def test_an_empty_form_shows_every_message_beside_its_field_and_sends_nothing(page: Page, site: Path) -> None:
+async def test_an_empty_form_asks_only_for_the_link_and_sends_nothing(page: Page, site: Path) -> None:
     backend = await ready(page, site)
     await open_form(page)
     await page.click("#reportSend")
-    expected = {
-        "Company": "Enter the company name.",
-        "Link": "Enter the link to the career page.",
-        "Why": "Tell us why this company matters.",
-    }
-    for name, message in expected.items():
-        assert await page.locator(f"#report{name}Error").inner_text() == message
-        assert await page.locator(f"#report{name}").get_attribute("aria-invalid") == "true"
-    assert await page.evaluate("document.activeElement.id") == "reportCompany"
+    assert await page.locator("#reportLinkError").inner_text() == "Enter the link to the career page."
+    assert await page.locator("#reportLink").get_attribute("aria-invalid") == "true"
+    for name in ("Company", "Why"):
+        assert await page.locator(f"#report{name}Error").is_hidden()
+        assert await page.locator(f"#report{name}").get_attribute("aria-invalid") is None
+    assert await page.evaluate("document.activeElement.id") == "reportLink"
     assert backend.requests == []
-    await page.fill("#reportCompany", "Acme")  # the message goes as soon as the value is fine
-    assert await page.locator("#reportCompanyError").is_hidden()
-    assert await page.locator("#reportCompany").get_attribute("aria-invalid") is None
-    assert await page.locator("#reportLinkError").is_visible()
+    await page.fill("#reportLink", GOOD["link"])  # the message goes as soon as the value is fine
+    assert await page.locator("#reportLinkError").is_hidden()
+
+
+async def test_a_report_with_only_a_link_is_sent(page: Page, site: Path) -> None:
+    backend = await ready(page, site)
+    await open_form(page)
+    await page.fill("#reportLink", GOOD["link"])
+    await page.click("#reportSend")
+    await expect(page.locator("#reportDone")).to_be_visible()
+    assert backend.bodies == [{"company": "", "link": GOOD["link"], "why": "", "website": ""}]
 
 
 @pytest.mark.parametrize(("link", "message"), BAD_LINKS)
@@ -433,10 +440,7 @@ async def test_a_bad_link_is_explained_before_anything_is_sent(
 @pytest.mark.parametrize(
     ("field", "value", "message"),
     [
-        ("company", "   ", "Enter the company name."),
         ("company", LONG, "The name can be at most 100 characters."),
-        ("why", "  ", "Tell us why this company matters."),
-        ("why", "ab", "Write a few words on why this company matters."),
         ("why", "x" * 1001, "The reason can be at most 1000 characters."),
     ],
 )
@@ -560,12 +564,13 @@ async def test_cancel_closes_the_form_and_sends_nothing(page: Page, site: Path) 
 async def test_a_message_names_its_field_for_a_screen_reader(page: Page, site: Path) -> None:
     await ready(page, site)
     await open_form(page)
+    await fill(page, company=LONG)
     await page.click("#reportSend")
     field = page.locator("#reportCompany")
     described = await field.evaluate(
         "e => e.getAttribute('aria-describedby').split(' ').map(i => document.getElementById(i).textContent).join(' ')"
     )
-    assert "Enter the company name." in described
+    assert "The name can be at most 100 characters." in described
     assert "Up to 100 characters." in described
 
 

@@ -178,7 +178,7 @@ Every answer is JSON, `{"ok": true}` or `{"ok": false, "error": {"code", "messag
 1. CORS: only `https://ravidorr.github.io` is answered with `Access-Control-Allow-Origin`, and a browser request from any
    other origin gets 403. A request with no `Origin` header (curl, a script) is allowed, since the next three checks
    hold for it too.
-2. The honeypot, then validation, before anything is counted. The email is plain text; only the company name, as one
+2. The honeypot, then validation, before anything is counted. The email is plain text; only the company name (the link when there is none), as one
    line, reaches a header (the subject), so a visitor cannot inject markup or a header.
 3. At most 3 reports per visitor per day. The visitor is the `cf-connecting-ip` header (Cloudflare sets it in front of
    Supabase and replaces what the caller sent), else the last entry of `x-forwarded-for` (a caller can only write the

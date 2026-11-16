@@ -272,7 +272,7 @@ describe('the flood', () => {
 
   it('puts the CORS headers on error answers too, so the page can read them', async () => {
     const world = fakeWorld();
-    const bad = await handleReport(post({ company: '' }), world.deps);
+    const bad = await handleReport(post({ link: '' }), world.deps);
     const wrongType = await handleReport(post('{}', { 'content-type': 'text/plain' }), world.deps);
     const unconfigured = await handleReport(post(GOOD), { ...world.deps, config: undefined });
     for (const response of [bad, wrongType, unconfigured]) {
@@ -285,7 +285,7 @@ describe('the flood', () => {
 describe('bad requests', () => {
   it('answers a bad input with the fields to fix, and sends and counts nothing', async () => {
     const world = fakeWorld();
-    const result = await answer(await handleReport(post({ company: '', link: 'ftp://x.example', why: '' }), world.deps));
+    const result = await answer(await handleReport(post({ company: 'c'.repeat(101), link: 'ftp://x.example', why: 'w'.repeat(1001) }), world.deps));
     expect(result.status).toBe(400);
     expect(result.json).toMatchObject({
       ok: false,
@@ -464,6 +464,14 @@ describe('email content', () => {
     expect(String(email?.body.text)).not.toContain('<script>'); // the address is percent-encoded
   });
 
+  it('copes with a report that has only a link', () => {
+    const { subject, text } = renderEmail({ company: '', link: 'https://a.example/', why: '' }, new Date('2026-11-16T10:00:00Z'));
+    expect(subject).toBe('Site report: https://a.example/');
+    expect(text).toContain('Careers page: https://a.example/');
+    expect(text).not.toContain('Company:');
+    expect(text).not.toContain('Why it matters');
+  });
+
   it('renders the report as text', () => {
     const { subject, text } = renderEmail({ company: 'A'.repeat(200), link: 'https://a.example/', why: 'w' }, new Date('2026-11-16T10:00:00Z'));
     expect(subject.length).toBeLessThanOrEqual(150);
@@ -544,15 +552,18 @@ describe('validateReport', () => {
     expect(result).toMatchObject({ ok: true, report: { company: 'Acme', why: 'abcd' } });
   });
 
-  it('refuses anything that is not a string and any length over the limit', () => {
-    for (const value of [undefined, null, 1, true, [], {}, ['a']]) {
-      const result = validateReport({ company: value, link: value, why: value });
-      expect(result).toMatchObject({ ok: false, fields: { company: anyString, link: anyString, why: anyString } });
+  it('requires only the link: a missing or non-text company and reason become empty', () => {
+    for (const value of [undefined, null, 1, true, [], {}, ['a'], '', ' \n ']) {
+      expect(validateReport({ company: value, link: value, why: value })).toMatchObject({ ok: false, fields: { link: anyString } });
+      expect(validateReport({ company: value, link: GOOD.link, why: value })).toEqual({ ok: true, report: { company: '', link: GOOD.link, why: '' } });
     }
+    expect(validateReport({ link: GOOD.link, why: 'ab' })).toMatchObject({ ok: true, report: { company: '', why: 'ab' } });
+  });
+
+  it('refuses any length over the limit', () => {
     const long = validateReport({ company: 'c'.repeat(LIMITS.company + 1), link: 'https://a.example/' + 'x'.repeat(LIMITS.link), why: 'w'.repeat(LIMITS.why + 1) });
     expect(long).toMatchObject({ ok: false, fields: { company: contains('100'), link: contains('500'), why: contains('1000') } });
     expect(validateReport({ company: 'c'.repeat(LIMITS.company), link: GOOD.link, why: 'w'.repeat(LIMITS.why) }).ok).toBe(true);
-    expect(validateReport({ company: ' \n ', link: GOOD.link, why: 'ab' })).toMatchObject({ ok: false, fields: { company: anyString, why: contains('few words') } });
   });
 });
 
