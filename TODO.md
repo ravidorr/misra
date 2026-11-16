@@ -6,6 +6,23 @@ one row from one segment), its "(28)" if the company had no careers URL, else it
 An item with a screenshot in `todo-images/` goes with it: delete the image file in the same PR.
 Observations about live sites below come from checks made on 2026-11-14 and may have changed.
 
+## Daily run monitoring
+
+- [ ] **Add an outside dead-man's switch for the daily run.** Trigger: on 2026-11-16 the scheduled daily run never
+  started (GitHub Actions was degraded) and nothing told us: the failure alert only fires when a step fails. A backup
+  start time and a guard (a second cron entry in `daily.yml`) cover a late or missed start, but not a GitHub outage.
+  - Where: the last step of `.github/workflows/daily.yml`; an Actions secret for the ping URL; `tests/test_daily_workflow.py`;
+    `SECURITY.md` (the new service) and `CONTRIBUTING.md` (how to read an alert).
+  - How: create a free check at healthchecks.io, or a similar service, that expects one ping a day with a grace period
+    of about 8 hours, and emails the maintainer when it is missed. The maintainer creates the account and the check and
+    gives the ping URL; store it as an Actions secret (for example `HEALTHCHECK_URL`) that only the ping step can read.
+    The step runs last and only on success (`if: success()`), uses `curl -fsS --retry 3 -m 10` and never fails the run
+    (`|| true`). Optionally ping a `/start` address at the beginning and a `/fail` address on failure. The ping carries
+    no personal data (the service sees only the time of the ping), but list the service in `SECURITY.md`, in the yearly
+    review (account access and the ping URL), and in the next note to the lawyer.
+  - Done when: a missed daily run emails the maintainer within the grace period (test it once by pausing the check),
+    the secret is scoped to the ping step, a test pins the step's place and scope, and `SECURITY.md` names the service.
+
 ## Yearly security review
 
 - [ ] **Do the yearly security review by 2027-11-15, then every year.** Trigger: the date. Where: the
