@@ -248,7 +248,7 @@ Decisions made in planning (they change the PRD's wording, so update the PRD in 
   outcome is in the PRD's "Before launch"; the gate stays until its wording is in). Nothing sends to a real
   user, and the sign-up control stays hidden behind a flag, until the answers are in and any required wording is added
   to the emails, `PRIVACY.md`, a new `TERMS.md` (as-is disclaimer) and the notice shown when the sign-in button is pressed (FR-1 AC 7). Done when: the answers are filed, those four are in, and the flag is switched on (both switches of step 6.2: the constant in `build_dashboard.py` and the function secret).~~
-  Done by 2026-11-16 (#111): both switches are on, signups are open and the maintainer is the first subscriber (`CONTRIBUTING.md`, "Resend volume").
+  Done in v0.31.0: both switches are on, signups are open and the maintainer is the first subscriber (`CONTRIBUTING.md`, "Resend volume").
   Progress: the wording is in for `PRIVACY.md` (controller, why and voluntary, providers and countries, rights under
   Sections 13 and 14, contact), `TERMS.md` (linked from the site footer and the sign-in notice), the notice shown when the
   sign-in button is pressed (FR-1 AC 7, with links to both) and the footer links on the page. The email footer text is written in
@@ -259,7 +259,7 @@ Decisions made in planning (they change the PRD's wording, so update the PRD in 
   a company skipped for 7 days in a row has its open jobs closed, from v0.26.0), and the company exclusion list `data/excluded_companies.csv` (a company
   on it is never crawled, is deleted from `data/jobs.db` and from Supabase `jobs`, `user_jobs` and `emailed`, and is
   off the exports and the coverage card; the process is in `CONTRIBUTING.md`). ~~Still to do before the gate closes: the
-  digest email itself (step 6.3, with its footer and headers), the flag, and the present-tense `PRIVACY.md` edits below.~~ Done in v0.31.0 except the function secret (see "Opening day" below). The gate closes when the secret is set.
+  digest email itself (step 6.3, with its footer and headers), the flag, and the present-tense `PRIVACY.md` edits below.~~ Done in v0.31.0 except the function secret (see "Opening day" below). The secret is set, so the gate is closed.
   Small wording and checks done in v0.29.0: the weekly choice reads "Weekly (Sundays)" (the lawyer's suggestion), the coverage card says what happens to the roles of a
   company skipped for robots.txt in both phases (kept for up to 7 days, then closed, with the days skipped), and the SQL policy tests now run in CI (job `sql-tests`).
   Second lawyer answer (2026-11-15), applied: the `auth.users` sentence in `PRIVACY.md` now says why Supabase keeps
@@ -280,7 +280,7 @@ Decisions made in planning (they change the PRD's wording, so update the PRD in 
   after `report_site_cleanup`); `SECURITY.md` scopes `BACKUP_DEPLOY_KEY` to `ravidorr/misra-backups` only, adds its rotation to the yearly review (by 2027-11-15) and the
   rule to delete any local clone of the backup repository at once; and the restore without `--create-auth-users` skips every user id no longer in `auth.users` (never resurrects a
   deleted account; `CONTRIBUTING.md`, "Restore", with a second rehearsal). No encryption of our own is claimed anywhere.
-  Opening day, still to do by the maintainer, in this order: apply the two cleanup migrations (before merging, or the next daily sync fails), merge, wait for `publish-docs`, run the signed-in checks that need the
+  Opening day, in this order (signups are open since v0.31.0): apply the two cleanup migrations (before merging, or the next daily sync fails), merge, wait for `publish-docs`, run the signed-in checks that need the
   secret unset (`supabase/README.md`, "Check it live"), then `supabase secrets set DIGEST_SIGNUP_ENABLED=true --project-ref dncodqeqpoqwcxdctzco`, then the maintainer's own turn-on flow
   and `send_digests.py` twice with a test subscriber. The legacy maintainer digest stays until one digest from `send_digests.py` has reached the maintainer (step 6.4).
 
