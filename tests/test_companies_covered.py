@@ -47,7 +47,15 @@ def test_the_count_of_companies_reaches_the_page_and_the_data(db: sqlite3.Connec
     prepare(workdir)
     write_json(
         workdir / "data" / "companies.json",
-        [{"name": "Zed", "status": "ok"}, {"name": "Down", "status": "ok"}, {"name": "Alpha", "status": "x"}],
+        [
+            {"name": "Zed", "status": "ok"},
+            {"name": "Down", "status": "ok"},
+            {"name": "Alpha", "status": "x"},
+            {"name": "Gone", "status": "ok"},  # excluded below: on no list, so not counted either
+        ],
+    )
+    (workdir / "data" / "excluded_companies.csv").write_text(
+        "company,reason,date_added\nGone,asked to be removed,2026-01-01\n", encoding="utf-8"
     )
     log(db, "2024-01-01", "Down", 1)
     log(db, "2024-01-02", "Down", 0, "HTTP 403")

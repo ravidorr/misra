@@ -539,9 +539,9 @@ def main() -> None:
         text = Path(source).read_text(encoding="utf-8")
         text = apply_digest_switch(text)
         text = text.replace("__SUPABASE_URL__", SUPABASE_URL).replace("__SUPABASE_ANON_KEY__", SUPABASE_ANON_KEY)
-        text = text.replace("__PAGE_DATA__", page_data)
         for placeholder, value in coverage_words(covered, gaps["total"]).items():
             text = text.replace(placeholder, value)
+        text = text.replace("__PAGE_DATA__", page_data)  # last: the data is never searched for placeholders
         (out / OUTPUT_NAMES.get(source, Path(source).name)).write_text(text, encoding="utf-8")
     for legal in LEGAL_PAGES:
         (out / legal.output).write_text(render_legal(legal, docs=out), encoding="utf-8")
