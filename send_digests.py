@@ -15,7 +15,8 @@ For each subscriber who confirmed and has not unsubscribed it
   levels and role types are the separate `level` and `role_types` columns, so Product with Intern and Junior gives only
   the entry-level Product roles);
 - sends nothing when no job is left;
-- otherwise sends ONE plain-text email through Resend and only after Resend accepted it records the jobs in `emailed`.
+- otherwise sends ONE email (plain text and HTML, the same words) through Resend and only after Resend accepted it
+  records the jobs in `emailed`.
   A send that fails records nothing, so the jobs are tried again at the next run.
 
 Each user is handled in its own try block: a failure for one person (a bad address, Resend refusing, a database error)
@@ -29,12 +30,16 @@ title or a response body. The service-role key and the Resend key are sent only 
 
 import hashlib
 import hmac
+import json
 import os
+import re
 import sys
 import time
 from collections.abc import Callable, Iterator, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime
+from html import escape
+from pathlib import Path
 from typing import Any, Protocol, cast
 
 import requests
@@ -75,6 +80,22 @@ FOOTER = (
     "Privacy: https://ravidorr.github.io/misra/privacy.html | Terms: https://ravidorr.github.io/misra/terms.html\n"
 )
 ONE_CLICK = "List-Unsubscribe=One-Click"
+
+# The HTML part. Colours are the fixed values of one file that both emails use (tests/test_email_html.py keeps them
+# equal to design-system/tokens.css). Gmail clips a message near 102 KB and would hide the footer with the unsubscribe
+# link, so a digest whose HTML would pass this many bytes goes out as plain text only (the same words).
+COLORS = json.loads((Path(__file__).parent / "supabase/functions/_shared/email-colors.json").read_text())
+LIGHT, DARK = COLORS["light"], COLORS["dark"]
+HTML_BUDGET = 90_000
+FONT = "system-ui,-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif"
+DARK_CSS = (
+    ":root{color-scheme:light dark}@media (prefers-color-scheme:dark){"
+    f".bg{{background-color:{DARK['bg']}!important}}"
+    f".panel{{background-color:{DARK['panel']}!important;border-color:{DARK['line']}!important}}"
+    f".ink{{color:{DARK['ink']}!important}}.muted{{color:{DARK['muted']}!important}}"
+    f".accent{{color:{DARK['accent']}!important}}.rule{{border-color:{DARK['line']}!important}}}}"
+)
+URL_PATTERN = re.compile(r"https?://[^\s<>\"()]*[^\s<>\"().,;:]")
 
 
 class DigestError(Exception):
@@ -301,8 +322,8 @@ def render_footer(frequency: str, url: str) -> str:
 
 
 def render_digest(frequency: str, jobs: Sequence[Job], url: str) -> tuple[str, str]:
-    """(subject, plain-text body): a count line, one block per job (company, title and place, then the link), and the
-    lawyer's footer. The email carries job listings only."""
+    """(subject, plain-text body; render_digest_html is the HTML of the same words): a count line, one block per job
+    (company, title and place, then the link), and the lawyer's footer. The email carries job listings only."""
     count = len(jobs)
     noun = "role" if count == 1 else "roles"
     subject = (
@@ -317,14 +338,96 @@ def render_digest(frequency: str, jobs: Sequence[Job], url: str) -> tuple[str, s
     return subject, body + render_footer(frequency, url)
 
 
+def _anchor(url: str, text: str, block: bool = False) -> str:
+    """A link in the accent colour. Only http(s) addresses become links; anything else stays text. `block` is a link on
+    a line of its own: padded to a 44px target and allowed to break anywhere (the addresses are long)."""
+    if not url.startswith(("https://", "http://")):
+        return escape(text)
+    style = f"color:{LIGHT['accent']};text-decoration:underline"
+    if block:
+        style += ";display:inline-block;padding:11px 0;line-height:22px;word-break:break-all;overflow-wrap:anywhere"
+    return f'<a class="accent" dir="ltr" href="{escape(url)}" style="{style}">{escape(text)}</a>'
+
+
+def _linkify(text: str) -> str:
+    """The text with each web address a link whose text is that address, so no word changes."""
+    out, last = [], 0
+    for found in URL_PATTERN.finditer(text):
+        out += [escape(text[last : found.start()]), _anchor(found.group(), found.group())]
+        last = found.end()
+    return "".join(out) + escape(text[last:])
+
+
+def html_document(subject: str, content: str) -> str:
+    """One 600px column on the page colour: table layout, inline styles, a lime band, no image, no script."""
+    return (
+        '<!doctype html><html lang="en" dir="ltr"><head><meta charset="utf-8">'
+        '<meta name="viewport" content="width=device-width,initial-scale=1">'
+        '<meta name="color-scheme" content="light dark"><meta name="supported-color-schemes" content="light dark">'
+        f"<title>{escape(subject)}</title><style>{DARK_CSS}</style></head>"
+        f'<body class="bg" style="margin:0;padding:0;background-color:{LIGHT["bg"]};-webkit-text-size-adjust:100%">'
+        f'<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" class="bg" '
+        f'style="background-color:{LIGHT["bg"]}"><tr><td align="center" style="padding:24px 16px">'
+        f'<table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" class="panel" '
+        f'style="width:100%;max-width:600px;table-layout:fixed;background-color:{LIGHT["panel"]};'
+        f"border:2px solid {LIGHT['line']};"
+        f'border-radius:20px"><tr><td aria-hidden="true" height="8" bgcolor="{LIGHT["lime"]}" '
+        f'style="height:8px;line-height:8px;font-size:8px;background-color:{LIGHT["lime"]};'
+        f'border-radius:18px 18px 0 0">&nbsp;</td></tr><tr><td class="ink" style="padding:24px 24px 8px 24px;'
+        f'font-family:{FONT};font-size:16px;line-height:1.5;color:{LIGHT["ink"]}">{content}</td></tr></table>'
+        "</td></tr></table></body></html>"
+    )
+
+
+def footer_html(text: str) -> str:
+    """The footer text as muted paragraphs under a rule, one per line; a line that is only an address is a link line."""
+    rows = [
+        f'<div class="rule" style="border-top:2px solid {LIGHT["line"]};height:0;line-height:0;font-size:0;'
+        'margin:16px 0">&nbsp;</div>'
+    ]
+    for line in text.splitlines():
+        if line in ("---", ""):
+            continue
+        body = _anchor(line, line, block=True) if URL_PATTERN.fullmatch(line) else _linkify(line)
+        rows.append(f'<p class="muted" style="margin:0 0 16px 0;font-size:14px;color:{LIGHT["muted"]}">{body}</p>')
+    return "".join(rows)
+
+
+def render_digest_html(frequency: str, jobs: Sequence[Job], url: str) -> str:
+    """The digest as HTML: the same words as render_digest's text, in the same order, only laid out. The count line is
+    the heading; each role is its company, title and place in bold with its link under it."""
+    subject, _ = render_digest(frequency, jobs, url)
+    count = len(jobs)
+    noun = "role" if count == 1 else "roles"
+    rows = []
+    for job in jobs:
+        place = f'<span class="muted" style="color:{LIGHT["muted"]};font-weight:400"> ({escape(job.location)})</span>'
+        link = _anchor(job.url, job.url, block=True) if job.url else ""
+        rows.append(
+            f'<tr><td class="rule" style="padding:12px 0;border-top:1px solid {LIGHT["line"]}">'
+            f'<p dir="auto" style="margin:0;font-weight:700">{escape(job.company)} - {escape(job.title)}'
+            f"{place if job.location else ''}</p>{link}</td></tr>"
+        )
+    head = (
+        f'<h1 style="margin:0 0 16px 0;font-size:18px;line-height:1.5">{count} new {noun} matching your filters:</h1>'
+    )
+    listing = (
+        f'<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">{"".join(rows)}</table>'
+    )
+    return html_document(subject, head + listing + footer_html(render_footer(frequency, url)))
+
+
 def build_payload(subscriber: Subscriber, jobs: Sequence[Job], url: str) -> dict[str, Any]:
     subject, text = render_digest(subscriber.frequency, jobs, url)
+    html = render_digest_html(subscriber.frequency, jobs, url)
     return {
         "from": FROM,
         "to": [subscriber.address],
         "reply_to": REPLY_TO,
         "subject": subject,
         "text": text,
+        # Multipart: the HTML is the designed version. Over the budget it is left out, so the footer is never clipped.
+        **({"html": html} if len(html.encode()) <= HTML_BUDGET else {}),
         # RFC 8058 one-click, which Gmail and Yahoo require: the mail client's own Unsubscribe button POSTs here.
         "headers": {"List-Unsubscribe": f"<{url}>", "List-Unsubscribe-Post": ONE_CLICK},
     }
