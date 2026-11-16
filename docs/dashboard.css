@@ -170,7 +170,7 @@
 /*
  * Card: one role. Machine-readable by design, so keep the data-* attributes.
  *   <article class="card" data-job-id="..." data-company="..." data-new="true">
- *     <span class="sticker card-flag">NEW</span>
+ *     <span class="sticker card-flag">New</span>
  *     <p class="card-company">Acme</p>
  *     <h3 class="card-title"><a href="...">Role</a></h3>
  *     <p class="card-tags"><span class="pill">Tel Aviv</span></p>
@@ -589,8 +589,8 @@ dialog.sheet:not(:modal) .sheet-done {
 }
 /*
  * Sticker (status) and pill (tag). Lime is reserved for "new".
- *   <span class="sticker">NEW</span>
- *   <span class="sticker sticker-warn">OLD?</span>
+ *   <span class="sticker">New</span>
+ *   <span class="sticker sticker-warn">Old?</span>
  *   <span class="pill">Tel Aviv</span>
  *   <span class="pill pill-soft">Intern</span>
  */
@@ -603,6 +603,7 @@ dialog.sheet:not(:modal) .sheet-done {
   color: var(--on-lime);
   font-size: var(--text-xs);
   font-weight: 800;
+  text-transform: uppercase; /* the text is sentence case so screen readers read words, not letters */
   transform: rotate(3deg);
 }
 

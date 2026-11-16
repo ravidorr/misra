@@ -26,7 +26,7 @@ const WORDS = {
   unsubscribed: UNSUBSCRIBED,
   'already-unsubscribed': UNSUBSCRIBED,
   'link-not-valid': NOT_VALID,
-  'try-again': ['Something went wrong', 'We could not finish this. Please open the link in your email again in a moment.'],
+  'try-again': ['Something went wrong', 'We could not finish this. Open the link in your email again in a moment.'],
 };
 const CONFIRM_ERRORS = {
   link_not_valid: NOT_VALID,
@@ -80,7 +80,7 @@ async function confirm(token) {
     button.removeAttribute('aria-busy');
     const text =
       error instanceof Error && error.message === 'server'
-        ? 'Something went wrong on our side. Please press the button again in a moment.'
+        ? 'Something went wrong on our side. Press the button again in a moment.'
         : 'We could not reach the service. Check your connection and press the button again.';
     message.textContent = text;
     status.textContent = text;

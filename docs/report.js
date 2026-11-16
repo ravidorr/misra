@@ -18,16 +18,16 @@ const STATUS = { badRequest: 400, forbidden: 403, tooLarge: 413, limited: 429, u
 const FIELDS = ['company', 'link', 'why'];
 const MESSAGES = {
   unreachable: 'We could not reach the service, so your report was most likely not sent. Check your connection and try again.',
-  slow: 'The service took too long to answer, so we cannot tell whether your report arrived. Please wait a minute and try again; if it did arrive, the repeat reaches us twice and uses one more of the reports allowed for today.',
-  unclear: 'We could not confirm that your report was sent. Please try again in a few minutes.',
+  slow: "The service took too long to answer, so we cannot tell whether your report arrived. Wait a minute, then try again. If the first one did arrive, we get the report twice and the repeat counts toward today's limit.",
+  unclear: 'We could not confirm that your report was sent. Try again in a few minutes.',
   invalid: 'Some details were not accepted, so nothing was sent. Check the fields below and try again.',
   request: 'Your report could not be read, so nothing was sent. Reload the page and try again.',
   origin: 'Reports can only be sent from the live page, so nothing was sent. Open the page from its normal address and try again.',
   large: 'The report is too large, so nothing was sent. Shorten the text and try again.',
-  limited: 'You have already sent as many reports as are allowed for today, so this one was not sent. Please try again tomorrow.',
-  paused: 'Reports are paused until tomorrow: we have received as many as we can read today, so this one was not sent. Please try again then.',
-  refused: 'We could not confirm that your report was passed on to us. Please try again in a few minutes.',
-  server: 'Something went wrong on our side, so nothing was sent. Please try again later.',
+  limited: 'You have sent as many reports as are allowed today, so this one was not sent. Try again tomorrow.',
+  paused: 'Reports are paused until tomorrow: we have received as many as we can read today, so this one was not sent. Try again tomorrow.',
+  refused: 'We could not confirm that your report was passed on to us. Try again in a few minutes.',
+  server: 'Something went wrong on our side, so nothing was sent. Try again later.',
 };
 
 /* What the visitor sees for each code the function can answer with (and, failing a code, for the status). */
@@ -66,7 +66,7 @@ function checkCompany(value) {
 
 function checkLink(value) {
   const text = value.trim();
-  if (!text) return 'Enter the link to the careers page.';
+  if (!text) return 'Enter the link to the career page.';
   if (text.length > LIMITS.link) return `The link can be at most ${LIMITS.link} characters.`;
   if (/[\s\p{Cc}\p{Zl}\p{Zp}\p{Bidi_Control}]/u.test(text)) return 'The link cannot contain spaces or line breaks.';
   let url;
