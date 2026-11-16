@@ -10,7 +10,7 @@ python3 sync_supabase.py --pull   # rebuild data/jobs.db (a scratch file) from S
 python3 run.py             # crawl, diff into data/jobs.db
 ```
 
-The history (jobs, open and closed, and the crawl log) lives in Supabase; `data/jobs.db` is rebuilt from it at the start of every run and is not committed. To try the crawl without Supabase, `touch data/jobs.db` gives it an empty history.
+The history (jobs, open and closed, and the crawl log) lives in Supabase; `data/jobs.db` is rebuilt from it at the start of every run and is not committed. To try the crawl without Supabase, `touch data/jobs.db` gives it an empty history (the sync refuses such a file: only a pulled one may be written back).
 
 Adapters: Greenhouse, Lever, Ashby, Workable, SmartRecruiters, Comeet (public hosted pages), Comeet plugin pages (a WordPress career page whose job links `/co/<place>/<uid>/<title>` are drawn on the server; the slug is the page address), Workday (the public job search, Israel only; slug `tenant/wdN/site`), JazzHR (the board page of `<slug>.applytojob.com`), BambooHR (the `/careers/list` JSON of `<slug>.bamboohr.com`), Oracle Fusion HCM (the public requisition search, Israel only; slug `host/site`), Amazon (the search JSON of amazon.jobs for one country; slug `ISR`), Phenom career sites (the search widget filtered to Israel; slug `host/country/lang`), and a generic
 Playwright crawler (`browser_crawl.py`, JSON-LD or job-looking links) for custom career pages. It also reads HiBob boards and

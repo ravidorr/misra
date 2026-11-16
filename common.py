@@ -28,6 +28,7 @@ DROP_BELIEVED = f"drop believed after {DROP_HOLD_DAYS} held days"  # note prefix
 # robots.txt (the lawyer's answer, PLAN.md step 6.6). One switch: False logs what would be skipped and skips nothing.
 ROBOTS_ENFORCED = True
 DB = "data/jobs.db"  # a per-run scratch file, rebuilt from Supabase by `sync_supabase.py --pull`; never committed
+PULLED = 1  # `PRAGMA user_version` of a history that a pull wrote: the sync refuses any other file
 CRAWL_LOG_DAYS = 90  # Supabase keeps this many days of crawl log (the crawl reads it all back each run)
 # `crawl_log.id` is Supabase's id: the pull fills it, so a row with none is one of this run (the sync still writes it).
 SCHEMA = """

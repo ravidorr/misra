@@ -631,3 +631,23 @@ def test_the_crawl_and_the_dashboard_refuse_a_missing_history(workdir: Any) -> N
     with pytest.raises(SystemExit, match="is missing"):
         common.open_history()
     assert not (workdir / "data" / "jobs.db").exists()  # looking never creates an empty one
+
+
+def test_the_pull_marks_its_file_and_the_sync_refuses_any_other(
+    monkeypatch: pytest.MonkeyPatch, workdir: Any, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """`touch data/jobs.db` and a crawl give a history without Supabase's first_seen values: syncing it would
+    overwrite them, and the digest would email every job as new."""
+    pull_from({"jobs": [job_row("Acme", "1")], "crawl_log": []}, workdir / "data" / "pulled.db")
+    marked = sqlite3.connect(workdir / "data" / "pulled.db")
+    assert marked.execute("PRAGMA user_version").fetchone() == (common.PULLED,)
+    fake = FakeSupabase()
+    monkeypatch.setenv("SUPABASE_URL", URL)
+    monkeypatch.setenv("SUPABASE_SERVICE_ROLE_KEY", KEY)
+    monkeypatch.setattr(sync_supabase.requests, "Session", lambda: fake)
+    plain = sqlite3.connect(workdir / "data" / "jobs.db")  # as `touch` and a local crawl leave it
+    plain.execute("PRAGMA user_version = 0")
+    plain.commit()
+    with pytest.raises(SystemExit, match=r"data/jobs\.db was not written by --pull"):
+        sync_supabase.main([])
+    assert not fake.calls  # nothing was sent

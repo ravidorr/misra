@@ -301,6 +301,7 @@ def main() -> None:  # noqa: PLR0912, PLR0915
         every = json.load(fh)
     companies = [c for c in every if c["status"] == "ok" and not is_excluded(c["name"], excluded)]
     c = open_history()
+    c.executescript(SCHEMA)  # a pulled file has the tables; `touch data/jobs.db` for a local trial does not
     check_spelling(c, [co["name"] for co in every], excluded)
     for name, n in purge_excluded(c, excluded).items():
         print(f"exclusion list: deleted {n} jobs of {name}")

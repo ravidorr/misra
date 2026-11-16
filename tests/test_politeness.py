@@ -1304,3 +1304,13 @@ def test_a_delete_that_fails_half_way_is_finished_by_the_next_run(local: sqlite3
     fake.request = real  # type: ignore[method-assign]
     assert sync_supabase.sync(local, supabase_client(fake), ["Acme"]).purged == rows_left
     assert not [key for key in fake.table if key[0] == "Acme"]
+
+
+def test_a_local_trial_runs_on_a_touched_empty_file(workdir: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """`touch data/jobs.db` (README) is a history with no tables yet: the crawl creates them."""
+    (workdir / "data" / "jobs.db").unlink()
+    (workdir / "data" / "jobs.db").touch()
+    monkeypatch.setitem(run.ADAPTERS, "fake", lambda _slug: [job("1")])
+    write_json(workdir / "data" / "companies.json", [co("Acme")])
+    run.main()
+    assert rows("SELECT company, job_id FROM jobs") == [("Acme", "1")]

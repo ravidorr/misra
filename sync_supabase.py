@@ -12,9 +12,10 @@ build refuse a missing file.
 no Supabase id yet) and deletes the log older than CRAWL_LOG_DAYS days.
 
 Env: SUPABASE_URL (https://<ref>.supabase.co) and SUPABASE_SERVICE_ROLE_KEY. Either one empty is an error, not a skip:
-the history lives in Supabase, so a run without it must go red, not carry on. Any problem exits non-zero, so the
-workflow's failure alert fires. The service-role key bypasses row-level security: it is sent only in request headers,
-never printed, and exposed only to the steps of the workflow that need it, never to the crawl.
+the history lives in Supabase, so a run without it must go red, not carry on. The sync also refuses a data/jobs.db that
+the pull did not write (a `touch`ed or older file): its first_seen values would overwrite Supabase's. Any problem exits
+non-zero, so the workflow's failure alert fires. The service-role key bypasses row-level security: it is sent only in
+request headers, never printed, and exposed only to the steps of the workflow that need it, never to the crawl.
 
 After a good sync (so not on a day the crawl failed) the spam-guard counters are cleaned: `report_site_cleanup` (the
 `report-site` function's) and `confirm_email_cleanup` (the confirmation email's), database functions only the service
@@ -62,6 +63,7 @@ from common import (
     DB,
     EXCLUDED_MIN_NAME,
     MAX_PURGE_COMPANIES,
+    PULLED,
     SCHEMA,
     ExclusionError,
     is_excluded,
@@ -254,6 +256,7 @@ def pull(source: Source, path: str = DB) -> tuple[int, int]:
     conn = sqlite3.connect(part)
     try:
         conn.executescript(SCHEMA)
+        conn.execute(f"PRAGMA user_version = {PULLED}")  # what the sync checks: this file came from Supabase
         conn.executemany(
             f"INSERT INTO jobs({', '.join(HISTORY_COLUMNS)}) VALUES({', '.join('?' * len(HISTORY_COLUMNS))})",
             [tuple(row[column] for column in HISTORY_COLUMNS) for row in jobs],
@@ -429,6 +432,12 @@ def main(argv: Sequence[str] | None = None) -> None:
         pull_main(url, key)
         return
     conn = open_history()
+    if conn.execute("PRAGMA user_version").fetchone()[0] != PULLED:
+        conn.close()
+        sys.exit(
+            f"Supabase sync failed: {DB} was not written by --pull (it did not come from Supabase, so its first_seen "
+            "values would overwrite the real ones)"
+        )
     try:
         client = Client(cast("HttpSession", requests.Session()), url, key)
         result = sync(conn, client, load_excluded())
