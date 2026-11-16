@@ -152,9 +152,9 @@ async def test_the_form_says_where_the_report_goes_and_what_the_spam_guard_keeps
     text = " ".join((await note.text_content() or "").split())
     assert text == (
         "Reports are emailed directly to the maintainer. To prevent spam, we store a daily non-reversible hash of your "
-        "network address that is deleted in the next daily cleanup. Privacy Notice"
+        "network address that is deleted in the next daily cleanup. Privacy notice"
     )
-    link = note.get_by_role("link", name="Privacy Notice")
+    link = note.get_by_role("link", name="Privacy notice")
     assert await link.get_attribute("href") == "privacy.html"
     assert await link.get_attribute("target") is None
     # a real element, not a placeholder, and the Send button names it so a screen reader reads it with the button

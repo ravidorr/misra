@@ -227,7 +227,9 @@ describe('confirming', () => {
       const response = await handleConfirm(request, w.deps);
       expect(response.status, method).toBe(405);
       expect(response.headers.get('allow')).toBe('POST, HEAD, OPTIONS');
-      expect((await answer(response)).error?.code).toBe('method_not_allowed');
+      const body = await answer(response);
+      expect(body.error?.code).toBe('method_not_allowed');
+      expect(body.error?.message).toBe('Open the link from your email and press "Confirm my email".');
     }
     expect(w.fakeFetch).not.toHaveBeenCalled();
     expect(ann.row.confirmedAt).toBeNull();
