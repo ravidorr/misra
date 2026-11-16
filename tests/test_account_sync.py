@@ -655,50 +655,6 @@ async def test_fr2_ac7_signed_out_the_filters_stay_in_this_browser_and_nothing_i
     assert await page.locator("#importResult").inner_text() == ""
 
 
-# ---- Export and import of a discards file, while signed in ----
-
-
-async def test_the_discards_file_works_for_the_account(page: Page, site: Path, tmp_path: Path) -> None:
-    choices = ChoicesBackend([discard_row("Acme", "2"), star_row("1", "Product Manager 1", "Tel Aviv, Israel", "Acme")])
-    await sign_in(page, site, choices)
-    async with page.expect_download() as download:
-        await page.click("#exp")
-    exported_path = await (await download.value).path()
-    assert exported_path is not None
-    exported = json.loads(Path(exported_path).read_text(encoding="utf-8"))
-    assert list(exported) == ["Acme|2"]  # the account's discards, not the browser's, and no stars
-    imported = tmp_path / "discarded-jobs.json"
-    imported.write_text(json.dumps({"Acme|2": "x", "Acme|1": "x", "Acme|7": "x", "Gone|9": "x"}), encoding="utf-8")
-    await page.set_input_files("#file", imported)
-    await until(lambda: choices.state_of("Acme", "7") == "discard")
-    assert choices.state_of("Acme", "1") == "star"  # the account's star is not replaced
-    assert choices.state_of("Gone", "9") is None
-    await expect(page.locator("#importResult .notice")).to_have_text(
-        "Brought over 1 choice from the file. "
-        "3 entries were skipped: already chosen in your account, or not an open role."
-    )
-
-
-async def test_a_discards_file_is_not_imported_before_the_account_choices_are_loaded(
-    page: Page, site: Path, tmp_path: Path
-) -> None:
-    choices = ChoicesBackend(mode="load_down")
-    await sign_in(page, site, choices)
-    imported = tmp_path / "discarded-jobs.json"
-    imported.write_text(json.dumps({"Acme|7": "x"}), encoding="utf-8")
-    await page.set_input_files("#file", imported)
-    await expect(page.locator("#importResult .notice")).to_contain_text("have not loaded")
-    assert choices.writes == []
-
-
-async def test_a_discards_file_with_nothing_new_says_so(page: Page, site: Path, tmp_path: Path) -> None:
-    await sign_in(page, site, ChoicesBackend())
-    imported = tmp_path / "discarded-jobs.json"
-    imported.write_text("{}", encoding="utf-8")
-    await page.set_input_files("#file", imported)
-    await expect(page.locator("#importResult .notice")).to_have_text("Nothing new to bring over from the file.")
-
-
 # ---- Agents ----
 
 
@@ -777,17 +733,3 @@ async def test_bringing_filters_over_keeps_a_change_made_while_the_offer_waited(
     await until(lambda: prefs.writes)
     assert saved_filters(prefs)["q"] == "Analyst"
     assert await page.input_value("#q") == "Analyst"
-
-
-async def test_a_choice_pending_for_a_job_is_not_overwritten_by_the_file(
-    page: Page, site: Path, tmp_path: Path
-) -> None:
-    choices = ChoicesBackend([star_row("1", "Product Manager 1", "Tel Aviv, Israel", "Acme")])
-    await sign_in(page, site, choices)
-    choices.mode = "down"
-    await page.click(f"{PM1} [data-act=star]")  # un-star: a removal waits
-    imported = tmp_path / "discarded-jobs.json"
-    imported.write_text(json.dumps({"Acme|1": "x"}), encoding="utf-8")
-    await page.set_input_files("#file", imported)
-    await expect(page.locator("#importResult .notice")).to_contain_text("Nothing new")
-    assert (await pending(page))["Acme|1"]["state"] is None

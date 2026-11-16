@@ -1530,62 +1530,6 @@ $('starredView').addEventListener('click', () => {
   render();
 });
 
-/* The discards as a file: this browser's, or the account's while signed in. */
-$('exp').addEventListener('click', () => {
-  const discards = account ? Object.fromEntries(JOBS.filter((j) => isDiscarded(key(j))).map((j) => [key(j), TODAY])) : gone;
-  const link = h('a', { download: 'discarded-jobs.json' });
-  link.href = URL.createObjectURL(new Blob([JSON.stringify(discards, null, 1)], { type: 'application/json' }));
-  link.click();
-  URL.revokeObjectURL(link.href);
-});
-$('imp').addEventListener('click', () => {
-  $('file').click();
-});
-
-/* A discards file, signed in: its open roles the account has no choice about become discards, the others are left as
-   they are (the same rule as bringing the browser's choices over). */
-async function importFileToAccount(a, imported) {
-  if (a.choicesState !== 'loaded') {
-    a.result = 'Your account\'s stars and discards have not loaded, so the file was not imported. Try again once they have.';
-    renderSyncNote();
-    return;
-  }
-  const keys = Object.keys(imported).filter((k) => JOB_BY_KEY.has(k) && choiceOf(k) === null);
-  const done = await bringOver(a, keys.map((k) => ({ item: JOB_BY_KEY.get(k), state: 'discard' })));
-  if (account === a) {
-    const same = Object.keys(imported).length - keys.length;
-    a.result = [describeBringOver(done, 'the file') || 'Nothing new to bring over from the file.', same > 0 ? `${plural(same, 'entry was', 'entries were')} skipped: already chosen in your account, or not an open role.` : ''].filter(Boolean).join(' ');
-    renderSyncNote();
-  }
-}
-
-$('file').addEventListener('change', (e) => {
-  const file = e.target.files[0];
-  if (!file) return;
-  const reader = new FileReader();
-  reader.onload = () => {
-    try {
-      const imported = JSON.parse(reader.result);
-      if (imported && typeof imported === 'object' && account) {
-        importFileToAccount(account, imported).catch((error) => {
-          console.error(error);
-          account.result = 'The file could not be imported. Try again.';
-          renderSyncNote();
-        });
-      } else if (imported && typeof imported === 'object') {
-        Object.assign(gone, imported);
-        for (const k of Object.keys(imported)) Reflect.deleteProperty(starred, k); /* a job is never both */
-        lsSet(LS_D, gone);
-        lsSet(LS_S, starred);
-        render();
-      }
-    } catch {
-      alert('This is not a discards file. Choose a file saved with Export discards.');
-    }
-  };
-  reader.readAsText(file);
-});
-
 const gaps = DATA.gaps ?? { blocked: [], untracked: [], total: 0, groups: [], closeDays: 0 };
 {
   /* The card is always there: "Report a site" (report.js) sits under the list and stays in view while the list is

@@ -24,7 +24,7 @@ PHONE_WIDTHS = [320, 375, 393, 430]
 FIRST_SCREEN = {"width": 393, "height": 852}  # an iPhone 16
 SHEET = "#moreFilters"
 NO_SIDEWAYS = "document.documentElement.scrollWidth <= document.documentElement.clientWidth"
-CONTROLS = "a[href], button, summary, select, textarea, input:not([type=hidden]):not([type=file]):not([tabindex='-1'])"
+CONTROLS = "a[href], button, summary, select, textarea, input:not([type=hidden]):not([tabindex='-1'])"
 KEY_TAB_PRESSES = 40
 # Past its last control the focus of a modal dialog goes to the browser's own controls (the body), never to the page.
 IN_SHEET_OR_BROWSER = (

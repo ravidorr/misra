@@ -4,6 +4,10 @@ All notable changes are documented here. Format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
+### Removed
+
+- "Export discards" and "Import discards" on the filters card, the hidden file input behind them and the code that read and wrote the file. Accounts sync discards across devices, and the first sign-in already offers to bring this browser's own choices over (PLAN.md step 4.3), so the file was redundant. A signed-out visitor's discards stay in the browser as before. `PRIVACY.md` no longer says the "Import discards" file is read inside the browser (the sentence about the missing document upload keeps its first half); the lawyer must approve that edit before the merge.
+
 ## [0.48.0] - 2026-11-16
 
 ### Fixed
