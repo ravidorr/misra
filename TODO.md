@@ -1,8 +1,8 @@
 # TODO
 
 Open work, as of 2026-11-14. Each item says what triggers it, how to do it and when it is done. When one is finished,
-delete it and update the counts in the others: the 87 and the four segment counts in the research item (a pin removes
-one row from one segment), its "(29)" if the company had no careers URL, else its "(58 today)".
+delete it and update the counts in the others: the 86 and the four segment counts in the research item (a pin removes
+one row from one segment), its "(28)" if the company had no careers URL, else its "(58 today)".
 An item with a screenshot in `todo-images/` goes with it: delete the image file in the same PR.
 Observations about live sites below come from checks made on 2026-11-14 and may have changed.
 
@@ -78,12 +78,12 @@ Observations about live sites below come from checks made on 2026-11-14 and may 
 
 ## Research the remaining unresolved companies
 
-- [ ] `data/unresolved_candidates.csv` lists 87 researched companies with no usable job feed (as of 2026-11-14: 24
-  multinational, 39 deeptech, 12 cyber_infra, 12 biz_software). Each needs
+- [ ] `data/unresolved_candidates.csv` lists 86 researched companies with no usable job feed (as of 2026-11-14: 24
+  multinational, 38 deeptech, 12 cyber_infra, 12 biz_software). Each needs
   its own research; there is no batch fix left. Every observation about a live site below is from the checks of
   2026-11-14, a crawl of the 105 rows that had a careers URL that day (58 today) and a scan of their rendered pages. The
   remaining work falls into these groups:
-  - **No careers URL (29).** Status `not_found` in `data/new/*_companies.json`: Upsolver, Ceva, Speedata,
+  - **No careers URL (28).** Status `not_found` in `data/new/*_companies.json`: Upsolver, Speedata,
     Teramount, X-Globe, Q Factor, Gilat, Siklu, Silicom, Sight Diagnostics, Brainsway, EarlySign, Diagnostic Robotics,
     Tevel Aerobotics, CytoReason, Converge Bio, SolarEdge, Watergen, Stratasys, AIR, Intel, SAP, eBay,
     Autodesk, Akamai, Ford, Ericsson, Uber, Keysight. Find the real
@@ -161,6 +161,8 @@ Observations about live sites below come from checks made on 2026-11-14 and may 
     REE Automotive (`https://ree.auto/careers/`, 2 jobs, 1 in Israel), Gauzy (`https://www.gauzy.com/careers/`, 9 jobs, none
     in Israel), Guesty (`https://www.guesty.com/careers/`, 35 jobs, 8 in Israel) and Apester (`https://apester.com/careers/`:
     "We don't have any open positions" today, so the first Israel job reaches the digest).
+    On 2026-11-16, Ceva (`ceva/76.005`, found in the job-page source of its own `/career/` site; the page names the
+    account SNC but the board answered under the name `ceva`, not `SNC`; 25 jobs, 14 in Israel, `israel_only`).
     Not done, and why (checked on 2026-11-14, or 2026-11-16 where dated; do not repeat):
     - Comeet plugin pages that the `comeet_page` adapter does not read (checked on 2026-11-16): SQream
       (`sqream.com/careers/` lists 1 job, "Controller", whose card names no place, and its `/co/` link holds the
