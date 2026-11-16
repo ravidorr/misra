@@ -1111,39 +1111,71 @@ $('places').replaceChildren(
   ),
 );
 
-function renderStories() {
+/* The new roles (this week, in Israel unless the Location says otherwise, not discarded) that the filters let through,
+   Company aside: one count per company. The row and the headline both read it, so they never disagree, and a tap on a
+   circle (which sets Company) shows at least that many new roles. */
+function newRoles() {
   const counts = {};
-  for (const j of JOBS) {
-    if (j.il && fresh(j) && !isDiscarded(key(j))) counts[j.c] = (counts[j.c] ?? 0) + 1;
-  }
+  const jobs = select({ ...F, company: '', showGone: false, onlyNew: true });
+  for (const j of jobs) counts[j.c] = (counts[j.c] ?? 0) + 1;
+  return { counts, total: jobs.length };
+}
+
+/* One circle per company with new roles, 15 at most, most first; the chosen company always stays, so it can be turned off. */
+function renderStories(counts) {
   const names = Object.keys(counts)
     .sort((a, b) => counts[b] - counts[a] || a.localeCompare(b))
     .slice(0, 15);
+  if (F.company && !names.includes(F.company)) names.push(F.company);
+  const focused = document.activeElement?.closest('#stories .story')?.dataset.company; /* replaceChildren drops the focus */
   $('hiring').hidden = names.length === 0;
   $('stories').replaceChildren(
     ...names.map((company) => {
-      const n = counts[company];
+      const n = counts[company] ?? 0;
       const button = h(
         'button',
         {
           type: 'button',
           class: 'story story-new',
           'data-company': company,
+          'data-count': String(n),
           'aria-pressed': String(F.company === company),
         },
         [
           h('span', { class: 'story-badge', 'aria-hidden': 'true', text: company.charAt(0).toUpperCase() }),
           h('span', { class: 'story-name', text: company }),
-          h('span', { class: 'sr-only', text: `, ${n} new ${n === 1 ? 'role' : 'roles'}` }),
+          h('span', { class: 'story-count', 'aria-hidden': 'true', text: `${n} new` }),
+          h('span', { class: 'sr-only', text: n === 0 ? ', no new roles' : `, ${n} new ${n === 1 ? 'role' : 'roles'}` }),
         ],
       );
       return h('li', {}, [button]);
     }),
   );
   layoutStories();
+  if (focused !== undefined) {
+    /* the circle can be gone (a chosen company without new roles, turned off): the focus goes to the list heading, never to the page */
+    const same = [...$('stories').children].find((li) => li.firstChild.dataset.company === focused);
+    (same?.firstChild ?? $('list-h')).focus();
+  }
 }
 
-/* "Hiring now" is one line of circles and a button ("Show all 15" / "Show fewer") at its end; the others wait in a
+/* The headline: the new roles that match the filters, "95 new this week." With a filter on it says "12 new matches."
+   and, when none is new, how many open roles match ("40 open matches."). Without a filter and without new roles it is
+   the open count. The Location is not a filter here: Israel is the default, and the headline does not name a place. */
+function renderHero(newN, filteredCount) {
+  const filtered = F.q.trim() !== '' || activeFilterCount({ ...F, company: '', loc: 'il', sort: 'new', onlyNew: false, showGone: false }) > 0;
+  const many = (n) => (n === 1 ? 'match.' : 'matches.');
+  let top;
+  let bottom;
+  if (view === 'starred') [top, bottom] = ['Starred', 'roles.'];
+  else if (newN > 0) [top, bottom] = [`${newN} new`, filtered ? many(newN) : 'this week.'];
+  else if (filtered) [top, bottom] = filteredCount > 0 ? [`${filteredCount} open`, many(filteredCount)] : ['No', 'matches.'];
+  else [top, bottom] = [`${filteredCount} open`, F.loc === 'il' ? 'in Israel.' : 'roles.'];
+  $('heroTop').textContent = top;
+  $('heroBottom').textContent = bottom;
+}
+
+/* "New this week" is one line of circles and a button ("Show all 15" / "Show fewer") at its end; the others wait in a
    wrapping area below until the button opens it. The choice lasts for the page session only. Hidden circles carry the
    `hidden` attribute, so they are out of the Tab order and away from screen readers, and nothing scrolls sideways. */
 let hiringOpen = false;
@@ -1341,19 +1373,17 @@ function render(focusIdx) {
   const starredView = view === 'starred';
   const res = starredView ? renderStarred() : select(F);
   const goneN = discardedCount();
-  const israel = JOBS.filter((j) => j.il).length;
   const scope = JOBS.filter((j) => inScope(j, F)).length;
   $('goneN').textContent = goneN;
   $('showGone').disabled = goneN === 0;
-  const newN = JOBS.filter((j) => j.il && fresh(j) && !isDiscarded(key(j))).length;
-  $('heroTop').textContent = newN ? `${newN} new` : `${israel} open`;
-  $('heroBottom').textContent = newN ? 'roles this week.' : 'roles in Israel.';
+  const { counts, total } = newRoles();
+  renderHero(total, select({ ...F, company: '', showGone: false, onlyNew: false }).length);
   if (!starredView) {
     const summary = `Showing ${res.length} of ${scope} open roles ${F.loc === 'il' ? 'in Israel' : 'in all locations'}. ${goneN} discarded.`;
     $('summary').textContent = summary;
     announce(summary);
     $('filtersDone').textContent = `Show ${res.length} ${res.length === 1 ? 'role' : 'roles'}`;
-    renderStories();
+    renderStories(counts);
   }
   const list = $('list');
   if (res.length === 0) {
