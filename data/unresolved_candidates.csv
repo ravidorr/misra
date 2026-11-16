@@ -24,9 +24,9 @@ Playstudios,playstudios.com,https://www.playstudios.com/careers/,biz_software,ne
 Jelly Button Games,jellybuttongames.com,https://www.jellybuttongames.com/careers,biz_software,site_unusable,Domain parked at GoDaddy
 Camtek,camtek.com,https://www.camtek.com/careers/,deeptech,site_unusable,The page is empty
 Speedata,speedata.io,,deeptech,no_careers_url,Jobs are on Viola Group's Getro board; its own page is a Wix site with no feed
-Teramount,teramount.com,,deeptech,no_careers_url,
+Teramount,teramount.com,,deeptech,no_careers_url,"Own domain does not answer; its jobs are on Grove Ventures' Getro board, no adapter"
 X-Globe,x-globe.com,,deeptech,no_careers_url,
-Q Factor,qfactor.ai,,deeptech,no_careers_url,
+Q Factor,qfactor.ai,,deeptech,no_careers_url,qfactor.ai does not answer and q-factor.io is another site; real domain not found
 Cognata,cognata.com,https://www.cognata.com,deeptech,no_feed_found,"No ATS link, feed or job link found"
 Gilat,gilat.com,,deeptech,no_careers_url,
 Siklu,siklu.com,,deeptech,no_careers_url,"Now part of Ceragon; the Comeet board on ceragon.com is Ceragon's, not Siklu's"
@@ -38,7 +38,7 @@ Quantum Art,quantum-art.com,https://www.quantum-art.com/careers,deeptech,bot_pro
 Sight Diagnostics,sightdx.com,,deeptech,no_careers_url,
 Brainsway,brainsway.com,,deeptech,no_careers_url,
 ReWalk,rewalk.com,https://golifeward.com/,deeptech,no_openings,"The list is US jobs, none in Israel"
-EarlySign,earlysign.com,,deeptech,no_careers_url,
+EarlySign,earlysign.com,,deeptech,no_careers_url,earlysign.com does not answer; no careers page or board found
 Kahun,kahun.com,https://www.kahun.com/careers,deeptech,site_unusable,Domain parked at GoDaddy
 Tyto Care,tytocare.com,https://www.tytocare.com/careers/,deeptech,needs_reader,A list or CV form with no job link
 Diagnostic Robotics,diagnosticrobotics.com,,deeptech,no_careers_url,The career page is a script list that shows no items
@@ -77,8 +77,8 @@ General Motors,gm.com,https://search-careers.gm.com/en/,multinational,bot_protec
 Western Digital,westerndigital.com,https://www.westerndigital.com/careers,multinational,no_openings,The SmartRecruiters board has no job in Israel today
 Ericsson,ericsson.com,,multinational,no_careers_url,Eightfold board shows 0 jobs in Israel today
 Cloudflare,cloudflare.com,https://www.cloudflare.com/careers/,multinational,needs_reader,"Greenhouse locations are Hybrid or Distributed, never a city"
-Rapid7,rapid7.com,https://careers.rapid7.com/,multinational,no_feed_found,No feed found in the page HTML
+Rapid7,rapid7.com,https://careers.rapid7.com/,multinational,needs_reader,"Own jobs platform (/jobs/<slug>-<uuid>); its location filter is ignored, so the page is a worldwide list"
 Booking.com,booking.com,https://careers.booking.com,multinational,bot_protection,The iCIMS board answers 403; the careers site has no feed
 Uber,uber.com,,multinational,no_careers_url,Blocks plain requests (403)
-Align Technology,aligntech.com,https://jobs.aligntech.com,multinational,no_feed_found,No feed found in the page HTML
+Align Technology,aligntech.com,https://jobs.aligntech.com,multinational,needs_reader,"Pinpoint board with a jobs.rss feed, no adapter for one company"
 Keysight,keysight.com,,multinational,no_careers_url,

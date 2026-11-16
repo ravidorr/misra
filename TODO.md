@@ -148,7 +148,8 @@ Observations about live sites below come from checks made on 2026-11-14 and may 
       and the crawler reads its "Join Talent Network" link as a job, so it is not pinned; pin it once it lists one.
     - eBay (`careers.ebayinc.com`), Walmart Global Tech (`careers.walmart.com`, a timeout), Siemens
       (`jobs.siemens.com`, no DNS answer), Align Technology (`jobs.aligntech.com`) and Rapid7
-      (`careers.rapid7.com/jobs/search`): no feed found in the page HTML; not investigated further.
+      (`careers.rapid7.com/jobs/search`): no feed found in the page HTML; Align and Rapid7 were looked at again on
+      2026-11-16 (third batch, below).
     - Done on 2026-11-14: new adapters `oraclehcm` (Oracle, JPMorgan Chase, Dell, American Express, Nokia), `amazon`
       and `phenom` (Cisco, GE HealthCare, Mastercard); Workday pins (Salesforce, Cadence, Edwards, Adobe, Zoom,
       Marvell, Medtronic, KLA, Kyndryl, Workday, then Broadcom and Philips once the adapter read a country value with
@@ -216,6 +217,19 @@ Observations about live sites below come from checks made on 2026-11-14 and may 
       Brainsway's careers page is its LinkedIn page; Teramount, Q Factor and EarlySign do not answer (Converge
       Bio's real domain is `converge-bio.com`: done above).
       A scan of the careers pages and their job links for ATS markers found only Nano Dimension (done above).
+    - Checked on 2026-11-16 (third batch, do not repeat): Converge Bio, Teramount, Q Factor and EarlySign were looked
+      up under their real names. Converge Bio's domain is `converge-bio.com` (pinned above); Teramount's own domain
+      does not answer and its jobs are on Grove Ventures' Getro board (`careers.grovevc.com/companies/teramount-2`, a
+      venture fund's board, no adapter); the real domain of Q Factor and EarlySign could not be found (`q-factor.io`
+      is another site). Slug guesses (Greenhouse, Lever, Ashby, Workable, three candidates each) for the other ~50 rows
+      with a name and no known ATS found only an unrelated `air` account. Extra careers paths (`/company/careers`,
+      `/join-us`, `/about/careers`, `/positions` and others) on X-Globe, Tevel, Sight, Watergen, AIR, Brainsway,
+      Diagnostic Robotics, CytoReason and Gilat answered nothing. Rapid7's `careers.rapid7.com/jobs/search` is its own
+      Rails and Turbo platform (`/jobs/<slug>-<uuid>`, server-drawn pages of 16): `?location=Israel` is ignored, so
+      it returns a worldwide list and would need its own adapter. Align Technology's Pinpoint board
+      has a `jobs.rss` feed, but Pinpoint is used by Align alone. The careers pages of the remaining own-site rows
+      show no Comeet, Greenhouse, Lever, Ashby, Workable, BambooHR, Recruitee, Teamtailor or Personio marker besides
+      those already listed.
     - Dead or unusable: Jelly Button Games, Kahun, Nucleai and Quantum Art (domain parked at GoDaddy), Satixfy (now an
       MDA Space page), Line 5 (needs a login), lakeFS and Quantum Art (403 or "Access Denied": bot protection), Radware
       and Camtek (an empty page), Elbit Systems (timeout on the news page; its career site `elbitsystemscareer.com` is a
