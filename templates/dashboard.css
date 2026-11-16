@@ -123,22 +123,9 @@ a {
   font-size: 0.875rem;
 }
 
-/* The notice under the header, shown while signed out, that the sign-in button points to with aria-describedby. */
-.sign-in-note {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-  margin: calc(-1 * var(--space-2)) 0 var(--space-4);
-  color: var(--muted);
-  font-size: 0.875rem;
-}
-
-.sign-in-line {
-  margin: 0;
-}
-
-/* Inline links keep the line height and still get a 44px hit area: padding on an inline box grows the target, not the line. */
-.sign-in-note a,
+/* The sign-in notice is the text of a dialog now. Inline links keep the line height and still get a 44px hit area: padding
+   on an inline box grows the target, not the line. */
+.sign-in-dialog a,
 .report-privacy a {
   padding: 14px 4px;
 }
@@ -159,15 +146,11 @@ a {
   overflow-wrap: anywhere;
 }
 
-.sign-in-note[hidden] {
-  display: none;
-}
-
 .auth-message .notice {
   margin: 0 0 var(--space-4);
 }
 
-/* The line about saving stars and discards (a status region: empty when all is well), and the switch to the starred list. */
+/* The line about saving stars and discards (a status region: empty when all is well). */
 .sync-note:not(:empty) {
   display: flex;
   flex-wrap: wrap;
@@ -185,7 +168,6 @@ a {
   display: grid;
   gap: var(--space-3);
   margin: 0 0 var(--space-4);
-  box-shadow: var(--shadow-md);
 }
 
 .import-offer[hidden] {
@@ -227,7 +209,7 @@ a {
 .digest-note {
   padding: var(--space-3) var(--space-4);
   border: var(--border-width) solid var(--line);
-  border-radius: 16px;
+  border-radius: var(--radius-card);
   background: var(--accent-bg);
   color: var(--ink);
   font-size: var(--text-sm);
@@ -278,16 +260,27 @@ a {
   font-weight: 400;
 }
 
-.view-switch {
-  margin: 0 0 var(--space-4);
+/* The row under the search: "Filters" (a phone only), the switch to the starred list and "New only". */
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+  margin: 0 0 var(--space-3);
+}
+
+/* On a wide screen the filters are already in the page, so only the starred switch and "New only" are left in the row. */
+.filters-open {
+  display: none;
 }
 
 /* Parts the page puts away (the filters while the starred list shows, import and export while signed in): .btn and the
    flex rows above set a display that would beat the hidden attribute. */
 .controls[hidden],
-.more[hidden],
+dialog.sheet[hidden],
 .search[hidden],
-.btn[hidden] {
+.btn[hidden],
+.chip[hidden] {
   display: none;
 }
 
@@ -313,23 +306,19 @@ a {
   }
 }
 
+/* A phone gets a one-line headline: the search and the roles come first. */
 .hero {
   margin: 0;
-  font-size: var(--text-hero);
+  font-size: 1.75rem;
   font-weight: 800;
-  letter-spacing: -0.05em;
-  line-height: 0.98;
-}
-
-.hero span {
-  display: block;
-  width: fit-content;
+  letter-spacing: -0.04em;
+  line-height: 1.15;
 }
 
 .sub {
-  margin: var(--space-4) 0 var(--space-5);
+  margin: var(--space-2) 0 var(--space-4);
   color: var(--muted);
-  font-size: var(--text-lg);
+  font-size: var(--text-sm);
 }
 
 .label {
@@ -338,13 +327,43 @@ a {
   font-weight: 700;
 }
 
+.hiring {
+  margin-bottom: var(--space-4);
+}
+
+/* One line of circles with the button at its end. The circles that do not fit wait behind the button (dashboard.js sets
+   `hidden` on them); open, they wrap below. Nothing here scrolls. */
+.hiring-row {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+}
+
+.hiring-toggle {
+  flex: none;
+  margin-top: var(--space-2);
+  white-space: nowrap;
+}
+
 .stories {
   display: flex;
+  flex: 1 1 0;
+  flex-wrap: wrap;
+  min-width: 0;
+  gap: var(--space-3) var(--space-2);
+  margin: 0;
+  padding: var(--space-1) 0 0;
   list-style: none;
-  gap: var(--space-4);
-  margin: 0 calc(-1 * var(--space-1)) var(--space-4);
-  padding: var(--space-1) var(--space-1) var(--space-4);
-  overflow-x: auto;
+}
+
+.stories > li {
+  display: flex;
+  flex: 0 0 4.5rem;
+  justify-content: center;
+}
+
+.stories > li[hidden] {
+  display: none;
 }
 
 .chip-group {
@@ -354,11 +373,31 @@ a {
 }
 
 .controls {
+  position: relative; /* the hidden label below is absolute */
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: var(--space-3);
-  margin-bottom: var(--space-4);
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
+}
+
+/* The level chips sit under the search row and name themselves ("All", "Intern"): the heading is for screen readers. */
+.controls .label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.controls .chip-group {
+  gap: var(--space-2);
+}
+
+.controls .chip,
+.toolbar .chip {
+  padding-inline: var(--space-3);
 }
 
 /* A named group of filter chips: its label, then the chips; it takes a full row in the filter panel. */
@@ -392,7 +431,7 @@ a {
   font-size: var(--text-sm);
 }
 
-.more-body .places-search {
+.sheet-body .places-search {
   margin-bottom: var(--space-3);
 }
 
@@ -412,7 +451,7 @@ a {
   overflow-y: auto;
 }
 
-.more-body .place {
+.sheet-body .place {
   min-height: var(--tap);
   padding: 0 var(--space-3);
   color: var(--ink);
@@ -420,46 +459,63 @@ a {
 }
 
 .search {
-  margin-bottom: var(--space-5);
+  display: block;
+  margin-bottom: var(--space-3);
 }
 
 .search .field {
   width: 100%;
 }
 
-.more-body input:disabled + span {
+.sheet-body input:disabled + span {
   opacity: 0.5;
 }
 
-.more {
-  margin-bottom: var(--space-5);
-  border: var(--border-width) solid var(--line);
-  border-radius: var(--radius-card);
-  background: var(--warn-bg);
-  box-shadow: var(--shadow-md);
+/* The filters sheet (design-system/components/sheet.css): its body is one column of groups, then the selects and switches. */
+.sheet-body {
+  display: grid;
+  gap: var(--space-4);
+  padding: 0 var(--space-4) var(--space-3);
 }
 
-.more > summary {
-  min-height: var(--tap);
-  padding: var(--space-3) var(--space-4);
-  font-weight: 700;
-  cursor: pointer;
+.sheet-body label {
+  display: grid;
+  min-width: 0;
+  gap: var(--space-1);
+  color: var(--muted);
+  font-size: var(--text-sm);
 }
 
-.more-body {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--space-3) var(--space-4);
-  padding: 0 var(--space-4) var(--space-4);
-}
-
-.more-body label {
+.sheet-body label:has(> input[type="checkbox"]) {
   display: flex;
   align-items: center;
   gap: var(--space-2);
-  color: var(--muted);
-  font-size: var(--text-sm);
+  min-height: var(--tap);
+}
+
+.sheet-body input[type="checkbox"] {
+  flex: none;
+  width: 1.5rem;
+  height: 1.5rem;
+}
+
+.sheet-body .btn-link {
+  justify-self: start;
+}
+
+.sheet-body .filter-group {
+  min-width: 0;
+}
+
+/* A long company name must not make the sheet wider than the screen: the select takes the width it is given. */
+.sheet-body .field {
+  width: 100%;
+  min-width: 0;
+}
+
+/* The page behind a sheet does not scroll while it is open. */
+html:has(.sheet:modal) {
+  overflow: hidden;
 }
 
 .gaps {
@@ -632,7 +688,8 @@ a {
   cursor: not-allowed;
 }
 
-/* Wide screens: compact header so filters and the first cards fit in one screen. */
+/* Wide screens: compact header so the search, the filters and the first cards fit in one screen. The filters are a panel
+   in the page here, so "Filters" is not needed. */
 @media (width >= 561px) {
   .page {
     padding-top: var(--space-3);
@@ -656,10 +713,75 @@ a {
     font-size: var(--text-md);
   }
 
-  .controls,
-  .more,
-  .search {
+  .controls .label {
+    position: static;
+    width: auto;
+    height: auto;
+    clip-path: none;
+    white-space: normal;
+  }
+
+  .controls .filter-group {
+    flex: 1 1 auto;
+  }
+
+  .sheet-body {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-3) var(--space-4);
+  }
+
+  .sheet-body label {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+  }
+
+  .sheet-body .field {
+    width: auto;
+  }
+
+  .sheet-body .filter-group {
+    flex: 1 1 100%;
+  }
+}
+
+/* The title link is a line of text: padding on an inline box grows the target (to 44px), not the card. */
+.card-title a {
+  padding-block: 11px;
+}
+
+/* A phone, or a short screen (a phone turned sideways): "Filters" opens the sheet, and the roles keep the page. */
+@media (width < 561px), (height < 500px) {
+  .filters-open {
+    display: inline-flex;
+  }
+
+  .card-title {
+    font-size: 1.25rem;
+  }
+
+  /* The company, the title and Apply come first; the tags (place, level, role types) follow. Only the look changes: the
+     tags are not controls, so the Tab order is the same. */
+  .card {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .card-actions {
+    order: 1;
     margin-bottom: var(--space-3);
+  }
+
+  .card-tags {
+    order: 2;
+    margin: 0 0 var(--space-2);
+  }
+
+  .feed {
+    margin-top: var(--space-4);
+    gap: var(--space-4);
   }
 }
 

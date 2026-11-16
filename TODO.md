@@ -8,62 +8,6 @@ Observations about live sites below come from checks made on 2026-11-14 and may 
 
 ## Web app fixes
 
-- [ ] **"Hiring now" row scrolls sideways.** Trigger: whenever there are many companies in the row (up to 15 are
-  shown), `.stories` scrolls horizontally and the last circle is cut off. A horizontal scroll should almost never
-  appear.
-
-  ![The Hiring now row with a horizontal scrollbar and the last circle cut off](todo-images/hiring-now-scroll.png)
-  - Where: `.stories` in `templates/dashboard.css` (`display: flex` with `overflow-x: auto`); the items are built by
-    `renderStories` in `templates/dashboard.js`; the circles are `design-system/components/story.css`.
-  - How: let the row wrap (`flex-wrap: wrap`) or use a grid that fits the width, and drop `overflow-x: auto`. Check on
-    a phone width and in light and dark. Edit the templates, never `docs/`.
-  - Done when: 15 companies show with no horizontal scrollbar at 375px and at desktop width.
-
-- [ ] **The whole page scrolls sideways on desktop.** Trigger: open the dashboard in a desktop browser (seen at about
-  1650 px wide). Besides the "Hiring now" row, the page itself has a horizontal scrollbar along the bottom of the
-  window and can be dragged sideways.
-
-  ![The page with a horizontal scrollbar along the bottom of the browser window](todo-images/page-horizontal-scroll.png)
-  - Where: measured on the live page on 2026-11-15 at 1650 px: the document is 1722 px wide for a 1635 px window
-    (87 px too wide), and nothing except the "Hiring now" row is wider than the window. The likely cause is the
-    `<span class="sr-only">` inside each story (", 2 new roles"): `.sr-only` in `design-system/components/field.css`
-    is `position: absolute`, `.stories` in `templates/dashboard.css` is not positioned, so the span is not clipped by
-    the row's `overflow-x: auto` and sits where the scrolled-out circle is (right edge 1723 px, matching the
-    document width). Confirm this before changing anything.
-  - How: the "Hiring now" row fix removes the scroll and likely this one with it. If the page still scrolls, give
-    `.stories` (or each `li`) `position: relative`, or `overflow-x: clip` on the page. Edit the templates, never
-    `docs/`. Check light and dark, and at 320, 375, 393 and 1650 px.
-  - Done when: `document.documentElement.scrollWidth <= clientWidth` at 320, 393, 768 and 1650 px, and the browser
-    test for the phone item (below) covers desktop widths too.
-
-- [ ] **The "account deleted" notice has a different border from the other cards.** Trigger: delete an account; the
-  message "Your account and everything saved in it were deleted..." (`MESSAGES.deleted` in `templates/auth.js`) shows
-  in a `.notice`.
-
-  ![The account deleted notice, with a thinner border than the cards](todo-images/account-deleted-notice.png)
-  - Where: `.notice` in `design-system/components/field.css` has a hard-coded `border-radius: 16px` and no shadow,
-    while `.card` (`design-system/components/card.css`) uses `--radius-card` and `--shadow-md`. The `.import-offer`
-    in `templates/dashboard.css` adds `--shadow-md` by hand for the same reason.
-  - How: decide whether a notice should look like a card; if so, use `--radius-card` and `--shadow-md` in `.notice`
-    (and drop the hand-added shadow), and check the other notices (`.sync-note`, the email page) still look right in
-    light and dark.
-  - Done when: the notice and a card have the same border, radius and shadow.
-
-- [ ] **Search is hard to find.** Trigger: user reviews say the search is unusable because it is hidden. In the
-  screen they sent, the search box sits below the "More filters" panel, under Level, Role type, Region, Places and
-  Sort, so on a phone it is far down the page and easy to miss.
-
-  ![The filters panel open, with the search box below it](todo-images/search-below-filters.png)
-  - Where: the search field and the `controls` bar in `templates/dashboard.html`; layout in `templates/dashboard.css`;
-    field styles in `design-system/components/field.css`.
-  - How: redesign it with Claude Designer plus the UI/UX experts, starting with the `design-super-agent`,
-    `ui-design-review` and `ux-web-review` skills, and keep the result inside the design system (tokens only, 44px
-    targets, light and dark, WCAG AA). Have them propose two or three layouts, for example search first and always
-    visible at the top, sticky on scroll, with a clear button, and filters collapsed below it. Pick one, then build
-    it from the templates, never `docs/`. Keep the WebMCP search tool in `templates/dashboard.js` working.
-  - Done when: a first-time visitor finds the search without scrolling or opening a panel, at 375px and at desktop
-    width, and the review of the two or three layouts is recorded in the PR.
-
 - [ ] **Show how many companies we cover.** Trigger: nothing on the dashboard says how many companies Misra crawls
   each day, which is the main reason to trust it. As of 2026-11-15 `data/companies.json` has 253 companies, 234 with
   status `ok`; the number must come from the data, not from text typed into the page.
@@ -81,34 +25,6 @@ Observations about live sites below come from checks made on 2026-11-14 and may 
     read it. A new count means a test that the number matches `data/companies.json`.
   - Done when: a visitor sees the count without scrolling at 375px and at desktop width, the number is computed at
     build time, and a test pins it to the data.
-
-- [ ] **Make the web app work well on a phone.** Trigger: most users open Misra on a phone, and it looks bad there.
-  From the iPhone 16 view (393 px wide) in Chrome's device mode:
-
-  ![The dashboard at 393 px: the filters fill the first screens and the search is under them](todo-images/mobile-393px.png)
-  - the filters (Level, Role type, Region, Places, Sort) fill the first screens, so the jobs start far down the page;
-  - the search box comes after all of them (see "Search is hard to find");
-  - the "Hiring now" row scrolls sideways, and so does the whole page (see both items);
-  - the controls are small and dense (tiny chips, small checkboxes and links) and may miss the 44 px target;
-  - notices and cards use different borders and shadows (see "account deleted" item).
-  - Where: layout in `templates/dashboard.css`, markup in `templates/dashboard.html`, components in
-    `design-system/components/*.css`. Edit the templates, never `docs/`.
-  - How: three consults before code, recorded in the PR.
-    1. Claude Designer and the UI/UX experts (`design-super-agent`, `ui-design-review`, `ux-web-review`,
-       `accessibility-expert`): design mobile first. Start from the jobs and the search, with the filters in a bottom
-       sheet or a "Filters" button that shows the number of active filters, quick chips for the level, and cards that
-       show the title, company, place and Apply first. Test at 320, 375, 393 and 430 px, in portrait and landscape,
-       in light and dark.
-    2. The `technical-writer` agent (`.claude/agents/technical-writer.md`): shorter labels and headings that fit a
-       small screen, one word per concept.
-    3. Do one pass with real devices or the iOS Simulator and Chrome device mode, and list what breaks.
-  - Fold the related items (search, "Hiring now" scroll, page scroll, notice border) into this one design so they are
-    not fixed one by one in different styles.
-  - Keep the design system rules (tokens only, 44 px targets, WCAG AA) and the agent hooks (`data-*` on
-    `article.card`, `jobs.jsonld`, the WebMCP tools). Add a test that fails on a horizontal scroll of the page at 320, 393, 768
-    and 1650 px (Playwright, as the browser tests do).
-  - Done when: the first screen at 393 px shows the search and the first jobs, no page scrolls sideways at 320 px, every
-    control is at least 44 px, and the PR shows before and after screenshots.
 
 - [ ] **Run the technical writer agent over all the text in the app.** Trigger: when you are ready for a copy pass;
   nothing blocks it.

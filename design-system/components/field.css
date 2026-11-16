@@ -3,6 +3,7 @@
  *   <label class="sr-only" for="q">Search</label>
  *   <input class="field" id="q" type="search" placeholder="Search">
  *   <div class="notice" role="note">Heads up: ...</div>
+ * A notice has the border, radius and shadow of a card (it is the same kind of surface), and no shadow inside a dialog.
  * A form field with a hint and an inline error (the error is text in a tinted box, never colour alone; name it in
  * aria-describedby and set aria-invalid="true" while it shows). A trap for bots goes in .field-trap.
  *   <div class="field-group">
@@ -44,11 +45,18 @@ select.field {
 .notice {
   padding: var(--space-3) var(--space-4);
   border: var(--border-width) solid var(--line);
-  border-radius: 16px;
+  border-radius: var(--radius-card);
   background: var(--warn-bg);
   color: var(--ink);
   font-size: var(--text-sm);
   font-weight: 600;
+  box-shadow: var(--shadow-md);
+}
+
+/* Inside a dialog or a sheet the surface already has the shadow: a second one would only crowd it. */
+.dialog .notice,
+.sheet .notice {
+  box-shadow: none;
 }
 
 .sr-only {

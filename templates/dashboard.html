@@ -31,7 +31,7 @@
   <svg class="top-mark" aria-hidden="true" viewBox="0 0 64 64"><circle class="mark-disc" cx="32" cy="32" r="29.5" stroke-width="5"/><path class="mark-pulse" d="M9 35h12l5-15 8 28 6-19 3 6h12" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round"/><path class="mark-spark" d="M47 6l2.4 6.6L56 15l-6.6 2.4L47 24l-2.4-6.6L38 15l6.6-2.4z" stroke-width="1.5" stroke-linejoin="round"/></svg>
   <span class="top-name"><span class="wordmark">misra</span></span>
   <div class="account" id="account" hidden>
-    <button type="button" class="btn btn-pill" id="signIn" aria-describedby="signInNote">Sign in<span class="sr-only"> with Google</span></button>
+    <button type="button" class="btn btn-pill" id="signIn" aria-haspopup="dialog">Sign in<span class="sr-only"> with Google</span></button>
     <div class="account-user" id="accountUser" hidden>
       <span class="account-email" id="accountEmail"></span>
       <!--digest--><button type="button" class="btn btn-pill" id="digestOpen" aria-haspopup="dialog" data-digest="open" data-digest-state="loading">Daily email</button><!--/digest-->
@@ -47,10 +47,6 @@
 </header>
 <div class="auth-message" id="authMessage" role="alert"></div>
 <main>
-  <div class="sign-in-note" id="signInNote" hidden>
-    <p class="sign-in-line">Sign in to sync your stars, "Not for me" choices, and saved filters across devices.</p>
-    <p class="sign-in-line">Signing in is optional. We store only your Google email address and job preferences in our EU database (Supabase)—never your CV, password, or tracking cookies. (Supabase's own sign-in record also holds your Google name and photo until you delete your account.) By signing in, you agree to the <a href="terms.html">Terms</a> and <a href="privacy.html">Privacy Notice</a>.</p>
-  </div>
   <h1 class="hero"><span class="highlight" id="heroTop">Open roles</span> <span id="heroBottom">in Israel.</span></h1>
   <p class="sub" id="summary">Loading roles…</p>
   <p class="sr-only" id="status" role="status"></p>
@@ -66,30 +62,36 @@
       <button type="button" class="btn btn-pill" id="importNo">No thanks</button>
     </p>
   </section>
-  <p class="view-switch"><button type="button" class="chip chip-new" id="starredView" aria-pressed="false">Starred (0)</button></p>
+  <search class="search" id="searchBar">
+    <label class="sr-only" for="q">Search roles, companies and cities</label>
+    <input class="field" type="search" id="q" placeholder="Search roles, companies, cities" autocomplete="off" enterkeyhint="search">
+  </search>
 
-  <section id="hiring" aria-labelledby="hiring-h" hidden>
-    <h2 class="label" id="hiring-h">Hiring now</h2>
-    <ul class="stories" id="stories"></ul>
-  </section>
+  <div class="toolbar">
+    <button type="button" class="btn btn-pill filters-open" id="filtersOpen" aria-haspopup="dialog">Filters</button>
+    <button type="button" class="chip chip-new" id="starredView" aria-pressed="false">Starred (0)</button>
+    <button type="button" class="chip chip-new" id="onlyNew" aria-pressed="false">New only</button>
+  </div>
 
   <div class="controls" id="controlsBar">
     <div class="filter-group">
       <h2 class="label" id="levels-h">Level</h2>
       <div class="chip-group" id="levels" role="group" aria-labelledby="levels-h"></div>
     </div>
-    <button type="button" class="chip chip-new" id="onlyNew" aria-pressed="false">New only</button>
   </div>
 
-  <details class="more" id="moreFilters" open>
-    <summary>More filters</summary>
-    <div class="more-body">
+  <dialog class="sheet" id="moreFilters" aria-labelledby="sheetTitle" open>
+    <div class="sheet-head">
+      <h2 class="sheet-title" id="sheetTitle" tabindex="-1">Filters</h2>
+      <button type="button" class="btn btn-pill sheet-close" id="filtersClose">Close</button>
+    </div>
+    <div class="sheet-body">
       <div class="filter-group">
-        <h2 class="label" id="types-h">Role type</h2>
+        <h3 class="label" id="types-h">Role type</h3>
         <div class="chip-group" id="types" role="group" aria-labelledby="types-h"></div>
       </div>
       <div class="filter-group">
-        <h2 class="label" id="regions-h">Region</h2>
+        <h3 class="label" id="regions-h">Region</h3>
         <div class="chip-group" id="regions" role="group" aria-labelledby="regions-h"></div>
         <button type="button" class="chip chip-new" id="remote" aria-pressed="false">Include remote roles that do not say where</button>
       </div>
@@ -104,17 +106,23 @@
       <label>Sort <select class="field" id="sort"><option value="new">Newest first</option><option value="co">Company A-Z</option><option value="title">Title A-Z</option></select></label>
       <label><input type="checkbox" id="hideStale"> Hide possibly old</label>
       <label><input type="checkbox" id="showGone"> <span>Show discarded (<span id="goneN">0</span>)</span></label>
-      <button type="button" class="btn btn-link" id="reset">Reset filters</button>
       <button type="button" class="btn btn-link" id="exp">Export discards</button>
       <button type="button" class="btn btn-link" id="imp">Import discards</button>
       <input type="file" id="file" accept="application/json" hidden>
     </div>
-  </details>
+    <div class="sheet-foot">
+      <button type="button" class="btn btn-link" id="reset">Reset filters</button>
+      <button type="button" class="btn btn-pill btn-primary sheet-done" id="filtersDone">Show roles</button>
+    </div>
+  </dialog>
 
-  <search class="search" id="searchBar">
-    <label class="sr-only" for="q">Search roles, companies and cities</label>
-    <input class="field" type="search" id="q" placeholder="Search">
-  </search>
+  <section class="hiring" id="hiring" aria-labelledby="hiring-h" hidden>
+    <h2 class="label" id="hiring-h">Hiring now</h2>
+    <div class="hiring-row">
+      <ul class="stories" id="stories"></ul>
+      <button type="button" class="btn btn-pill hiring-toggle" id="hiringToggle" aria-expanded="false" aria-controls="stories" hidden>Show all</button>
+    </div>
+  </section>
 
   <noscript><p class="notice">The list needs JavaScript. Every open role is also in <a href="jobs.json">jobs.json</a> and <a href="jobs.jsonld">jobs.jsonld</a>.</p></noscript>
   <h2 class="sr-only" id="list-h" tabindex="-1">All roles</h2>
@@ -143,6 +151,17 @@
   </nav>
 </footer>
 </div>
+<dialog class="dialog sign-in-dialog" id="signInDialog" aria-labelledby="signInTitle" aria-describedby="signInText">
+  <h2 class="dialog-title" id="signInTitle" tabindex="-1">Sign in</h2>
+  <div id="signInText">
+    <p>Sign in to sync your stars, "Not for me" choices, and saved filters across devices.</p>
+    <p>Signing in is optional. We store only your Google email address and job preferences in our EU database (Supabase)—never your CV, password, or tracking cookies. (Supabase's own sign-in record also holds your Google name and photo until you delete your account.) By signing in, you agree to the <a href="terms.html">Terms</a> and <a href="privacy.html">Privacy Notice</a>.</p>
+  </div>
+  <p class="dialog-actions">
+    <button type="button" class="btn btn-pill" id="signInCancel">Cancel</button>
+    <button type="button" class="btn btn-pill btn-primary" id="signInContinue">Continue with Google</button>
+  </p>
+</dialog>
 <dialog class="dialog" id="deleteDialog" aria-labelledby="deleteTitle" aria-describedby="deleteText">
   <h2 class="dialog-title" id="deleteTitle" tabindex="-1">Delete your Misra account?</h2>
   <div id="deleteText">
