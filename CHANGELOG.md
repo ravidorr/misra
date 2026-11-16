@@ -4,6 +4,10 @@ All notable changes are documented here. Format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
+### Added
+
+- Each job card shows the start of the posting under the title (PLAN.md step 7.2, the card half): the public `snippet` column, the first 255 characters as written, in a muted paragraph with `dir="auto"` (a Hebrew posting reads right to left), shown as text and never as markup. It is clamped to two lines on a phone and three from 561px. The data has no ellipsis, so the page adds one (hidden from screen readers) to a snippet of 200 characters or more that does not end a sentence: a cut never ends in `.`, `!` or `?`. A job with no text shows nothing. The dashboard reads `snippet` with the other named columns (never `description` or `details`), and the WebMCP tools that return a role (`search_jobs`, `list_new_jobs`, `get_job` and the others) carry it as `snippet` (`null` when there is none). `jobs.json` and `jobs.jsonld` are unchanged. The detail view with the link to the employer is step 7.3.
+
 ### Changed
 
 - The "Level" chips (All, Intern, Junior, Not specified) and "New only" moved from under the search into the filters card, as its first controls, so the quick filters sit with the other filters and count in "Filters (n)" as before. Same ids, filter keys and WebMCP arguments, so saved filters, the account filter sync and the first-sign-in import are unchanged. "Starred (n)" stays beside "Filters": it is a view of its own, not a filter, and the starred list puts the filters card away, so the switch back has to stay outside it. On a phone the chips are one tap further away (open "Filters" first).
