@@ -873,5 +873,10 @@
   "ats": "comeet",
   "slug": "convergebio/CA.00D",
   "israel_only": true
+ },
+ "Optibus": {
+  "ats": "comeet_page",
+  "slug": "https://optibus.com/company/careers/jobs/",
+  "israel_only": true
  }
 }
