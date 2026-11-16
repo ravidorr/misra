@@ -910,8 +910,6 @@ async def test_the_dialog_reads_well_on_a_phone_and_every_control_is_big_enough(
             size = await item.bounding_box()
             assert size is not None
             assert round(size["height"]) >= TAP, selector
-    button = await page.locator("#digestClose").bounding_box()
-    assert button is not None
     await page.click("#digestClose")
     await page.click("#accountMenuButton")
     assert await page.evaluate("document.getElementById('digestOpen').getBoundingClientRect().width") > 0
@@ -1039,3 +1037,46 @@ async def test_the_page_loads_the_digest_script_from_its_own_origin_with_an_inte
     assert (digest_site / "digest.js").is_file()
     assert "__SUPABASE_URL__" not in (digest_site / "digest.js").read_text(encoding="utf-8")
     assert ORIGIN  # the fake origin the tests serve it from
+
+
+MENU_VIEWPORT_HEIGHT = 800
+
+
+@pytest.mark.parametrize("width", [320, 393])
+async def test_the_menu_with_job_alerts_fits_the_screen_and_every_item_is_big_enough(
+    page: Page, digest_site: Path, width: int
+) -> None:
+    await page.set_viewport_size({"width": width, "height": MENU_VIEWPORT_HEIGHT})
+    await signed_in(page, digest_site, World())
+    await page.click("#accountMenuButton")
+    assert await page.locator("#accountMenu .account-item").all_inner_texts() == [
+        "Job alerts",
+        "Sign out",
+        "Delete my account",
+    ]
+    assert await page.locator("#accountMenu #digestOpen").count() == 1
+    assert await page.evaluate("document.documentElement.scrollWidth <= document.documentElement.clientWidth")
+    menu = await page.locator("#accountMenu").bounding_box()
+    assert menu is not None
+    assert 0 <= menu["x"] <= menu["x"] + menu["width"] <= width
+    assert menu["y"] + menu["height"] <= MENU_VIEWPORT_HEIGHT
+    for item in await page.locator("#accountMenu .account-item").all():
+        box = await item.bounding_box()
+        assert box is not None
+        assert box["height"] >= TAP
+    await page.evaluate(AXE.read_text(encoding="utf-8"))
+    assert await page.evaluate(AXE_RUN) == []
+
+
+async def test_choosing_job_alerts_closes_the_menu_and_closing_the_dialog_returns_to_the_button(
+    page: Page, digest_site: Path
+) -> None:
+    await signed_in(page, digest_site, World())
+    await page.click("#accountMenuButton")
+    await page.click("#digestOpen")
+    await expect(page.locator(DIALOG)).to_be_visible()
+    assert await page.locator("#accountMenuButton").get_attribute("aria-expanded") == "false"
+    await page.keyboard.press("Escape")
+    await expect(page.locator(DIALOG)).to_be_hidden()
+    assert await page.evaluate("document.activeElement.id") == "accountMenuButton"
+    await expect(page.locator("#accountMenu")).to_be_hidden()

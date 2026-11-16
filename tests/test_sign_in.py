@@ -28,6 +28,7 @@ from tests.test_dashboard_page import (
     USER_ID,
     AuthBackend,
     account_action,
+    account_action_by_keyboard,
     serve,
     site,  # noqa: F401  (a fixture)
 )
@@ -515,15 +516,37 @@ async def test_the_menu_closes_on_escape_an_outside_click_and_a_choice(page: Pag
     await button.click()
     await page.click("#heroTop")  # a click elsewhere
     await expect(menu).to_be_hidden()
+    assert await button.get_attribute("aria-expanded") == "false"
     await button.click()
     await page.focus("#theme")  # the Tab key moving on
     await expect(menu).to_be_hidden()
+    assert await button.get_attribute("aria-expanded") == "false"
+    await button.click()
+    await page.focus("#signOut")
+    await page.keyboard.press("Escape")  # Escape from an item
+    await expect(menu).to_be_hidden()
+    assert await page.evaluate("document.activeElement.id") == "accountMenuButton"
     await button.click()
     await page.click("#deleteAccount")  # a choice closes it and the focus goes to the button
     await expect(menu).to_be_hidden()
     await expect(page.locator("#deleteDialog")).to_be_visible()
     await page.keyboard.press("Escape")
     assert await page.evaluate("document.activeElement.id") == "accountMenuButton"
+
+
+async def test_a_token_refresh_does_not_close_the_open_menu(page: Page, site: Path) -> None:
+    await sign_in(page, site)
+    await page.click("#accountMenuButton")
+    await page.focus("#signOut")
+    await page.evaluate("globalThis.misraAccount.client.auth.refreshSession()")  # an auth event with the same session
+    await expect(page.locator("#accountMenu")).to_be_visible()
+
+
+async def test_sign_out_works_from_the_keyboard_and_the_focus_lands_on_sign_in(page: Page, site: Path) -> None:
+    await sign_in(page, site)
+    await account_action_by_keyboard(page, "#signOut")
+    await expect(page.locator("#signIn")).to_be_visible()
+    assert await page.evaluate("document.activeElement.id") == "signIn"
 
 
 async def test_the_menu_opens_from_the_keyboard_and_tab_walks_through_it(page: Page, site: Path) -> None:

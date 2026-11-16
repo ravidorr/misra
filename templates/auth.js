@@ -140,7 +140,7 @@ function show(session) {
   $('account').classList.toggle('is-signed-in', Boolean(session));
   $('signIn').hidden = Boolean(session);
   $('accountUser').hidden = !session;
-  setMenu(false);
+  if (!session) setMenu(false); /* not on a token refresh: the user may be using the menu */
   $('accountEmail').textContent = session ? (email ?? 'Signed in') : '';
   if (lostFocus) $('signIn').focus(); /* the focused profile button just went away */
 }
