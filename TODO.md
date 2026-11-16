@@ -6,46 +6,6 @@ one row from one segment), its "(28)" if the company had no careers URL, else it
 An item with a screenshot in `todo-images/` goes with it: delete the image file in the same PR.
 Observations about live sites below come from checks made on 2026-11-14 and may have changed.
 
-## Daily run monitoring
-
-- [ ] **Start the daily run from outside GitHub, with cron-job.org.** Trigger: on 2026-11-16 the scheduled daily run
-  never started (GitHub Actions was degraded) and nothing told us: the failure alert only fires when a step fails. The
-  second cron entry and the guard in `daily.yml` cover a late or missed first start, but both use GitHub's own
-  scheduler, so a GitHub outage still loses the day. The maintainer already uses cron-job.org in another project. It
-  cannot alert on a missing ping (that is what healthchecks.io does), so it starts the run instead: a third start
-  time, from outside GitHub, and its own failure email when GitHub does not accept the call.
-  - Where: `.github/workflows/daily.yml` (an input on `workflow_dispatch`, and the guard's query);
-    `tests/test_daily_workflow.py`; `SECURITY.md` (the new service and the token); `CONTRIBUTING.md` (how a run from
-    cron-job.org looks in the Actions tab).
-  - How:
-    1. The maintainer creates a fine-grained GitHub token limited to this repository, with only "Actions: read and
-       write". That permission lets the holder start, cancel and disable this repository's workflows (so someone who got
-       the token could stop the daily run and the backups) but not read secrets or change code. This is an accepted
-       risk: the token is stored only at cron-job.org and expires. A disabled workflow raises no alert by itself, so a
-       stop would show only as a missing daily commit of `data/jobs.db`. Use the longest expiry GitHub allows
-       (one year; put the renewal date in the yearly review). It is stored at cron-job.org only, never in the repo or
-       in an Actions secret, and never pasted into chat.
-    2. The maintainer creates a cron-job.org job: `POST
-       https://api.github.com/repos/ravidorr/misra/actions/workflows/daily.yml/dispatches`, headers
-       `Authorization: Bearer <token>`, `Accept: application/vnd.github+json` and `X-GitHub-Api-Version: 2022-11-28`,
-       body `{"ref":"main","inputs":{"source":"cron-job.org"}}`, at about 10:30 UTC (after the second try at 09:53),
-       with "notify me when the job fails" on. A success answer is 204.
-    3. Done (workflow side): `daily.yml` has a `source` input on `workflow_dispatch`, a `run-name` that titles a start with
-       `source=cron-job.org` as `daily-job-digest (cron-job.org)`, and a guard that also runs for that start and skips it
-       when a scheduled run or an earlier cron-job.org run already succeeded that UTC day (it finds those runs by the
-       title, because the runs API does not return inputs). Other manual runs are never skipped and never counted. The
-       guard still fails open and the run job's secrets are as before. Pinned in `tests/test_daily_workflow.py`.
-    4. Done (docs side): `SECURITY.md` names the service and the token and the accepted risk, and the yearly review lists
-       both; `CONTRIBUTING.md` ("The daily digest") says how a run from cron-job.org looks in the Actions tab. Still to
-       do: add the service and the token's expiry to the next note to the lawyer.
-  - What remains is the maintainer's: steps 1 and 2 (the token and the cron-job.org job; the guide is
-    `misra-cron-job-org-setup.md` on the maintainer's Desktop) and the end-to-end test below (also check there that the
-    run is titled `daily-job-digest (cron-job.org)` in the Actions tab and that the next guard log counts it: the title
-    is what the guard matches, and it was not dispatched live).
-  - Done when: with the first two starts disabled, the cron-job.org call starts a full run that sends the digests once;
-    on a normal day the call is skipped by the guard; a failed call (try a wrong token once) emails the maintainer; a
-    test pins the input, the guard's rule and the secret scope; and `SECURITY.md` names the service.
-
 ## Yearly security review
 
 - [ ] **Do the yearly security review by 2027-11-15, then every year.** Trigger: the date. Where: the
