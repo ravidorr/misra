@@ -76,6 +76,16 @@ async def visible_stories(page: Page) -> list[dict[str, float]]:
     return boxes
 
 
+async def settle(page: Page, expression: str) -> None:
+    """Wait until the page says `expression` is true (the page script answers a resize a moment later; the page's CSP
+    does not let Playwright's own polling evaluate a string)."""
+    for _ in range(30):
+        if await page.evaluate(expression):
+            return
+        await page.wait_for_timeout(100)
+    raise AssertionError(expression)
+
+
 async def lines_of_stories(page: Page) -> int:
     """How many lines of circles show, once the row has settled after a resize."""
     lines = 0
@@ -202,7 +212,7 @@ async def test_hiring_now_keeps_its_choice_for_the_page_and_follows_the_width(pa
     await page.click('.chip[data-group=levels][data-value="Intern"]')  # a new render keeps it open
     assert await page.locator("#hiringToggle").get_attribute("aria-expanded") == "true"
     await page.set_viewport_size({"width": 1650, "height": 800})
-    await page.wait_for_function("document.querySelectorAll('#stories > li:not([hidden])').length === 15")
+    await settle(page, "document.querySelectorAll('#stories > li:not([hidden])').length === 15")
     await page.click("#hiringToggle")
     assert await lines_of_stories(page) == 1
     await page.set_viewport_size(
@@ -376,8 +386,8 @@ async def test_the_sheet_follows_the_window_between_a_phone_and_a_desktop(page: 
     assert await sheet.is_hidden()  # a phone does not show it until asked
     await open_sheet(page)
     await page.set_viewport_size({"width": 1200, "height": 800})  # turned into a desktop while open
+    await settle(page, "!document.getElementById('moreFilters').matches(':modal')")  # the script answers later
     assert await sheet.is_visible()
-    assert not await sheet.evaluate("e => e.matches(':modal')")
     await page.set_viewport_size({"width": 375, "height": 800})
     assert await sheet.is_hidden()
     await page.set_viewport_size({"width": 1200, "height": 800})  # and back: closed on a phone, shown again here
