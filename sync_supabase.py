@@ -3,9 +3,9 @@
 `python sync_supabase.py --pull` runs before the crawl: it rebuilds data/jobs.db from Supabase (every row of `jobs`,
 open and closed, without the text of the postings, and the whole `crawl_log`, each row with its Supabase id). It
 reads through the export's `Source`, which checks every table against its exact row count, and it refuses an empty
-`jobs` table: a crawl that starts from
-nothing would take every job for a new one (and the digest would email them all). The file is written beside and
-renamed over, so there is never a half-built one, and the crawl and the dashboard build refuse a missing file.
+`jobs` table: a crawl that starts from nothing would take every job for a new one (and the digest would email them
+all). The file is written beside and renamed over, so there is never a half-built one, and the crawl and the dashboard
+build refuse a missing file.
 
 `python sync_supabase.py` runs after the crawl: it copies the open jobs of data/jobs.db into the Supabase `jobs` table
 (PostgREST over HTTPS), closes the jobs that are no longer open, writes the crawl log rows of this run (the ones with

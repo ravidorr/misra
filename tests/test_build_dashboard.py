@@ -3,6 +3,7 @@ import csv
 import hashlib
 import json
 import re
+import runpy
 import sqlite3
 from pathlib import Path
 from typing import Any
@@ -141,6 +142,23 @@ def test_main_builds_dashboard(db: sqlite3.Connection, workdir: Path, capsys: py
     assert jobs["2"]["n"] is True
     assert jobs["6"]["s"] is True
     assert "failing" in capsys.readouterr().out
+
+
+def test_running_the_module_builds_from_the_history_file(workdir: Path) -> None:
+    prepare(workdir)
+    write_css(workdir)
+    runpy.run_module("build_dashboard", run_name="__main__")
+    assert (workdir / "docs" / "jobs.json").is_file()
+
+
+def test_the_build_refuses_a_missing_history_and_writes_nothing(workdir: Path) -> None:
+    prepare(workdir)
+    write_css(workdir)
+    (workdir / "data" / "jobs.db").unlink()
+    with pytest.raises(SystemExit, match="is missing"):
+        build_dashboard.main()
+    assert not (workdir / "docs" / "jobs.json").exists()
+    assert not (workdir / "data" / "jobs.db").exists()  # looking never creates an empty history
 
 
 def test_read_css_bundles_sources_in_order(workdir: Path) -> None:
