@@ -1132,7 +1132,46 @@ function renderStories() {
       return h('li', {}, [button]);
     }),
   );
+  layoutStories();
 }
+
+/* "Hiring now" is one line of circles and a button ("Show all 15" / "Show fewer") at its end; the others wait in a
+   wrapping area below until the button opens it. The choice lasts for the page session only. Hidden circles carry the
+   `hidden` attribute, so they are out of the Tab order and away from screen readers, and nothing scrolls sideways. */
+let hiringOpen = false;
+let hiringWidth = 0;
+function layoutStories() {
+  const items = [...$('stories').children];
+  const toggle = $('hiringToggle');
+  const focused = document.activeElement === toggle; /* measuring hides the button for a moment, and that drops the focus */
+  for (const item of items) item.hidden = false;
+  toggle.hidden = true;
+  const overflowing = () => {
+    const top = items[0]?.offsetTop ?? 0;
+    return items.filter((item) => item.offsetTop > top);
+  };
+  if (overflowing().length === 0) {
+    $('stories').dataset.expanded = 'false';
+    return; /* everything fits on one line: no button */
+  }
+  toggle.hidden = false; /* the button takes room from the line */
+  const rest = overflowing();
+  toggle.textContent = hiringOpen ? 'Show fewer' : `Show all ${items.length}`;
+  toggle.setAttribute('aria-expanded', String(hiringOpen));
+  $('stories').dataset.expanded = String(hiringOpen);
+  if (!hiringOpen) for (const item of rest) item.hidden = true;
+  if (focused) toggle.focus();
+}
+$('hiringToggle').addEventListener('click', () => {
+  hiringOpen = !hiringOpen;
+  layoutStories();
+});
+new ResizeObserver(() => {
+  const width = $('hiring').clientWidth;
+  if (width === hiringWidth) return;
+  hiringWidth = width;
+  layoutStories();
+}).observe($('hiring'));
 
 const NEW_TAB = ' (opens in a new tab)';
 const MAX_LOCATION = 80;
@@ -1411,7 +1450,6 @@ $('reset').addEventListener('click', () => {
    traps focus, closes it on Esc and hides the page from screen readers. The media query is the one in sheet.css. */
 const sheet = $('moreFilters');
 const compact = matchMedia('(width < 561px), (height < 500px)');
-$('hiring').open = !compact.matches;
 
 function openFilters() {
   sheet.close(); /* the markup opens it as a panel, and showModal() refuses a dialog that is already open */

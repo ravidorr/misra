@@ -129,7 +129,6 @@ function show(session) {
   signedInEmail = typeof email === 'string' ? email : '';
   $('account').classList.toggle('is-signed-in', Boolean(session));
   $('signIn').hidden = Boolean(session);
-  $('signInNote').hidden = Boolean(session);
   $('accountUser').hidden = !session;
   $('accountEmail').textContent = session ? (email ?? 'Signed in') : '';
 }
@@ -145,11 +144,21 @@ if (typeof globalThis.supabase?.createClient === 'function') {
     publish(client, session);
   });
   $('account').hidden = false;
-  $('signInNote').hidden = false; /* the notice shows whenever the button does; show() hides both once signed in */
   say(failure);
 
-  $('signIn').addEventListener('click', async () => {
+  /* "Sign in" only opens the notice (what signing in is for, what is stored, the Terms and the Privacy Notice). The
+     Google redirect starts from "Continue with Google" and from nothing else. */
+  const signInDialog = $('signInDialog');
+  $('signIn').addEventListener('click', () => {
     say('');
+    signInDialog.showModal();
+    $('signInTitle').focus();
+  });
+  $('signInCancel').addEventListener('click', () => {
+    signInDialog.close(); /* the focus goes back to "Sign in" */
+  });
+  $('signInContinue').addEventListener('click', async () => {
+    signInDialog.close();
     try {
       const { error } = await client.auth.signInWithOAuth({
         provider: 'google',

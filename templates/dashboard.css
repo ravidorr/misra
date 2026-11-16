@@ -123,22 +123,9 @@ a {
   font-size: 0.875rem;
 }
 
-/* The notice under the header, shown while signed out, that the sign-in button points to with aria-describedby. */
-.sign-in-note {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-  margin: calc(-1 * var(--space-2)) 0 var(--space-4);
-  color: var(--muted);
-  font-size: 0.875rem;
-}
-
-.sign-in-line {
-  margin: 0;
-}
-
-/* Inline links keep the line height and still get a 44px hit area: padding on an inline box grows the target, not the line. */
-.sign-in-note a,
+/* The sign-in notice is the text of a dialog now. Inline links keep the line height and still get a 44px hit area: padding
+   on an inline box grows the target, not the line. */
+.sign-in-dialog a,
 .report-privacy a {
   padding: 14px 4px;
 }
@@ -157,10 +144,6 @@ a {
 /* The signed-in address in the delete dialog is one unbroken word: let a long one wrap on a phone. */
 .delete-email {
   overflow-wrap: anywhere;
-}
-
-.sign-in-note[hidden] {
-  display: none;
 }
 
 .auth-message .notice {
@@ -344,14 +327,43 @@ dialog.sheet[hidden],
   font-weight: 700;
 }
 
+.hiring {
+  margin-bottom: var(--space-4);
+}
+
+/* One line of circles with the button at its end. The circles that do not fit wait behind the button (dashboard.js sets
+   `hidden` on them); open, they wrap below. Nothing here scrolls. */
+.hiring-row {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+}
+
+.hiring-toggle {
+  flex: none;
+  margin-top: var(--space-2);
+  white-space: nowrap;
+}
+
 .stories {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(4.5rem, 1fr));
-  justify-items: center;
+  display: flex;
+  flex: 1 1 0;
+  flex-wrap: wrap;
+  min-width: 0;
   gap: var(--space-3) var(--space-2);
   margin: 0;
   padding: var(--space-1) 0 0;
   list-style: none;
+}
+
+.stories > li {
+  display: flex;
+  flex: 0 0 4.5rem;
+  justify-content: center;
+}
+
+.stories > li[hidden] {
+  display: none;
 }
 
 .chip-group {
@@ -520,13 +532,11 @@ html:has(.sheet:modal) {
   font-weight: 400;
 }
 
-.hiring > summary::before,
 .gaps summary::before {
   content: '\25B8';
   flex: none;
 }
 
-.hiring[open] > summary::before,
 .gaps[open] > summary::before,
 .gaps details[open] > summary::before {
   content: '\25BE';
@@ -595,22 +605,6 @@ html:has(.sheet:modal) {
 .gap-why {
   display: block;
   font-size: var(--text-sm);
-}
-
-/* "Hiring now": a disclosure (closed on a phone, open on a wide screen) over a grid that wraps, never scrolls sideways. */
-.hiring {
-  margin-bottom: var(--space-4);
-}
-
-.hiring > summary {
-  display: flex;
-  min-height: var(--tap);
-  list-style: none;
-  align-items: center;
-  gap: var(--space-2);
-  font-size: 0.8125rem;
-  font-weight: 700;
-  cursor: pointer;
 }
 
 .feed {

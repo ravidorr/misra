@@ -59,8 +59,31 @@ async def listed(page: Page) -> int:
 
 
 async def open_hiring(page: Page) -> None:
-    """Open "Hiring now" whatever its state: a phone starts with it closed and a desktop with it open."""
-    await page.evaluate("document.getElementById('hiring').open = true")
+    """Expand "Hiring now" (it starts as one line)."""
+    toggle = page.locator("#hiringToggle")
+    if await toggle.get_attribute("aria-expanded") == "false":
+        await toggle.click()
+
+
+async def visible_stories(page: Page) -> list[dict[str, float]]:
+    boxes = []
+    for story in await page.locator("#stories .story").all():
+        if await story.is_visible():
+            box = await story.bounding_box()
+            if box is not None:  # a circle can be put away between the two questions, after a resize
+                boxes.append(box)
+    return boxes
+
+
+async def lines_of_stories(page: Page) -> int:
+    """How many lines of circles show, once the row has settled after a resize."""
+    lines = 0
+    for _ in range(20):
+        lines = len({box["y"] for box in await visible_stories(page)})
+        if lines == 1:
+            break
+        await page.wait_for_timeout(100)
+    return lines
 
 
 async def open_sheet(page: Page) -> None:
@@ -89,7 +112,8 @@ async def visible_controls(page: Page, root: str) -> list[tuple[str, dict[str, f
 async def test_the_page_never_scrolls_sideways(page: Page, crowd: Path, width: int, scheme: str) -> None:
     await open_page(page, crowd, width, scheme=scheme)
     assert await page.evaluate(NO_SIDEWAYS)
-    await open_hiring(page)  # the row, opened, at every width
+    assert await page.evaluate(NO_SIDEWAYS)  # the row as one line
+    await open_hiring(page)  # and opened, at every width
     assert await page.evaluate(NO_SIDEWAYS)
     await page.locator("#gaps-title").click()
     assert await page.evaluate(NO_SIDEWAYS)
@@ -112,21 +136,75 @@ async def test_the_page_does_not_scroll_sideways_in_landscape_or_with_the_sheet_
     assert box["x"] + box["width"] <= width
 
 
-@pytest.mark.parametrize("width", [375, 1650])
-async def test_hiring_now_shows_all_its_companies_and_wraps(page: Page, crowd: Path, width: int) -> None:
+@pytest.mark.parametrize("width", [320, 393, 1650])
+async def test_hiring_now_is_one_line_with_the_rest_behind_a_button(page: Page, crowd: Path, width: int) -> None:
     await open_page(page, crowd, width)
-    hiring = page.locator("#hiring")
-    if width < 561:  # noqa: PLR2004  (the phone breakpoint)
-        assert await hiring.get_attribute("open") is None  # closed on a phone, so the jobs come first
-        await page.locator("#hiring > summary").click()
-    assert await hiring.get_attribute("open") is not None
-    stories = page.locator("#stories .story")
-    assert await stories.count() == HIRING_COMPANIES
-    for story in await stories.all():
-        box = await story.bounding_box()
-        assert box is not None
+    toggle = page.locator("#hiringToggle")
+    one_line = await visible_stories(page)
+    assert 1 <= len(one_line) < HIRING_COMPANIES
+    assert len({box["y"] for box in one_line}) == 1  # exactly one line
+    for box in one_line:
         assert 0 <= box["x"] <= box["x"] + box["width"] <= width
+    assert await toggle.get_attribute("aria-expanded") == "false"
+    assert await toggle.get_attribute("aria-controls") == "stories"
+    assert await toggle.inner_text() == f"Show all {HIRING_COMPANIES}"
+    toggle_box = await toggle.bounding_box()
+    assert toggle_box is not None
+    assert toggle_box["height"] >= TAP
+    assert toggle_box["x"] >= one_line[-1]["x"] + one_line[-1]["width"]  # at the end of the line
+    assert toggle_box["x"] + toggle_box["width"] <= width
+    assert await page.locator("#stories .story[hidden], #stories > li[hidden]").count() == HIRING_COMPANIES - len(
+        one_line
+    )
+    assert await page.evaluate(NO_SIDEWAYS)
     assert await page.locator("#stories").evaluate("e => e.scrollWidth <= e.clientWidth")
+    await toggle.click()  # open: all of them, wrapped below
+    assert await toggle.get_attribute("aria-expanded") == "true"
+    assert await toggle.inner_text() == "Show fewer"
+    assert await page.evaluate("document.activeElement.id") == "hiringToggle"  # the focus stays on the button
+    everyone = await visible_stories(page)
+    assert len(everyone) == HIRING_COMPANIES
+    assert len({box["y"] for box in everyone}) > 1  # wrapped
+    for box in everyone:
+        assert 0 <= box["x"] <= box["x"] + box["width"] <= width
+    assert await page.evaluate(NO_SIDEWAYS)
+    assert await page.locator("#stories").evaluate("e => e.scrollWidth <= e.clientWidth")
+    await toggle.click()
+    assert await toggle.get_attribute("aria-expanded") == "false"
+    assert len(await visible_stories(page)) == len(one_line)
+    assert await page.evaluate("document.activeElement.id") == "hiringToggle"
+
+
+async def test_hiring_now_is_reached_and_operated_by_keyboard(page: Page, crowd: Path) -> None:
+    await open_page(page, crowd, 375)
+    shown = len(await visible_stories(page))
+    await page.locator("#stories .story").first.focus()
+    for _ in range(shown - 1):  # only the circles on the line are in the Tab order
+        await page.keyboard.press("Tab")
+        assert await page.evaluate("document.activeElement.classList.contains('story')")
+    await page.keyboard.press("Tab")
+    assert await page.evaluate("document.activeElement.id") == "hiringToggle"  # then the button, at the end of the line
+    await page.keyboard.press("Enter")
+    assert await page.locator("#hiringToggle").get_attribute("aria-expanded") == "true"
+    assert len(await visible_stories(page)) == HIRING_COMPANIES
+    await page.keyboard.press("Space")
+    assert await page.locator("#hiringToggle").get_attribute("aria-expanded") == "false"
+    assert await page.evaluate("document.activeElement.id") == "hiringToggle"
+
+
+async def test_hiring_now_keeps_its_choice_for_the_page_and_follows_the_width(page: Page, crowd: Path) -> None:
+    await open_page(page, crowd, 375)
+    await page.click("#hiringToggle")
+    await page.click('.chip[data-group=levels][data-value="Intern"]')  # a new render keeps it open
+    assert await page.locator("#hiringToggle").get_attribute("aria-expanded") == "true"
+    await page.set_viewport_size({"width": 1650, "height": 800})
+    await page.wait_for_function("document.querySelectorAll('#stories > li:not([hidden])').length === 15")
+    await page.click("#hiringToggle")
+    assert await lines_of_stories(page) == 1
+    await page.set_viewport_size(
+        {"width": 320, "height": 800}
+    )  # narrower: fewer on the line, the rest behind the button
+    assert await lines_of_stories(page) == 1
     assert await page.evaluate(NO_SIDEWAYS)
 
 
@@ -282,7 +360,7 @@ async def test_a_wide_screen_has_the_filters_in_the_page_and_no_filters_button(p
     await page.click("#reset")
     assert await page.locator("#filtersOpen").inner_text() == "Filters"
     assert await sheet.is_visible()
-    assert await page.locator("#hiring").get_attribute("open") is not None
+    assert await lines_of_stories(page) == 1  # "Hiring now" is one line here too
 
 
 async def test_the_sheet_follows_the_window_between_a_phone_and_a_desktop(page: Page, crowd: Path) -> None:
