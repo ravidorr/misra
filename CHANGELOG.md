@@ -4,7 +4,7 @@ All notable changes are documented here. Format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
-## [0.35.0] - 2026-11-15
+## [0.36.0] - 2026-11-16
 
 ### Changed
 
@@ -21,6 +21,16 @@ All notable changes are documented here. Format follows [Keep a Changelog](https
 
 - `tests/test_phone_layout.py`: no horizontal page scroll at 320, 375, 393, 430, 768 and 1650 px in both themes (and landscape, with the sheet open), every control a 44 px target on a phone and on a desktop, the search on the first screen at 375 px, the first role on the first screen of a 393x852 iPhone, "Hiring now" is one line with the rest behind the button at 320, 393 and 1650 px, the count on "Filters", the sheet by keyboard (focus trap, Esc, focus back), and a notice and a card sharing border, radius and shadow.
 - The five finished items (and their screenshots) are gone from `TODO.md`.
+
+## [0.35.0] - 2026-11-15
+
+### Changed
+
+- The Misra logo mark has a lime disc and a violet spark (it was the other way round), which matches the colors of the app. The ink pulse line and ring are unchanged: ink on lime is about 16:1, the violet spark on the lime disc is 4.6:1 and the violet spark on the dark page is 3.5:1 (the ink outline of the spark is 3.6:1 against violet), so no token other than `--mark-disc` and `--mark-spark` changed (they swap values; the dark theme does not redefine them). `design-system/assets/mark.svg`, the new `design-system/assets/apple-touch-icon.png` (180 px, white background, rendered from the SVG) and the design-system README follow.
+
+### Fixed
+
+- `docs/favicon.svg` and `docs/apple-touch-icon.png` were committed by hand and no build produced them, so a logo change could not reach the site through `publish-docs`. `build_dashboard.py` now copies them from `design-system/assets/` (`ICON_FILES`), and the daily workflow stages them. New tests pin the lime disc and violet spark in the tokens, the SVG and the header styles, and check that the built icons are the sources.
 
 ## [0.34.0] - 2026-11-15
 

@@ -53,6 +53,11 @@ OUTPUT_NAMES = {"templates/dashboard.html": "index.html"}
 # Third-party scripts copied byte for byte to docs/ (vendor/README.md says where each one comes from). The page loads
 # them from its own origin, so the Content-Security-Policy needs no CDN.
 VENDORED_FILES = ("vendor/supabase.js",)
+# The sources of the icons the pages link: the logo mark and a 180 px render of it on white, copied to docs/.
+ICON_FILES = {
+    "design-system/assets/mark.svg": "favicon.svg",
+    "design-system/assets/apple-touch-icon.png": "apple-touch-icon.png",
+}
 # Placeholders in the page for the integrity hash of the file with that name in docs/.
 INTEGRITY = re.compile(r"__SRI_([A-Z]+)_([A-Z]+)__")
 
@@ -516,6 +521,8 @@ def main() -> None:
         (out / legal.output).write_text(render_legal(legal, docs=out), encoding="utf-8")
     for source in VENDORED_FILES:
         shutil.copyfile(source, out / Path(source).name)
+    for source, name in ICON_FILES.items():
+        shutil.copyfile(source, out / name)
     for name in PAGES:
         page = out / name
         # __SRI_DASHBOARD_CSS__ becomes the integrity hash of docs/dashboard.css; one pass over each page

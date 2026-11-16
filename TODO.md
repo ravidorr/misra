@@ -174,6 +174,12 @@ Observations about live sites below come from checks made on 2026-11-14 and may 
       (`/open-position/<slug>`, 1 Tel Aviv job), Walnut (`/jobs/<slug>`), env0 (`/careers/<slug>`), Deep Instinct (PDF job
       descriptions, none in Israel), Firefly's own `/positions/` pages (Firefly itself is pinned above), Syte (job list
       by script, no job link), Tyto Care and StoreDot (list or CV form with no job link), Swimm (an email address).
+    - Checked on 2026-11-16 (first batch, do not repeat): Stratasys is SuccessFactors (`careers.stratasys.com`, no
+      adapter); Speedata's jobs are on Viola Group's Getro board and its own page is a Wix site with no feed; Siklu is
+      now part of Ceragon, whose Comeet board is Ceragon's; CytoReason's old plugin page answers 404; Diagnostic
+      Robotics' list shows "No items found"; Guesty's page is a Next.js app that shows no uid even on a job page. Guessing
+      the Greenhouse, Lever, Ashby and Workable slugs of the 21 companies without a careers URL found only an unrelated
+      company (`air` on Greenhouse). Western Digital's board is on SmartRecruiters, which robots.txt skips.
     - Dead or unusable: Jelly Button Games, Kahun, Nucleai and Quantum Art (domain parked at GoDaddy), Satixfy (now an
       MDA Space page), Line 5 (needs a login), lakeFS and Quantum Art (403 or "Access Denied": bot protection), Radware
       and Camtek (an empty page), Elbit Systems (timeout on the news page; its careers site `elbitsystemscareer.com` is a
