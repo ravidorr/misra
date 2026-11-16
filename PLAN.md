@@ -11,8 +11,8 @@ Supabase host, with SRI on any CDN script. "AC" below means the acceptance crite
 
 Decisions made in planning (they change the PRD's wording, so update the PRD in step 0.3):
 
-- Role types start as: Product, R&D (software, hardware, QA, DevOps, algorithms), Data & AI, Design, IT, Finance,
-  Sales & BD, Customer success & support, Other. Marketing, HR, Legal and Operations stay in Other until they have volume.
+- Role types start as: Product, R&D (software, hardware, QA, algorithms), DevOps & SRE (added 2026-11-16; its titles
+  are not R&D), Data & AI, Design, IT, Finance, Sales & BD, Customer success & support, Other. Marketing, HR, Legal and Operations stay in Other until they have volume.
   Levels: Intern, Junior, Not specified.
 - FR-7 spam guard: rate limit per hashed IP and per day, a honeypot field and a daily cap on emails to the maintainer.
   No captcha, so `PRIVACY.md` keeps its no-tracking line.
