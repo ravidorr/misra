@@ -12,8 +12,8 @@
 //      changes every day (the address itself is never stored or logged);
 //   5. at most DAILY_CAP emails per day in all, whoever sends them. A place is taken in the database before the email is
 //      sent and given back when sending fails. If the database cannot be reached nothing is sent (fail closed).
-// The email is plain text with no field in a header except the company name as one line of the subject, so a visitor
-// cannot inject markup or a header.
+// The email is plain text with no field in a header except the company name (or, without one, the link) as one line of
+// the subject, so a visitor cannot inject markup or a header.
 
 import { validateReport } from './validate.ts';
 import type { Report } from './validate.ts';
@@ -237,16 +237,14 @@ async function release(deps: Deps, config: Config, day: string, ipHash: string):
 
 export function renderEmail(report: Report, now: Date): { subject: string; text: string } {
   return {
-    subject: `Site report: ${report.company}`.slice(0, 150),
+    subject: `Site report: ${report.company || report.link}`.slice(0, 150),
     text: [
       'A visitor of the Misra dashboard reports a career site that is missing from the crawl.',
       '',
-      `Company: ${report.company}`,
+      ...(report.company ? [`Company: ${report.company}`] : []),
       `Careers page: ${report.link}`,
       '',
-      'Why it matters:',
-      report.why,
-      '',
+      ...(report.why ? ['Why it matters:', report.why, ''] : []),
       `Received: ${now.toISOString()}`,
       '',
     ].join('\n'),

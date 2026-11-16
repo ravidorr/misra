@@ -1,6 +1,7 @@
 // Input checks of the `report-site` Edge Function. Pure and free of any Deno or Node API, so the repository's test stack
-// (vitest) runs it as it is. Nothing here trusts the caller: every field must be a string of a known length, the link
-// must be an http(s) address, and the text is normalised so it cannot carry a line break into an email header.
+// (vitest) runs it as it is. Nothing here trusts the caller: only the link is required (a missing or non-text company or reason
+// counts as empty), every text has a length cap, the link must be an http(s) address, and the text is normalised so it
+// cannot carry a line break into an email header.
 
 export const LIMITS = { company: 100, link: 500, why: 1000 } as const;
 
@@ -61,20 +62,17 @@ export function checkLink(raw: unknown): { link: string } | { error: string } {
 export function validateReport(input: Record<string, unknown>): Validation {
   const fields: FieldErrors = {};
 
-  const company = cleanCompany(input.company);
-  if (!company) fields.company = 'Enter the company name.';
-  else if (company.length > LIMITS.company) {
+  const company = cleanCompany(input.company) ?? '';
+  if (company.length > LIMITS.company) {
     fields.company = `The name can be at most ${String(LIMITS.company)} characters.`;
   }
 
   const link = checkLink(input.link);
   if ('error' in link) fields.link = link.error;
 
-  const why = cleanWhy(input.why);
-  if (!why) fields.why = 'Tell us why this company matters.';
-  else if (why.length < 3) fields.why = 'Write a few words on why this company matters.';
-  else if (why.length > LIMITS.why) fields.why = `The reason can be at most ${String(LIMITS.why)} characters.`;
+  const why = cleanWhy(input.why) ?? '';
+  if (why.length > LIMITS.why) fields.why = `The reason can be at most ${String(LIMITS.why)} characters.`;
 
-  if (Object.keys(fields).length > 0 || !company || 'error' in link || !why) return { ok: false, fields };
+  if (Object.keys(fields).length > 0 || 'error' in link) return { ok: false, fields };
   return { ok: true, report: { company, link: link.link, why } };
 }
