@@ -35,7 +35,7 @@ Q Factor,qfactor.ai,,deeptech,no_careers_url,
 Cognata,cognata.com,https://www.cognata.com,deeptech,no_feed_found,"No ATS link, feed or job link found"
 REE Automotive,ree.auto,https://ree.auto/careers/,deeptech,needs_reader,Comeet plugin page: the jobs are only in the page markup
 Gilat,gilat.com,,deeptech,no_careers_url,
-Siklu,siklu.com,,deeptech,no_careers_url,Now part of Ceragon; the Comeet board on ceragon.com is Ceragon's, not Siklu's
+Siklu,siklu.com,,deeptech,no_careers_url,"Now part of Ceragon; the Comeet board on ceragon.com is Ceragon's, not Siklu's"
 Satixfy,satixfy.com,https://satixfy.com,deeptech,site_unusable,The page is now an MDA Space page
 Silicom,silicom.co.il,,deeptech,no_careers_url,
 Elbit Systems,elbitsystems.com,https://www.elbitsystems.com,deeptech,site_unusable,Timeout; its careers site is a Hebrew custom site with no feed seen
@@ -62,7 +62,7 @@ SolarEdge,solaredge.com,,deeptech,no_careers_url,
 H2Pro,h2pro.co,https://www.h2pro.co/careers,deeptech,no_openings,No open positions
 Watergen,watergen.com,,deeptech,no_careers_url,
 Nano Dimension,nano-di.com,https://www.nano-di.com/careers,deeptech,no_feed_found,"No ATS link, feed or job link found"
-Stratasys,stratasys.com,,deeptech,no_careers_url,Careers site is SuccessFactors (careers.stratasys.com), no adapter
+Stratasys,stratasys.com,,deeptech,no_careers_url,"Careers site is SuccessFactors (careers.stratasys.com), no adapter"
 Kornit Digital,kornit.com,https://careers.kornit.com/,deeptech,needs_reader,Comeet plugin page: the jobs are only in the page markup
 Landa,landanano.com,https://www.landa-corporation.com/,deeptech,no_feed_found,"No ATS link, feed or job link found"
 AIR,air.one,,deeptech,no_careers_url,
