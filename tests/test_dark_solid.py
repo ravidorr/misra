@@ -140,3 +140,20 @@ def test_the_two_dark_token_blocks_agree() -> None:
         return dict(line.rstrip(";").split(":", 1) for line in lines if line.startswith("--"))
 
     assert declarations(auto.group(1)) == declarations(manual.group(1))
+
+
+@pytest.mark.parametrize("mode", ["dark", "forced-dark"])
+async def test_the_dark_primary_keeps_its_shadow_color_on_hover_and_press(page: Page, site: Path, mode: str) -> None:
+    await open_in(page, site, mode)
+    assert await page.evaluate("matchMedia('(hover: hover)').matches")  # else the hover rule is never tested
+    button = page.locator("#list article .btn-primary").first
+    rest = await rgb(page, (await primary(page))["shadow"])
+    await button.hover()
+    await page.wait_for_timeout(TRANSITION_MS)
+    assert await rgb(page, await button.evaluate(SECONDARY_SHADOW)) == rest
+    assert "4px 4px" in await button.evaluate("e => getComputedStyle(e).boxShadow")
+    await page.mouse.down()
+    await page.wait_for_timeout(TRANSITION_MS)
+    assert await rgb(page, await button.evaluate(SECONDARY_SHADOW)) == rest
+    assert "1px 1px" in await button.evaluate("e => getComputedStyle(e).boxShadow")
+    await page.mouse.up()
