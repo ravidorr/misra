@@ -1040,10 +1040,18 @@ const typeMatches = (j, f) => f.types.length === 0 || f.types.some((t) => j.rt.i
    its title, company, team or location has every word, or when its key is in that answer. The answers are kept by query
    (the words, one space apart), so only the answer for the query being shown counts; a search that fails or is slow
    leaves the match on title, company, team and location alone. */
-const SEARCH_MIN = 3; /* the function answers nothing for less */
+const hasSearchWord = (query) => /[\p{L}\p{N}]{3}/u.test(query); /* the function answers nothing without a run of 3 letters or digits */
 const SEARCH_DELAY_MS = 400; /* the box changes with every key: ask once typing pauses */
 const SEARCH_KEPT = 30; /* answers kept */
+const SEARCH_CAP = 3000; /* the most keys the function returns: a full answer may be missing some */
+const SEARCH_NOTES = {
+  failed: 'Description search failed. These results match titles, companies and places only.',
+  capped: 'Too many description matches, so some may be missing. Add a word to narrow it.',
+  short: 'Searching inside job descriptions needs a word of 3 or more letters or digits.',
+};
 const textKeys = new Map();
+const textCapped = new Set(); /* the queries whose answer hit the cap */
+const searchFailed = new Set(); /* the queries whose last ask failed, each until it is answered: asks overlap, so one slot would lose a failure */
 let searchTimer;
 const searchQuery = (q) => q.trim().toLowerCase().split(/\s+/).filter(Boolean).join(' ');
 
@@ -1057,7 +1065,17 @@ async function fetchTextKeys(query) {
   if (!response.ok) throw new Error(`search_job_keys: HTTP ${response.status}`);
   const pairs = await response.json();
   if (!Array.isArray(pairs)) throw new Error('search_job_keys: not a list');
-  return new Set(pairs.map(([company, id]) => `${company}|${id}`));
+  return { keys: new Set(pairs.map(([company, id]) => `${company}|${id}`)), capped: pairs.length >= SEARCH_CAP };
+}
+
+/* The sentence about the description search for the query in the box, or nothing when all is well. It goes on the
+   summary line, which is a visible line and is read out by the status region. Nothing of the query is logged. */
+function searchNote() {
+  const query = searchQuery(F.q);
+  if (query === '') return '';
+  if (!hasSearchWord(query)) return SEARCH_NOTES.short;
+  if (searchFailed.has(query)) return SEARCH_NOTES.failed;
+  return textCapped.has(query) ? SEARCH_NOTES.capped : '';
 }
 
 /* Ask for the keys of the query in the box once, a moment after the last key; show the list again when they come, if
@@ -1065,14 +1083,19 @@ async function fetchTextKeys(query) {
 function searchText() {
   clearTimeout(searchTimer);
   const query = searchQuery(F.q);
-  if (query.length < SEARCH_MIN || textKeys.has(query)) return;
+  if (!hasSearchWord(query) || textKeys.has(query)) return;
   searchTimer = setTimeout(async () => {
     try {
-      const keys = await fetchTextKeys(query);
-      if (textKeys.size >= SEARCH_KEPT) textKeys.clear();
+      const { keys, capped } = await fetchTextKeys(query);
+      if (textKeys.size >= SEARCH_KEPT) {
+        textKeys.clear();
+        textCapped.clear();
+      }
       textKeys.set(query, keys);
+      if (capped) textCapped.add(query);
+      searchFailed.delete(query);
     } catch {
-      return; /* the title match stays; a later keystroke asks again */
+      if (!textKeys.has(query)) searchFailed.add(query); /* an older ask of the same words may fail after a newer one answered; the title match stays and says so; a later change asks again */
     }
     if (ready && view === 'roles' && searchQuery(F.q) === query) render();
   }, SEARCH_DELAY_MS);
@@ -1329,9 +1352,13 @@ const tagsEl = (j) =>
     j.f && h('time', { class: 'card-seen', datetime: j.f, text: ago(j.f) }),
   ]);
 
-/* A heuristic: the data does not say whether a snippet was cut. A cut never ends in `.`, `!` or `?` (the sync trims
-   them), so a text of 200 or more characters that does not is treated as cut and gets the ellipsis, hidden from screen
-   readers; a whole text of that length that ends in a quote or a bracket gets a false one. */
+/* A heuristic, and no exact rule exists on the page: the snippet is the first 255 characters of the text cut at a word
+   boundary, and the data holds no flag or length of the full text, so a whole text of up to 255 characters and a cut one
+   look the same. A cut never ends in `.`, `!` or `?` (the sync trims them) and is nearly always close to 255, so a text
+   of 200 or more characters that does not end so is treated as cut and gets the ellipsis, hidden from screen readers.
+   Wrong in two rare cases: a whole text of that length that ends in a quote, a bracket or no punctuation gets a false
+   one, and a cut that is shorter than 200 (a very long word) gets none. An exact rule
+   needs a stored flag (see TODO.md, "Snippet ellipsis"). */
 const cutMark = (text) => text.length >= 200 && !/[.!?]$/.test(text) && h('span', { 'aria-hidden': 'true', text: '…' });
 
 function cardEl(j) {
@@ -1436,6 +1463,22 @@ function renderStarred() {
   return items;
 }
 
+/* Draw the list. replaceChildren drops the focus, and a late search answer draws the list while a reader is on one of
+   its controls: put the focus back on the same control of the same role, or on the list heading when that role is not
+   on the page any more. A caller that places the focus itself (a star or a discard) passes false. A modal dialog that is
+   open holds the focus, so it never finds it in the list. */
+function drawList(nodes, keepFocus) {
+  const list = $('list');
+  const held = list.contains(document.activeElement) ? document.activeElement : null;
+  const card = held?.closest('article');
+  const jobId = card?.dataset.jobId;
+  const spot = card ? [...card.querySelectorAll('a[href], button')].indexOf(held) : -1;
+  list.replaceChildren(...nodes);
+  if (!held || !keepFocus) return;
+  const again = [...list.querySelectorAll('article')].find((art) => art.dataset.jobId === jobId);
+  (again?.querySelectorAll('a[href], button')[spot] ?? $('list-h')).focus({ preventScroll: true }); /* a late answer must not scroll the page */
+}
+
 function render(focusIdx) {
   showView();
   const starredView = view === 'starred';
@@ -1447,7 +1490,8 @@ function render(focusIdx) {
   const { counts, total } = newRoles();
   renderHero(total, select({ ...F, company: '', showGone: false, onlyNew: false }).length);
   if (!starredView) {
-    const summary = `Showing ${res.length} of ${scope} open roles ${F.loc === 'il' ? 'in Israel' : 'in all locations'}. ${goneN} discarded.`;
+    const note = searchNote();
+    const summary = `Showing ${res.length} of ${scope} open roles ${F.loc === 'il' ? 'in Israel' : 'in all locations'}. ${goneN} discarded.${note && ` ${note}`}`;
     $('summary').textContent = summary;
     announce(summary);
     $('filtersDone').textContent = `Show ${res.length} ${res.length === 1 ? 'role' : 'roles'}`;
@@ -1455,19 +1499,20 @@ function render(focusIdx) {
   }
   const list = $('list');
   if (res.length === 0) {
-    list.replaceChildren(
+    drawList([
       h('li', {
         class: 'empty',
         text: starredView ? 'No starred roles yet. Use Star on a role to keep it here.' : 'No roles match. Change the search or the filters.',
       }),
-    );
+    ], focusIdx === undefined);
+    if (focusIdx !== undefined) $('list-h').focus(); /* the last role was starred or discarded: the focus stays on the page's list */
     $('pager').hidden = true;
     return;
   }
   const size = SIZES.includes(Number(F.size)) ? Number(F.size) : 10;
   const pages = Math.ceil(res.length / size);
   page = Math.min(page, pages - 1);
-  list.replaceChildren(...res.slice(page * size, (page + 1) * size).map((item) => (item.closed ? closedCardEl(item) : cardEl(item))));
+  drawList(res.slice(page * size, (page + 1) * size).map((item) => (item.closed ? closedCardEl(item) : cardEl(item))), focusIdx === undefined);
   $('pager').hidden = res.length <= 10;
   $('size').value = size;
   $('prev').disabled = page === 0;
