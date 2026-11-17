@@ -514,8 +514,8 @@ html:has(.sheet:modal) {
 }
 
 /* The sign that the list can be opened: a chevron in a round, bordered shape at the end of the row (the whole row opens
-   it). It points down when closed and up when open; the line and the stroke follow the theme, and the shape keeps its
-   border in forced colors. */
+   it). It points down when closed and up when open; the border and the stroke are the text color, so they follow the theme
+   and stay visible in forced colors. */
 .gaps-sign {
   display: inline-flex;
   width: 2rem;
@@ -524,7 +524,7 @@ html:has(.sheet:modal) {
   align-items: center;
   justify-content: center;
   margin-inline-start: auto;
-  border: var(--border-width) solid var(--line);
+  border: var(--border-width) solid currentcolor;
   border-radius: 50%;
   background: var(--panel);
 }

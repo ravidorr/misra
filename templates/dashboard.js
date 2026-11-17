@@ -1710,7 +1710,7 @@ const gaps = DATA.gaps ?? { blocked: [], untracked: [], total: 0, groups: [] };
     {
       part: 'cannot-read',
       title: 'We miss roles at these companies',
-      note: 'We cannot find or read their open roles in Israel.',
+      note: 'We cannot find or read open roles in Israel at these companies.',
       sites: [],
     },
   ];

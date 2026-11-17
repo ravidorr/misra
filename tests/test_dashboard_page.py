@@ -732,7 +732,7 @@ async def test_the_coverage_gap_card_says_in_plain_words_which_sites_we_choose_n
     assert await card.text_content() == "GuardedCareers page (opens in a new tab)"  # the name, where it goes, the cue
     assert await skipped.locator("a").get_attribute("href") == "https://guarded.test/careers"
     unread = await page.locator("[data-part=cannot-read] .gap-part-note").inner_text()
-    assert unread == "We cannot find or read their open roles in Israel."
+    assert unread == "We cannot find or read open roles in Israel at these companies."
 
 
 async def test_each_gap_link_says_where_it_goes(page: Page, site: Path) -> None:
