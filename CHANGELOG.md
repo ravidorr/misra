@@ -10,6 +10,17 @@ All notable changes are documented here. Format follows [Keep a Changelog](https
 
 - The assistant connection is on. The page "Connect your assistant" (`assistant.html`, from `ASSISTANT.md`, with the lawyer's wording) is built and linked from the footer and from `llms.txt` (`ASSISTANT_PAGE_ENABLED = True`), after the lawyer approved it and the migration, the function `mcp` and the secret `ASSISTANT_ENDPOINT_ENABLED` went live (limits: 100 searches and 15 job reads per caller per day, 500 job reads a day for everyone).
 
+## [0.53.1] - 2026-11-17
+
+### Fixed
+
+- The daily job checks out `ref: main` (the tip of `main` when the job starts) instead of the commit the run was queued at. A run that waited in the `daily-job-digest` group behind a `publish-docs` run built on the older commit and its `docs/` push conflicted on `docs/jobs.json` and `docs/jobs.jsonld` ("push to main failed after 3 attempts", two runs on 2026-11-17). The two workflows never overlapped; the checkout was stale. The deploy-key flow and the `protect-main` ruleset are unchanged.
+- A bad pull or a failed sync never publishes: the dashboard build runs only after a good sync, and the commit only after a good build (the alert lists `build=`). A failed crawl, digest or gaps step still builds.
+- The pull refuses a `jobs` table with under half of the open jobs the dashboard last published (`docs/jobs.json`; a partly hidden or lost table would look like jobs that closed and the rest like new ones), by the same rule as the backup's shrink guard (`export_accounts.fell_by_half`). `--allow-shrink`, and the `allow_shrink` input of the manual run, override it for a real loss. An unreadable `docs/jobs.json` fails the pull too (it is committed, so it is always there); an empty `crawl_log` is a `::warning::` line (counts only), never a failure.
+- A crash late in the crawl no longer loses the day: `run.py` commits to the scratch history company by company and records the API companies before the browser crawl starts, and the sync step also runs after a crawl that failed part of the way (the run is red anyway). A crash inside the browser crawl itself still loses its results (`TODO.md`), and a day that crashed has no descriptions (the work file is written at the end of the crawl). The digests still run after such a sync: a job recorded that day is emailed once (by `first_seen` and `emailed`), a company not reached is recorded and emailed the next day.
+- The first backup after a table joins the export no longer switches the shrink guard off: `publish_backup.previous_counts` judges each table by its own file in the last backup, so the account tables stay guarded and the new ones are guarded from the next day.
+- The dashboard's order of jobs (`ORDER BY company, job_id`, byte order) has been fixed since 0.53.0 and a rebuild over the same data is byte-identical (a test now says so). The one reorder of `docs/jobs.json` on 2026-11-17 was that switch: before 0.53.0 the query had no `ORDER BY` and listed the jobs in the order of the old database.
+
 ## [0.53.0] - 2026-11-17
 
 ### Changed
