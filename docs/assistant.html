@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; base-uri 'none'; form-action 'none'">
+<meta name="referrer" content="no-referrer">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" media="(prefers-color-scheme: light)" content="#f5f0e6">
+<meta name="theme-color" media="(prefers-color-scheme: dark)" content="#121116">
+<meta name="description" content="How to connect your own AI assistant, such as Claude or ChatGPT, to the Misra jobs, step by step.">
+<title>Connect your assistant - Misra</title>
+<link rel="canonical" href="https://ravidorr.github.io/misra/assistant.html">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="dashboard.css" integrity="sha384-9W8Vnw/C+IgcBRITZkvR/7LHFkSF6v+RVbkwtRTTjlb4QFWW8H6uIzZA+nUjr7qC">
+<script src="theme.js" integrity="sha384-HYg7XFf1IJXOEgRXtXu8PaIF1+Z+LZWtoEMko63nPxbGA1OeTRN0ULcwPM+r2ONB"></script>
+</head>
+<body>
+<div class="page">
+<header class="top">
+  <span class="top-name"><a class="wordmark" href="./">misra</a></span>
+</header>
+<main class="legal">
+<h1 id="connect-your-assistant">Connect your assistant</h1>
+<p>Connect your own AI assistant, such as Claude or ChatGPT, and it can search the roles on Misra and read one posting in full, for example to compare roles or draft a cover letter.</p>
+<p>This is optional: the dashboard and the job alerts work without it. It is free and read-only, with no account and no sign-in. Your assistant sends Misra only the search words and the posting it asks for. Misra does not keep them and does not log your address (only a daily, non-reversible hash is used to count rate limits; see the privacy notice). Your CV stays in your assistant.</p>
+<p>Select this address and copy it. You paste it in the steps below. Before you connect, read the <a href="terms.html">terms</a> and the <a href="privacy.html">privacy notice</a>.</p>
+<pre><code class="language-text">https://dncodqeqpoqwcxdctzco.supabase.co/functions/v1/mcp
+</code></pre>
+<h2 id="claude">Claude</h2>
+<p>In claude.ai or the desktop app, on Free (one custom connector), Pro or Max:</p>
+<ol>
+<li>Open <strong>Customize</strong>, then <strong>Connectors</strong>.</li>
+<li>Click <strong>+ Add</strong>, then <strong>Add custom connector</strong>.</li>
+<li>Enter the name <code>Misra</code>, paste the address and click <strong>Continue</strong>.</li>
+<li>Under <strong>Authentication</strong>, choose <strong>No sign in</strong>, then click <strong>Add</strong>.</li>
+</ol>
+<p>On Team and Enterprise, an owner adds it first in <strong>Organization settings</strong>, <strong>Connectors</strong> (<strong>Add</strong>, <strong>Custom</strong>, <strong>Web</strong>). Each member then opens <strong>Customize</strong>, <strong>Connectors</strong>, finds Misra and clicks <strong>Connect</strong>. The mobile apps use it once it is added on the web.</p>
+<h2 id="chatgpt">ChatGPT</h2>
+<p>On chatgpt.com. It depends on your plan, and may need <strong>Developer mode</strong> under <strong>Settings</strong>, <strong>Security and login</strong>. If you do not see these options, your account does not have them.</p>
+<ol>
+<li>Open <a href="https://chatgpt.com/plugins" target="_blank" rel="noopener noreferrer">https://chatgpt.com/plugins<span class="sr-only"> (opens in a new tab)</span></a> and click the plus button.</li>
+<li>Choose <strong>Add custom MCP server</strong>.</li>
+<li>Enter the name <code>Misra</code> and paste the address as <strong>Server URL</strong>.</li>
+<li>Set authentication to <strong>No authentication</strong>.</li>
+<li>Read the warning, click <strong>I understand and want to continue</strong>, then <strong>Create as a plugin</strong>.</li>
+<li>Install it. In a chat, type <code>@</code> and pick Misra.</li>
+</ol>
+<h2 id="other-assistants">Other assistants</h2>
+<p>Any assistant that can add a &quot;remote MCP server&quot; or &quot;custom connector&quot; takes the same address, with no sign-in. If it asks for a type, choose &quot;streamable HTTP&quot;. For developers, in Claude Code:</p>
+<pre><code class="language-sh">claude mcp add --transport http misra https://dncodqeqpoqwcxdctzco.supabase.co/functions/v1/mcp
+</code></pre>
+<p>Menu names change. If yours differ, look for &quot;connectors&quot; or &quot;MCP&quot; in the settings.</p>
+<h2 id="try-it">Try it</h2>
+<ul>
+<li>&quot;Find junior product roles in Tel Aviv on Misra.&quot;</li>
+<li>&quot;Read the first one in full and tell me what it asks for.&quot;</li>
+<li>&quot;Draft a short cover letter for it. Here is my CV: ...&quot;</li>
+</ul>
+<h2 id="what-your-assistant-can-see">What your assistant can see</h2>
+<p>Each role has the company, title, place, level, role type, region, the start of the posting and a link to the employer's page.</p>
+<h3 id="what-your-assistant-can-seeand-the-rules-for-using-it">What your assistant can see—and the rules for using it</h3>
+<ul>
+<li><strong>Public job data only:</strong> Your assistant can search open listings and read the full description of one job at a time (up to 20,000 characters, for open roles or roles closed less than 30 days). It cannot see your Misra account, email address, stars, &quot;Not for me&quot; choices, or saved filters.</li>
+<li><strong>Your data stays in your assistant:</strong> Connecting Misra requires no sign-in and sends nothing personal to us—your resume and prompts stay inside your own AI assistant. To enforce daily limits (100 searches and 15 full-job reads per day), we store only a daily, non-reversible hash of your network address, which is deleted during the next daily cleanup.</li>
+<li><strong>Personal job search only:</strong> All job postings and descriptions belong to the respective employers and are provided &quot;as is&quot;. You may use this connection only for your own personal job search—bulk copying, republishing, or training models on the postings is not allowed.</li>
+<li><strong>Check before you apply:</strong> Misra is a free, unofficial project and is not affiliated with any employer. Your AI assistant—not Misra—is responsible for anything it writes (such as cover letters or summaries). Always verify details on the employer's own career page before applying.</li>
+<li>By connecting your assistant, you agree to the <a href="https://ravidorr.github.io/misra/terms.html" target="_blank" rel="noopener noreferrer">Terms<span class="sr-only"> (opens in a new tab)</span></a> and <a href="https://ravidorr.github.io/misra/privacy.html" target="_blank" rel="noopener noreferrer">Privacy Notice<span class="sr-only"> (opens in a new tab)</span></a>.</li>
+</ul>
+<h2 id="limits">Limits</h2>
+<p>There is a daily limit for each connection, and one for everyone on reading full postings. When a limit is reached, your assistant tells you. It resets the next day (UTC).</p>
+<h2 id="if-it-does-not-work">If it does not work</h2>
+<ul>
+<li>Check that you pasted the whole address. On a phone it wraps over several lines; paste it as it is, with no spaces added.</li>
+<li>A work or school account may need an administrator to allow it.</li>
+<li>Ask your assistant to &quot;use the Misra connector&quot;.</li>
+</ul>
+<p>Still stuck? Write to <a href="mailto:raanan@avidor.org">raanan@avidor.org</a>.</p>
+<p>See the <a href="privacy.html">privacy notice</a> and the <a href="terms.html">terms</a>.</p>
+
+</main>
+<footer class="legal-foot">
+  <nav class="legal-nav" aria-label="Legal and security">
+    <a href="privacy.html">Privacy</a>
+    <a href="terms.html">Terms</a>
+    <a href="security.html">Security</a>
+  </nav>
+  <p><a class="btn btn-pill" href="./">Open Misra dashboard</a></p>
+</footer>
+</div>
+</body>
+</html>
