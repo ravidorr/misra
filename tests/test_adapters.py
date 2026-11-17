@@ -1904,3 +1904,18 @@ def test_the_pages_known_to_carry_a_job_posting_are_career_pages_of_the_list() -
     companies = json.loads((Path(__file__).parent.parent / "data" / "companies.json").read_text(encoding="utf-8"))
     browser = {c["slug"] for c in companies if c["ats"] == "browser"}
     assert browser >= adapters.JSONLD_PAGES
+
+
+def test_a_job_posting_whose_type_is_a_list_is_found_and_a_page_is_read_to_a_limit(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    page = ld_html({"@type": ["JobPosting", "Thing"], "description": "Listed type"})
+    assert adapters._job_posting(page) is not None
+    late = "x" * adapters.JSONLD_MAX_BYTES + page
+    assert adapters._job_posting(late) is None  # the cap bounds the work on a hostile page
+
+
+def test_a_page_of_another_host_is_not_asked_for_its_job_posting() -> None:
+    assert adapters._browser_wants_page(LD_PAGE, {"url": "https://www.weka.io/careers/1"})
+    assert not adapters._browser_wants_page(LD_PAGE, {"url": "https://other.test/careers/1"})
+    assert not adapters._browser_wants_page(LD_PAGE, {})

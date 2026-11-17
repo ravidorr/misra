@@ -9,7 +9,7 @@ from collections.abc import Callable, Iterable, Iterator
 from typing import Any
 from urllib.parse import parse_qsl, urljoin, urlparse
 
-from common import ISRAEL, get, post, reset_robots_block
+from common import ISRAEL, get, host_of, post, reset_robots_block
 from descriptions import DETAIL_CAP, HELD, attach, html_to_text, jsonld_description, plain_text, sections
 
 HTTP_OK = 200
@@ -587,19 +587,21 @@ JSONLD_PAGES = frozenset(
         "https://digitalturbine.wd501.myworkdayjobs.com/Digital_Turbine_External_Careers",
     }
 )
+JSONLD_MAX_BYTES = 500 * 1024  # a page is read no further than this for its JSON-LD
 _JSONLD = re.compile(r'<script[^>]*type=["\']application/ld\+json["\'][^>]*>(.*?)</script>', re.S | re.I)
 
 
 def _job_posting(page: str) -> dict[str, Any] | None:
     """The first schema.org JobPosting in the JSON-LD blocks of a page, or None."""
-    for block in _JSONLD.findall(page):
+    for block in _JSONLD.findall(page[:JSONLD_MAX_BYTES]):
         try:
             data = json.loads(block)
         except ValueError:
             continue
         for item in data if isinstance(data, list) else data.get("@graph", [data]) if isinstance(data, dict) else []:
-            if isinstance(item, dict) and item.get("@type") == "JobPosting":
-                return item
+            kind = item.get("@type") if isinstance(item, dict) else None
+            if kind == "JobPosting" or (isinstance(kind, list) and "JobPosting" in kind):
+                return item  # type: ignore[no-any-return]
     return None
 
 
@@ -621,7 +623,9 @@ def browser_description(slug: str, job: Job) -> tuple[str, dict[str, Any]] | Non
 
 
 def _browser_wants_page(slug: str, job: Job) -> bool:
-    return bool(job.get("detail_url")) or slug in JSONLD_PAGES
+    if job.get("detail_url"):
+        return True
+    return slug in JSONLD_PAGES and host_of(str(job.get("url"))) == host_of(slug)  # the career page's own host only
 
 
 # Adapters whose list has no text: one request per job page, `fetch(slug, job) -> (text, details) | None`. `WANTS`

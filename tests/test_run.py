@@ -647,3 +647,18 @@ def test_the_job_pages_of_browser_companies_are_read_after_the_lists(
     assert "job pages: browser 1 requests, 1 with a text, 0 left for later runs" in out
     assert "descriptions: browser 1/2 (50%)" in out
     assert list(descriptions.read_work_file()) == [("Br", "1")]
+
+
+def test_no_job_page_is_read_for_a_job_an_israel_only_company_does_not_keep(
+    workdir: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    asked: list[str] = []
+
+    def page(_slug: str, j: dict[str, str]) -> tuple[str, dict[str, Any]]:
+        asked.append(j["job_id"])
+        return "text", {}
+
+    monkeypatch.setitem(adapters.DETAILS, "browser", page)
+    inside, outside = {**job("1"), "location": "Haifa, Israel", "detail_url": "d"}, {**job("2"), "detail_url": "d"}
+    run.read_job_pages({**co("Br", ats="browser"), "israel_only": True}, [inside, outside])
+    assert asked == ["1"]

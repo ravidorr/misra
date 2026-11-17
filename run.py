@@ -129,6 +129,8 @@ DETAIL_STATS: dict[str, tuple[str, int, int, int]] = {}  # company -> (ats, requ
 
 def read_job_pages(co: dict[str, Any], jobs: list[dict[str, Any]]) -> None:
     """Gives a company's jobs the descriptions its list lacks (adapters.add_descriptions) and records the counts."""
+    if co.get("israel_only"):  # the jobs the history keeps, so no page is read for one that is dropped
+        jobs = [j for j in jobs if ISRAEL.search(j["location"] or "")]
     try:
         stats = add_descriptions(co["ats"], co["slug"], co["name"], jobs, HELD_TEXTS, datetime.date.today().toordinal())
     except Exception as exc:  # the list is what matters: a failure here costs texts, never the company
