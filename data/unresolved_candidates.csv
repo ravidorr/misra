@@ -53,6 +53,7 @@ Watergen,watergen.com,,deeptech,no_careers_url,
 Kornit Digital,kornit.com,https://careers.kornit.com/,deeptech,needs_reader,"Own theme on /all-positions/ with /cmcareer/ links, not the plugin's"
 Landa,landanano.com,https://www.landa-corporation.com/,deeptech,no_feed_found,"No ATS link, feed or job link found"
 AIR,air.one,,deeptech,no_careers_url,
+SeeTrue,seetrue.ai,https://seetrue.ai/careers/,deeptech,needs_reader,Roles are listed in the HTML of its own page; the Dueto board behind them is closed to robots (api.dueto.io robots.txt)
 Google,google.com,https://www.google.com/about/careers/applications/,multinational,needs_reader,The results page embeds its data; a worldwide search
 Apple,apple.com,https://www.apple.com/careers/us/,multinational,needs_reader,A script app; its search API redirects
 Meta,meta.com,https://www.metacareers.com/,multinational,no_feed_found,No feed found

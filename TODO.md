@@ -2,7 +2,7 @@
 
 Open work, as of 2026-11-17. Each item says what triggers it, how to do it and when it is done. When one is finished,
 delete it and update the counts in the others: the 85 and the four segment counts in the research item (a pin removes
-one row from one segment), its "(28)" if the company had no careers URL, else its "(53 today)".
+one row from one segment), its "(28)" if the company had no careers URL, else its "(54 today)".
 An item with a screenshot in `todo-images/` goes with it: delete the image file in the same PR.
 Observations about live sites below come from checks made on 2026-11-14 and may have changed.
 
@@ -157,10 +157,10 @@ waits for him. Do not write the maintainer's email address in this repository (i
 
 ## Research the remaining unresolved companies
 
-- [ ] `data/unresolved_candidates.csv` lists 76 researched companies with no usable job feed (as of 2026-11-14: 22
-  multinational, 33 deeptech, 11 cyber_infra, 10 biz_software). Each needs
+- [ ] `data/unresolved_candidates.csv` lists 77 researched companies with no usable job feed (as of 2026-11-14: 22
+  multinational, 34 deeptech, 11 cyber_infra, 10 biz_software). Each needs
   its own research; there is no batch fix left. Every observation about a live site below is from the checks of
-  2026-11-14, a crawl of the 105 rows that had a careers URL that day (53 today) and a scan of their rendered pages. The
+  2026-11-14, a crawl of the 105 rows that had a careers URL that day (54 today) and a scan of their rendered pages. The
   remaining work falls into these groups:
   - **No careers URL (23).** Status `not_found` in `data/new/*_companies.json`: Upsolver, Speedata,
     Teramount, X-Globe, Q Factor, Gilat, Siklu, Silicom, Sight Diagnostics, Brainsway, EarlySign, Diagnostic Robotics,
