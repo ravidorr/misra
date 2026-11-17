@@ -4,6 +4,12 @@ All notable changes are documented here. Format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
+## [0.55.0] - 2026-11-17
+
+### Changed
+
+- The ellipsis after a job snippet is exact. A new column `jobs.snippet_cut` (migration `20261126100000_jobs_snippet_cut.sql`, readable by everyone like `snippet`) is true when the 255-character snippet is shorter than the posting, false when it is the whole text and null when there is no snippet. The sync sets it (`descriptions.snippet_cut`) and writes again a row whose flag differs, the migration fills it in for the rows already stored, and the page shows the ellipsis exactly when the flag is true (and nothing when it is missing) instead of guessing from the length and the last character. The column is left out of the account backup like `snippet`.
+
 ## [0.54.0] - 2026-11-17
 
 ### Added

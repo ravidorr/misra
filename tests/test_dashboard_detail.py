@@ -15,8 +15,8 @@ SNIPPET = "We are looking for a product manager to join a small team that builds
 CUT = SNIPPET + " people who plan their week and"  # 255-ish characters, no final punctuation: cut by the data
 HTML = "<script>window.pwned = 1</script><b>bold</b> text"
 ROWS = [
-    job("cut", "Product Manager", "Haifa, Israel", snippet=CUT * 3),
-    job("whole", "Designer", "Haifa, Israel", snippet="Short posting that ends here."),
+    job("cut", "Product Manager", "Haifa, Israel", snippet=CUT * 3, snippet_cut=True),
+    job("whole", "Designer", "Haifa, Israel", snippet="Short posting that ends here.", snippet_cut=False),
     job("html", "Engineer", "Haifa, Israel", snippet=HTML),
     job("none", "Analyst", "Haifa, Israel", snippet=None),
     job("hebrew", "מנהל מוצר", "Haifa, Israel", snippet="משרה בחיפה"),
