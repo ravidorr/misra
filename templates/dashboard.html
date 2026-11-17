@@ -81,9 +81,15 @@ __HEADER__
         <h3 class="label" id="company-h">Company</h3>
         <select class="field" id="company" aria-labelledby="company-h"><option value="">All companies</option></select>
       </div>
-      <label>Sort <select class="field" id="sort"><option value="new">Newest first</option><option value="co">Company A-Z</option><option value="title">Title A-Z</option></select></label>
-      <label><input type="checkbox" id="hideStale"> <span>Hide roles marked Old? (<span id="staleN">0</span>)</span></label>
-      <label><input type="checkbox" id="showGone"> <span>Show discarded (<span id="goneN">0</span>)</span></label>
+      <div class="filter-group">
+        <h3 class="label" id="sort-h">Sort</h3>
+        <select class="field" id="sort" aria-labelledby="sort-h"><option value="new">Newest first</option><option value="co">Company A-Z</option><option value="title">Title A-Z</option></select>
+      </div>
+      <div class="filter-group" role="group" aria-labelledby="visibility-h">
+        <h3 class="label" id="visibility-h">Visibility</h3>
+        <label><input type="checkbox" id="hideStale"> <span>Hide roles marked Old? (<span id="staleN">0</span>)</span></label>
+        <label><input type="checkbox" id="showGone"> <span>Show discarded (<span id="goneN">0</span>)</span></label>
+      </div>
     </div>
     <div class="sheet-foot">
       <div class="reset-note" id="resetNote" role="status"></div>
