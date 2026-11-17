@@ -21,7 +21,7 @@ from playwright.async_api import Page, Route
 import build_dashboard
 from tests.conftest import add_crawls
 from tests.test_build_dashboard import prepare, read_payload
-from tests.test_dashboard_page import AXE, ORIGIN, PHONE, TAP, site  # noqa: F401  (site is a fixture)
+from tests.test_dashboard_page import AXE, ORIGIN, PHONE, TAP_MIN, site  # noqa: F401  (site is a fixture)
 from tests.test_sign_in import AXE_RUN
 
 REPO = Path(__file__).resolve().parents[1]
@@ -561,8 +561,8 @@ async def test_the_links_of_the_footer_and_the_header_are_big_enough_to_tap(
         box = await link.bounding_box()
         assert box is not None
         if "wordmark" not in (await link.get_attribute("class") or ""):
-            assert box["height"] >= TAP, await link.inner_text()
-            assert box["width"] >= TAP, await link.inner_text()
+            assert box["height"] >= TAP_MIN, await link.inner_text()
+            assert box["width"] >= TAP_MIN, await link.inner_text()
 
 
 async def test_a_link_to_a_section_of_another_page_opens_it_at_that_section(page: Page, site: Path) -> None:

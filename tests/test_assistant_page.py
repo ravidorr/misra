@@ -10,7 +10,7 @@ import pytest
 from playwright.async_api import Page
 
 import build_dashboard
-from tests.test_dashboard_page import AXE, PHONE, TAP, build_site
+from tests.test_dashboard_page import AXE, PHONE, TAP_MIN, build_site
 from tests.test_legal_pages import SMALL_PHONE, open_legal
 from tests.test_sign_in import AXE_RUN
 
@@ -145,7 +145,7 @@ async def test_the_page_fits_a_small_phone_and_its_links_are_big_enough_to_tap(
         box = await link.bounding_box()
         assert box is not None
         if "wordmark" not in (await link.get_attribute("class") or ""):
-            assert box["height"] >= TAP, await link.inner_text()
+            assert box["height"] >= TAP_MIN, await link.inner_text()
 
 
 async def test_the_dashboard_footer_leads_to_the_page(page: Page, assistant_site: Path) -> None:

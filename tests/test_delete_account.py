@@ -17,7 +17,7 @@ import build_dashboard
 from tests.test_dashboard_page import (
     AXE,
     PHONE,
-    TAP,
+    TAP_MIN,
     USER_ID,
     WEBMCP,
     AuthBackend,
@@ -359,8 +359,8 @@ async def test_the_dialog_and_the_error_read_well_on_a_phone(page: Page, site: P
     for button in await page.locator(f"{DIALOG} .btn").all():
         size = await button.bounding_box()
         assert size is not None
-        assert size["height"] >= TAP
-        assert size["width"] >= TAP
+        assert size["height"] >= TAP_MIN
+        assert size["width"] >= TAP_MIN
     await page.evaluate(AXE.read_text(encoding="utf-8"))
     assert await page.evaluate(AXE_RUN) == []
 
@@ -372,7 +372,7 @@ async def test_the_header_buttons_are_big_enough_on_a_phone(page: Page, site: Pa
     for target in await page.locator("header .btn").and_(page.locator(":visible")).all():
         box = await target.bounding_box()
         assert box is not None
-        assert box["height"] >= TAP
+        assert box["height"] >= TAP_MIN
         assert 0 <= box["x"] <= box["x"] + box["width"] <= PHONE["width"]
 
 

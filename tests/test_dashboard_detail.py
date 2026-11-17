@@ -9,7 +9,7 @@ import pytest
 from playwright.async_api import Locator, Page
 
 import build_dashboard
-from tests.test_dashboard_page import AXE, AXE_RUN, PHONE, TAP, Backend, build_site, job, serve
+from tests.test_dashboard_page import AXE, AXE_RUN, PHONE, TAP_MIN, Backend, build_site, job, serve
 
 SNIPPET = "We are looking for a product manager to join a small team that builds tools for"
 CUT = SNIPPET + " people who plan their week and"  # 255-ish characters, no final punctuation: cut by the data
@@ -93,10 +93,10 @@ async def test_the_card_has_no_axe_violations_44px_targets_and_no_sideways_scrol
     await serve(page, site, backend=Backend(ROWS))
     for control in await page.locator(".card-actions .btn").all():
         box = await control.bounding_box()
-        assert box is not None and box["height"] >= TAP and box["width"] >= TAP
+        assert box is not None and box["height"] >= TAP_MIN and box["width"] >= TAP_MIN
     for link in await page.locator(".card-more a").all():  # the lawyer's link: a 44px target too
         box = await link.bounding_box()
-        assert box is not None and box["height"] >= TAP
+        assert box is not None and box["height"] >= TAP_MIN
     await page.evaluate(AXE.read_text(encoding="utf-8"))
     assert await page.evaluate(AXE_RUN) == []
     assert await page.evaluate("document.documentElement.scrollWidth <= document.documentElement.clientWidth")

@@ -25,6 +25,7 @@ from tests.test_dashboard_page import (
     PHONE,
     PHOTO,
     TAP,
+    TAP_MIN,
     USER_ID,
     AuthBackend,
     account_action,
@@ -593,8 +594,8 @@ async def test_fr1_ac7_the_notice_reads_well_on_a_phone_in_both_themes(page: Pag
             for target in await page.locator(selector).all():
                 size = await target.bounding_box()
                 assert size is not None
-                assert size["height"] >= TAP
-                assert size["width"] >= TAP
+                assert size["height"] >= TAP_MIN
+                assert size["width"] >= TAP_MIN
         await page.evaluate(AXE.read_text(encoding="utf-8"))
         assert await page.evaluate("axe.run().then(r => r.violations.map(v => v.id))") == []
 
@@ -615,8 +616,8 @@ async def test_the_footer_links_to_the_privacy_notice_the_terms_and_the_contact(
     for link in await links.all():
         box = await link.bounding_box()
         assert box is not None
-        assert box["height"] >= TAP
-        assert box["width"] >= TAP
+        assert box["height"] >= TAP_MIN
+        assert box["width"] >= TAP_MIN
     assert "Career pages last read" in await page.locator("footer.foot").inner_text()  # the date line is still there
 
 
@@ -627,7 +628,7 @@ async def test_the_footer_links_read_well_on_a_phone(page: Page, site: Path) -> 
     for link in await page.locator("footer.foot a").all():
         box = await link.bounding_box()
         assert box is not None
-        assert box["height"] >= TAP
+        assert box["height"] >= TAP_MIN
         assert 0 <= box["x"] <= box["x"] + box["width"] <= PHONE["width"]
 
 
@@ -661,8 +662,8 @@ async def test_the_header_reads_well_on_a_phone(page: Page, site: Path, signed_i
     for target in await page.locator("header .btn").and_(page.locator(":visible")).all():
         box = await target.bounding_box()
         assert box is not None
-        assert box["height"] >= TAP
-        assert box["width"] >= TAP
+        assert box["height"] >= TAP_MIN
+        assert box["width"] >= TAP_MIN
         assert 0 <= box["x"] <= box["x"] + box["width"] <= PHONE["width"]
     if signed_in:
         email = await page.locator("#accountEmail").bounding_box()
@@ -698,7 +699,7 @@ async def test_the_open_menu_does_not_overflow_the_screen(page: Page, site: Path
     for item in await page.locator("#accountMenu .account-item").all():
         box = await item.bounding_box()
         assert box is not None
-        assert box["height"] >= TAP
+        assert box["height"] >= TAP_MIN
 
 
 @pytest.mark.parametrize("scheme", ["light", "dark"])
