@@ -247,7 +247,8 @@ def test_the_crawl_itself_logs_no_gaps(
     add_crawls(db, "Broken", [(0, "request failed")], ats="fake")
     db.commit()
     write_json(
-        workdir / "data" / "companies.json", [{"name": "Broken", "ats": "fake", "slug": "broken", "status": "ok"}]
+        workdir / "data" / "companies.json",
+        [{"name": "Broken", "crawl": True, "ats": "fake", "slug": "broken", "status": "ok"}],
     )
     monkeypatch.setitem(run.ADAPTERS, "fake", lambda _slug: None)
     monkeypatch.setattr(sys, "argv", ["run.py"])

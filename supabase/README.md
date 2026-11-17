@@ -146,7 +146,7 @@ In the Supabase dashboard, Authentication:
 
 ## Contact form (Edge Function `contact`)
 
-The form of the Contact page (`templates/contact.html`, `templates/contact.js`). OFF until the lawyer agrees (the TODO.md item): the build constant
+The form of the Contact page (`templates/contact.html`, `templates/contact.js`). The lawyer agreed on 2026-11-17, but it stays OFF until the maintainer has set the secrets and deployed the function (the TODO.md item): the build constant
 `CONTACT_FORM_ENABLED` in `build_dashboard.py` is `False` (the page then has no form, no script and no `connect-src`), and the function answers 404 to
 everything (with the site's CORS headers, so the page can read it) unless the function secret `CONTACT_FORM_ENABLED` is exactly `true`. Files: `supabase/functions/contact/` (`index.ts` starts the server,
 `handler.ts` the logic, `validate.ts` the input checks), `_shared/resend.ts` (the Resend call it shares with `report-site`), `test/contact.test.ts`.
@@ -165,7 +165,7 @@ Limits: `CALLER_DAILY_LIMIT` (3) per visitor and day, `DAILY_CAP` (10) in all, c
 and the digest up to 30 and the rest, this form 10. A place is given back only when the daily cap refuses; once a send was tried it is never given back, so a visitor cannot make Resend refuse a Reply-To to get unlimited tries. If the database cannot be
 reached nothing is sent. Only `https://ravidorr.github.io` may call it from a browser.
 
-### Turn it on (only after the lawyer has agreed and `PRIVACY.md` says it)
+### Turn it on (the lawyer agreed on 2026-11-17 and `PRIVACY.md` says it)
 
 1. Set the secrets (the maintainer's own mailbox as `CONTACT_TO`; `RESEND_API_KEY`, `IP_HASH_SECRET`, `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY`
    are already there): `supabase secrets set --project-ref dncodqeqpoqwcxdctzco CONTACT_TO=<mailbox>`.
@@ -173,6 +173,9 @@ reached nothing is sent. Only `https://ravidorr.github.io` may call it from a br
 3. Set `CONTACT_FORM_ENABLED=true` the same way, check with `curl -s -X POST <url>/functions/v1/contact -H 'content-type: application/json' -H 'origin: https://ravidorr.github.io' -d '{"message":"test","elapsed":5000}'`
    (one real email arrives), then set `CONTACT_FORM_ENABLED = True` in `build_dashboard.py` in a PR (update `tests/test_build_dashboard.py` and
    `tests/test_legal_wording.py` with it). To close the form, unset the secret: the next request answers 404.
+
+A visitor who asks to have a message deleted: delete the thread from the maintainer's mailbox and from its Trash. The lawyer
+agreed on 2026-11-17 that this is enough, so Resend is not asked.
 
 ## Report a site (Edge Function `report-site`)
 
@@ -781,7 +784,7 @@ compares them.
 `templates/digest.js` (a module with its own integrity hash, built to `docs/digest.js` only while the switch is on). The "Job
 alerts" button sits next to "Sign out" and opens a native dialog with the state (not on, waiting for you to confirm, on, unsubscribed),
 the address field, daily or weekly, the filters the email will use, "Use the page filters now" and the actions "Start job
-alerts" (or "Send the confirmation again" while waiting, "Confirm new address" while on) and "End job alerts". The
+alerts" (or "Resend confirmation" while waiting, "Confirm new address" while on) and "End job alerts". The
 button copies exactly regions, levels, role types and keywords from the dashboard at that moment (`globalThis.misraEmailFilters()`
 in `dashboard.js` returns copies); later changes to the page's filters, a quick search included, change nothing until it is pressed
 again. While the email is off the choices are a draft sent with "Start job alerts"; while it waits or runs, a new frequency or

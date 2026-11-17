@@ -192,7 +192,7 @@ if (open && dialog) {
     const changed = state === 'on' && typed !== '' && typed !== view.row.address.toLowerCase();
     send.hidden = state === 'on' && !changed;
     off.hidden = !running();
-    send.textContent = { waiting: 'Send the confirmation again', on: 'Confirm new address' }[state] ?? 'Start job alerts';
+    send.textContent = { waiting: 'Resend confirmation', on: 'Confirm new address' }[state] ?? 'Start job alerts';
   }
 
   /* Reads the user's own row (row-level security gives them theirs and no token hash). Returns true when it could. */

@@ -25,12 +25,9 @@ describe('ESLint: no emoji and no em dash in strings', () => {
     expect(await ruleIds(code, 'templates/sample.js')).toEqual(['no-em-dash/no-em-dash', 'no-em-dash/no-em-dash']);
   });
 
-  it('accepts a hyphen, and an em dash in the lawyer-approved templates/email.js', async () => {
+  it('accepts a hyphen, and fails on an em dash and an emoji even in templates/email.js', async () => {
     expect(await ruleIds("export const a = 'a - b';\n", 'scripts/sample.mjs')).toEqual([]);
-    expect(await ruleIds(`export const a = 'a ${EM_DASH} b';\n`, 'templates/email.js')).toEqual([]);
-  });
-
-  it('still fails on an emoji in templates/email.js', async () => {
+    expect(await ruleIds(`export const a = 'a ${EM_DASH} b';\n`, 'templates/email.js')).toEqual(['no-em-dash/no-em-dash']);
     expect(await ruleIds(`export const a = '${EMOJI}';\n`, 'templates/email.js')).toEqual(['no-emoji/no-emoji']);
   });
 });
@@ -50,12 +47,11 @@ describe('lint-text: Markdown and Python', () => {
     expect(findProblems('x.md', plain)).toEqual([]);
   });
 
-  it('skips the em dash, not the emoji, in exactly the lawyer files', () => {
-    expect(LAWYER_FILES).toContain('ASSISTANT.md');
-    for (const file of LAWYER_FILES) {
-      expect(findProblems(file, `a ${EM_DASH} b\n`)).toEqual([]);
+  it('exempts no file: the lawyer files have no em dash since his answer of 2026-11-17', () => {
+    expect(LAWYER_FILES).toEqual([]);
+    for (const file of ['ASSISTANT.md', 'PRIVACY.md', 'TERMS.md', 'SECURITY.md', 'supabase/email-texts.md']) {
+      expect(findProblems(file, `a ${EM_DASH} b\n`)).toEqual([`${file}:1: em dash`]);
       expect(findProblems(file, `${EMOJI}\n`)).toEqual([`${file}:1: emoji`]);
     }
-    expect(findProblems('docs/ASSISTANT.md', `a ${EM_DASH} b\n`)).toEqual(['docs/ASSISTANT.md:1: em dash']);
   });
 });

@@ -19,7 +19,7 @@ const back = document.getElementById('back');
 
 const NOT_VALID = [
   'This link is no longer valid',
-  'It may have expired (confirmation links work for 7 days), been replaced by a newer link, or belong to job alerts that were turned off. If you got more than one confirmation email, use the link in the newest one. To manage your job alerts or delete your account, sign in on the Misra dashboard. If your job alerts are waiting for confirmation, press "Send the confirmation again" there to get a new link.',
+  'It may have expired (confirmation links work for 7 days), been replaced by a newer link, or belong to job alerts that were turned off. If you got more than one confirmation email, use the link in the newest one. To manage your job alerts or delete your account, sign in on the Misra dashboard. If your job alerts are waiting for confirmation, press "Resend confirmation" there to get a new link.',
 ];
 const UNSUBSCRIBE_NOT_VALID = [
   'This unsubscribe link no longer works',

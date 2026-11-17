@@ -65,6 +65,18 @@ def site(db: sqlite3.Connection, workdir: Path, monkeypatch: pytest.MonkeyPatch)
     return build_site(db, workdir)
 
 
+def gap_row(name: str, careers_url: str, reason: str, note: str) -> dict[str, object]:
+    """A researched company that is not crawled, as data/companies.json holds it."""
+    return {
+        "name": name,
+        "domain": f"{name.lower()}.test",
+        "crawl": False,
+        "careers_url": careers_url,
+        "status": "careers_page_only",
+        "gap": {"reason": reason, "note": note},
+    }
+
+
 def build_site(db: sqlite3.Connection, workdir: Path, fill: Callable[[sqlite3.Connection], None] | None = None) -> Path:
     """The real templates and design system built over a small database (the jobs `fill` adds, else a few of Acme's);
     returns docs/."""
@@ -76,17 +88,19 @@ def build_site(db: sqlite3.Connection, workdir: Path, fill: Callable[[sqlite3.Co
     write_json(
         workdir / "data" / "companies.json",
         [
-            {"name": "Acme", "status": "ok"},
-            {"name": "Nowhere", "status": "x", "domain": "nowhere.test", "careers_url": "https://nowhere.test/jobs"},
+            {"name": "Acme", "crawl": True, "status": "ok"},
+            {
+                "name": "Nowhere",
+                "crawl": True,
+                "status": "x",
+                "domain": "nowhere.test",
+                "careers_url": "https://nowhere.test/jobs",
+            },
+            gap_row("Parked", "", "site_unusable", "Domain parked at GoDaddy"),
+            gap_row("LongName", "https://long.test/careers", "needs_reader", LONG_NOTE),
+            gap_row("Walled", "https://walled.test/jobs", "bot_protection", ""),
+            gap_row("Guarded", "https://guarded.test/careers", "robots_disallowed", ""),
         ],
-    )
-    (workdir / "data" / "unresolved_candidates.csv").write_text(
-        "name,domain,careers_url,segment,reason,note\r\n"
-        "Parked,parked.test,,deeptech,site_unusable,Domain parked at GoDaddy\r\n"
-        f'LongName,long.test,https://long.test/careers,deeptech,needs_reader,"{LONG_NOTE}"\r\n'
-        "Walled,walled.test,https://walled.test/jobs,multinational,bot_protection,\r\n"
-        "Guarded,guarded.test,https://guarded.test/careers,deeptech,robots_disallowed,\r\n",
-        encoding="utf-8",
     )
     if fill is not None:
         fill(db)
