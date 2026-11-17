@@ -1198,9 +1198,12 @@ function renderStories(counts) {
   );
   layoutStories();
   if (focused !== undefined) {
-    /* the circle can be gone (a chosen company without new roles, turned off): the focus goes to the list heading, never to the page */
+    /* the circle can be gone (a chosen company without new roles, turned off) or put away behind "Show all" (a company
+       that is not on the first line goes back to its place): the focus goes to the button, or else to the list heading,
+       never to the page and never to a hidden circle */
     const same = [...$('stories').children].find((li) => li.firstChild.dataset.company === focused);
-    (same?.firstChild ?? $('list-h')).focus();
+    const toggle = $('hiringToggle');
+    (same && !same.hidden ? same.firstChild : toggle.hidden ? $('list-h') : toggle).focus();
   }
 }
 

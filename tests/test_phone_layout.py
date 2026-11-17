@@ -1171,3 +1171,23 @@ async def test_a_chosen_company_among_the_first_fifteen_is_moved_first_not_repea
     names = await page.locator("#stories .story").evaluate_all("els => els.map(e => e.dataset.company)")
     assert names[0] == "Company 07"
     assert len(names) == len(set(names)) == HIRING_COMPANIES  # still 15, none twice
+
+
+async def test_the_focus_stays_on_the_page_when_a_chosen_circle_goes_behind_the_button(
+    page: Page, db: sqlite3.Connection, workdir: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The bug: a company from beyond the first line, chosen in the Company filter, shows first; clearing it by the
+    keyboard sent it back behind "Show all" and the focus stayed on that hidden circle, that is, fell to the page."""
+    await open_page(page, names_site(SIXTEEN, db, workdir, monkeypatch), 375)
+    await page.evaluate(
+        "() => { const c = document.querySelector('#company'); c.value = 'Company 10';"
+        " c.dispatchEvent(new Event('change', { bubbles: true })); }"
+    )
+    chosen = page.locator('#stories .story[data-company="Company 10"]')
+    assert await chosen.is_visible()
+    await chosen.focus()
+    await page.keyboard.press("Enter")  # turns the filter off: the circle returns to its place, past the first line
+    assert await chosen.is_hidden()
+    assert await page.evaluate("document.activeElement !== document.body")
+    assert await page.evaluate("document.activeElement.id === 'hiringToggle' || document.activeElement.id === 'list-h'")
+    assert await page.evaluate("document.activeElement.getClientRects().length > 0")  # and it shows
