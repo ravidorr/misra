@@ -1698,28 +1698,30 @@ const gaps = DATA.gaps ?? { blocked: [], untracked: [], total: 0, groups: [] };
 {
   /* The card is always there: "Add a company" (report.js) sits under the list and stays in view while the list is
      closed, even when no company is known to be missing. The reader gets two lists, not the internal reasons: the
-     companies we choose not to read (their robots.txt does not allow it) first, then the ones our crawler cannot read.
-     Each company keeps its reason in data-reason, and the reasons stay in the page data. */
+     companies we choose not to include (their robots.txt does not allow it) first, then the ones whose roles we
+     cannot find or read. Each company keeps its reason in data-reason, and the reasons stay in the page data. */
   const parts = [
     {
       part: 'skipped',
-      title: 'We choose not to read these',
+      title: 'We choose not to include these companies',
       note: 'Their policy does not allow automated access, so we respect it.',
       sites: [],
     },
     {
       part: 'cannot-read',
-      title: 'Our crawl misses these',
-      note: "Our daily crawl cannot find or read their roles, so they may be missing or old here. Each name opens the company's career page or job board in a new tab, or its website when we know no career page.",
+      title: 'We miss roles at these companies',
+      note: 'We cannot find or read their open roles in Israel.',
       sites: [],
     },
   ];
+  /* What a company's link opens (`to`, from the build): said in two or three words under the name. */
+  const LINK_KIND = { israel: 'Israel careers', careers: 'Careers page', site: 'Website' };
   for (const group of gaps.groups) {
     const part = parts[group.reason === 'robots_disallowed' ? 0 : 1];
     for (const site of group.sites) part.sites.push({ ...site, reason: group.reason });
   }
   if (gaps.total > 0) {
-    $('gaps-title').textContent = `Coverage gaps: ${gaps.total} companies whose roles may be missing or old`;
+    $('gaps-title').textContent = `Coverage gaps: ${gaps.total} ${gaps.total === 1 ? 'company' : 'companies'} whose roles may be missing or old`;
     for (const part of parts.filter((p) => p.sites.length > 0)) {
       part.sites.sort((a, b) => a.c.localeCompare(b.c, 'en', { sensitivity: 'base' }));
       const heading = `gap-${part.part}-h`;
@@ -1728,7 +1730,8 @@ const gaps = DATA.gaps ?? { blocked: [], untracked: [], total: 0, groups: [] };
         /* The name is a link to the careers page (or the company's own site): https only, so nothing else is ever linked. */
         const name = site.url?.startsWith('https://')
           ? h('a', { class: 'gap-link', href: site.url, target: '_blank', rel: 'noopener noreferrer' }, [
-              site.c,
+              h('span', { class: 'gap-name-text', text: site.c }),
+              ...(LINK_KIND[site.to] ? [h('span', { class: 'gap-to', text: LINK_KIND[site.to] })] : []),
               h('span', { class: 'sr-only', text: NEW_TAB }),
             ])
           : site.c;

@@ -33,6 +33,7 @@ PHONE = {"width": 375, "height": 800}
 TAP = 44
 # Chrome measures a 44 px box as 43.999999 now and then; the rule is still 44 (a 43 px target fails).
 TAP_MIN = TAP - 0.01
+SIGN_MIN = 28  # the chevron of the coverage card: wider than the text caret it replaced
 REST_PAGE = 1000
 REQUESTS_FOR_TOTAL = 3  # 2,345 rows at 1,000 a request
 CORS = {
@@ -52,7 +53,7 @@ SITES = {
     "Nowhere": "https://nowhere.test/jobs",
     "Guarded": "https://guarded.test/careers",
 }
-GAP_PARTS = [("We choose not to read these", 1), ("Our crawl misses these", 4)]
+GAP_PARTS = [("We choose not to include these companies", 1), ("We miss roles at these companies", 4)]
 
 
 @pytest.fixture
@@ -710,32 +711,66 @@ async def test_the_coverage_gap_card_has_two_parts_and_no_internal_reasons(page:
         assert internal not in text
     # the reason stays in the page for agents
     assert await page.locator("li[data-company=Parked]").get_attribute("data-reason") == "site_unusable"
-    assert await page.locator("li[data-company=Walled]").text_content() == "Walled (opens in a new tab)"
+    assert await page.locator("li[data-company=Walled]").text_content() == "WalledCareers page (opens in a new tab)"
     # the cards are in alphabetical order inside a part
     names = await page.locator("[data-part=cannot-read] li").evaluate_all("els => els.map(e => e.dataset.company)")
     assert names == ["LongName", "Nowhere", "Parked", "Walled"]
 
 
-async def test_the_coverage_gap_card_says_in_plain_words_which_sites_we_choose_not_to_read(
+async def test_the_coverage_gap_card_says_in_plain_words_which_sites_we_choose_not_to_include(
     page: Page, site: Path
 ) -> None:
     await serve(page, site)
     await open_gaps(page)
     skipped = page.locator("[data-part=skipped]")
-    assert await skipped.locator("h3 span").first.inner_text() == "We choose not to read these"
+    assert await skipped.locator("h3 span").first.inner_text() == "We choose not to include these companies"
     note = await skipped.locator(".gap-part-note").inner_text()
     assert note == "Their policy does not allow automated access, so we respect it."
     card = skipped.locator("li")
     assert await card.get_attribute("data-company") == "Guarded"
     assert await card.get_attribute("data-reason") == "robots_disallowed"
-    assert await card.text_content() == "Guarded (opens in a new tab)"  # the name and its link, nothing else
+    assert await card.text_content() == "GuardedCareers page (opens in a new tab)"  # the name, where it goes, the cue
     assert await skipped.locator("a").get_attribute("href") == "https://guarded.test/careers"
     unread = await page.locator("[data-part=cannot-read] .gap-part-note").inner_text()
-    assert unread == (
-        "Our daily crawl cannot find or read their roles, so they may be missing or old here. "
-        "Each name opens the company's career page or job board in a new tab, "
-        "or its website when we know no career page."
+    assert unread == "We cannot find or read their open roles in Israel."
+
+
+async def test_each_gap_link_says_where_it_goes(page: Page, site: Path) -> None:
+    await serve(page, site)
+    await open_gaps(page)
+    hints = await page.locator("#gaps .gap-card").evaluate_all(
+        "els => Object.fromEntries(els.map(e => [e.dataset.company, e.querySelector('.gap-to').textContent]))"
     )
+    # a careers page is named as such; a company with no career page opens its own website
+    assert hints == {
+        "Guarded": "Careers page",
+        "LongName": "Careers page",
+        "Nowhere": "Careers page",
+        "Parked": "Website",
+        "Walled": "Careers page",
+    }
+    assert await page.get_by_role("link", name="Walled Careers page (opens in a new tab)").count() == 1
+    link = page.locator("li[data-company=Parked] a")
+    assert await link.evaluate("a => a.textContent") == "ParkedWebsite (opens in a new tab)"
+    box = await link.bounding_box()
+    assert box is not None
+    assert box["height"] >= TAP_MIN
+
+
+async def test_the_gap_card_shows_with_a_sign_that_it_can_be_opened(page: Page, site: Path) -> None:
+    await page.emulate_media(reduced_motion="reduce")  # the turn is instant, so the value read is the final one
+    await serve(page, site)
+    sign = page.locator("#gaps summary .gaps-sign")
+    box = await sign.bounding_box()
+    assert box is not None
+    assert box["width"] >= SIGN_MIN  # larger than the old text caret
+    assert await sign.get_attribute("aria-hidden") == "true"  # the state is read from the details itself
+    closed = await sign.locator("svg").evaluate("e => getComputedStyle(e).transform")
+    assert closed == "none"
+    await page.locator("#gaps summary").click()
+    assert await page.locator("#gaps").evaluate("d => d.open") is True
+    opened = await sign.locator("svg").evaluate("e => getComputedStyle(e).transform")
+    assert opened == "matrix(-1, 0, 0, -1, 0, 0)"  # turned half way round: it points up
 
 
 async def test_every_site_on_the_coverage_gap_card_is_a_safe_link_that_the_keyboard_reaches(
@@ -747,7 +782,7 @@ async def test_every_site_on_the_coverage_gap_card_is_a_safe_link_that_the_keybo
     assert await page.locator("#gaps .gap-list li").count() == await links.count() == len(SITES)
     found = {}
     for link in await links.all():
-        name = (await link.text_content() or "").replace(" (opens in a new tab)", "")
+        name = await link.locator(".gap-name-text").text_content() or ""
         found[name] = await link.get_attribute("href")
         assert await link.get_attribute("target") == "_blank"
         assert await link.get_attribute("rel") == "noopener noreferrer"
@@ -760,7 +795,7 @@ async def test_every_site_on_the_coverage_gap_card_is_a_safe_link_that_the_keybo
     assert found == SITES
     assert all(href is not None and href.startswith("https://") for href in found.values())
     # Tab reaches every link, in order, and the focus is drawn
-    await page.locator("#gaps-title").focus()
+    await page.locator("#gaps summary").focus()
     reached = []
     for _ in range(40):
         await page.keyboard.press("Tab")
@@ -790,12 +825,9 @@ async def test_a_site_without_an_https_address_is_shown_as_plain_text(page: Page
 async def test_the_coverage_gap_card_opens_and_closes_and_says_so(page: Page, site: Path) -> None:
     await serve(page, site)
     details = page.locator("#gaps")
-    marker = "d => getComputedStyle(d.querySelector('summary'), '::before').content"
     assert await details.evaluate("d => d.open") is False
-    assert await details.evaluate(marker) == '"\u25b8"'
     await page.locator("#gaps-title").click()
     assert await details.evaluate("d => d.open") is True
-    assert await details.evaluate(marker) == '"\u25be"'
     await page.locator("#gaps-title").click()
     assert await details.evaluate("d => d.open") is False
 
