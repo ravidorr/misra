@@ -873,8 +873,29 @@ a {
   transform: rotate(-2deg);
 }
 
+/* The mark and the name are one link to the dashboard (44px tall) that is only as wide as they are; the auto margin
+   pushes the controls to the end, so an empty part of the header is not a link. */
+.top-home {
+  display: flex;
+  align-items: center;
+  margin-inline-end: auto;
+  gap: var(--space-3);
+  min-width: 0;
+  min-height: var(--tap);
+  color: inherit;
+  text-decoration: none;
+}
+
+.top > :not(.top-home) {
+  flex-shrink: 0; /* the controls keep their 44px; the logo link gives way on a narrow phone */
+}
+
+.top-home:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+}
+
 .top-name {
-  flex: 1;
   min-width: 0;
   margin: 0;
   font-size: var(--text-xl);
@@ -1577,7 +1598,7 @@ html:has(.sheet:modal) {
 
   /* The company, the title and Apply come first; the tags (place, level, role types) follow. Only the look changes: the
      tags are not controls, so the Tab order is the same. */
-  .card {
+  .card:not(.legal) {
     display: flex;
     flex-direction: column;
   }
@@ -1614,20 +1635,26 @@ html:has(.sheet:modal) {
   font-size: var(--text-lg);
 }
 
-/* The legal pages (privacy.html, terms.html, security.html): the Markdown of the repository, converted by
-   build_dashboard.py. A readable measure, and links, table cells and long words that never push the page sideways. */
+/* The pages built from a Markdown file (privacy, terms, security, about and the assistant page), converted
+   by build_dashboard.py. They are a `card` like the dashboard's, under the shared header, with the title on a lime
+   swipe like the dashboard's headline. Links, table cells and long words never push the page sideways. */
 .legal {
-  max-width: 68ch;
+  padding: var(--space-5);
   line-height: 1.6;
   overflow-wrap: break-word;
 }
 
 .legal h1 {
+  width: fit-content;
+  max-width: 100%;
   margin: 0 0 var(--space-4);
-  font-size: var(--text-xl);
+  padding: 0 var(--space-2);
+  background: var(--lime);
+  color: var(--on-lime);
+  font-size: 1.75rem;
   font-weight: 800;
-  letter-spacing: -0.03em;
-  line-height: 1.15;
+  letter-spacing: -0.04em;
+  line-height: 1.3;
 }
 
 .legal h2 {
@@ -1714,30 +1741,6 @@ html:has(.sheet:modal) {
 
 .legal th {
   background: var(--accent-bg);
-}
-
-.legal-foot {
-  max-width: 68ch;
-  margin-top: var(--space-6);
-  padding-top: var(--space-4);
-  border-top: var(--border-width) solid var(--line);
-  color: var(--muted);
-  font-size: var(--text-sm);
-}
-
-.legal-nav {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0 var(--space-3);
-  margin-bottom: var(--space-3);
-}
-
-.legal-nav a {
-  display: inline-flex;
-  align-items: center;
-  min-width: var(--tap);
-  min-height: var(--tap);
-  justify-content: center;
 }
 
 /* The page the emails link to (email.html): the message of each state in one card under the header, then the footer links. */

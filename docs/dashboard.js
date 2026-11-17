@@ -6,11 +6,9 @@ const LS_Q = 'misra-pending-choices-v1';
 const LS_F = 'il-jobs-filters-v3';
 const LS_PF = 'misra-pending-filters-v1';
 const LS_I = 'misra-imported-v1';
-const LS_T = 'misra-theme';
 const OTHER = 'Other';
 const REMOTE_REGION = 'Remote';
 const REMOTE_NOT_SAID = 'Remote, country not given';
-const MODES = ['auto', 'light', 'dark'];
 const SIZES = [10, 25, 50, 100];
 const ANNOUNCE_DELAY_MS = 600;
 
@@ -30,33 +28,6 @@ function lsSet(key, value) {
     /* Storage is blocked: the choice lasts until the page closes. */
   }
 }
-
-/* Theme: auto follows the system; light and dark are forced with data-theme. */
-function themeLabel(mode) {
-  const button = $('theme');
-  button.setAttribute('aria-label', `Theme: ${mode}`);
-  button.title = `Theme: ${mode}`;
-}
-
-function currentMode() {
-  return document.documentElement.getAttribute('data-theme') ?? 'auto';
-}
-
-function setTheme(mode) {
-  globalThis.misraTheme(mode);
-  try {
-    if (mode === 'auto') localStorage.removeItem(LS_T);
-    else localStorage.setItem(LS_T, mode);
-  } catch {
-    /* Storage is blocked: the theme lasts until the page closes. */
-  }
-  themeLabel(mode);
-}
-
-themeLabel(currentMode());
-$('theme').addEventListener('click', () => {
-  setTheme(MODES[(MODES.indexOf(currentMode()) + 1) % MODES.length]);
-});
 
 /* The backend: Supabase over PostgREST, read with the public anon key (row-level security lets it read open jobs only).
    build_dashboard.py injects both values, the same ones it puts in the page's connect-src. */
