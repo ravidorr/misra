@@ -15,7 +15,7 @@ from tests.test_dashboard_page import (
     AXE,
     ISRAEL_JOBS,
     PHONE,
-    TAP,
+    TAP_MIN,
     USER_ID,
     WEBMCP,
     AuthBackend,
@@ -725,7 +725,7 @@ async def test_the_offer_has_no_axe_violations_and_big_enough_targets(page: Page
         for target in await page.locator(selector).all():
             box = await target.bounding_box()
             assert box is not None
-            assert box["height"] >= TAP
+            assert box["height"] >= TAP_MIN
     assert await page.evaluate("document.documentElement.scrollWidth <= window.innerWidth")
 
 

@@ -9,7 +9,7 @@ import pytest
 from playwright.async_api import Locator, Page, expect
 
 import build_dashboard
-from tests.test_dashboard_page import AXE, AXE_RUN, PHONE, TAP, Backend, build_site, job, serve
+from tests.test_dashboard_page import AXE, AXE_RUN, PHONE, TAP_MIN, Backend, build_site, job, serve
 
 SNIPPET = "We are looking for a product manager to join a small team that builds tools for"
 CUT = SNIPPET + " people who plan their week and"  # 255-ish characters, no final punctuation: cut by the data
@@ -153,13 +153,13 @@ async def test_the_detail_view_has_no_axe_violations_44px_targets_and_no_sideway
     assert await button(page, "cut").bounding_box() is not None
     for card_button in await page.locator("[data-detail]").all():
         box = await card_button.bounding_box()
-        assert box is not None and box["height"] >= TAP and box["width"] >= TAP
+        assert box is not None and box["height"] >= TAP_MIN and box["width"] >= TAP_MIN
     await open_detail(page, "cut")
     await page.evaluate(AXE.read_text(encoding="utf-8"))
     assert await page.evaluate(AXE_RUN) == []
     for control in ("#detailClose", "#detailLink"):
         box = await page.locator(control).bounding_box()
-        assert box is not None and box["height"] >= TAP
+        assert box is not None and box["height"] >= TAP_MIN
     box = await page.locator(DETAIL).bounding_box()
     assert box is not None and box["x"] >= 0 and box["x"] + box["width"] <= size["width"]
     assert await page.evaluate("document.documentElement.scrollWidth <= document.documentElement.clientWidth")

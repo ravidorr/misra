@@ -22,7 +22,7 @@ from tests.test_dashboard_page import (
     ISRAEL_JOBS,
     PAGE_SIZE,
     PHONE,
-    TAP,
+    TAP_MIN,
     USER_ID,
     WEBMCP,
     AuthBackend,
@@ -511,7 +511,7 @@ async def test_fr2_ac8_a_star_made_while_the_service_is_down_is_kept_and_said_to
     assert await page.locator("#syncNote").get_attribute("role") == "status"
     box = await page.locator("#syncRetry").bounding_box()
     assert box is not None
-    assert box["height"] >= TAP
+    assert box["height"] >= TAP_MIN
 
 
 async def test_fr2_ac8_the_kept_choice_survives_a_reload_and_is_saved_when_the_service_is_back(
@@ -734,7 +734,7 @@ async def test_the_cards_and_their_buttons_fit_a_phone(page: Page, site: Path, s
     for target in await page.locator("#list .btn, #starredView").and_(page.locator(":visible")).all():
         box = await target.bounding_box()
         assert box is not None
-        assert box["height"] >= TAP
+        assert box["height"] >= TAP_MIN
         assert 0 <= box["x"] <= box["x"] + box["width"] <= PHONE["width"]
 
 

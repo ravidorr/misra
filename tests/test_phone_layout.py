@@ -14,7 +14,7 @@ from playwright.async_api import Page, expect
 
 import build_dashboard
 from tests.conftest import add_job, write_json
-from tests.test_dashboard_page import AXE, TAP, Backend, build_site, serve
+from tests.test_dashboard_page import AXE, TAP_MIN, Backend, build_site, serve
 
 HIRING_COMPANIES = 15  # the row shows up to 15
 ROLES_PER_COMPANY = 2  # an old one and a new one
@@ -185,7 +185,7 @@ async def test_hiring_now_is_one_line_with_the_rest_behind_a_button(page: Page, 
     assert await toggle.inner_text() == f"Show all {HIRING_COMPANIES}"
     toggle_box = await toggle.bounding_box()
     assert toggle_box is not None
-    assert toggle_box["height"] >= TAP
+    assert toggle_box["height"] >= TAP_MIN
     assert toggle_box["x"] >= one_line[-1]["x"] + one_line[-1]["width"]  # at the end of the line
     assert toggle_box["x"] + toggle_box["width"] <= width
     assert await page.locator("#stories .story[hidden], #stories > li[hidden]").count() == HIRING_COMPANIES - len(
@@ -253,8 +253,8 @@ async def test_every_control_is_a_44px_target_on_a_phone(page: Page, crowd: Path
     page_controls = await visible_controls(page, "body")  # the header and the footer too
     assert len(page_controls) > HIRING_COMPANIES
     for name, box in page_controls:
-        assert box["height"] >= TAP, name
-        assert box["width"] >= TAP, name
+        assert box["height"] >= TAP_MIN, name
+        assert box["width"] >= TAP_MIN, name
         assert 0 <= box["x"] <= box["x"] + box["width"] <= width, name
     await open_sheet(page)
     await page.locator("#places-title").click()
@@ -264,16 +264,16 @@ async def test_every_control_is_a_44px_target_on_a_phone(page: Page, crowd: Path
     sheet_controls = await visible_controls(page, SHEET)
     assert len(sheet_controls) > len(["levels", "types", "regions"])
     for name, box in sheet_controls:
-        assert box["height"] >= TAP, name
-        assert box["width"] >= TAP, name
+        assert box["height"] >= TAP_MIN, name
+        assert box["width"] >= TAP_MIN, name
         assert 0 <= box["x"] <= box["x"] + box["width"] <= width, name
 
 
 async def test_every_control_is_a_44px_target_on_a_desktop(page: Page, crowd: Path) -> None:
     await open_page(page, crowd, 1650)
     for name, box in await visible_controls(page, "body"):
-        assert box["height"] >= TAP, name
-        assert box["width"] >= TAP, name
+        assert box["height"] >= TAP_MIN, name
+        assert box["width"] >= TAP_MIN, name
 
 
 @pytest.mark.parametrize("size", [(375, 812), (320, 640), (1650, 900)])
@@ -528,8 +528,8 @@ async def test_reset_filters_is_a_secondary_button_beside_the_primary_one(page: 
     assert await foot.evaluate_all("els => els.map(e => e.id)") == ["reset", "filtersDone"]  # Tab order: Reset first
     box = await reset.bounding_box()
     assert box is not None
-    assert box["height"] >= TAP
-    assert box["width"] >= TAP
+    assert box["height"] >= TAP_MIN
+    assert box["width"] >= TAP_MIN
     assert await page.locator(SHEET).evaluate("e => e.scrollWidth <= e.clientWidth")
 
 
@@ -587,7 +587,7 @@ async def test_report_a_site_is_in_view_with_the_coverage_card_closed_and_open(
     await expect(button).to_be_visible()  # closed: the list is hidden, the report row is not
     box = await button.bounding_box()
     assert box is not None
-    assert box["height"] >= TAP
+    assert box["height"] >= TAP_MIN
     assert 0 <= box["x"] <= box["x"] + box["width"] <= width
     assert await page.evaluate(NO_SIDEWAYS)
     await page.locator("#gaps-title").click()
@@ -622,8 +622,8 @@ async def test_the_footer_fits_and_has_44px_links(page: Page, crowd: Path, width
     for link in await foot.locator("nav a").all():
         link_box = await link.bounding_box()
         assert link_box is not None
-        assert link_box["height"] >= TAP
-        assert link_box["width"] >= TAP
+        assert link_box["height"] >= TAP_MIN
+        assert link_box["width"] >= TAP_MIN
         assert box["x"] <= link_box["x"] <= link_box["x"] + link_box["width"] <= box["x"] + box["width"]
         names.append(await link.inner_text())
     assert names == ["Privacy", "Terms", "Connect your assistant", "Contact"]

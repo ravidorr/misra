@@ -13,7 +13,7 @@ import pytest
 from playwright.async_api import Page, Route, expect
 
 import build_dashboard
-from tests.test_dashboard_page import AXE, PHONE, TAP, WEBMCP, serve, site  # noqa: F401  (site is a fixture)
+from tests.test_dashboard_page import AXE, PHONE, TAP_MIN, WEBMCP, serve, site  # noqa: F401  (site is a fixture)
 from tests.test_sign_in import AXE_RUN
 
 FUNCTION = f"{build_dashboard.SUPABASE_URL}/functions/v1/report-site"
@@ -622,12 +622,12 @@ async def test_the_form_reads_well_on_a_phone(page: Page, site: Path) -> None:
     for control in await page.locator(f"{DIALOG} .btn, {DIALOG} .field").and_(page.locator(":visible")).all():
         size = await control.bounding_box()
         assert size is not None
-        assert round(size["height"]) >= TAP  # subpixel layout can give 43.9999
-        assert round(size["width"]) >= TAP
+        assert size["height"] >= TAP_MIN
+        assert size["width"] >= TAP_MIN
     target = await page.locator("#reportPrivacy a").bounding_box()  # the privacy link is a 44px target too
     assert target is not None
-    assert round(target["height"]) >= TAP
-    assert round(target["width"]) >= TAP
+    assert target["height"] >= TAP_MIN
+    assert target["width"] >= TAP_MIN
     await page.evaluate(AXE.read_text(encoding="utf-8"))
     assert await page.evaluate(AXE_RUN) == []
 
@@ -637,7 +637,7 @@ async def test_the_card_action_is_big_enough_on_a_phone(page: Page, site: Path) 
     await ready(page, site)
     box = await page.locator("#reportOpen").bounding_box()  # with the list closed
     assert box is not None
-    assert box["height"] >= TAP
+    assert box["height"] >= TAP_MIN
     assert 0 <= box["x"] <= box["x"] + box["width"] <= PHONE["width"]
 
 

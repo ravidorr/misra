@@ -31,6 +31,8 @@ DEBOUNCE_MS = 600
 LONG_NOTE = "A very long note without a break " + "x" * 120
 PHONE = {"width": 375, "height": 800}
 TAP = 44
+# Chrome measures a 44 px box as 43.999999 now and then; the rule is still 44 (a 43 px target fails).
+TAP_MIN = TAP - 0.01
 REST_PAGE = 1000
 REQUESTS_FOR_TOTAL = 3  # 2,345 rows at 1,000 a request
 CORS = {
@@ -403,9 +405,6 @@ class PrefsBackend:
             await route.fulfill(status=201, headers=ROWS_CORS)
 
 
-UNDO_TAP = 44  # the smallest target the design system allows
-
-
 async def account_action(page: Page, selector: str) -> None:
     """Pick an item of the account menu with the mouse: open the menu if it is closed, then press the item."""
     if await page.locator("#accountMenu").is_hidden():
@@ -578,7 +577,7 @@ async def test_an_unreachable_or_incomplete_backend_shows_an_error_card(page: Pa
     assert await page.locator("#list > li").count() == 0
     box = await card.locator("#retry").bounding_box()
     assert box is not None
-    assert box["height"] >= TAP
+    assert box["height"] >= TAP_MIN
 
 
 async def test_an_empty_table_is_an_error_not_an_empty_dashboard(page: Page, site: Path) -> None:
@@ -756,8 +755,8 @@ async def test_every_site_on_the_coverage_gap_card_is_a_safe_link_that_the_keybo
         assert await link.get_attribute("tabindex") is None
         box = await link.bounding_box()
         assert box is not None
-        assert box["height"] >= TAP
-        assert box["width"] >= TAP
+        assert box["height"] >= TAP_MIN
+        assert box["width"] >= TAP_MIN
     assert found == SITES
     assert all(href is not None and href.startswith("https://") for href in found.values())
     # Tab reaches every link, in order, and the focus is drawn
@@ -819,7 +818,7 @@ async def test_the_coverage_gap_card_reads_well_on_a_phone(page: Page, site: Pat
     assert await page.evaluate("document.documentElement.scrollWidth <= document.documentElement.clientWidth")
     summary = await page.locator("#gaps summary").bounding_box()
     assert summary is not None
-    assert summary["height"] >= TAP
+    assert summary["height"] >= TAP_MIN
     for note in await page.locator("#gaps .gap-part-note").all():
         box = await note.bounding_box()
         assert box is not None
@@ -828,7 +827,7 @@ async def test_the_coverage_gap_card_reads_well_on_a_phone(page: Page, site: Pat
     for card in await page.locator("#gaps .gap-card").all():
         box = await card.bounding_box()
         assert box is not None
-        assert box["height"] >= TAP
+        assert box["height"] >= TAP_MIN
         assert box["x"] + box["width"] <= width
 
 
@@ -1258,7 +1257,7 @@ async def test_the_filters_read_well_on_a_phone(page: Page, site: Path) -> None:
     for target in await targets.all():
         box = await target.bounding_box()
         assert box is not None
-        assert box["height"] >= TAP
+        assert box["height"] >= TAP_MIN
         assert box["x"] >= 0
         assert box["x"] + box["width"] <= FEW["width"]
     for group in ("levels", "types", "regions"):  # the chips wrap instead of scrolling sideways
@@ -1325,7 +1324,7 @@ async def test_reset_can_be_undone_for_a_few_seconds(page: Page, site: Path) -> 
     undo = page.locator("#undoReset")
     box = await undo.bounding_box()
     assert box is not None
-    assert box["height"] >= UNDO_TAP
+    assert box["height"] >= TAP_MIN
     await page.fill("#q", "product manager")  # typed while the offer shows: the search words stay what they are now
     assert await note.inner_text() == ""  # any other change ends the offer: it would restore stale state
     await page.click(".chip[data-group=levels][data-value=Junior]")
