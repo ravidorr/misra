@@ -818,3 +818,92 @@ token even for `OPTIONS`), or a real user token in check 3 gets a 401 from the g
 whose signing keys the gateway's JWT check does not accept), set `verify_jwt = false` for this function in `config.toml` and
 redeploy: the function already asks Auth who the caller is and refuses everything without a token Auth accepts. Then update the
 test in `tests/test_function_config.py` and the comment in `config.toml`.
+
+## Assistant endpoint (Edge Function `mcp`)
+
+PLAN.md step 8.1, PRD FR-6. A public, read-only MCP server (Model Context Protocol, Streamable HTTP, JSON answers, no
+sessions) so anyone's AI assistant can search the jobs on the dashboard and read one job in full. No sign-in, no key, no
+user data: it cannot see anyone's stars, discards or preferences.
+
+**It is built and off.** The lawyer asked on 2026-11-17 to review it before it goes live, because `get_job` returns the full
+text of a posting. Until he confirms, the function is not deployed, and even a deployed copy answers `404 {"error":"not_found"}`
+to every request (no CORS headers, no sign that an endpoint is there) unless the function secret `ASSISTANT_ENDPOINT_ENABLED`
+is exactly `true` (the same pattern as `DIGEST_SIGNUP_ENABLED`). The dashboard page "Connect your assistant" (step 8.2) is behind
+its own build constant, `ASSISTANT_PAGE_ENABLED` in `build_dashboard.py`, `False` until then.
+
+Files: `supabase/functions/mcp/` (`index.ts` starts the server and is the only file that knows Deno, `handler.ts` is the protocol,
+the switch and the limits, `tools.ts` what the two tools say and how their arguments are read), the shared
+`_shared/visitor.ts` (the visitor's network and its daily keyed hash, moved out of `report-site`) and `callRpc` in
+`_shared/subscription.ts`, the migration `20261125100000_assistant_endpoint.sql` and `supabase/config.toml`
+(`verify_jwt = false`: assistants call it with no token).
+
+### The two tools
+
+`POST <project url>/functions/v1/mcp` with `Content-Type: application/json` and one JSON-RPC 2.0 message (`initialize`,
+`notifications/initialized`, `ping`, `tools/list`, `tools/call`). `GET` answers 405 (no server-sent stream is offered). Any origin
+may call it (CORS `*`), because the data is public and nothing uses cookies or a token.
+
+- `search_jobs` (`query`, `levels`, `roleTypes`, `regions`, `limit` 1 to 50 (20), `offset`): the SQL function `search_jobs`, which
+  follows the rules of the dashboard's own search so the assistant sees the same roles: open jobs in Israel, any of the chosen
+  levels, role types and regions, and every word of the query in the company, title, team or location or in the full text
+  (`search_job_keys`, step 7.3; words of three letters or more). Newest first. Each role has the dashboard's public columns and the
+  snippet, never the full text. A value no role has (a level that is not one of the three, say) comes back as a `warnings` entry,
+  so an empty answer is never silent. The list of values is in `tools.ts`; `test/mcp-filter-values.test.mjs` fails if it drifts
+  from `classify.py` or `regions.py`.
+- `get_job` (`company`, `job_id`): one job with everything collected, including `description` and `details`, read by its exact key
+  with the service role (no SQL function: the text is closed to the public roles and no function returns it in bulk), and only when
+  it is open or closed for less than 30 days (the same day the daily trim deletes the text). Never a list, never more than one
+  job per call.
+
+An invalid argument, a refused call and a failing database come back as a tool result with `isError: true` and a sentence the
+assistant can read to the person; an unknown method or tool is a JSON-RPC error; a body over 16 KiB is 413.
+
+### Limits and what is kept
+
+Counted in the table `assistant_ip_limits` by `assistant_reserve`, against a keyed hash (the secret `IP_HASH_SECRET`, the one
+`report-site` uses) of the tool, the caller's network (`cf-connecting-ip`, an IPv6 address as its /64) and the day, so the key
+changes every day and no address is stored or logged:
+
+- `search_jobs`: 200 calls per caller per day. `get_job`: 30 calls per caller per day, and 1,000 per day for everyone together
+  (a row whose key is the fixed word `get_job:all`), so many callers cannot read the texts in bulk. The numbers are
+  `SEARCH_DAILY_LIMIT`, `JOB_DAILY_LIMIT` and `JOB_DAILY_CAP` in `handler.ts` and are one of the lawyer's questions.
+- A refused call is not counted, a call with a bad argument is not counted, and if the database cannot be reached nothing is
+  answered (fail closed).
+- Rows of earlier days are deleted by the next call and by `report_site_cleanup`, which the daily run already calls (the migration
+  replaces it so it also clears this table; nothing else changes in the daily run).
+- Nothing else is stored: no query, no job key, no address. A log line holds a function name and a status.
+
+### How the assistant endpoint is tested
+
+`test/mcp.test.ts` (vitest, part of `npm run test` and CI) speaks the protocol as an HTTP client against the handler with a fake of
+the database: the handshake and the version negotiation, `tools/list`, both tools, the argument checks, the limits (per caller and
+for everyone), the fail-closed paths, the switch, and that only hashes reach the database and nothing personal reaches a log.
+`supabase/tests/assistant_endpoint.sql` runs the counter and `search_jobs` against a real Postgres (the filters, the full-text match, the
+order, the paging, the columns, who may call what). `tests/test_migrations.py` pins the migration: the counter belongs to the
+service role, `search_jobs` is closed to the public roles and never names `description` or `details`. Before the endpoint was
+finished it was also run once with the official MCP TypeScript client (`@modelcontextprotocol/sdk` 1.32) through `fetch`:
+connect, list the tools, call both.
+
+### Turn it on (the maintainer, after the lawyer has confirmed; nothing here is done by the pull request)
+
+1. Apply the migration `supabase/migrations/20261125100000_assistant_endpoint.sql` (it is harmless while the function is off).
+2. Deploy: `supabase functions deploy mcp --project-ref dncodqeqpoqwcxdctzco` (`config.toml` sets `verify_jwt = false`). `IP_HASH_SECRET`,
+   `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` are already there (a missing one makes it answer 500 and the log names it).
+3. Set the secret: `supabase secrets set --project-ref dncodqeqpoqwcxdctzco ASSISTANT_ENDPOINT_ENABLED=true`. To turn it off again,
+   unset it (`supabase secrets unset ... ASSISTANT_ENDPOINT_ENABLED`); the next request answers 404.
+4. Check it with the secret set:
+
+```sh
+URL=https://dncodqeqpoqwcxdctzco.supabase.co/functions/v1/mcp
+H='-H Content-Type:application/json -H Accept:application/json,text/event-stream'
+# 1. the handshake, then the list of tools (two)
+curl -s -X POST "$URL" $H -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"curl","version":"1"}}}'
+curl -s -X POST "$URL" $H -d '{"jsonrpc":"2.0","id":2,"method":"tools/list"}'
+# 2. a search, then one job by a company and job_id from it (the job's text is in the answer)
+curl -s -X POST "$URL" $H -d '{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"search_jobs","arguments":{"query":"product","limit":2}}}'
+# 3. the same with the secret unset: 404 {"error":"not_found"}
+```
+
+Then in the SQL editor `select count(*) from public.assistant_ip_limits;` is more than 0 and `select ip_hash from public.assistant_ip_limits limit 3;`
+shows 64-character hashes, never an address. Last, a real assistant: add `<project url>/functions/v1/mcp` as a custom connector (see
+step 8.2) and ask it for junior roles in Haifa.

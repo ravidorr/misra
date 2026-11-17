@@ -118,17 +118,10 @@ export async function verifyUnsubscribeToken(secret: string, token: unknown): Pr
 export class DatabaseError extends Error {}
 
 /**
- * Calls a Postgres function through PostgREST as the service role and returns its answer, which must be one of the
- * `allowed` words (the functions return text, which PostgREST sends as a bare JSON string). Any other outcome throws
+ * Calls a Postgres function through PostgREST as the service role and returns its answer as JSON. Any failure throws
  * with the status only, never with a body.
  */
-export async function callDatabase<Word extends string>(
-  deps: Deps,
-  config: Config,
-  name: string,
-  args: Record<string, unknown>,
-  allowed: readonly Word[],
-): Promise<Word> {
+export async function callRpc(deps: Deps, config: Config, name: string, args: Record<string, unknown>): Promise<unknown> {
   const response = await deps.fetch(`${config.supabaseUrl}/rest/v1/rpc/${name}`, {
     method: 'POST',
     headers: {
@@ -143,9 +136,23 @@ export async function callDatabase<Word extends string>(
     await response.body?.cancel().catch(() => undefined);
     throw new DatabaseError(`${name} answered ${String(response.status)}`);
   }
-  const answer: unknown = await response.json().catch(() => {
+  return response.json().catch(() => {
     throw new DatabaseError(`${name} gave an answer that is not JSON`);
   });
+}
+
+/**
+ * Calls a Postgres function that returns text (PostgREST sends it as a bare JSON string) and checks that the answer is
+ * one of the `allowed` words.
+ */
+export async function callDatabase<Word extends string>(
+  deps: Deps,
+  config: Config,
+  name: string,
+  args: Record<string, unknown>,
+  allowed: readonly Word[],
+): Promise<Word> {
+  const answer = await callRpc(deps, config, name, args);
   const word = allowed.find((candidate) => candidate === answer);
   if (word === undefined) throw new DatabaseError(`${name} gave an answer this function does not know`);
   return word;
