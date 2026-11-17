@@ -1,52 +1,10 @@
 # TODO
 
-Open work, as of 2026-11-14. Each item says what triggers it, how to do it and when it is done. When one is finished,
+Open work, as of 2026-11-17. Each item says what triggers it, how to do it and when it is done. When one is finished,
 delete it and update the counts in the others: the 85 and the four segment counts in the research item (a pin removes
 one row from one segment), its "(28)" if the company had no careers URL, else its "(54 today)".
 An item with a screenshot in `todo-images/` goes with it: delete the image file in the same PR.
 Observations about live sites below come from checks made on 2026-11-14 and may have changed.
-
-## Emails
-
-- [ ] **Make the emails designed HTML documents.** Trigger: both emails people receive from Misra (the confirmation
-  email and the job-alert digest) are plain text today. A designed email, in the look of the web app, is easier to read
-  and to act on, and looks like the same product. Plain text stays as the fallback.
-  - Where: the digest is built in `send_digests.py` (Resend payload, `"text"` today; add `"html"` so the message is
-    multipart); the confirmation email in the Edge Function `supabase/functions/email-settings` (and its plain modules
-    under `supabase/functions/`); the approved wording in `supabase/email-texts.md`, pinned by
-    `tests/test_legal_wording.py` and `test/email-texts.test.mjs`; colours and type from `design-system/tokens.css`
-    (emails cannot use CSS variables, so the tokens are copied as fixed values into one place and a test keeps them
-    equal to `tokens.css`). The site-report email to the maintainer and the failure alerts (`send_alert.py`, Gmail)
-    stay plain text: nobody else reads them.
-  - How: consult before building, and record every answer in the PR. 1) Claude Designer plus the UI/UX experts
-    (`design-super-agent`, `ui-design-review`, `ux-web-review`, `accessibility-expert`): a simple single-column layout
-    (about 600px, fluid on a phone), the logo as text or a small inline image with alt text (many clients block
-    images, so nothing may depend on one), the digest list (company, title, place, one clear "view role" link per job),
-    the confirmation email with one primary button (email clients do not support the HTML `<button>` tag: a button is a link
-    styled as one, with padding and a background colour, and it needs a version that still looks right in Outlook), light and dark (`prefers-color-scheme` where supported, and colours
-    that stay readable where the client forces its own), 44px targets, contrast WCAG AA. Two or three layouts, one
-    picked with reasons. 2) The `technical-writer` agent: wording stays EXACTLY as in `supabase/email-texts.md`
-    (the lawyer approved it; the HTML only changes the layout, never the words, the footer, the postal address, the
-    unsubscribe link or the explanation of why the person got it). No word is changed, added or removed.
-    Ask the experts whether the full URL should be shown next to the button link, for copying and pasting
-    (a common habit; it may no longer be needed). KISS: leave it out unless they show it helps, and it must not add
-    or change any approved word.
-    3) The `advisor`, before choosing the approach and before calling it done.
-  - Build it for email clients, not browsers: table layout, inline styles (a build step may inline a small stylesheet),
-    no JavaScript, no web fonts (system font stack), no background images, `role="presentation"` on layout tables,
-    `lang` and `dir` set, preheader text, and keep the whole HTML well
-    below Gmail's clipping size (about 100 KB; a digest with many jobs must stay under it, so cap or split the list as
-    the digest already does). Keep the `List-Unsubscribe` and `List-Unsubscribe-Post` headers and the unsubscribe link in
-    the footer exactly as now. A test that the plain text and the HTML carry the same words and links (strip the tags and
-    compare), one that every approved sentence appears, one that the HTML has no script, no remote image and no
-    external stylesheet, and a test of the size limit. Render checks: Playwright at 600px and 375px, light and dark;
-    send test messages to the maintainer's own address only (never to a subscriber) and look at them in Gmail (web and
-    phone) and one other client; list what was checked.
-  - Status: built in the HTML emails PR (layout, tests, screenshots). Left: the maintainer looks at both emails in Gmail
-    (web and phone) and one other client, then this item is removed.
-  - Done when: both emails go out as multipart (plain text plus HTML) with the same approved words, the maintainer has
-    looked at both in Gmail and one other client, the tests above pass, `npm run lint` and `npm run test:coverage` pass,
-    and the PR shows screenshots. A change to `send_digests.py` needs a version bump and a changelog entry.
 
 ## Focus after a late search answer
 
@@ -67,10 +25,8 @@ Observations about live sites below come from checks made on 2026-11-14 and may 
 ## Assistant endpoint
 
 - [ ] **Hand-test the assistant connection with someone who is not technical.** Trigger: the endpoint and the page "Connect your
-  assistant" are on since 2026-11-17 (the lawyer approved them), and PLAN.md steps 8.1 and 8.2 stay unticked until a real
-  assistant has done it. How: someone who is not technical follows `https://ravidorr.github.io/misra/assistant.html` in Claude
-  and in ChatGPT, asks for junior roles, has one read in full and a cover letter drafted. Done when: both connect in a couple of
-  minutes without help, the wording of the page is fixed only with the lawyer's agreement, and steps 8.1 and 8.2 are ticked.
+  assistant" are on since 2026-11-17. How and done when: the hand test plan in `PLAN.md`, step 8.2. Steps 8.1 and 8.2 are
+  ticked when it passes.
 - [ ] **Revisit the missing per-caller limit on `search_job_keys`.** Decided 2026-11-17 to leave it: a counter for dashboard
   searchers needs new `PRIVACY.md` wording, and a global cap would let one scraper switch the search off for everyone (reasons
   and what a limit would need: `supabase/README.md`, "Why `search_job_keys` has no per-caller limit"). Trigger: any sign of
@@ -326,15 +282,16 @@ Added when the history moved to Supabase (v0.53.0; `CONTRIBUTING.md`, "The histo
 could not prove: a real PostgREST, a real Supabase project and a real Actions run.
 
 - [ ] **Check the first daily runs after the move.** Trigger: the PR of step 9.1 is merged and the one-time copy of the
-  old history is done. How: in the log of the first run, `pull` says `pulled <jobs> jobs and <log> crawl log rows`, the
+  old history is done. Status (2026-11-17): the 04:30 UTC cron-job.org run was green; two other runs that morning failed
+  at the commit step on a stale checkout, fixed in #152 (`ref: main`); no run after #152 yet. How: in the log of the first run, `pull` says `pulled <jobs> jobs and <log> crawl log rows`, the
   sync says `<n> crawl log rows written` and a second run the next day does not repeat them; `docs/` is committed and
   `data/` is not; the `backup` step commits to `ravidorr/misra-backups` with `jobs` and `crawl_log` in its counts. Done
-  when two runs in a row are green and the coverage card and the robots.txt deletion still works (the five SmartRecruiters
+  when two runs in a row after #152 are green and the coverage card and the robots.txt deletion still work (the five SmartRecruiters
   companies lose their `jobs` rows on the first sync after v0.57.0: the log says `Supabase: robots.txt, deleted <n> jobs of 5 companies`).
 - [ ] **Measure the size of `crawl_log` and `jobs` after a month.** Trigger: 30 days after the move. How: Supabase
   dashboard, Reports, Database. `crawl_log` keeps 90 days (`CRAWL_LOG_DAYS`, about 250 rows a day), the pull reads all of
-  it every run, and the backup exports it; if the pull gets slow or the table is large, shorten it. Done when: the
-  numbers are in `CONTRIBUTING.md`, "Real data against the limits".
+  it every run, and the backup exports it; if the pull gets slow or the table is large, shorten it. The same check serves PLAN.md step 7.4 (the size of the description
+  text, a month after 2026-11-16). Done when: the numbers are in `CONTRIBUTING.md`, "Real data against the limits".
 - [ ] **Rehearse a restore into a scratch Supabase project.** Trigger: the first `backup` commit with `jobs` and
   `crawl_log` exists. How: `CONTRIBUTING.md`, "Restore", into a new free project, with `--create-auth-users`; then the
   pull and a daily run against it. Done when: counts match the backup commit and the run is green.
