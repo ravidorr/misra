@@ -19,7 +19,7 @@ Do not edit anything until you have read, in this order:
    - `templates/dashboard.html`, `templates/dashboard.js`, `templates/auth.js`, `templates/report.js`, `templates/email.html`, `templates/email.js`
    - `build_dashboard.py` (`REASONS`, the coverage gap card), `send_digests.py`, `send_alert.py`
    - `supabase/functions/**` (responses and emails)
-   - `data/unresolved_candidates.csv` (`note` column, shown on the dashboard)
+   - `data/companies.json` (the `note` of each `gap`, shown on the dashboard)
    - the docs: `CONTRIBUTING.md`, `SECURITY.md`, `SUPPORT.md`, `llms.txt`
 
 Then say in two lines who the readers are (job seekers in Israel, the maintainer) and what tone the app already has.
