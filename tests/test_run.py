@@ -676,7 +676,7 @@ def test_a_company_that_is_not_israel_only_has_every_job_read_and_a_crash_costs_
     monkeypatch.setitem(adapters.DETAILS, "browser", page)
     jobs = [{**job("1"), "location": None, "detail_url": "d"}, {**job("2"), "detail_url": "d"}]
     run.read_job_pages(co("Br", ats="browser"), jobs)
-    assert asked == ["1", "2"]
+    assert sorted(asked) == ["1", "2"]  # the window moves with the day
     assert all(j["description"] == "text" for j in jobs)
 
     def boom(*_a: Any) -> None:
