@@ -65,7 +65,10 @@ def write_unresolved(workdir: Path, *rows: tuple[str, str, str]) -> None:
 
 
 def prepare(workdir: Path) -> None:
-    write_json(workdir / "data" / "companies.json", [{"name": "Zed", "status": "ok"}, {"name": "Alpha", "status": "x"}])
+    write_json(
+        workdir / "data" / "companies.json",
+        [{"name": "Zed", "crawl": True, "status": "ok"}, {"name": "Alpha", "crawl": True, "status": "x"}],
+    )
     write_unresolved(workdir, ("Beta", "no_openings", "No open roles"))
     write_static(workdir)
 
@@ -355,9 +358,23 @@ def test_page_gets_integrity_hashes_of_its_files(db: sqlite3.Connection, workdir
 
 
 COMPANIES = [
-    {"name": "Page", "status": "careers_page_only", "domain": "page.test", "careers_url": "https://page.test/jobs"},
-    {"name": "Nowhere", "status": "not_found", "domain": "nowhere.test", "careers_url": ""},
-    {"name": "Odd", "status": "something_new", "domain": "odd.test", "careers_url": "", "ats": "ashby", "slug": "odd"},
+    {
+        "name": "Page",
+        "crawl": True,
+        "status": "careers_page_only",
+        "domain": "page.test",
+        "careers_url": "https://page.test/jobs",
+    },
+    {"name": "Nowhere", "crawl": True, "status": "not_found", "domain": "nowhere.test", "careers_url": ""},
+    {
+        "name": "Odd",
+        "crawl": True,
+        "status": "something_new",
+        "domain": "odd.test",
+        "careers_url": "",
+        "ats": "ashby",
+        "slug": "odd",
+    },
 ]
 
 
@@ -375,8 +392,14 @@ def test_gap_groups_follow_the_reasons_in_order_and_count_each_site_once() -> No
     ]
     everyone = [
         *COMPANIES,
-        {"name": "Down", "status": "ok", "domain": "down.test", "careers_url": ""},
-        {"name": "Walled", "status": "ok", "domain": "walled.test", "careers_url": "https://walled.test/careers"},
+        {"name": "Down", "crawl": True, "status": "ok", "domain": "down.test", "careers_url": ""},
+        {
+            "name": "Walled",
+            "crawl": True,
+            "status": "ok",
+            "domain": "walled.test",
+            "careers_url": "https://walled.test/careers",
+        },
     ]
     groups = build_dashboard.gap_groups(blocked, COMPANIES, unresolved, everyone)
     assert [(g["reason"], g["count"]) for g in groups] == [
@@ -439,6 +462,12 @@ def test_read_unresolved_rejects_a_reason_that_is_not_known() -> None:
         build_dashboard.read_unresolved([{"name": "Beta", "gap": {"reason": "because"}}])
 
 
+def test_read_unresolved_names_the_company_whose_gap_has_no_reason() -> None:
+    for gap in ({}, {"note": "n"}):
+        with pytest.raises(ValueError, match="Beta has the unknown reason None"):
+            build_dashboard.read_unresolved([{"name": "Beta", "gap": gap}])
+
+
 def test_read_unresolved_reads_a_bare_gap_as_an_empty_note_domain_and_address() -> None:
     (row,) = build_dashboard.read_unresolved([{"name": "Beta", "gap": {"reason": "no_openings"}}])
     assert (row["note"], row["domain"], row["careers_url"], row["segment"]) == ("", "", "", "")
@@ -452,7 +481,7 @@ def test_the_real_gaps_have_only_known_reasons(monkeypatch: pytest.MonkeyPatch) 
 def test_the_backend_settings_and_page_data_are_injected_into_the_page(db: sqlite3.Connection, workdir: Path) -> None:
     write_css(workdir)
     write_static(workdir)
-    write_json(workdir / "data" / "companies.json", [{"name": "A</script>", "status": "x"}])
+    write_json(workdir / "data" / "companies.json", [{"name": "A</script>", "crawl": True, "status": "x"}])
     write_unresolved(workdir)
     (workdir / "templates" / "dashboard.html").write_text(
         "connect-src __SUPABASE_URL__<script id=d>__PAGE_DATA__</script>", encoding="utf-8"
@@ -662,8 +691,21 @@ def test_every_ats_board_address_is_https_with_a_host() -> None:
 def test_each_reason_links_where_the_card_says() -> None:
     """blocked and robots.txt: the careers page; no careers page: the own site; the rest: the careers page."""
     everyone = [
-        {"name": "Robot", "status": "ok", "domain": "robot.test", "ats": "smartrecruiters", "slug": "robot"},
-        {"name": "Walled", "status": "ok", "domain": "walled.test", "careers_url": "https://walled.test/careers"},
+        {
+            "name": "Robot",
+            "crawl": True,
+            "status": "ok",
+            "domain": "robot.test",
+            "ats": "smartrecruiters",
+            "slug": "robot",
+        },
+        {
+            "name": "Walled",
+            "crawl": True,
+            "status": "ok",
+            "domain": "walled.test",
+            "careers_url": "https://walled.test/careers",
+        },
     ]
     blocked = [
         {"c": "Robot", "why": f"{build_dashboard.ROBOTS_NOTE} (/jobs)", "last": "2026-01-02"},
@@ -746,7 +788,9 @@ def test_main_warns_when_a_site_has_no_link(
     db: sqlite3.Connection, workdir: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     prepare(workdir)
-    write_json(workdir / "data" / "companies.json", [{"name": "Alpha", "status": "x"}])  # no domain, no careers page
+    write_json(
+        workdir / "data" / "companies.json", [{"name": "Alpha", "crawl": True, "status": "x"}]
+    )  # no domain, no careers page
     db.close()
     build_dashboard.main()
     assert "WARNING: no link for ['Alpha']" in capsys.readouterr().out
@@ -757,7 +801,15 @@ def test_a_career_link_wins_over_the_address_the_data_gives() -> None:
     rows = [
         {"name": "Beta", "reason": "needs_reader", "note": "", "domain": "beta.test", "careers_url": "https://b.test"}
     ]
-    everyone = [{"name": "Walled", "status": "ok", "domain": "walled.test", "careers_url": "https://walled.test/jobs"}]
+    everyone = [
+        {
+            "name": "Walled",
+            "crawl": True,
+            "status": "ok",
+            "domain": "walled.test",
+            "careers_url": "https://walled.test/jobs",
+        }
+    ]
     links = {
         "Walled": ("https://walled.test/israel", "israel"),
         "Beta": ("https://beta.test/careers", "careers"),

@@ -128,10 +128,28 @@ def load_companies(path: str = COMPANIES) -> list[dict[str, Any]]:
         return cast("list[dict[str, Any]]", json.load(fh))
 
 
+# Every key a record may have, in the order they are written: a person's fields and the discovered ones
+RECORD_KEYS = (
+    "name",
+    "domain",
+    "segment",
+    "crawl",
+    "careers_url",
+    "ats",
+    "slug",
+    "source",
+    "status",
+    "israel_only",
+    "verify",
+    "links",
+    "gap",
+)
+
+
 def crawled_companies(companies: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """The companies the pipeline crawls: `crawl` is true. The others are researched sites kept for the coverage card
-    (`gap`) and are never requested. A record without the key counts as crawled; a test makes the real file spell it."""
-    return [c for c in companies if c.get("crawl", True)]
+    """The companies the pipeline crawls: `crawl` is exactly true. The others are researched sites kept for the
+    coverage card (`gap`) and are never requested; a record that does not say `crawl` is not crawled."""
+    return [c for c in companies if c.get("crawl") is True]
 
 
 def host_of(url: str) -> str:

@@ -60,7 +60,7 @@ def many(db: sqlite3.Connection, workdir: Path, monkeypatch: pytest.MonkeyPatch)
         add_companies(conn)
         write_json(
             workdir / "data" / "companies.json",
-            [{"name": f"Company {n}", "status": "ok"} for n in range(MANY_COMPANIES)],
+            [{"name": f"Company {n}", "crawl": True, "status": "ok"} for n in range(MANY_COMPANIES)],
         )
 
     monkeypatch.setattr(build_dashboard, "DIGEST_SIGNUP_ENABLED", False)

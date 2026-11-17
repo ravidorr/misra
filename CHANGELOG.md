@@ -14,6 +14,7 @@ All notable changes are documented here. Format follows [Keep a Changelog](https
 
 - One list of every company: `data/companies.json` now holds the companies the pipeline crawls (`"crawl": true`) and the 77 researched ones it does not (`"crawl": false`, with a `gap` of `reason` and `note`), with each company's `links`, `segment`, `israel_only` and `verify`. It replaces `data/seed_companies.csv`, `data/overrides.json`, `data/career_links.json`, `data/unresolved_candidates.csv` and the research output in `data/new/`. A company is crawled only when its record says `crawl: true`.
 - `discover.py` fills in each crawled record in place (`careers_url`, `ats`, `slug`, `source`, `status`) and leaves every other field and every other record as it is; a record with `"source": "override"` is a pin: its `ats` and `slug` are kept and checked. It no longer writes `n_jobs` and `n_israel`, which nothing read. `common.load_companies` and `common.crawled_companies` read the file; `run.py`, `build_dashboard.py`, `survey.py` and `survey2.py` use them.
+- A record that does not say `crawl: true` is not crawled (`crawled_companies`, `discover.py` and the dashboard agree). `discover.py` writes through a temporary file, keeps the keys in `common.RECORD_KEYS` order, drops the records of excluded companies, and refuses to write when more than 5 working companies would fail (`--force` overrides).
 - The crawl list, the coverage card, the career links and the covered count are the same as before (checked against the old files); the file is sorted by name.
 
 ### Fixed

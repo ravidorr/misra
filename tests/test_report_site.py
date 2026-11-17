@@ -196,7 +196,9 @@ async def test_the_card_offers_the_action_even_when_no_company_is_known_to_be_mi
     page: Page,
     site: Path,
 ) -> None:
-    (site.parent / "data" / "companies.json").write_text('[{"name": "Acme", "status": "ok"}]', encoding="utf-8")
+    (site.parent / "data" / "companies.json").write_text(
+        '[{"name": "Acme", "crawl": true, "status": "ok"}]', encoding="utf-8"
+    )
     build_dashboard.main()
     await ready(page, site)
     await expect(page.locator("#gaps")).to_be_hidden()  # no list to show, only the report row

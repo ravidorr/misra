@@ -88,8 +88,14 @@ def build_site(db: sqlite3.Connection, workdir: Path, fill: Callable[[sqlite3.Co
     write_json(
         workdir / "data" / "companies.json",
         [
-            {"name": "Acme", "status": "ok"},
-            {"name": "Nowhere", "status": "x", "domain": "nowhere.test", "careers_url": "https://nowhere.test/jobs"},
+            {"name": "Acme", "crawl": True, "status": "ok"},
+            {
+                "name": "Nowhere",
+                "crawl": True,
+                "status": "x",
+                "domain": "nowhere.test",
+                "careers_url": "https://nowhere.test/jobs",
+            },
             gap_row("Parked", "", "site_unusable", "Domain parked at GoDaddy"),
             gap_row("LongName", "https://long.test/careers", "needs_reader", LONG_NOTE),
             gap_row("Walled", "https://walled.test/jobs", "bot_protection", ""),

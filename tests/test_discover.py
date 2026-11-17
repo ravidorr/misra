@@ -238,7 +238,8 @@ def test_main_rewrites_only_the_discovered_fields_of_the_crawled_records(
     out = json.loads(text)
     new = {k: v for k, v in found.items() if k in discover.DISCOVERED}
     assert out == [{**records[0], **new}, records[1], {**records[2], **new}]  # no n_jobs: it would make noisy diffs
-    assert list(out[0]) == ["name", "domain", "crawl", "israel_only", "links", *new]  # order kept, new keys appended
+    assert list(out[0]) == [k for k in common.RECORD_KEYS if k in out[0]]  # every key in its place, new ones too
+    assert not (workdir / "data" / "companies.json.tmp").exists()  # written through a temporary file, then moved
     assert "Counter({'ok': 2})" in capsys.readouterr().out
     write_json(workdir / "other.json", [])
     monkeypatch.setattr(sys, "argv", ["discover.py", "other.json"])
@@ -251,3 +252,81 @@ def test_run_as_script(workdir: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(sys, "argv", ["discover.py"])
     runpy.run_module("discover", run_name="__main__")
     assert json.loads((workdir / "data" / "companies.json").read_text()) == []
+
+
+def run_main(workdir: Path, monkeypatch: pytest.MonkeyPatch, *args: str) -> list[dict[str, Any]]:
+    monkeypatch.setattr(sys, "argv", ["discover.py", *args])
+    discover.main()
+    return json.loads((workdir / "data" / "companies.json").read_text())  # type: ignore[no-any-return]
+
+
+def test_main_keeps_a_pin_and_everything_written_by_a_person(
+    workdir: Path, env: Env, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    pin = {"name": "Acme Co", "domain": "acme.com", "crawl": True, "israel_only": True, "verify": False}
+    pin |= {"ats": "ov", "slug": "s", "source": "override", "status": "ok", "careers_url": ""}
+    found = {"name": "Found", "domain": "found.com", "crawl": True, "ats": "x", "slug": "y", "source": "page"}
+    found |= {"status": "ok", "careers_url": "u"}
+    write_json(workdir / "data" / "companies.json", [pin, found])
+    out = run_main(workdir, monkeypatch)
+    assert out[0] == pin  # the pinned ats and slug stay (not checked here: verify is false), and so does every flag
+    assert list(out[0]) == [k for k in common.RECORD_KEYS if k in pin]
+    assert out[1]["status"] == "not_found"  # not pinned and nothing found any more: searched again, as before
+    assert (out[1]["ats"], out[1]["slug"], out[1]["source"]) == ("", "", "")
+
+
+def test_main_puts_a_key_added_by_discovery_in_its_place_and_drops_the_excluded(
+    workdir: Path, env: Env, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    env.pages["https://www.acme.com/"] = ("lever", "acme")
+    env.jobs[("lever", "acme")] = [IL_JOB]
+    write_json(
+        workdir / "data" / "companies.json",
+        [
+            {"name": "Acme Co", "domain": "acme.com", "crawl": True, "israel_only": True, "links": {"global": "g"}},
+            {"name": "Gone", "domain": "gone.com", "crawl": False, "gap": {"reason": "needs_reader", "note": ""}},
+        ],
+    )
+    (workdir / "data" / "excluded_companies.csv").write_text(
+        "company,reason,date_added\nGone,asked to be removed,2026-01-01\n", encoding="utf-8"
+    )
+    (out,) = run_main(workdir, monkeypatch)
+    assert list(out) == [
+        "name",
+        "domain",
+        "crawl",
+        "careers_url",
+        "ats",
+        "slug",
+        "source",
+        "status",
+        "israel_only",
+        "links",
+    ]
+
+
+def many(n: int, ok: bool) -> list[dict[str, Any]]:
+    return [
+        {"name": f"C{i}", "domain": f"c{i}.com", "crawl": True, "status": "ok" if ok else "not_found"} for i in range(n)
+    ]
+
+
+def test_main_writes_nothing_when_too_many_working_companies_would_fail(
+    workdir: Path, env: Env, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    records = many(discover.MAX_LOST + 1, ok=True)  # an offline run: every probe finds nothing
+    write_json(workdir / "data" / "companies.json", records)
+    monkeypatch.setattr(sys, "argv", ["discover.py"])
+    with pytest.raises(
+        SystemExit, match=r"6 companies would stop being ok \(C0, C1, C2, C3, C4, C5\); nothing written"
+    ):
+        discover.main()
+    assert json.loads((workdir / "data" / "companies.json").read_text()) == records
+    assert not (workdir / "data" / "companies.json.tmp").exists()
+    out = run_main(workdir, monkeypatch, "--force")
+    assert {r["status"] for r in out} == {"not_found"}
+
+
+def test_main_accepts_a_few_companies_failing(workdir: Path, env: Env, monkeypatch: pytest.MonkeyPatch) -> None:
+    write_json(workdir / "data" / "companies.json", many(discover.MAX_LOST, ok=True))
+    assert {r["status"] for r in run_main(workdir, monkeypatch)} == {"not_found"}

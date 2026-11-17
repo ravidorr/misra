@@ -2,33 +2,21 @@
 here would crawl a site nobody chose, or drop a note from the coverage card."""
 
 import json
+import sqlite3
 from pathlib import Path
 from typing import Any
 
 import pytest
 
 import build_dashboard
+import common
 import run
-from common import COMPANIES, crawled_companies, load_companies
+from adapters import ADAPTERS
+from common import COMPANIES, RECORD_KEYS, crawled_companies, load_companies
 from tests.conftest import write_json
 
 REPO = Path(__file__).resolve().parents[1]
-# every key a record may have, in the order discover.py and a person write them
-KEYS = [
-    "name",
-    "domain",
-    "segment",
-    "crawl",
-    "careers_url",
-    "ats",
-    "slug",
-    "source",
-    "status",
-    "israel_only",
-    "verify",
-    "links",
-    "gap",
-]
+KEYS = list(RECORD_KEYS)
 STATUSES = {"ok", "careers_page_only", "not_found", "ats_failed"}
 
 
@@ -37,8 +25,13 @@ def records() -> list[dict[str, Any]]:
     return json.loads((REPO / COMPANIES).read_text(encoding="utf-8"))
 
 
-def test_the_file_is_sorted_by_name_and_ends_with_a_newline(records: list[dict[str, Any]]) -> None:
-    assert (REPO / COMPANIES).read_text(encoding="utf-8").endswith("]\n")
+def test_the_file_is_written_the_way_discover_writes_it(records: list[dict[str, Any]]) -> None:
+    """A hand edit in another format would make the next discover.py run a diff of the whole file."""
+    text = (REPO / COMPANIES).read_text(encoding="utf-8")
+    assert text == json.dumps(records, indent=1, ensure_ascii=False) + "\n"
+
+
+def test_the_file_is_sorted_by_name(records: list[dict[str, Any]]) -> None:
     assert [r["name"] for r in records] == sorted((r["name"] for r in records), key=str.casefold)
 
 
@@ -75,9 +68,18 @@ def test_a_pinned_record_names_its_ats_and_slug(records: list[dict[str, Any]]) -
             assert "verify" not in r, r["name"]  # only a pin is trusted without a check
 
 
-def test_a_company_that_is_not_crawled_is_never_requested(
-    workdir: Path, monkeypatch: pytest.MonkeyPatch, records: list[dict[str, Any]]
-) -> None:
+def test_a_crawled_feed_names_an_ats_the_crawl_has_an_adapter_for(records: list[dict[str, Any]]) -> None:
+    for r in records:
+        if r["crawl"] and r["status"] == "ok":
+            assert r["slug"], r["name"]
+            assert r["ats"] in ADAPTERS or r["ats"] == "browser", r["name"]  # a typo in a pin fails here, not at 04:30
+        assert r["source"] in {"override", "guess", "page", ""}, r["name"]
+        assert r.get("israel_only", True) is True, r["name"]  # the flag is there or it is not
+        if r["gap"]["reason"] == "no_careers_url" if "gap" in r else False:
+            assert r["status"] == "not_found", r["name"]
+
+
+def test_a_company_that_is_not_crawled_is_never_requested(workdir: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     asked: list[str] = []
     monkeypatch.setitem(run.ADAPTERS, "fake", lambda slug: asked.append(slug) or [])
     row = {"ats": "fake", "status": "ok", "source": "override"}
@@ -90,10 +92,13 @@ def test_a_company_that_is_not_crawled_is_never_requested(
     )
     run.main()
     assert asked == ["in"]
+    check = sqlite3.connect(common.DB)
+    assert [r[0] for r in check.execute("SELECT DISTINCT company FROM crawl_log")] == ["In"]
+    check.close()
 
 
 def test_the_loaders(workdir: Path) -> None:
-    rows = [{"name": "A", "crawl": True}, {"name": "B", "crawl": False}, {"name": "C"}]
+    rows = [{"name": "A", "crawl": True}, {"name": "B", "crawl": False}, {"name": "C"}, {"name": "D", "crawl": "yes"}]
     write_json(workdir / COMPANIES, rows)
     assert load_companies() == rows
-    assert [c["name"] for c in crawled_companies(rows)] == ["A", "C"]  # the real file always says it (tests above)
+    assert [c["name"] for c in crawled_companies(rows)] == ["A"]  # only a true `crawl` is consent to request a site

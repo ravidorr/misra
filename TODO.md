@@ -2,7 +2,7 @@
 
 Open work, as of 2026-11-17. Each item says what triggers it, how to do it and when it is done. When one is finished,
 delete it and update the counts in the others: the 85 and the four segment counts in the research item (a pin removes
-one row from one segment), its "(28)" if the company had no careers URL, else its "(54 today)".
+one record from one segment), its "(28)" if the company had no careers URL, else its "(54 today)".
 An item with a screenshot in `todo-images/` goes with it: delete the image file in the same PR.
 Observations about live sites below come from checks made on 2026-11-14 and may have changed.
 

@@ -164,7 +164,7 @@ SUPABASE_ANON_KEY = "sb_publishable_9gvh4YdsfErlFsgJfmNexQ_yHF-XwnA"
 
 BLOCKED_WHY = "its site blocks automated access from GitHub's servers"
 # Why a site is on the coverage gap card, in the order the card lists them. The keys are the only values the `reason`
-# column of the CSV may hold; the labels are what the visitor reads.
+# of a `gap` in data/companies.json may hold; the labels are what the visitor reads.
 REASONS = {
     "crawl_failing": "Failing in the latest crawl",
     "bot_protection": "Blocks automated access",
@@ -228,13 +228,14 @@ def read_unresolved(companies: list[dict[str, Any]]) -> list[dict[str, str]]:
     a key of REASONS, and its `note`). A reason that is not in REASONS stops the build."""
     rows = []
     for company in companies:
-        if gap := company.get("gap"):
+        if "gap" in company:
+            gap = company["gap"]
             row = {
                 "name": company["name"],
                 "domain": company.get("domain") or "",
                 "careers_url": company.get("careers_url") or "",
                 "segment": company.get("segment") or "",
-                "reason": gap["reason"],
+                "reason": gap.get("reason"),
                 "note": gap.get("note") or "",
             }
             if row["reason"] not in REASONS:
@@ -270,7 +271,7 @@ def gap_groups(
     (`no_careers_url`) or when no careers address is known. `companies` is every crawled company of companies.json; it
     gives the address of the failing and robots.txt sites."""
     known = {c["name"]: c for c in [*untracked, *(companies or [])]}
-    # a company that left companies.json for the CSV can still be in the crawl log: its row gives the address
+    # a researched company (a `gap` record, not crawled) can still be in the crawl log: its record gives the address
     rows = {r["name"]: https_only(r.get("careers_url")) or own_site(r.get("domain")) for r in unresolved}
     sites: dict[str, tuple[str, str, str]] = {}
     for gap in blocked:

@@ -441,8 +441,8 @@ async def test_the_browser_crawl_goes_on_when_the_switch_is_off(monkeypatch: pyt
     assert browser_crawl.WHY.get(URL, "") != ROBOTS_NOTE
 
 
-def co(name: str, ats: str = "fake", slug: str | None = None, status: str = "ok") -> dict[str, str]:
-    return {"name": name, "ats": ats, "slug": slug or name.lower(), "status": status}
+def co(name: str, ats: str = "fake", slug: str | None = None, status: str = "ok") -> dict[str, Any]:
+    return {"name": name, "crawl": True, "ats": ats, "slug": slug or name.lower(), "status": status}
 
 
 def job(job_id: str) -> dict[str, str]:
@@ -713,7 +713,7 @@ def test_discover_skips_an_excluded_seed_row(workdir: Path, monkeypatch: pytest.
     assert seen == ["Beta"]  # not the excluded one, not the one that is not crawled
     rows = {r["name"]: r for r in json.loads((workdir / "data" / "companies.json").read_text())}
     assert rows["Beta"]["status"] == "x"
-    assert "status" not in rows["Acme"]  # the excluded record stays as it was: discover never deletes a record
+    assert "Acme" not in rows  # the record of an excluded company goes, as its jobs do
 
 
 def test_the_dashboard_never_lists_an_excluded_company(db: sqlite3.Connection, workdir: Path) -> None:
@@ -722,8 +722,8 @@ def test_the_dashboard_never_lists_an_excluded_company(db: sqlite3.Connection, w
     write_json(
         workdir / "data" / "companies.json",
         [
-            {"name": "Acme", "status": "careers_page_only"},
-            {"name": "Beta", "status": "not_found"},
+            {"name": "Acme", "crawl": True, "status": "careers_page_only"},
+            {"name": "Beta", "crawl": True, "status": "not_found"},
             {"name": "Acme", "crawl": False, "domain": "a.test", "gap": {"reason": "no_openings", "note": ""}},
             {"name": "Gamma", "crawl": False, "domain": "g.test", "gap": {"reason": "no_openings", "note": ""}},
         ],

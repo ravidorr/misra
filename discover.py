@@ -2,10 +2,13 @@
 
 Only the discovered fields (DISCOVERED) of a record that has `crawl` true are rewritten, in place and in the same order;
 everything a person wrote (`crawl`, `israel_only`, `verify`, `links`, `gap`, `segment`) is left as it is, and so are
-the records of the companies that are not crawled. A record whose `source` is `override` is pinned by hand: its `ats`
-and `slug` are kept and only checked. To add a company, add `{"name", "domain", "crawl": true}` and run this."""
+the records of the companies that are not crawled. The records of excluded companies are dropped. The file is
+written through a temporary file, and a run that would turn more than MAX_LOST working companies into failures (an
+offline run) writes nothing unless it is given `--force`. A record whose `source` is `override` is pinned by hand: its
+`ats` and `slug` are kept and only checked. To add a company, add `{"name", "domain", "crawl": true}` and run this."""
 
 import json
+import os
 import re
 import sys
 from collections import Counter
@@ -13,9 +16,10 @@ from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
 from adapters import ADAPTERS
-from common import COMPANIES, ISRAEL, get, is_excluded, load_companies, load_excluded, slug_candidates
+from common import COMPANIES, ISRAEL, RECORD_KEYS, get, is_excluded, load_companies, load_excluded, slug_candidates
 
 HTTP_OK = 200
+MAX_LOST = 5  # more companies than this going from ok to not ok in one run is refused without --force
 DISCOVERED = ("careers_url", "ats", "slug", "source", "status")  # the fields this script owns
 PROBE_ORDER = ["greenhouse", "lever", "ashby", "workable", "smartrecruiters"]
 ATS_LINK = [
@@ -131,17 +135,25 @@ def discover(row: dict[str, Any]) -> dict[str, Any]:  # noqa: PLR0912
 
 
 def main() -> None:
-    path = sys.argv[1] if len(sys.argv) > 1 else COMPANIES
+    args = [a for a in sys.argv[1:] if a != "--force"]
+    path = args[0] if args else COMPANIES
     excluded = load_excluded()  # a company that asked to be removed is never looked at again
-    records = load_companies(path)
-    todo = [r for r in records if r.get("crawl") and not is_excluded(r["name"], excluded)]
+    kept = [r for r in load_companies(path) if not is_excluded(r["name"], excluded)]  # its record goes, as its jobs do
+    todo = [r for r in kept if r.get("crawl") is True]
     with ThreadPoolExecutor(8) as ex:
         found = list(ex.map(discover, todo))
-    for record, res in zip(todo, found, strict=True):
+    pairs = list(zip(todo, found, strict=True))
+    lost = [r["name"] for r, res in pairs if r.get("status") == "ok" and res["status"] != "ok"]
+    if len(lost) > MAX_LOST and "--force" not in sys.argv:  # an offline or blocked run, not a change in the world
+        sys.exit(f"{len(lost)} companies would stop being ok ({', '.join(lost)}); nothing written. Use --force.")
+    for record, res in pairs:
         record.update({k: res[k] for k in DISCOVERED})
-    with open(path, "w", encoding="utf-8") as fh:
+    records = [{k: r[k] for k in RECORD_KEYS if k in r} for r in kept]  # a key added by update() goes in its place
+    tmp = f"{path}.tmp"  # the file is the only copy of the notes: a failed write must not leave half of it
+    with open(tmp, "w", encoding="utf-8") as fh:
         json.dump(records, fh, indent=1, ensure_ascii=False)
         fh.write("\n")
+    os.replace(tmp, path)
     print(Counter(r["status"] for r in found))
 
 
