@@ -1,0 +1,347 @@
+{
+ "Adobe": {
+  "global": "https://careers.adobe.com/"
+ },
+ "AIR": {
+  "global": "https://www.airev.aero/careers"
+ },
+ "Akamai": {
+  "israel": "https://jobs.akamai.com/en/sites/CX_1/jobs?location=Israel",
+  "global": "https://jobs.akamai.com/"
+ },
+ "Aleph Farms": {
+  "global": "https://aleph-farms.com/careers/"
+ },
+ "Align Technology": {
+  "israel": "https://jobs.aligntech.com/he",
+  "global": "https://jobs.aligntech.com/careers"
+ },
+ "AMD": {
+  "global": "https://careers.amd.com/careers-home/jobs"
+ },
+ "Aniview": {
+  "global": "https://aniview.com/careers/"
+ },
+ "AnyClip": {
+  "global": "https://anyclip.com/careers/"
+ },
+ "Apple": {
+  "israel": "https://jobs.apple.com/en-il/search?location=israel-ISR",
+  "global": "https://www.apple.com/careers/"
+ },
+ "Applitools": {
+  "global": "https://applitools.com/company/careers/"
+ },
+ "Bigabid": {
+  "global": "https://www.bigabid.com/careers/"
+ },
+ "Booking.com": {
+  "israel": "https://careers.booking.com/locations/tel-aviv/",
+  "global": "https://careers.booking.com/"
+ },
+ "Brainsway": {
+  "israel": "https://brainsway.co.il/come-work-with-us/",
+  "global": "https://www.brainsway.com/"
+ },
+ "Broadcom": {
+  "israel": "https://broadcom.wd1.myworkdayjobs.com/External_Career",
+  "global": "https://www.broadcom.com/company/careers"
+ },
+ "Cadence": {
+  "israel": "https://cadence.wd1.myworkdayjobs.com/en-US/External_Careers",
+  "global": "https://www.cadence.com/en_US/home/company/life-at-cadence/careers.html"
+ },
+ "Camtek": {
+  "global": "https://www.camtek.com/careers/open-positions/"
+ },
+ "Check Point": {
+  "global": "https://careers.checkpoint.com/jobs"
+ },
+ "Cloudflare": {
+  "global": "https://www.cloudflare.com/careers/jobs/"
+ },
+ "Cognata": {
+  "global": "https://www.cognata.com/hiring/"
+ },
+ "Criteo": {
+  "global": "https://careers.criteo.com/en/"
+ },
+ "CrowdStrike": {
+  "global": "https://www.crowdstrike.com/en-us/careers/"
+ },
+ "Deel": {
+  "israel": "https://jobs.deel.com/deel/",
+  "global": "https://www.deel.com/careers/"
+ },
+ "Deep Instinct": {
+  "global": "https://www.deepinstinct.com/careers"
+ },
+ "Diagnostic Robotics": {
+  "global": "https://www.diagnosticrobotics.com/"
+ },
+ "DoubleVerify": {
+  "global": "https://doubleverify.com/en/company/careers"
+ },
+ "DriveNets": {
+  "global": "https://www.comeet.com/jobs/drivenets/72.006"
+ },
+ "Dynamic Yield": {
+  "israel": "https://careers.mastercard.com/us/en/tel-aviv-israel",
+  "global": "https://careers.mastercard.com/us/en/tech-jobs-dynamic-yield"
+ },
+ "eBay": {
+  "global": "https://careers.ebayinc.com/"
+ },
+ "Edwards Lifesciences": {
+  "israel": "https://www.edwards.com/careers/locations/israel",
+  "global": "https://www.edwards.com/careers/jobsearch"
+ },
+ "Elbit Systems": {
+  "global": "https://elbitsystems.com/careers/"
+ },
+ "env0": {
+  "global": "https://www.envzero.com/careers"
+ },
+ "Ericsson": {
+  "global": "https://jobs.ericsson.com/careers"
+ },
+ "Evogene": {
+  "global": "https://evogene.com/careers/"
+ },
+ "Ford": {
+  "global": "https://www.careers.ford.com/en"
+ },
+ "General Motors": {
+  "israel": "https://search-careers.gm.com/en/locations/israel/",
+  "global": "https://search-careers.gm.com/en/"
+ },
+ "Gilat": {
+  "global": "https://www.gilat.com/career/"
+ },
+ "Google": {
+  "israel": "https://www.google.com/about/careers/applications/locations/tel-aviv-haifa/",
+  "global": "https://www.google.com/about/careers/applications/"
+ },
+ "H2Pro": {
+  "global": "https://www.h2pro.co/careers"
+ },
+ "Hailo": {
+  "global": "https://hailo.ai/company-overview/careers/"
+ },
+ "IBM": {
+  "global": "https://www.ibm.com/careers"
+ },
+ "Imperva": {
+  "israel": "https://careers.thalesgroup.com/global/en",
+  "global": "https://www.imperva.com/company/careers/"
+ },
+ "Innoviz": {
+  "israel": "https://innoviz.tech/join-us",
+  "global": "https://innoviz.tech/careers"
+ },
+ "Integral Ad Science": {
+  "global": "https://integralads.com/about-ias/careers/"
+ },
+ "Intuit": {
+  "israel": "https://www.intuit.com/careers/locations/israel/",
+  "global": "https://www.intuit.com/careers/"
+ },
+ "Jelly Button Games": {
+  "global": "https://www.playtika.com/careers/"
+ },
+ "Keysight": {
+  "israel": "https://jobs.keysight.com/location-israel",
+  "global": "https://careers.keysight.com/"
+ },
+ "Kornit Digital": {
+  "global": "https://careers.kornit.com/all-positions/"
+ },
+ "Kyndryl": {
+  "israel": "https://www.kyndryl.com/il/en/careers",
+  "global": "https://www.kyndryl.com/us/en/careers"
+ },
+ "lakeFS": {
+  "global": "https://lakefs.io/careers/"
+ },
+ "Line 5": {
+  "global": "https://line5.ai/Hiring"
+ },
+ "Lumigo": {
+  "global": "https://lumigo.io/careers/"
+ },
+ "Madgicx": {
+  "global": "https://madgicx.com/careers"
+ },
+ "Magic Software": {
+  "israel": "https://www.magicsoftware.com/about-us/careers/job-openings-in-israel/",
+  "global": "https://www.magicsoftware.com/careers/"
+ },
+ "Medtronic": {
+  "israel": "https://www.medtronic.com/il-he/our-company/careers.html",
+  "global": "https://www.medtronic.com/en-us/our-company/careers.html"
+ },
+ "Meta": {
+  "israel": "https://www.metacareers.com/tel-avivjobsearch/",
+  "global": "https://www.metacareers.com/"
+ },
+ "Motorola Solutions": {
+  "global": "https://motorolasolutions.wd5.myworkdayjobs.com/Careers"
+ },
+ "Nayax": {
+  "israel": "https://www.comeet.com/jobs/nayax/13.009",
+  "global": "https://www.nayax.com/careers/"
+ },
+ "Nucleai": {
+  "global": "https://nucleai.ai/careers/"
+ },
+ "Ormat": {
+  "global": "https://careers.ormat.com/OrmatGlobal"
+ },
+ "Palo Alto Networks": {
+  "israel": "https://jobs.paloaltonetworks.com/en/israel",
+  "global": "https://jobs.paloaltonetworks.com/"
+ },
+ "Papaya Global": {
+  "israel": "https://www.comeet.com/jobs/papayaglobal/16.005",
+  "global": "https://www.papayaglobal.com/careers/"
+ },
+ "Pay-Me": {
+  "global": "https://payme.io/careers/"
+ },
+ "Philips": {
+  "israel": "https://www.careers.philips.com/il/en/search-results",
+  "global": "https://www.careers.philips.com/global/en"
+ },
+ "Pillar Security": {
+  "global": "https://www.pillar.security/careers"
+ },
+ "Playstudios": {
+  "israel": "https://www.playstudios.com/tel-aviv/",
+  "global": "https://www.playstudios.com/careers/"
+ },
+ "Pliops": {
+  "global": "https://pliops.com/careers/"
+ },
+ "Proofpoint": {
+  "global": "https://www.proofpoint.com/us/company/careers"
+ },
+ "Quantum Art": {
+  "global": "https://www.quantum-art.tech/careers"
+ },
+ "Radware": {
+  "global": "https://www.radware.com/careers/"
+ },
+ "Rapid7": {
+  "global": "https://careers.rapid7.com/"
+ },
+ "Rapyd": {
+  "global": "https://www.rapyd.net/company/careers/"
+ },
+ "Redefine Meat": {
+  "global": "https://www.comeet.com/jobs/redefinemeat/28.004"
+ },
+ "Remilk": {
+  "global": "https://www.remilk.com/careers"
+ },
+ "ReWalk": {
+  "global": "https://golifeward.com/company/careers/"
+ },
+ "Salesforce": {
+  "israel": "https://www.salesforce.com/company/careers/locations/emea/israel/",
+  "global": "https://salesforce.wd12.myworkdayjobs.com/External_Career_Site"
+ },
+ "Samsung": {
+  "israel": "https://www.samsung.com/il/about-us/careers/",
+  "global": "https://research.samsung.com/careers"
+ },
+ "SAP": {
+  "israel": "https://careers.sap.com/viewalljobs/750/",
+  "global": "https://jobs.sap.com/en/"
+ },
+ "Satixfy": {
+  "global": "https://mda.space/careers"
+ },
+ "SentinelOne": {
+  "global": "https://www.sentinelone.com/jobs/"
+ },
+ "Siemens": {
+  "global": "https://www.siemens.com/en-us/company/jobs/"
+ },
+ "Siklu": {
+  "global": "https://www.ceragon.com/about-ceragon/careers"
+ },
+ "Silicom": {
+  "global": "https://www.silicom.dk/careers/"
+ },
+ "SolarEdge": {
+  "global": "https://corporate.solaredge.com/en/careers/open-positions"
+ },
+ "Speedata": {
+  "global": "https://www.speedata.io/careers-1"
+ },
+ "SQream": {
+  "global": "https://sqream.com/careers/"
+ },
+ "StoreDot": {
+  "global": "https://store-dot.com/careers.html"
+ },
+ "Stratasys": {
+  "global": "https://careers.stratasys.com/"
+ },
+ "Swimm": {
+  "global": "https://swimm.io/careers/"
+ },
+ "Synopsys": {
+  "global": "https://www.synopsys.com/careers/global/europe-and-middle-east/israel.html"
+ },
+ "Syte": {
+  "global": "https://www.syte.ai/careers/"
+ },
+ "Tabit": {
+  "global": "https://tabit.cloud/il/tabit-careers/"
+ },
+ "Trax": {
+  "global": "https://traxretail.com/company/careers/"
+ },
+ "Tyto Care": {
+  "global": "https://www.tytocare.com/careers/"
+ },
+ "Uber": {
+  "global": "https://www.uber.com/us/en/careers/"
+ },
+ "Unity": {
+  "global": "https://unity.com/careers/positions"
+ },
+ "Varonis": {
+  "global": "https://jobs.jobvite.com/varonis"
+ },
+ "Verbit": {
+  "global": "https://verbit.ai/careers/"
+ },
+ "Vimeo": {
+  "global": "https://vimeo.com/jobs"
+ },
+ "Visa": {
+  "global": "https://corporate.visa.com/en/careers.html"
+ },
+ "Walmart Global Tech": {
+  "global": "https://careers.walmart.com/us/en/home/careers-areas/technology"
+ },
+ "Walnut": {
+  "global": "https://www.walnut.io/jobs/"
+ },
+ "Western Digital": {
+  "global": "https://careers.smartrecruiters.com/westerndigital"
+ },
+ "Wix": {
+  "israel": "https://careers.wix.com/location/tel-aviv",
+  "global": "https://careers.wix.com/"
+ },
+ "Workday": {
+  "israel": "https://workday.wd5.myworkdayjobs.com/Workday/?q=Israel",
+  "global": "https://workday.wd5.myworkdayjobs.com/Workday"
+ },
+ "Zesty": {
+  "global": "https://zesty.co/careers/"
+ }
+}
