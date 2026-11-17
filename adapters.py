@@ -13,6 +13,7 @@ from common import ISRAEL, get, post, reset_robots_block
 from descriptions import DETAIL_CAP, HELD, attach, html_to_text, plain_text, sections
 
 HTTP_OK = 200
+DETAIL_FAIL_STREAK = 5  # job pages in a row without a text after which a company's job pages stop for this run
 Job = dict[str, Any]
 WORKDAY_ISRAEL = (
     "084562884af243748dad7c84c304d89a"  # Workday's id for Israel in a country facet, the same on every tenant
@@ -579,15 +580,16 @@ def workday_description(slug: str, job: Job) -> tuple[str, dict[str, Any]] | Non
 DETAILS: dict[str, Callable[[str, Job], tuple[str, dict[str, Any]] | None]] = {"workday": workday_description}
 
 
-def add_descriptions(
-    ats: str, slug: str, company: str, jobs: list[Job], held: set[tuple[str, str]]
+def add_descriptions(  # noqa: PLR0913, PLR0917
+    ats: str, slug: str, company: str, jobs: list[Job], held: set[tuple[str, str]], day: int = 0
 ) -> tuple[int, int, int]:
     """Gives the jobs of a company whose list carries no text their description, one request per job page, and
     returns (requested, got a text, deferred). Only jobs without a text are asked: one Supabase already holds (`held`,
-    left by the pull) is marked and not fetched again, and at most DETAIL_CAP are asked per company and run, the rest
-    wait for the next run (a first fill takes a few days, a steady day asks only for the new jobs). A page that fails,
-    is refused by robots.txt or has no text gives no description and changes nothing else: this never fails the list,
-    and a refusal does not make the company a robots skip (the list was crawled)."""
+    left by the pull) is marked and not fetched again. At most DETAIL_CAP are asked per company and run, in a window
+    that moves with `day` so a page that never answers cannot starve the others, and five misses in a row end the
+    company's run (a host that refuses is left alone). The rest wait for the next run. A page that fails, is refused
+    by robots.txt or has no text gives no description and changes nothing else: this never fails the list, and a
+    refusal does not make the company a robots skip (the list was crawled)."""
     fetch_one = DETAILS.get(ats)
     if fetch_one is None:
         return 0, 0, 0
@@ -595,21 +597,31 @@ def add_descriptions(
     for job in jobs:
         if job.get("description"):
             continue
-        if (company, job["job_id"]) in held:
+        if (company, str(job.get("job_id"))) in held:
             job[HELD] = True
         else:
             todo.append(job)
-    got = 0
+    if len(todo) > DETAIL_CAP:  # a different window each day, so a job whose page never answers cannot starve the rest
+        start = day * DETAIL_CAP % len(todo)
+        todo = todo[start:] + todo[:start]
+    asked = got = streak = 0
     for job in todo[:DETAIL_CAP]:
+        asked += 1
         try:
             found = fetch_one(slug, job)
+            if found:
+                attach(job, *found)
         except Exception:  # a posting must never stop its company's crawl, whatever its page is
             found = None
-        if found:
-            attach(job, *found)
-            got += bool(job.get("description"))
+        if job.get("description"):
+            got += 1
+            streak = 0
+        else:
+            streak += 1
+            if streak >= DETAIL_FAIL_STREAK:  # a host that keeps refusing or failing is left alone until the next run
+                break
     reset_robots_block()  # a refused job page is not a refused company
-    return min(len(todo), DETAIL_CAP), got, max(0, len(todo) - DETAIL_CAP)
+    return asked, got, len(todo) - asked
 
 
 def _oraclehcm_place(req: dict[str, Any]) -> str | None:

@@ -127,6 +127,17 @@ def test_a_company_that_failed_or_is_on_the_exclusion_list_leaves_no_text(workdi
     assert list(read_work_file()) == [("Acme", "2")]
 
 
+class FixedDay:
+    """A day whose ordinal is 0, so the window of job pages starts at the first job."""
+
+    @staticmethod
+    def today() -> "FixedDay":
+        return FixedDay()
+
+    def toordinal(self) -> int:
+        return 0
+
+
 def test_job_pages_are_asked_only_for_jobs_without_a_stored_text_and_the_log_has_counts_only(
     workdir: Path, crawl: Any, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
@@ -138,6 +149,7 @@ def test_job_pages_are_asked_only_for_jobs_without_a_stored_text_and_the_log_has
 
     monkeypatch.setitem(adapters.DETAILS, "fake", page)
     monkeypatch.setattr(adapters, "DETAIL_CAP", 2)
+    monkeypatch.setattr(run.datetime, "date", FixedDay)
     descriptions.write_held([("Acme", "held")])
     crawl(
         [co("Acme", "acme")],
@@ -602,3 +614,17 @@ def test_a_crawl_that_died_in_the_browser_leaves_a_history_the_sync_stores_witho
     conn.close()
     assert (result.upserted, result.texts, result.logged) == (1, 0, 1)
     assert list(fake.table) == [("Acme", "1")]
+
+
+def test_a_crash_in_the_job_pages_costs_the_texts_and_not_the_company(
+    workdir: Path, crawl: Any, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    def boom(*_a: Any) -> None:
+        raise RuntimeError("secret detail")
+
+    monkeypatch.setattr(run, "add_descriptions", boom)
+    crawl([co("Acme", "acme")], {"acme": [posting("1", None)]})
+    out = capsys.readouterr().out
+    assert "::warning::job pages of Acme failed: RuntimeError" in out
+    assert "secret detail" not in out
+    assert "failed 0 []" in out

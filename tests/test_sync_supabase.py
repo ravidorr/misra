@@ -794,7 +794,7 @@ def test_the_pull_goes_on_without_the_keys_when_they_cannot_be_listed(
     )
     descriptions.work_path(descriptions.HELD_FILE).mkdir()  # a file that cannot be written
     assert sync_supabase.leave_held(client(FakeSupabase())) is None
-    assert "::warning::the stored descriptions could not be listed for the crawl: " in capsys.readouterr().out
+    assert "::warning::an older list of stored descriptions could not be removed: " in capsys.readouterr().out
 
 
 def test_main_pull_stays_quiet_about_the_held_count_when_the_keys_could_not_be_listed(
@@ -811,3 +811,17 @@ def test_main_pull_stays_quiet_about_the_held_count_when_the_keys_could_not_be_l
     monkeypatch.setattr(sync_supabase, "leave_held", lambda _client: None)
     sync_supabase.main(["--pull"])
     assert capsys.readouterr().out.splitlines() == ["Supabase: pulled 1 jobs and 1 crawl log rows into data/jobs.db"]
+
+
+def test_an_older_held_file_that_cannot_be_removed_is_a_warning_and_no_keys(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    def refuse(self: Path, missing_ok: bool = False) -> None:
+        raise PermissionError("no")
+
+    monkeypatch.setattr(Path, "unlink", refuse)
+    assert sync_supabase.leave_held(client(FakeSupabase())) is None
+    assert (
+        "::warning::an older list of stored descriptions could not be removed: PermissionError"
+        in capsys.readouterr().out
+    )

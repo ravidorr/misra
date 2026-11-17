@@ -307,8 +307,9 @@ PLAN.md step 7.1. Where the text of a posting lives, and how it gets there:
   the same `/wday/cxs/` path as the list, so the `robots.txt` gate, the one-request-a-second-per-host delay and the User-Agent
   are the same (the tenants' own `robots.txt` files, read on 2026-11-17, do not disallow `/wday/`). The budget: a page is
   asked for only for a job Supabase holds no text for (the pull, `sync_supabase.py --pull`, leaves the keys of those that do in
-  `$RUNNER_TEMP/misra-held-texts.jsonl`, keys only; no file means none known) and at most 40 per company and run
-  (`DETAIL_CAP`, the rest next run). The first fill of the 318 Israeli jobs is therefore about 200 requests on the first day
+  `$RUNNER_TEMP/misra-held-texts.jsonl`, keys only; no file means none known; the crawl prints how many it knows) and at most 40 per
+  company and run (`DETAIL_CAP`, the rest next run, in a window that moves each day so a page that never answers cannot starve the
+  others; five pages in a row without a text end that company's job pages for the run, so a host that refuses is left alone). The first fill of the 318 Israeli jobs is therefore about 200 requests on the first day
   (Palo Alto Networks 115 and KLA 82 are capped at 40 each, so they take three days), over 24 tenant hosts, and a steady day
   asks only for the new jobs, a handful. A text edited in place is not fetched again until the job closes and reopens (a rolling
   refresh is in `TODO.md`). A page that fails, is refused by `robots.txt` or has no text costs only its own text: the list is

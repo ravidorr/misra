@@ -455,6 +455,10 @@ def leave_held(client: Client) -> int | None:
     held = descriptions.work_path(descriptions.HELD_FILE)
     try:
         held.unlink(missing_ok=True)  # never an older run's keys
+    except OSError as exc:
+        print(f"::warning::an older list of stored descriptions could not be removed: {type(exc).__name__}")
+        return None
+    try:
         stored = client.stored_texts()
         return descriptions.write_held([key for key, (digest, _snippet) in stored.items() if digest])
     except (SyncError, ValueError, KeyError, TypeError, OSError) as exc:

@@ -152,9 +152,15 @@ def crawl(co: dict[str, Any]) -> tuple[dict[str, Any], list[dict[str, Any]] | No
         time.sleep(4)
         jobs = fetch(co)
     if jobs:  # after the list is final: nothing the job pages do can change it, and one that fails costs only its text
-        stats = add_descriptions(co["ats"], co["slug"], co["name"], jobs, HELD_TEXTS)
-        if stats[0] or stats[2]:
-            DETAIL_STATS[co["name"]] = (co["ats"], *stats)
+        try:
+            stats = add_descriptions(
+                co["ats"], co["slug"], co["name"], jobs, HELD_TEXTS, datetime.date.today().toordinal()
+            )
+        except Exception as exc:  # the list is what matters: a failure here costs texts, never the company
+            print(f"::warning::job pages of {co['name']} failed: {type(exc).__name__}")
+        else:
+            if stats[0] or stats[2]:
+                DETAIL_STATS[co["name"]] = (co["ats"], *stats)
     return co, jobs
 
 
@@ -334,6 +340,7 @@ def main() -> None:  # noqa: PLR0915
     crawled: list[tuple[str, list[dict[str, Any]]]] = []  # (ats, jobs) of every crawl that gave a list
     HELD_TEXTS.clear()
     HELD_TEXTS.update(descriptions.read_held())
+    print(f"stored texts known to the crawl: {len(HELD_TEXTS)}")
     DETAIL_STATS.clear()
     texts: list[dict[str, Any]] = []  # the descriptions for the sync step: never stored in the database
 

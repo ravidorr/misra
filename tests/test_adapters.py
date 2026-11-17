@@ -1787,3 +1787,17 @@ def test_an_adapter_with_the_text_in_its_list_asks_for_no_job_page(monkeypatch: 
     urls = fake_get(monkeypatch, wd_detail())
     assert adapters.add_descriptions("lever", "acme", "Acme", jobs_n(2), set()) == (0, 0, 0)
     assert urls == []
+
+
+def test_five_misses_in_a_row_end_a_companys_job_pages_for_the_run(monkeypatch: pytest.MonkeyPatch) -> None:
+    urls = fake_get(monkeypatch, FakeHttpResponse(status_code=429))
+    jobs = jobs_n(20)
+    assert adapters.add_descriptions("workday", WD_SLUG, "Acme", jobs, set()) == (adapters.DETAIL_FAIL_STREAK, 0, 15)
+    assert len(urls) == adapters.DETAIL_FAIL_STREAK  # a host that refuses is left alone
+
+
+def test_the_window_of_job_pages_moves_each_day_so_none_starves(monkeypatch: pytest.MonkeyPatch) -> None:
+    urls = fake_get(monkeypatch, wd_detail())
+    monkeypatch.setattr(adapters, "DETAIL_CAP", 2)
+    adapters.add_descriptions("workday", WD_SLUG, "Acme", jobs_n(5), set(), day=1)
+    assert [u.rsplit("/", 1)[1] for u in urls] == ["J2", "J3"]
