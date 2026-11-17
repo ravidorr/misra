@@ -158,13 +158,13 @@
 </footer>
 </div>
 <dialog class="dialog sign-in-dialog" id="signInDialog" aria-labelledby="signInTitle" aria-describedby="signInText">
+  <button type="button" class="dialog-close" id="signInCancel" aria-label="Close"><svg aria-hidden="true" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
   <h2 class="dialog-title" id="signInTitle" tabindex="-1">Sign in</h2>
   <div id="signInText">
     <p>Sign in to sync your stars, "Not for me" choices, and saved filters across devices.</p>
-    <p>Signing in is optional. We store only your Google email address and job preferences. They are kept in our database in the EU (Supabase), with a daily backup copy at GitHub in the United States. We never store your CV or a password, and we set no tracking cookies. (Supabase's own sign-in record also holds your Google name and photo until you delete your account.) By signing in, you agree to the <a href="terms.html">Terms</a> and <a href="privacy.html">privacy notice</a>.</p>
+    <p>Signing in is optional. We store only your Google email address and job preferences. They are kept in our database in the EU (Supabase), with a daily backup copy at GitHub in the United States. We never store your CV or a password, and we set no tracking cookies. (Supabase's own sign-in record also holds your Google name and photo until you delete your account.) By signing in, you agree to the <a href="terms.html" target="_blank" rel="noopener">Terms<svg class="icon-ext" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></svg><span class="sr-only"> (opens in a new tab)</span></a> and <a href="privacy.html" target="_blank" rel="noopener">privacy notice<svg class="icon-ext" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></svg><span class="sr-only"> (opens in a new tab)</span></a>.</p>
   </div>
   <p class="dialog-actions">
-    <button type="button" class="btn btn-pill" id="signInCancel">Cancel</button>
     <button type="button" class="btn btn-pill btn-primary" id="signInContinue">Continue with Google</button>
   </p>
 </dialog>
@@ -192,10 +192,10 @@
 </dialog>
 <!--digest-->
 <dialog class="dialog" id="digestDialog" aria-labelledby="digestTitle" aria-describedby="digestIntro" data-digest="dialog" data-state="loading">
+  <button type="button" class="dialog-close" id="digestClose" aria-label="Close"><svg aria-hidden="true" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
   <h2 class="dialog-title" id="digestTitle" tabindex="-1">Job alerts</h2>
   <p id="digestIntro">Get the new roles that match your filters by email.</p>
-  <p class="notice" id="digestState" role="status" data-digest="state">Checking your email settings…</p>
-  <p class="digest-note" id="digestNote" role="status" tabindex="-1" hidden></p>
+  <p class="notice" id="digestState" role="status" tabindex="-1" data-digest="state">Checking your email settings…</p>
   <p class="notice" id="digestError" role="alert" tabindex="-1" hidden></p>
   <p class="dialog-actions" id="digestRetryRow" hidden><button type="button" class="btn btn-pill" id="digestRetry">Try again</button></p>
   <form id="digestForm" novalidate data-digest="form" hidden>
@@ -214,16 +214,15 @@
     </fieldset>
     <div class="field-group">
       <h3 class="digest-label" id="digestFiltersLabel">Filters for the email</h3>
-      <ul class="digest-filters" id="digestFilters" aria-labelledby="digestFiltersLabel" data-digest="filters"></ul>
-      <button type="button" class="btn btn-pill" id="digestUseFilters">Use these filters for my email</button>
-      <p class="field-hint" id="digestUseHint">Copies the regions, levels, role types and keywords chosen on the page right now. Changing the filters on the page later, or searching, does not change the email until you press this again.</p>
+      <p id="digestFilters" data-digest="filters"></p>
+      <button type="button" class="btn btn-pill" id="digestUseFilters">Use the page filters now</button>
+      <p class="field-hint" id="digestUseHint">Changing the page filters later does not change the email.</p>
     </div>
     <p class="dialog-actions">
-      <button type="button" class="btn btn-pill" id="digestOff" hidden>Turn the email off</button>
-      <button type="submit" class="btn btn-pill btn-primary" id="digestSend">Turn the email on</button>
+      <button type="button" class="btn btn-pill" id="digestOff" hidden>End job alerts</button>
+      <button type="submit" class="btn btn-pill btn-primary" id="digestSend">Start job alerts</button>
     </p>
   </form>
-  <p class="dialog-actions" id="digestCloseRow"><button type="button" class="btn btn-pill" id="digestClose">Close</button></p>
 </dialog>
 <!--/digest-->
 <dialog class="dialog" id="reportDialog" aria-labelledby="reportTitle" aria-describedby="reportIntro" data-report="dialog" data-state="idle">

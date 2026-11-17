@@ -9,7 +9,7 @@ export const LIMITS = { address: 254, name: 80, names: 30, keywords: 200 } as co
 export const FREQUENCIES = ['daily', 'weekly'] as const;
 export type Frequency = (typeof FREQUENCIES)[number];
 
-/** What the dashboard's "Use these filters for my email" copies, as it is stored in `subscriptions.filters`. */
+/** What the dashboard's "Use the page filters now" copies, as it is stored in `subscriptions.filters`. */
 export interface Filters {
   regions: string[];
   levels: string[];

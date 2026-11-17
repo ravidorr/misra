@@ -2086,7 +2086,7 @@ if (modelContext) {
 }
 
 /* The four filters the daily email copies (regions, levels, role types and keywords, never the rest). digest.js asks for
-   them when the user presses "Use these filters for my email"; it is a read-only copy taken at that moment, so later
+   them when the user presses "Use the page filters now"; it is a read-only copy taken at that moment, so later
    changes to the page's filters, such as a quick search, never reach the email by themselves. */
 globalThis.misraEmailFilters = () => ({
   regions: [...F.regions],

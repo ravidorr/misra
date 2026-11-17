@@ -672,7 +672,7 @@ maintainer's own turn-on flow (turn the email on, read the confirmation email, c
    not write `docs/digest.js` (it also removes one left by an earlier build). Change the constant in a pull request, merge, and
    the next daily build publishes it. `tests/test_build_dashboard.py` tests both values.
    To close signups again, unset the secret (turning off keeps working without it). Do not set the constant back to `False` once anyone
-   has subscribed: it also removes "Turn the email off" from the page.
+   has subscribed: it also removes "End job alerts" from the page.
 
 Because the function checks its own switch, calling the API directly does not get around the page's flag.
 
@@ -750,11 +750,11 @@ compares them.
 
 `templates/digest.js` (a module with its own integrity hash, built to `docs/digest.js` only while the switch is on). The "Job
 alerts" button sits next to "Sign out" and opens a native dialog with the state (not on, waiting for you to confirm, on, unsubscribed),
-the address field, daily or weekly, the filters the email will use, "Use these filters for my email" and the actions "Turn the email
-on" (or "Send the confirmation again" while waiting, "Change the address and confirm it" while on) and "Turn the email off". The
+the address field, daily or weekly, the filters the email will use, "Use the page filters now" and the actions "Start job
+alerts" (or "Send the confirmation again" while waiting, "Confirm new address" while on) and "End job alerts". The
 button copies exactly regions, levels, role types and keywords from the dashboard at that moment (`globalThis.misraEmailFilters()`
 in `dashboard.js` returns copies); later changes to the page's filters, a quick search included, change nothing until it is pressed
-again. While the email is off the choices are a draft sent with "Turn the email on"; while it waits or runs, a new frequency or
+again. While the email is off the choices are a draft sent with "Start job alerts"; while it waits or runs, a new frequency or
 filter set is saved straight to the user's own row (the only two columns they may update). Every failure is explained and never
 called a success, and the page reads the row again after every call.
 

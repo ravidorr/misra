@@ -39,13 +39,13 @@ const MESSAGES = {
   limited: `You have already asked for ${USER_LIMIT} confirmation emails today, the most allowed, so nothing was sent. Try again tomorrow.`,
   addressLimited: 'That address has already been sent as many confirmation emails as are allowed today, so nothing was sent. Try again tomorrow, or use another address.',
   paused: 'We have sent as many confirmation emails as we can today, so nothing was sent. Try again tomorrow.',
-  closed: 'Signups for the email are not open yet, so nothing was turned on.',
-  sendFailed: 'The confirmation email could not be sent, so nothing is waiting for you in your inbox, and the email stays paused until you confirm. Press "Send the confirmation again" later.',
+  closed: 'Signups for job alerts are not open yet. Nothing was turned on.',
+  sendFailed: 'The confirmation email could not be sent, so job alerts stay paused. Try again later.',
   sendUnclear: 'We could not confirm that the email was sent. Wait a few minutes and check your inbox, and your spam folder, before asking again: each request uses one of the confirmation emails allowed today.',
   server: 'Something went wrong on our side. Check the settings above and try again.',
   unclear: 'We could not confirm what happened. The settings above are read again from your account; check them and try again.',
-  loadFailed: 'We could not read your email settings. Nothing was changed.',
-  saveFailed: 'We could not save that, so the email keeps its earlier settings. Try again.',
+  loadFailed: 'We could not read your job alert settings. Nothing was changed.',
+  saveFailed: 'We could not save that. Your job alerts keep their earlier settings. Try again.',
   signedOut: 'You are signed out, so nothing was changed. Sign in and try again.',
   noFilters: 'The roles are still loading, so the filters could not be read. Try again in a moment.',
 };
@@ -80,20 +80,21 @@ const dialog = $('digestDialog');
 if (open && dialog) {
   const form = $('digestForm');
   const stateLine = $('digestState');
-  const note = $('digestNote');
   const problem = $('digestError');
   const retryRow = $('digestRetryRow');
   const address = $('digestAddress');
   const addressError = $('digestAddressError');
-  const filtersList = $('digestFilters');
+  const filtersLine = $('digestFilters');
   const useFilters = $('digestUseFilters');
   const send = $('digestSend');
   const off = $('digestOff');
   const frequencies = [...form.querySelectorAll('input[name="digestFrequency"]')];
 
   /* `row` is the account's subscription row as last read (null: none, or not read yet), `phase` is loading, ready or failed,
-     and `draft` is what "Turn the email on" will send while there is no running subscription (off or unsubscribed). */
-  const view = { row: null, phase: 'loading', draft: { frequency: 'daily', filters: emptyFilters() }, busy: false, user: null };
+     `draft` is what "Start job alerts" will send while there is no running subscription (off or unsubscribed), and `result`
+     is the outcome of the last action. It takes the place of the state's words in the state line until the next action or
+     the dialog is closed, so the dialog never shows two banners that say the same. */
+  const view = { row: null, phase: 'loading', draft: { frequency: 'daily', filters: emptyFilters() }, busy: false, user: null, result: '' };
 
   function emptyFilters() {
     return { regions: [], levels: [], role_types: [], keywords: '' };
@@ -120,34 +121,28 @@ if (open && dialog) {
     return items.length > 0 ? items : ['Every new role (no filters chosen).'];
   }
 
-  function renderFilters() {
-    filtersList.replaceChildren(
-      ...describeFilters(shownFilters()).map((text) => {
-        const item = document.createElement('li');
-        item.textContent = text;
-        return item;
-      }),
-    );
-  }
+  const renderFilters = () => {
+    filtersLine.textContent = describeFilters(shownFilters()).join('; ');
+  };
 
-  const every = (frequency) => (frequency === 'weekly' ? 'once a week, as a summary' : 'every day there is something new');
+  const when = (frequency) => (frequency === 'weekly' ? 'on Sundays, when there are new matches' : 'on days with new matches');
 
   /* The words of each state. They name the address because the user may have typed another one. */
   function stateText(state) {
     const row = view.row;
     switch (state) {
       case 'loading':
-        return 'Checking your email settings…';
+        return 'Checking your job alert settings…';
       case 'unknown':
-        return 'We could not read your email settings.';
+        return 'We could not read your job alert settings.';
       case 'on':
-        return `The email is on. New roles that match your filters go to ${row.address}, ${every(row.frequency)}.`;
+        return `Job alerts are on. New matching roles go to ${row.address} ${when(row.frequency)}.`;
       case 'waiting':
         return `Waiting for you to confirm ${row.address}. Open the link in the confirmation email and press "Confirm my email"; until then nothing is sent. The link works for 7 days.`;
       case 'unsubscribed':
-        return 'You unsubscribed, so nothing is sent. You can turn the email on again; you will confirm your address again first.';
+        return 'You unsubscribed, so nothing is sent. Press "Start job alerts" to start again; we send a new confirmation email first.';
       default:
-        return 'The email is off. Nothing is sent to you.';
+        return 'Job alerts are off. Nothing is sent to you.';
     }
   }
 
@@ -173,8 +168,7 @@ if (open && dialog) {
   }
 
   function showNote(text) {
-    note.textContent = text;
-    note.hidden = !text;
+    view.result = text;
   }
 
   /* Draws the dialog, the button hooks and the form from `view`. `keepAddress` leaves what the user typed. */
@@ -183,7 +177,7 @@ if (open && dialog) {
     open.dataset.digestState = state;
     dialog.dataset.state = state;
     stateLine.dataset.digestState = state;
-    stateLine.textContent = stateText(state);
+    stateLine.textContent = view.result || stateText(state);
     const frequency = shownFrequency();
     open.dataset.digestFrequency = running() ? frequency : '';
     const ready = view.phase === 'ready';
@@ -198,10 +192,7 @@ if (open && dialog) {
     const changed = state === 'on' && typed !== '' && typed !== view.row.address.toLowerCase();
     send.hidden = state === 'on' && !changed;
     off.hidden = !running();
-    send.textContent = { waiting: 'Send the confirmation again', on: 'Change the address and confirm it' }[state] ?? 'Turn the email on';
-    $('digestUseHint').textContent = running()
-      ? 'Copies the regions, levels, role types and keywords chosen on the page right now and saves them for the email. Changing the filters on the page later, or searching, does not change the email until you press this again.'
-      : 'Copies the regions, levels, role types and keywords chosen on the page right now. Press it before you turn the email on if you want only roles like the ones you see. Changing the filters on the page later does not change the email until you press this again.';
+    send.textContent = { waiting: 'Send the confirmation again', on: 'Confirm new address' }[state] ?? 'Start job alerts';
   }
 
   /* Reads the user's own row (row-level security gives them theirs and no token hash). Returns true when it could. */
@@ -296,7 +287,7 @@ if (open && dialog) {
     render({ keepAddress: !outcome.ok });
     if (!dialog.open) dialog.showModal(); /* a second Esc can close it while the request runs: the answer must still be seen */
     if (!problem.hidden) problem.focus();
-    else if (document.activeElement === document.body) note.focus(); /* the button that was pressed may have gone away */
+    else stateLine.focus(); /* the button that was pressed may have gone away, and the new state is read out */
   }
 
   function turnOn() {
@@ -322,8 +313,8 @@ if (open && dialog) {
       {
         success: (answer) =>
           answer.state === 'on'
-            ? 'The email was already on for this address, so nothing was changed and nothing was sent.'
-            : `Check ${sentTo} for a confirmation link. Your ${running() ? view.row.frequency : view.draft.frequency} job alerts start only after you open it and press "Confirm my email".${state === 'on' ? ' The email stays paused until then.' : ''}`,
+            ? 'Job alerts were already on for this address. Nothing changed and nothing was sent.'
+            : `Check ${sentTo} for a confirmation link. Your ${running() ? view.row.frequency : view.draft.frequency} job alerts start only after you open it and press "Confirm my email".${state === 'on' ? ' Job alerts are paused until then.' : ''}`,
       },
     );
   }
@@ -334,8 +325,8 @@ if (open && dialog) {
       {
         success: (answer) =>
           answer.status === 'not_subscribed'
-            ? 'The email was not on, so nothing was changed.'
-            : 'The email is off. Nothing more will be sent. The filters saved for the email were deleted; your dashboard filters stay as they are. We keep the address and the times you turned it on, confirmed and off as a record of your consent.',
+            ? 'Job alerts were not on, so nothing changed.'
+            : 'Job alerts are off. Nothing more will be sent. The filters saved for the email were deleted; your dashboard filters stay as they are. We keep the address and the times you turned job alerts on, confirmed and off as a record of your consent.',
       },
     );
   }
@@ -358,7 +349,7 @@ if (open && dialog) {
     const reread = await refresh();
     setBusy(false);
     if (!account()) return;
-    if (saved) showNote('Saved. The next email uses this.');
+    if (saved) showNote('Saved. Your next job alert uses this.');
     else showProblem(MESSAGES.saveFailed);
     if (!reread) showProblem(`${problem.textContent ? `${problem.textContent} ` : ''}${MESSAGES.loadFailed}`);
     render({ keepAddress: true });
@@ -380,8 +371,8 @@ if (open && dialog) {
       return;
     }
     view.draft.filters = filters;
+    showNote('Copied. Press "Start job alerts" to use them.');
     render({ keepAddress: true });
-    showNote('Copied. Press "Turn the email on" to use them.');
   }
 
   open.addEventListener('click', async () => {
@@ -439,6 +430,7 @@ if (open && dialog) {
       const a = account();
       if (a?.userId === view.user && a) return; /* the same user again (a renewed token) */
       view.row = null;
+      view.result = '';
       view.draft = { frequency: 'daily', filters: emptyFilters() };
       view.user = a?.userId ?? null;
       if (!a) {

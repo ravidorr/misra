@@ -211,7 +211,7 @@ starting with the ones that matter most to users.
 
 - AC: A signed-in user can turn the email on or off and choose the address it goes to (their Google email by default).
 - AC: The digest filters are regions, levels, role types and keywords. A user sets them with one action on the
-  dashboard, "Use these filters for my email", which copies those four filters. Later changes to the dashboard
+  dashboard, "Use the page filters now", which copies those four filters. Later changes to the dashboard
   filters, such as a quick search, do not change the email until the user does that again.
 - AC: Daily is the default for every new subscriber. Early-career roles attract many applicants and fill quickly, so a
   new listing matters on the day it appears. Weekly is available if the user chooses it.

@@ -38,35 +38,24 @@ for wording, the technical-writer agent, before building; the maintainer may be 
 disagree. The wording of `PRIVACY.md`, `TERMS.md` and `ASSISTANT.md` is the lawyer's (`AGENTS.md`): a change to them
 waits for him. Do not write the maintainer's email address in this repository (it is public).
 
-### Job alerts modal (![alerts modal](todo-images/alerts-modal.webp))
+### Job alerts modal waits for the lawyer
 
-- [ ] **Duplicate banners.** The yellow "Waiting for you to confirm `<email>`. Open the link ... The link works for 7 days."
-  and the purple "Check `<email>` for a confirmation link. Your daily job alerts start only after you open it ..." say the
-  same thing (![alerts pending banners](todo-images/alerts-pending-banners.png)). Keep one. Ask: Claude Design, UI/UX expert, technical writer.
-- [ ] **"Send it to" help text.** Is "Your Google email, unless you type another one. Either way, the address gets a
-  confirmation email first, and nothing else until its owner confirms." needed (![alerts send it to](todo-images/alerts-send-it-to.png))? Ask: same three.
-- [ ] **"Email me new matching roles" text is half redundant** (![alerts email me text](todo-images/alerts-email-me-text.png)). "Nothing is sent until you
-  confirm" repeats "We first send a confirmation link"; "you get an email only when there are new matches" repeats the
-  section title. Cut to what is not said elsewhere (the one-click unsubscribe, the Terms and privacy links). The digest
-  wording in `PRIVACY.md` is tested by `tests/test_legal_wording.py`: check it still holds. Ask: same three.
-- [ ] **"Filters for the email" confuses users** (![alerts filters](todo-images/alerts-filters.png)). Replace the list, the button and its long help
-  text with two radio buttons: "No filters" and "Same filters as on the page" (with a short note that changing the page
-  filters later does not change the email filters). Ask: same three.
-- [ ] **Button labels and behaviour.** "Turn the email off" becomes "End job alerts", "Turn the email on" becomes "Start
-  job alerts", "Send the confirmation again" becomes "Resend confirmation". Clicking any of these buttons closes the
-  modal. The "Close" button becomes an (x) in the top-right corner of the modal.
+- [ ] **"Email me new matching roles" text is half redundant.** The label and the helper text ("We first send a
+  confirmation link to ... Nothing is sent until you confirm, and you get an email only when there are new matches.
+  One-click unsubscribe is in every email. By turning this on you agree to ...") are the lawyer's wording (`CHANGELOG.md`
+  0.31.0, `PLAN.md` step 6.6). The experts would cut the heading and keep only the unsubscribe and agreement sentences
+  (the rest repeats the state line and the title); ask him. Same ask for "Choices saved locally in this browser while you
+  were signed out are not affected. This action cannot be undone." in the delete dialog (the writer would say "What this
+  browser saved while you were signed out stays until you clear your browser's data. This cannot be undone.").
 
 ### Other modals and the profile menu
 
-- [ ] **Profile menu** (![profile menu](todo-images/profile-menu.png)). (a) The email address is smaller and lighter than the other entries: make
-  it the same size and weight, or say why not. (b) Why is "Delete my account" highlighted (a filled yellow row)? Ask:
-  Claude Design and the UI/UX expert whether the maintainer is wrong on either.
-- [ ] **"Delete your Misra account?" modal** (![delete account modal](todo-images/delete-account-modal.webp)). What is "Choices saved locally in this browser
-  while you were signed out are not affected. This action cannot be undone."? Decide whether to keep, shorten or move
-  it (technical writer). Replace the "Cancel" button with an (x) in the top-right corner.
-- [ ] **"Sign in" modal** (![sign in modal](todo-images/sign-in-modal.webp)). Replace "Cancel" with an (x) in the top-right corner. The "Terms" and
-  "privacy notice" links open in a new tab, with a visual sign that they do (an icon, and the accessible name says
-  "opens in a new tab").
+- [ ] **Follow-ups from the modals review** (the experts' reasons are in the PR that closed the rest of this section).
+  The report dialog, the role detail dialog and the filters sheet keep their "Close" buttons: move them to the corner (x)
+  (`.dialog-close`, `design-system/components/dialog.css`) so all dialogs match. Ask the lawyer, with the next review of
+  `templates/email.js`, whether "Send the confirmation again" (named in an approved sentence there) may become "Resend
+  confirmation", and whether the agreement links in the job alerts dialog (pinned as raw HTML in
+  `tests/test_legal_wording.py`) may open in a new tab like the ones in the sign-in dialog.
 - [ ] **Google's account chooser says "to continue to `<project>.supabase.co`"** (![google account chooser](todo-images/google-account-chooser.webp)). Find how
   to show "Misra" or our own domain instead: the usual ways are the OAuth consent screen branding in Google Cloud and
   a Supabase custom domain (check whether it needs a paid plan and what it costs before doing anything).
