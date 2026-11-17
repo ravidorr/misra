@@ -254,12 +254,12 @@ Decisions made in planning (they change the PRD's wording, so update the PRD in 
   (`Misra/<version> (+site; contact)`), a per-host delay for the browser crawl equal to the adapters', the `robots.txt`
   check (enforced: `ROBOTS_ENFORCED` in `common.py`; the published ATS APIs are not treated as pages, but SmartRecruiters'
   `api.smartrecruiters.com` disallows everyone, so its five companies are skipped until SmartRecruiters gives permission;
-  a company skipped for 7 days in a row has its open jobs closed, from v0.26.0), and the company exclusion list `data/excluded_companies.csv` (a company
+  a company skipped for 7 days in a row had its open jobs closed from v0.26.0; since v0.57.0 its jobs are deleted at once, see `CONTRIBUTING.md`), and the company exclusion list `data/excluded_companies.csv` (a company
   on it is never crawled, is deleted from the scratch history and from Supabase `jobs`, `crawl_log`, `user_jobs` and `emailed`, and is
   off the exports and the coverage card; the process is in `CONTRIBUTING.md`). ~~Still to do before the gate closes: the
   digest email itself (step 6.3, with its footer and headers), the flag, and the present-tense `PRIVACY.md` edits below.~~ Done in v0.31.0 except the function secret (see "Opening day" below). The secret is set, so the gate is closed.
-  Small wording and checks done in v0.29.0: the weekly choice reads "Weekly (Sundays)" (the lawyer's suggestion), the coverage card says what happens to the roles of a
-  company skipped for robots.txt in both phases (kept for up to 7 days, then closed, with the days skipped), and the SQL policy tests now run in CI (job `sql-tests`).
+  Small wording and checks done in v0.29.0: the weekly choice reads "Weekly (Sundays)" (the lawyer's suggestion), the coverage card said what happens to the roles of a
+  company skipped for robots.txt (kept for up to 7 days, then closed; v0.57.0 deletes them at once and the card no longer says it), and the SQL policy tests now run in CI (job `sql-tests`).
   Second lawyer answer (2026-11-15), applied: the `auth.users` sentence in `PRIVACY.md` now says why Supabase keeps
   Google's name and photo, and `TERMS.md` gained the liability, acceptable-use and governing-law points. ~~Still to do on
   the day the flag is switched on (the text is true only then, so it is not in `PRIVACY.md` yet): in `PRIVACY.md`, (a)

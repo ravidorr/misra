@@ -270,8 +270,8 @@ could not prove: a real PostgREST, a real Supabase project and a real Actions ru
   at the commit step on a stale checkout, fixed in #152 (`ref: main`); no run after #152 yet. How: in the log of the first run, `pull` says `pulled <jobs> jobs and <log> crawl log rows`, the
   sync says `<n> crawl log rows written` and a second run the next day does not repeat them; `docs/` is committed and
   `data/` is not; the `backup` step commits to `ravidorr/misra-backups` with `jobs` and `crawl_log` in its counts. Done
-  when two runs in a row after #152 are green and the coverage card and the robots.txt closing still work (the five SmartRecruiters
-  companies close on their seventh skipped day).
+  when two runs in a row after #152 are green and the coverage card and the robots.txt deletion still work (the five SmartRecruiters
+  companies lose their `jobs` rows on the first sync after v0.57.0: the log says `Supabase: robots.txt, deleted <n> jobs of 5 companies`).
 - [ ] **Measure the size of `crawl_log` and `jobs` after a month.** Trigger: 30 days after the move. How: Supabase
   dashboard, Reports, Database. `crawl_log` keeps 90 days (`CRAWL_LOG_DAYS`, about 250 rows a day), the pull reads all of
   it every run, and the backup exports it; if the pull gets slow or the table is large, shorten it. The same check serves PLAN.md step 7.4 (the size of the description
@@ -291,3 +291,6 @@ could not prove: a real PostgREST, a real Supabase project and a real Actions ru
 
 - Dashboard description search has no per-visitor limit; to add one we would store a daily hashed-address counter for people who
   search without signing in, which needs new `PRIVACY.md` wording: do you want that?
+- `PRIVACY.md` (the "Reporting a missing career site" bullet, line 42) names the dashboard button "Report a site", and the
+  short version and the line about the spam counter say "if you report a site". The button now reads "Add a company"
+  (the form is the same). Do you want the notice to say "Add a company" too? Left as approved until you answer.
