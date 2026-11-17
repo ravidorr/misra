@@ -299,9 +299,7 @@ async def test_a_late_answer_that_moves_the_role_gives_the_focus_a_visible_ring_
     assert seen["outlineWidth"] == "3px" and seen["outlineColor"] == seen["accent"]
 
 
-async def test_the_list_heading_stays_out_of_sight_until_the_keyboard_puts_the_focus_on_it(
-    page: Page, site: Path
-) -> None:
+async def test_the_list_heading_shows_only_when_the_keyboard_puts_the_focus_on_it(page: Page, site: Path) -> None:
     fake = crowded()
     await serve(page, site, backend=fake)
     box = await page.locator("#list-h").bounding_box()
@@ -310,6 +308,8 @@ async def test_the_list_heading_stays_out_of_sight_until_the_keyboard_puts_the_f
     before = await page.evaluate(top)
     await page.locator("#list-h").focus()
     await page.keyboard.press("Shift")
+    shown_box = await page.locator("#list-h").bounding_box()
+    assert shown_box and shown_box["width"] > CLIPPED_PX  # the keyboard shows it
     assert await page.evaluate(top) == before  # showing the heading does not move the list
 
 
