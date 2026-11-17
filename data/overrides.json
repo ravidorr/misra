@@ -932,5 +932,15 @@
   "ats": "browser",
   "slug": "https://jobs.amdocs.com/careers?location=Israel",
   "israel_only": true
+ },
+ "Ormat": {
+  "ats": "browser",
+  "slug": "https://careers.ormat.com/search/?q=&locationsearch=Israel",
+  "israel_only": true
+ },
+ "Stratasys": {
+  "ats": "browser",
+  "slug": "https://careers.stratasys.com/search/?q=&locationsearch=Israel",
+  "israel_only": true
  }
 }

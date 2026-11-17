@@ -1752,9 +1752,9 @@ $('starredView').addEventListener('click', () => {
   render();
 });
 
-const gaps = DATA.gaps ?? { blocked: [], untracked: [], total: 0, groups: [], closeDays: 0 };
+const gaps = DATA.gaps ?? { blocked: [], untracked: [], total: 0, groups: [] };
 {
-  /* The card is always there: "Report a site" (report.js) sits under the list and stays in view while the list is
+  /* The card is always there: "Add a company" (report.js) sits under the list and stays in view while the list is
      closed, even when no company is known to be missing. The reader gets two lists, not the internal reasons: the
      companies we choose not to read (their robots.txt does not allow it) first, then the ones we cannot read yet.
      Each company keeps its reason in data-reason, and the reasons stay in the page data. */
@@ -1762,7 +1762,7 @@ const gaps = DATA.gaps ?? { blocked: [], untracked: [], total: 0, groups: [], cl
     {
       part: 'skipped',
       title: 'We choose not to read these',
-      note: `Their robots.txt does not allow automated access, so we respect it. Roles we already had are kept for up to ${gaps.closeDays} days and then closed.`,
+      note: 'Their policy does not allow automated access, so we respect it.',
       sites: [],
     },
     {
@@ -1790,12 +1790,9 @@ const gaps = DATA.gaps ?? { blocked: [], untracked: [], total: 0, groups: [], cl
               h('span', { class: 'sr-only', text: NEW_TAB }),
             ])
           : site.c;
-        /* Only a skipped company says why: it is the one fact the reader may want (roles close after the days). */
-        const why = part.part === 'skipped' && site.why ? h('span', { class: 'gap-why', text: site.why }) : null;
         list.append(
           h('li', { class: 'gap-card', 'data-company': site.c, 'data-reason': site.reason }, [
             h('b', { class: 'gap-name' }, [name]),
-            why,
           ]),
         );
       }

@@ -142,8 +142,7 @@
       <div class="gap-parts" id="gapParts"></div>
     </details>
     <div class="gap-report" id="gapReport" data-report="card">
-      <p id="gapReportText">Is a company missing from this list? Tell us where it hires.</p>
-      <button type="button" class="btn btn-pill" id="reportOpen" aria-haspopup="dialog" data-report="open" hidden>Report a site</button>
+      <button type="button" class="btn btn-pill" id="reportOpen" aria-haspopup="dialog" data-report="open" hidden>Add a company</button>
     </div>
   </section>
 </main>
@@ -227,9 +226,9 @@
 </dialog>
 <!--/digest-->
 <dialog class="dialog" id="reportDialog" aria-labelledby="reportTitle" aria-describedby="reportIntro" data-report="dialog" data-state="idle">
-  <h2 class="dialog-title" id="reportTitle" tabindex="-1">Report a site</h2>
+  <h2 class="dialog-title" id="reportTitle" tabindex="-1">Add a company</h2>
   <form id="reportForm" novalidate data-report="form">
-    <p id="reportIntro">Tell us about a company whose career page is missing from this list. You need no account and no personal details. We email the report to the maintainer. Only the career page link is required.</p>
+    <p id="reportIntro">Tell us about a company whose career page is missing from this list, or one we read wrong. You need no account and no personal details. We email the report to the maintainer. Only the career page link is required.</p>
     <p class="notice" id="reportError" role="alert" tabindex="-1" hidden></p>
     <div class="field-group">
       <label for="reportCompany">Company</label>
@@ -261,7 +260,7 @@
   </form>
   <div id="reportDone" data-report="done" hidden>
     <h3 class="dialog-title" id="reportDoneTitle" tabindex="-1">Report sent</h3>
-    <p role="status">Your report was emailed to the maintainer. Sites we accept are added to the crawl, or listed on this card with the reason we cannot read them.</p>
+    <p role="status">Your report was emailed to the maintainer. Companies we accept are added to the crawl, or listed on this card with the reason we do not read them.</p>
     <p class="dialog-actions"><button type="button" class="btn btn-pill btn-primary" id="reportClose">Close</button></p>
   </div>
 </dialog>

@@ -1,4 +1,4 @@
-/* "Report a site" (PLAN.md step 5.2, PRD FR-7). A visitor, signed in or not, tells the maintainer about a company whose
+/* "Add a company" (PLAN.md step 5.2, PRD FR-7). A visitor, signed in or not, tells the maintainer about a company whose
    careers page is missing from the crawl. The form lives in a native dialog opened from the coverage gap card; its button
    asks the `report-site` Edge Function (supabase/functions/report-site/), which emails the report. It is a separate module
    on purpose: it needs no account and no other script, and a failure here can never stop the roles from loading.

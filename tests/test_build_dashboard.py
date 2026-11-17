@@ -647,7 +647,7 @@ def test_each_reason_links_where_the_card_says() -> None:
         {"name": "Walled", "status": "ok", "domain": "walled.test", "careers_url": "https://walled.test/careers"},
     ]
     blocked = [
-        {"c": "Robot", "why": f"{build_dashboard.ROBOTS_NOTE} (/jobs)", "last": "2026-01-02", "days": 1},
+        {"c": "Robot", "why": f"{build_dashboard.ROBOTS_NOTE} (/jobs)", "last": "2026-01-02"},
         {"c": "Walled", "why": build_dashboard.BLOCKED_WHY, "last": "never"},
     ]
     rows = [

@@ -40,7 +40,7 @@ CREATE TABLE IF NOT EXISTS crawl_log(
   ts TEXT, company TEXT, ats TEXT, ok INTEGER, n_jobs INTEGER, note TEXT, id INTEGER);
 """
 ROBOTS_NOTE = "robots.txt does not allow it"  # crawl log note prefix of a company skipped because of robots.txt
-ROBOTS_CLOSE_DAYS = 7  # a company skipped by robots.txt on every run for this many days gets its open jobs closed
+ROBOTS_MAX_PURGE_COMPANIES = 10  # the sync deletes the jobs of at most this many robots.txt-skipped companies a run
 ROBOTS_TIMEOUT = 10
 ROBOTS_MAX_BYTES = 500 * 1024  # RFC 9309: a parser reads at least the first 500 KiB
 HTTP_OK = 200

@@ -1267,7 +1267,7 @@ html:has(.sheet:modal) {
 }
 
 /* The coverage card: a closed list of companies (two coarse parts, each company a small card with a link) and, always in
-   view under it, the "Report a site" row. */
+   view under it, the "Add a company" row. */
 .gaps {
   margin-top: var(--space-5);
   margin-bottom: var(--space-5);
@@ -1307,10 +1307,6 @@ html:has(.sheet:modal) {
   font-weight: 400;
 }
 
-.gap-report p {
-  margin: 0;
-}
-
 .gap-parts {
   display: grid;
   gap: var(--space-4);
@@ -1347,11 +1343,6 @@ html:has(.sheet:modal) {
   overflow-wrap: anywhere;
 }
 
-/* A skipped company says why in a sentence, so its cards are wider. */
-.gap-part[data-part='skipped'] .gap-list {
-  grid-template-columns: repeat(auto-fill, minmax(min(15rem, 100%), 1fr));
-}
-
 /* A company is a small position card: the same border and panel as a role card, without its shadow. */
 .gap-card {
   display: flex;
@@ -1386,12 +1377,6 @@ html:has(.sheet:modal) {
   .gap-link:hover {
     color: var(--accent);
   }
-}
-
-.gap-why {
-  display: block;
-  padding-bottom: var(--space-2);
-  font-size: var(--text-sm);
 }
 
 .feed {

@@ -2,7 +2,7 @@
 
 Open work, as of 2026-11-17. Each item says what triggers it, how to do it and when it is done. When one is finished,
 delete it and update the counts in the others: the 85 and the four segment counts in the research item (a pin removes
-one row from one segment), its "(28)" if the company had no careers URL, else its "(54 today)".
+one row from one segment), its "(28)" if the company had no careers URL, else its "(53 today)".
 An item with a screenshot in `todo-images/` goes with it: delete the image file in the same PR.
 Observations about live sites below come from checks made on 2026-11-14 and may have changed.
 
@@ -71,14 +71,14 @@ Observations about live sites below come from checks made on 2026-11-14 and may 
 
 ## Research the remaining unresolved companies
 
-- [ ] `data/unresolved_candidates.csv` lists 78 researched companies with no usable job feed (as of 2026-11-14: 22
-  multinational, 35 deeptech, 11 cyber_infra, 10 biz_software). Each needs
+- [ ] `data/unresolved_candidates.csv` lists 76 researched companies with no usable job feed (as of 2026-11-14: 22
+  multinational, 33 deeptech, 11 cyber_infra, 10 biz_software). Each needs
   its own research; there is no batch fix left. Every observation about a live site below is from the checks of
-  2026-11-14, a crawl of the 105 rows that had a careers URL that day (54 today) and a scan of their rendered pages. The
+  2026-11-14, a crawl of the 105 rows that had a careers URL that day (53 today) and a scan of their rendered pages. The
   remaining work falls into these groups:
-  - **No careers URL (24).** Status `not_found` in `data/new/*_companies.json`: Upsolver, Speedata,
+  - **No careers URL (23).** Status `not_found` in `data/new/*_companies.json`: Upsolver, Speedata,
     Teramount, X-Globe, Q Factor, Gilat, Siklu, Silicom, Sight Diagnostics, Brainsway, EarlySign, Diagnostic Robotics,
-    Tevel Aerobotics, SolarEdge, Watergen, Stratasys, AIR, SAP, eBay,
+    Tevel Aerobotics, SolarEdge, Watergen, AIR, SAP, eBay,
     Akamai, Ford, Ericsson, Uber, Keysight. Find the real
     career page first, then continue with the groups below. The large multinationals will need a location-filtered
     address or their ATS (see the last group).
@@ -103,8 +103,7 @@ Observations about live sites below come from checks made on 2026-11-14 and may 
     - Cloudflare: the Greenhouse board's locations are "Hybrid" or "Distributed", never a city, so an Israel job could
       not be recognised. The adapter would need to read the offices (`?content=true`) first.
   - **The page returned links, not jobs.** Checked on 2026-11-14: Ex Libris links to `careers.clarivate.com`, a
-    worldwide Phenom board of its parent Clarivate (not Ex Libris only); Ormat's list is a ViziRecruiter board
-    (`vizi.vizirecruiter.com/OrmatTechnologiesInc-4638`, one company so no adapter); Optibus is a Comeet plugin
+    worldwide Phenom board of its parent Clarivate (not Ex Libris only); Ormat is pinned on 2026-11-17 (see below); Optibus is a Comeet plugin
     page, done on 2026-11-16 below; REE Automotive is in the next group.
   - **Large multinational boards that show a worldwide first page.** Google, Intuit, Apple, IBM
     and others returned jobs, but almost none in Israel (Apple's page had one), because the page is a worldwide search.
@@ -178,12 +177,20 @@ Observations about live sites below come from checks made on 2026-11-14 and may 
       (`/open-position/<slug>`, 1 Tel Aviv job), Walnut (`/jobs/<slug>`), env0 (`/careers/<slug>`), Deep Instinct (PDF job
       descriptions, none in Israel), Firefly's own `/positions/` pages (Firefly itself is pinned above), Syte (job list
       by script, no job link), Tyto Care and StoreDot (list or CV form with no job link), Swimm (an email address).
-    - Checked on 2026-11-16 (first batch, do not repeat): Stratasys is SuccessFactors (`careers.stratasys.com`, no
-      adapter); Speedata's jobs are on Viola Group's Getro board and its own page is a Wix site with no feed; Siklu is
+    - Checked on 2026-11-16 (first batch, do not repeat): Stratasys is SuccessFactors (pinned on 2026-11-17, see below); Speedata's jobs are on Viola Group's Getro board and its own page is a Wix site with no feed; Siklu is
       now part of Ceragon, whose Comeet board is Ceragon's; CytoReason's old plugin page answers 404; Diagnostic
       Robotics' list shows "No items found"; Guesty's page is a Next.js app that shows no uid even on a job page. Guessing
       the Greenhouse, Lever, Ashby and Workable slugs of the 21 companies without a careers URL found only an unrelated
       company (`air` on Greenhouse). Western Digital's board is on SmartRecruiters, which robots.txt skips.
+    - Checked on 2026-11-17 (third batch, do not repeat): Ormat and Stratasys are SuccessFactors career sites whose
+      `/search/?q=&locationsearch=Israel` page the generic browser crawl reads without an adapter (3 and 18 Israeli
+      jobs, the same on two runs); robots.txt of `careers.ormat.com` and `careers.stratasys.com` only blocks
+      `/applybutton/`, `/talentcommunity/`, `/services/` and similar, so both are pinned with `israel_only`. Jobvite
+      (`jobs.jobvite.com`) has no robots.txt, but Varonis's public board `/varonis/jobs` shows no job to the crawl (the
+      `varonis-internal` board did: it is not the public one), and Playstudios' Jobvite board has no job location; no
+      adapter. Pinpoint (`jobs.aligntech.com`: robots.txt allows the pages and `jobs.rss`) serves Align Technology
+      alone. SAP's SuccessFactors host answers 403 to a plain request: not read. Redefine Meat's Comeet board
+      (`redefinemeat/28.004`) lists 1 job, in the Netherlands.
     - Checked on 2026-11-16 (second batch, do not repeat): no adapter for iCIMS (AMD, Keysight: robots.txt of
       `careers-amd.icims.com` and `careers-keysight.icims.com` is `Disallow: /`) or Avature (Synopsys alone: the
       robots.txt of `generalmotors.avature.net` disallows `/careers`) or SuccessFactors (Stratasys alone) or Pinpoint
@@ -278,8 +285,8 @@ could not prove: a real PostgREST, a real Supabase project and a real Actions ru
   at the commit step on a stale checkout, fixed in #152 (`ref: main`); no run after #152 yet. How: in the log of the first run, `pull` says `pulled <jobs> jobs and <log> crawl log rows`, the
   sync says `<n> crawl log rows written` and a second run the next day does not repeat them; `docs/` is committed and
   `data/` is not; the `backup` step commits to `ravidorr/misra-backups` with `jobs` and `crawl_log` in its counts. Done
-  when two runs in a row after #152 are green and the coverage card and the robots.txt closing still work (the five SmartRecruiters
-  companies close on their seventh skipped day).
+  when two runs in a row after #152 are green and the coverage card and the robots.txt deletion still work (the five SmartRecruiters
+  companies lose their `jobs` rows on the first sync after v0.57.0: the log says `Supabase: robots.txt, deleted <n> jobs of 5 companies`).
 - [ ] **Measure the size of `crawl_log` and `jobs` after a month.** Trigger: 30 days after the move. How: Supabase
   dashboard, Reports, Database. `crawl_log` keeps 90 days (`CRAWL_LOG_DAYS`, about 250 rows a day), the pull reads all of
   it every run, and the backup exports it; if the pull gets slow or the table is large, shorten it. The same check serves PLAN.md step 7.4 (the size of the description
@@ -299,3 +306,6 @@ could not prove: a real PostgREST, a real Supabase project and a real Actions ru
 
 - Dashboard description search has no per-visitor limit; to add one we would store a daily hashed-address counter for people who
   search without signing in, which needs new `PRIVACY.md` wording: do you want that?
+- `PRIVACY.md` (the "Reporting a missing career site" bullet, line 42) names the dashboard button "Report a site", and the
+  short version and the line about the spam counter say "if you report a site". The button now reads "Add a company"
+  (the form is the same). Do you want the notice to say "Add a company" too? Left as approved until you answer.
