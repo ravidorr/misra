@@ -450,7 +450,7 @@ dialog.sheet[hidden],
   opacity: 0.5;
 }
 
-/* The filters sheet (design-system/components/sheet.css): its body is one column of groups, then the selects and switches. */
+/* The filters sheet (design-system/components/sheet.css): its body is one column of groups (the chips, the company, the sort, the two switches). */
 .sheet-body {
   display: grid;
   gap: var(--space-4);

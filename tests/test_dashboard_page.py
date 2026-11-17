@@ -1388,6 +1388,34 @@ async def test_the_company_has_a_heading_and_the_old_roles_have_a_count(page: Pa
     assert await page.locator("#hideStale").is_enabled()  # a plain checkbox, whatever the count
 
 
+@pytest.mark.parametrize("control", ["company", "sort"])
+async def test_the_selects_have_a_heading_like_the_other_groups_and_keep_their_name(
+    page: Page, site: Path, control: str
+) -> None:
+    await serve_filters(page, site)
+    group = page.locator(f".sheet-body > .filter-group:has(> h3.label#{control}-h)")
+    assert await group.count() == 1
+    assert await group.locator("> h3").inner_text() == control.capitalize()
+    assert await group.locator(f"> select#{control}[aria-labelledby={control}-h]").count() == 1
+    assert await page.locator(f"label:has(#{control})").count() == 0  # one name, from the heading, not announced twice
+    assert await page.get_by_role("combobox", name=control.capitalize(), exact=True).count() == 1
+
+
+async def test_the_two_checkboxes_are_a_named_group_and_the_headings_nest_under_the_sheet_title(
+    page: Page, site: Path
+) -> None:
+    await serve_filters(page, site)
+    group = page.get_by_role("group", name="Visibility", exact=True)
+    assert await group.locator("input[type=checkbox]").evaluate_all("els => els.map(e => e.id)") == [
+        "hideStale",
+        "showGone",
+    ]
+    heads = await page.locator("#moreFilters :is(h2, h3)").evaluate_all(
+        "els => els.map(e => e.tagName + e.textContent)"
+    )
+    assert heads == ["H2Filters", "H3Level", "H3Role type", "H3Region", "H3Company", "H3Sort", "H3Visibility"]
+
+
 async def test_the_old_roles_count_is_what_ticking_hide_would_remove(page: Page, site: Path) -> None:
     html = (site / "index.html").read_text(encoding="utf-8")
     (site / "index.html").write_text(
