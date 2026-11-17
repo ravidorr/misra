@@ -48,6 +48,14 @@ Observations about live sites below come from checks made on 2026-11-14 and may 
     looked at both in Gmail and one other client, the tests above pass, `npm run lint` and `npm run test:coverage` pass,
     and the PR shows screenshots. A change to `send_digests.py` needs a version bump and a changelog entry.
 
+## Snippet ellipsis
+
+- [ ] **Make the ellipsis on a snippet exact.** Trigger: `cutMark()` in `templates/dashboard.js` guesses that a snippet
+  of 200 or more characters that does not end in `.`, `!` or `?` was cut, because the page cannot tell a whole text of up
+  to 255 characters from a cut one. Where: a `jobs.snippet_cut` boolean (true when `descriptions.snippet` cut the text),
+  set by `sync_supabase.py`, read with the other `JOB_COLUMNS`, and `cutMark` shows the mark when it is true. Done when:
+  the heuristic and its comment are gone and a test covers a cut under 200 and a whole text over 200 ending in `)`.
+
 ## Assistant endpoint
 
 - [ ] **Turn on the assistant endpoint after the lawyer has reviewed it.** Trigger: his confirmation (he asked on 2026-11-17 to
