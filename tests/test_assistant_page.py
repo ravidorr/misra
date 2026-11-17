@@ -42,27 +42,28 @@ def test_the_markdown_says_where_to_connect_and_makes_no_promise_the_endpoint_do
 
 def test_the_markdown_carries_the_lawyers_block_of_2026_11_17_word_for_word_and_the_limits() -> None:
     text = (REPO / "ASSISTANT.md").read_text(encoding="utf-8")
-    heading = "### What your assistant can see\u2014and the rules for using it\n"
-    assert heading in text
+    assert "What your assistant can see\u2014" not in text  # the duplicated heading is gone (lawyer, 2026-11-17)
+    assert "\u2014" not in text  # he agreed to commas, colons or parentheses in place of the dashes
     for sentence in (
         "Your assistant can search open listings and read the full description of one job at a time (up to 20,000 "
         "characters, for open roles or roles closed less than 30 days). It cannot see your Misra account, email "
         'address, stars, "Not for me" choices, or saved filters.',
-        "Connecting Misra requires no sign-in and sends nothing personal to us\u2014your resume and prompts stay "
+        "Connecting Misra requires no sign-in and sends nothing personal to us: your resume and prompts stay "
         "inside your own AI assistant. To enforce daily limits (100 searches and 15 full-job reads per day), we "
         "store only a daily, non-reversible hash of your network address, which is deleted during the next daily "
         "cleanup.",
         'All job postings and descriptions belong to the respective employers and are provided "as is". You may '
-        "use this connection only for your own personal job search\u2014bulk copying, republishing, or training "
+        "use this connection only for your own personal job search: bulk copying, republishing, or training "
         "models on the postings is not allowed.",
-        "Misra is a free, unofficial project and is not affiliated with any employer. Your AI assistant\u2014not "
-        "Misra\u2014is responsible for anything it writes (such as cover letters or summaries). Always verify "
+        "Misra is a free, unofficial project and is not affiliated with any employer. Your AI assistant (not "
+        "Misra) is responsible for anything it writes (such as cover letters or summaries). Always verify "
         "details on the employer's own career page before applying.",
         "By connecting your assistant, you agree to the [Terms](https://ravidorr.github.io/misra/terms.html) and "
         "[Privacy Notice](https://ravidorr.github.io/misra/privacy.html).",
     ):
         assert sentence in text, sentence
     assert "(only a daily, non-reversible hash is used to count rate limits; see the privacy notice)" in text
+    assert text.count("What your assistant can see") == 1
     assert text.count("\n## What your assistant can see\n") == 1  # the bullets stand alone, no paragraph repeats them
     assert "Postings belong to the employers" not in text
     assert "It resets the next day (UTC)." in text
