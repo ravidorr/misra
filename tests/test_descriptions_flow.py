@@ -54,8 +54,8 @@ def crawl(workdir: Path, monkeypatch: pytest.MonkeyPatch) -> Any:
     return go
 
 
-def co(name: str, slug: str) -> dict[str, str]:
-    return {"name": name, "ats": "fake", "slug": slug, "status": "ok"}
+def co(name: str, slug: str) -> dict[str, Any]:
+    return {"name": name, "crawl": True, "ats": "fake", "slug": slug, "status": "ok"}
 
 
 def test_the_crawl_leaves_the_texts_in_the_work_file_and_never_in_the_database(
@@ -645,7 +645,7 @@ def test_a_crawl_that_died_in_the_browser_leaves_a_history_the_sync_stores_witho
     monkeypatch.setattr(run, "crawl_many", crash)
     with pytest.raises(RuntimeError, match="browser died"):
         crawl(
-            [co("Acme", "acme"), {"name": "Br", "ats": "browser", "slug": "https://br", "status": "ok"}],
+            [co("Acme", "acme"), {"name": "Br", "crawl": True, "ats": "browser", "slug": "https://br", "status": "ok"}],
             {"acme": [posting("1")]},
         )
     fake = FakeSupabase()

@@ -34,8 +34,8 @@ def adapter(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
     return results
 
 
-def co(name: str, ats: str = "fake", slug: str | None = None, status: str = "ok") -> dict[str, str]:
-    return {"name": name, "ats": ats, "slug": slug or name.lower(), "status": status}
+def co(name: str, ats: str = "fake", slug: str | None = None, status: str = "ok") -> dict[str, Any]:
+    return {"name": name, "crawl": True, "ats": ats, "slug": slug or name.lower(), "status": status}
 
 
 def test_init_is_idempotent(workdir: Path) -> None:
