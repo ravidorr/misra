@@ -14,14 +14,6 @@ Observations about live sites below come from checks made on 2026-11-14 and may 
   keyboard user sees no focus ring (WCAG 2.4.7). Not tested yet. Done when: the case is covered by a test and the focus
   lands on something visible, or the heading shows a focus ring.
 
-## Snippet ellipsis
-
-- [ ] **Make the ellipsis on a snippet exact.** Trigger: `cutMark()` in `templates/dashboard.js` guesses that a snippet
-  of 200 or more characters that does not end in `.`, `!` or `?` was cut, because the page cannot tell a whole text of up
-  to 255 characters from a cut one. Where: a `jobs.snippet_cut` boolean (true when `descriptions.snippet` cut the text),
-  set by `sync_supabase.py`, read with the other `JOB_COLUMNS`, and `cutMark` shows the mark when it is true. Done when:
-  the heuristic and its comment are gone and a test covers a cut under 200 and a whole text over 200 ending in `)`.
-
 ## Assistant endpoint
 
 - [ ] **Hand-test the assistant connection with someone who is not technical.** Trigger: the endpoint and the page "Connect your

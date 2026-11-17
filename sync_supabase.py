@@ -186,12 +186,13 @@ class Client:
     def open_keys(self) -> set[tuple[str, str]]:
         return set(self.open_text_hashes("company,job_id"))
 
-    def stored_texts(self) -> dict[tuple[str, str], tuple[str | None, str | None]]:
-        """The fingerprint of the stored description and the stored snippet of every open job (None when none)."""
-        return self.open_text_hashes("company,job_id,snippet,hash:details->>" + descriptions.HASH_KEY)
+    def stored_texts(self) -> dict[tuple[str, str], tuple[str | None, str | None, bool | None]]:
+        """The fingerprint of the stored description, the stored snippet and its cut flag of every open job (None
+        when none)."""
+        return self.open_text_hashes("company,job_id,snippet,snippet_cut,hash:details->>" + descriptions.HASH_KEY)
 
-    def open_text_hashes(self, select: str) -> dict[tuple[str, str], tuple[str | None, str | None]]:
-        keys: dict[tuple[str, str], tuple[str | None, str | None]] = {}
+    def open_text_hashes(self, select: str) -> dict[tuple[str, str], tuple[str | None, str | None, bool | None]]:
+        keys: dict[tuple[str, str], tuple[str | None, str | None, bool | None]] = {}
         offset = 0
         while True:
             params: dict[str, str | int] = {
@@ -206,7 +207,10 @@ class Client:
                 raise SyncError("GET jobs returned something other than a list")
             if not page:  # a server may cap a response below PAGE, so only an empty page ends the read
                 return keys
-            keys.update(((row["company"], row["job_id"]), (row.get("hash"), row.get("snippet"))) for row in page)
+            keys.update(
+                ((row["company"], row["job_id"]), (row.get("hash"), row.get("snippet"), row.get("snippet_cut")))
+                for row in page
+            )
             offset += len(page)
 
 
@@ -375,13 +379,19 @@ def push_texts(
     for company, job_id in wanted:
         text, details = texts[(company, job_id)]
         digest, short = descriptions.fingerprint(text, details), descriptions.snippet(text)
-        if stored.get((company, job_id)) != (digest, short):  # a text, its details or its snippet is not stored as is
+        cut = descriptions.snippet_cut(text)
+        if stored.get((company, job_id)) != (
+            digest,
+            short,
+            cut,
+        ):  # the text, details, snippet or flag is not stored as is
             fresh.append(
                 {
                     "company": company,
                     "job_id": job_id,
                     "description": text,
                     "snippet": short,
+                    "snippet_cut": cut,
                     "details": {**details, descriptions.HASH_KEY: digest},
                 }
             )
