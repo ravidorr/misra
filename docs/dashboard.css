@@ -749,6 +749,20 @@ a {
   top: var(--space-2);
 }
 
+.list-heading:focus-visible {
+  width: auto;
+  height: auto;
+  padding: var(--space-1) var(--space-3);
+  overflow: visible;
+  clip-path: none;
+  background: var(--bg);
+  color: var(--ink);
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+  transform: translateY(calc(-100% - var(--space-2))); /* above the first card, out of the flow: the list does not move */
+  z-index: 1;
+}
+
 /* Safe-area insets keep content clear of notches and the home indicator on phones. */
 .page {
   max-width: 760px;
