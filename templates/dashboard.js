@@ -1768,8 +1768,8 @@ const gaps = DATA.gaps ?? { blocked: [], untracked: [], total: 0, groups: [], cl
     },
     {
       part: 'cannot-read',
-      title: 'Our crawler cannot read these',
-      note: "These career pages block or fail our daily crawl, so their roles here may be missing or out of date. Each name opens the company's own page in a new tab.",
+      title: 'Our crawl misses these',
+      note: "Our daily crawl cannot find or read their roles, so they may be missing or old here. Each name opens the company's career page or job board in a new tab, or its website when we know no career page.",
       sites: [],
     },
   ];
