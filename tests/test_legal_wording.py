@@ -444,3 +444,32 @@ def test_the_lawyers_assistant_wording_of_2026_11_17_is_in_the_notice_and_the_te
         'property of the respective employers, are provided "as is", and are removed from both the dashboard and the '
         "assistant connection promptly upon an employer's request."
     ) in read("TERMS.md")
+
+
+def test_the_contact_form_stays_off_until_the_lawyer_agrees_and_his_questions_are_listed() -> None:
+    """The form of the Contact page and its Edge Function go live only with the lawyer's agreement (the TODO.md item).
+    Whoever turns them on updates PRIVACY.md first and this test with it. The page never writes the address."""
+    assert build_dashboard.CONTACT_FORM_ENABLED is False
+    function = (REPO / "supabase" / "functions" / "contact" / "handler.ts").read_text(encoding="utf-8")
+    assert "CONTACT_FORM_ENABLED" in function
+    assert "deps.enabled" in function
+    assert CONTACT not in function
+    page = (REPO / "templates" / "contact.html").read_text(encoding="utf-8")
+    script = (REPO / "templates" / "contact.js").read_text(encoding="utf-8")
+    assert CONTACT not in page + script
+    assert "daily non-reversible hash of your network address that is deleted in the next daily cleanup" in page
+    todo = (REPO / "TODO.md").read_text(encoding="utf-8")
+    item = todo[todo.index("Ask the lawyer about the Contact page and its form") :]
+    item = item[: item.index("\n- [ ]")]
+    for asked in (
+        "What the form collects",
+        "Purpose",
+        "Where it goes",
+        "Retention",
+        "Logs",
+        "Spam limits",
+        "His wording for `PRIVACY.md`",
+    ):
+        assert asked in item, asked
+    privacy = (REPO / "PRIVACY.md").read_text(encoding="utf-8")
+    assert "contact form" not in privacy.lower()  # the lawyer's file is untouched until he words it

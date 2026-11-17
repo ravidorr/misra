@@ -34,6 +34,7 @@ STATIC_FILES = (
     "templates/theme.js",
     "templates/email.html",
     "templates/email.js",
+    "templates/contact.html",
 )
 # The daily-email signup (PLAN.md steps 6.2 and 6.6). While False the page has no "Job alerts" button, no settings
 # dialog and no script for them, and docs/digest.js is not built: everything between `<!--digest-->` and
@@ -45,6 +46,16 @@ DIGEST_SCRIPT = "templates/digest.js"
 DIGEST_REGION = re.compile(r"<!--digest-->(.*?)<!--/digest-->", re.DOTALL)
 # The same region with its own line (indent and line break), so removing it leaves no whitespace-only line.
 DIGEST_LINE = re.compile(r"^[ \t]*<!--digest-->.*?<!--/digest-->[ \t]*\n", re.DOTALL | re.MULTILINE)
+# The form of the Contact page (TODO.md "Dashboard and site review"). While False, docs/contact.html has only the
+# static contact information (GitHub issues, the security note, the privacy notice), docs/contact.js is not built (an
+# old one is deleted) and the page's CSP has no connect-src: everything between `<!--contactform-->` and
+# `<!--/contactform-->` in templates/contact.html is cut out. It stays False until the lawyer has agreed (his wording
+# for PRIVACY.md is a TODO.md item), together with the function secret CONTACT_FORM_ENABLED=true (the Edge Function
+# `contact` answers 404 without it). Nobody flips either before he says so.
+CONTACT_FORM_ENABLED = False
+CONTACT_SCRIPT = "templates/contact.js"
+CONTACT_REGION = re.compile(r"<!--contactform-->(.*?)<!--/contactform-->", re.DOTALL)
+CONTACT_LINE = re.compile(r"^[ \t]*<!--contactform-->.*?<!--/contactform-->[ \t]*\n", re.DOTALL | re.MULTILINE)
 # The "Connect your assistant" page (PLAN.md step 8.2) and the link to it. While False, docs/assistant.html is not built
 # (and an old one is deleted) and everything between `<!--assistant-->` and `<!--/assistant-->` in
 # templates/dashboard.html is cut out. It is True since the lawyer approved the assistant endpoint and ASSISTANT.md
@@ -54,7 +65,7 @@ ASSISTANT_PAGE_ENABLED = True
 ASSISTANT_REGION = re.compile(r"<!--assistant-->(.*?)<!--/assistant-->", re.DOTALL)
 ASSISTANT_LINE = re.compile(r"^[ \t]*<!--assistant-->.*?<!--/assistant-->[ \t]*\n", re.DOTALL | re.MULTILINE)
 # The built pages that carry __SRI_*__ placeholders.
-PAGES = ("index.html", "email.html")
+PAGES = ("index.html", "email.html", "contact.html")
 OUTPUT_NAMES = {"templates/dashboard.html": "index.html"}
 # Third-party scripts copied byte for byte to docs/ (vendor/README.md says where each one comes from). The page loads
 # them from its own origin, so the Content-Security-Policy needs no CDN.
@@ -490,6 +501,11 @@ def apply_digest_switch(text: str) -> str:
     return apply_switch(text, DIGEST_REGION, DIGEST_LINE, DIGEST_SIGNUP_ENABLED)
 
 
+def apply_contact_switch(text: str) -> str:
+    """Keep the form of the Contact page when its switch is on, else remove it."""
+    return apply_switch(text, CONTACT_REGION, CONTACT_LINE, CONTACT_FORM_ENABLED)
+
+
 def apply_assistant_switch(text: str) -> str:
     """Keep the link to the assistant page when its switch is on, else remove it."""
     return apply_switch(text, ASSISTANT_REGION, ASSISTANT_LINE, ASSISTANT_PAGE_ENABLED)
@@ -525,7 +541,7 @@ def render_static(source: str, covered: int, page_data: str) -> tuple[str, str]:
     text = Path(source).read_text(encoding="utf-8")
     if output.endswith(".html"):
         text = apply_chrome(text, output, dashboard=output == "index.html")
-    text = apply_assistant_switch(apply_digest_switch(text))
+    text = apply_assistant_switch(apply_contact_switch(apply_digest_switch(text)))
     text = text.replace("__SUPABASE_URL__", SUPABASE_URL).replace("__SUPABASE_ANON_KEY__", SUPABASE_ANON_KEY)
     for placeholder, value in coverage_words(covered).items():
         text = text.replace(placeholder, value)
@@ -616,7 +632,13 @@ def main() -> None:
         (out / Path(DIGEST_SCRIPT).name).unlink(
             missing_ok=True
         )  # a file of an earlier build must not outlive the switch
-    for source in (*STATIC_FILES, *((DIGEST_SCRIPT,) if DIGEST_SIGNUP_ENABLED else ())):
+    if not CONTACT_FORM_ENABLED:
+        (out / Path(CONTACT_SCRIPT).name).unlink(missing_ok=True)
+    scripts = (
+        *((DIGEST_SCRIPT,) if DIGEST_SIGNUP_ENABLED else ()),
+        *((CONTACT_SCRIPT,) if CONTACT_FORM_ENABLED else ()),
+    )
+    for source in (*STATIC_FILES, *scripts):
         output, text = render_static(source, covered, page_data)
         (out / output).write_text(text, encoding="utf-8")
     if not ASSISTANT_PAGE_ENABLED:

@@ -144,6 +144,36 @@ In the Supabase dashboard, Authentication:
   match Supabase falls back to the Site URL.
 - The Google Cloud OAuth client's authorised redirect URI is `<project url>/auth/v1/callback`.
 
+## Contact form (Edge Function `contact`)
+
+The form of the Contact page (`templates/contact.html`, `templates/contact.js`). OFF until the lawyer agrees (the TODO.md item): the build constant
+`CONTACT_FORM_ENABLED` in `build_dashboard.py` is `False` (the page then has no form, no script and no `connect-src`), and the function answers 404 to
+everything (with the site's CORS headers, so the page can read it) unless the function secret `CONTACT_FORM_ENABLED` is exactly `true`. Files: `supabase/functions/contact/` (`index.ts` starts the server,
+`handler.ts` the logic, `validate.ts` the input checks), `_shared/resend.ts` (the Resend call it shares with `report-site`), `test/contact.test.ts`.
+
+`POST <project url>/functions/v1/contact` with `{"name", "email", "message", "website", "elapsed"}`: only `message` (1 to 2000 characters) is required,
+`name` is up to 100, `email` up to 254 and one plain address. `website` is the hidden field and `elapsed` the milliseconds since the page loaded:
+a filled `website` gets a fake `{"ok": true}` and nothing happens; an `elapsed` under 3000 or missing gets an honest 400 `too_fast` (autofill can make a person
+that fast; a filter, not a guarantee: the page sends the time, so a bot that knows can lie). One plain-text email goes to the secret `CONTACT_TO` from `Misra contact <digest@send.avidor.org>` (secret
+`CONTACT_FROM_EMAIL` to change it) with the fixed subject `Misra contact form`; the visitor's name and message are in the body and the visitor's
+address is only the `Reply-To`. The visitor is never emailed. Nothing is stored. A log line holds a function name and a status: never an address, an
+IP, a name or a message (of Resend's answer only the status and its short error name are logged: the rest can echo the `Reply-To`).
+
+Limits: `CALLER_DAILY_LIMIT` (3) per visitor and day, `DAILY_CAP` (10) in all, counted with `assistant_reserve` and `assistant_release` (table
+`assistant_ip_limits`; keys `contact|<network>` hashed with `IP_HASH_SECRET` and the day, and `contact:all`), so there is no migration, and
+`report_site_cleanup` already deletes the rows of earlier days. Resend's free plan is 100 emails a day for everything: `report-site` 20, job alerts
+and the digest up to 30 and the rest, this form 10. A place is given back only when the daily cap refuses; once a send was tried it is never given back, so a visitor cannot make Resend refuse a Reply-To to get unlimited tries. If the database cannot be
+reached nothing is sent. Only `https://ravidorr.github.io` may call it from a browser.
+
+### Turn it on (only after the lawyer has agreed and `PRIVACY.md` says it)
+
+1. Set the secrets (the maintainer's own mailbox as `CONTACT_TO`; `RESEND_API_KEY`, `IP_HASH_SECRET`, `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY`
+   are already there): `supabase secrets set --project-ref dncodqeqpoqwcxdctzco CONTACT_TO=<mailbox>`.
+2. Deploy: `supabase functions deploy contact --project-ref dncodqeqpoqwcxdctzco` (`config.toml` sets `verify_jwt = false`).
+3. Set `CONTACT_FORM_ENABLED=true` the same way, check with `curl -s -X POST <url>/functions/v1/contact -H 'content-type: application/json' -H 'origin: https://ravidorr.github.io' -d '{"message":"test","elapsed":5000}'`
+   (one real email arrives), then set `CONTACT_FORM_ENABLED = True` in `build_dashboard.py` in a PR (update `tests/test_build_dashboard.py` and
+   `tests/test_legal_wording.py` with it). To close the form, unset the secret: the next request answers 404.
+
 ## Report a site (Edge Function `report-site`)
 
 PLAN.md step 5.1, PRD FR-7. A visitor with no account reports a company whose career page is missing from the crawl; the

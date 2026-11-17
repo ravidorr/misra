@@ -612,7 +612,7 @@ async def test_the_footer_links_to_the_privacy_notice_the_terms_and_the_contact(
     assert await privacy.get_attribute("href") == "privacy.html"
     assert await nav.get_by_role("link", name="Terms").get_attribute("href") == "terms.html"
     assert await nav.get_by_role("link", name="Connect your assistant").get_attribute("href") == "assistant.html"
-    assert await nav.get_by_role("link", name="Contact").get_attribute("href") == "mailto:raanan@avidor.org"
+    assert await nav.get_by_role("link", name="Contact").get_attribute("href") == "contact.html"
     assert await nav.get_by_role("link", name="About").get_attribute("href") == "about.html"
     assert await nav.get_by_role("link", name="Security").get_attribute("href") == "security.html"
     for link in await links.all():

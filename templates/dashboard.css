@@ -886,6 +886,11 @@ html:has(.sheet:modal) {
   line-height: 1.3;
 }
 
+/* The form of the Contact page: a readable line length, not the width of the card. */
+.contact-form {
+  max-width: 36rem;
+}
+
 .legal h1,
 .legal h2,
 .legal h3 {
