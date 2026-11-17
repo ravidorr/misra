@@ -75,3 +75,4 @@ Booking.com,booking.com,https://careers.booking.com,multinational,bot_protection
 Uber,uber.com,,multinational,no_careers_url,Blocks plain requests (403)
 Align Technology,aligntech.com,https://jobs.aligntech.com,multinational,needs_reader,"Pinpoint board with a jobs.rss feed, no adapter for one company"
 Keysight,keysight.com,,multinational,no_careers_url,
+SeeTrue,seetrue.ai,https://employer.dueto.io/seetrue/career-website/positions,deeptech,robots_disallowed,Jobs load from api.dueto.io (a script app on Dueto); its robots.txt disallows all
