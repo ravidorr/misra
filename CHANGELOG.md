@@ -4,27 +4,7 @@ All notable changes are documented here. Format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
-### Added
-
-- The assistant endpoint (PLAN.md step 8.1, FR-6), built and **switched off**: the Edge Function `mcp`, a public read-only MCP server
-  (JSON-RPC over HTTP, no sessions, no sign-in, no user data) with two tools. `search_jobs` runs the new SQL function of the same
-  name, which applies the dashboard's search (open jobs in Israel, levels, role types, regions, every word in the company, title,
-  team or location or in the full text through `search_job_keys`), 50 roles at most, the snippet and never the text. `get_job`
-  returns one job by company and job_id with everything collected, the full text included, only when it is open or closed for less
-  than 30 days. Per-caller limits (200 searches and 30 `get_job` a day) and a cap of 1,000 `get_job` a day for everyone, counted
-  in `assistant_ip_limits` against a keyed hash of the tool, the caller's network and the day (the address is never stored or
-  logged), cleaned by the daily cleanup. It answers 404 to everything unless the function secret `ASSISTANT_ENDPOINT_ENABLED` is
-  `true`, it is not deployed, and nobody sets the secret before the lawyer has reviewed it. Migration
-  `20261125100000_assistant_endpoint.sql` (harmless while it is off; the maintainer applies it): the counter table, `assistant_reserve`,
-  `search_jobs`, and `report_site_cleanup` replaced so it also clears the new counter. The lint in `tests/test_migrations.py` pins
-  all of it (nothing for the public roles, `search_jobs` never names the text).
-
-### Changed
-
-- The visitor's network and its daily keyed hash moved from `report-site` into `supabase/functions/_shared/visitor.ts`, and the
-  call into a Postgres function got a `callRpc` in `_shared/subscription.ts`, so `report-site` and `mcp` share them. No change in behavior.
-
-## [0.52.0] - 2026-11-17
+## [0.53.0] - 2026-11-17
 
 ### Changed
 
@@ -39,6 +19,37 @@ All notable changes are documented here. Format follows [Keep a Changelog](https
 ### Removed
 
 - `data/jobs.db` from the repository (it stays in git history), the daily commit of it, its integrity check and the `jobs-db` artifact that kept it when the push failed (the data is in Supabase), and the tables `robots_skips` and `gap_alerts` with `mark_alerted`, the `ALTER TABLE` that added `note` to old databases, the `VACUUM` of a purge and the support for a database without a `note` column.
+
+## [0.52.0] - 2026-11-17
+
+### Added
+
+- The assistant endpoint (PLAN.md step 8.1, FR-6), built and **switched off**: the Edge Function `mcp`, a public read-only MCP server
+  (JSON-RPC over HTTP, no sessions, no sign-in, no user data) with two tools. `search_jobs` runs the new SQL function of the same
+  name, which applies the dashboard's search (open jobs in Israel, levels, role types, regions, every word in the company, title,
+  team or location or in the full text through `search_job_keys`), 50 roles at most, the snippet and never the text. `get_job`
+  returns one job by company and job_id with everything collected, the full text included, only when it is open or closed for less
+  than 30 days. Per-caller limits (200 searches and 30 `get_job` a day) and a cap of 1,000 `get_job` a day for everyone, counted
+  in `assistant_ip_limits` against a keyed hash of the tool, the caller's network and the day (the address is never stored or
+  logged), cleaned by the daily cleanup. It answers 404 to everything unless the function secret `ASSISTANT_ENDPOINT_ENABLED` is
+  `true`, it is not deployed, and nobody sets the secret before the lawyer has reviewed it. Migration
+  `20261125100000_assistant_endpoint.sql` (harmless while it is off; the maintainer applies it): the counter table, `assistant_reserve`,
+  `search_jobs`, and `report_site_cleanup` replaced so it also clears the new counter. The lint in `tests/test_migrations.py` pins
+  all of it (nothing for the public roles, `search_jobs` never names the text).
+- The "Connect your assistant" page (PLAN.md step 8.2, FR-6 AC 5 to 7), built and **switched off**: `ASSISTANT.md`, plain step-by-step instructions
+  for Claude, ChatGPT and other assistants with the address of the assistant endpoint, converted to `docs/assistant.html` in the
+  template of the privacy page (`build_dashboard.py`, one new `LegalPage`), a "Connect your assistant" link in the dashboard footer
+  (the region between `<!--assistant-->` and `<!--/assistant-->`), a `.legal pre` style so an address wraps on a phone, `ASSISTANT.md` in
+  the paths of the `publish-docs` workflow and `docs/assistant.html` in the files the daily workflow stages. The constant
+  `ASSISTANT_PAGE_ENABLED` is `False`, so nothing changes in `docs/` and the page is not published: it stays off until the lawyer has
+  reviewed the assistant endpoint and the function secret `ASSISTANT_ENDPOINT_ENABLED` is set (see `TODO.md`). A test keeps `llms.txt`
+  naming the page exactly when the constant is on.
+
+### Changed
+
+- The visitor's network and its daily keyed hash moved from `report-site` into `supabase/functions/_shared/visitor.ts`, and the
+  call into a Postgres function got a `callRpc` in `_shared/subscription.ts`, so `report-site` and `mcp` share them. No change in behavior.
+- The README keeps a short developer note on the assistant connection instead of describing it in full.
 
 ## [0.51.0] - 2026-11-17
 

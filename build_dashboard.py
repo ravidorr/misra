@@ -46,6 +46,14 @@ DIGEST_SCRIPT = "templates/digest.js"
 DIGEST_REGION = re.compile(r"<!--digest-->(.*?)<!--/digest-->", re.DOTALL)
 # The same region with its own line (indent and line break), so removing it leaves no whitespace-only line.
 DIGEST_LINE = re.compile(r"^[ \t]*<!--digest-->.*?<!--/digest-->[ \t]*\n", re.DOTALL | re.MULTILINE)
+# The "Connect your assistant" page (PLAN.md step 8.2) and the link to it. While False, docs/assistant.html is not built
+# (and an old one is deleted) and everything between `<!--assistant-->` and `<!--/assistant-->` in
+# templates/dashboard.html is cut out. It stays False until the lawyer has reviewed the assistant endpoint (PLAN.md
+# step 8.1, the Edge Function `mcp`, which answers 404 until the function secret ASSISTANT_ENDPOINT_ENABLED is
+# "true"), and is set to True together with that secret and with llms.txt naming the page (a test keeps them in step).
+ASSISTANT_PAGE_ENABLED = False
+ASSISTANT_REGION = re.compile(r"<!--assistant-->(.*?)<!--/assistant-->", re.DOTALL)
+ASSISTANT_LINE = re.compile(r"^[ \t]*<!--assistant-->.*?<!--/assistant-->[ \t]*\n", re.DOTALL | re.MULTILINE)
 # The built pages that carry __SRI_*__ placeholders.
 PAGES = ("index.html", "email.html")
 OUTPUT_NAMES = {"templates/dashboard.html": "index.html"}
@@ -95,8 +103,15 @@ LEGAL_PAGES = (
         "How to report a vulnerability in Misra and how the project protects its data.",
     ),
 )
+# The assistant page is the Markdown file ASSISTANT.md in the same template. It is built only with the switch on.
+ASSISTANT_PAGE = LegalPage(
+    "ASSISTANT.md",
+    "assistant.html",
+    "Connect your assistant - Misra",
+    "How to connect your own AI assistant, such as Claude or ChatGPT, to the Misra jobs, step by step.",
+)
 # A link from one of these pages to another page of the set stays on the site.
-LEGAL_LINKS = {page.source: page.output for page in LEGAL_PAGES}
+LEGAL_LINKS = {page.source: page.output for page in (*LEGAL_PAGES, ASSISTANT_PAGE)}
 NEW_TAB = '<span class="sr-only"> (opens in a new tab)</span>'
 
 # The backend the page reads the jobs from: the one place for the project URL and the PUBLIC anon key. Row-level
@@ -409,11 +424,21 @@ def coverage_words(covered: int) -> dict[str, str]:
     return {"__COVERED__": str(covered), "__COMPANIES__": count_words(covered)}
 
 
+def apply_switch(text: str, region: re.Pattern[str], line: re.Pattern[str], enabled: bool) -> str:
+    """Keep the regions of a source file that the pattern marks when the switch is on, else remove them."""
+    if enabled:
+        return region.sub(r"\1", text)
+    return region.sub("", line.sub("", text))
+
+
 def apply_digest_switch(text: str) -> str:
     """Keep the daily email regions of a source file when the signup switch is on, else remove them."""
-    if DIGEST_SIGNUP_ENABLED:
-        return DIGEST_REGION.sub(r"\1", text)
-    return DIGEST_REGION.sub("", DIGEST_LINE.sub("", text))
+    return apply_switch(text, DIGEST_REGION, DIGEST_LINE, DIGEST_SIGNUP_ENABLED)
+
+
+def apply_assistant_switch(text: str) -> str:
+    """Keep the link to the assistant page when its switch is on, else remove it."""
+    return apply_switch(text, ASSISTANT_REGION, ASSISTANT_LINE, ASSISTANT_PAGE_ENABLED)
 
 
 def failing_sites(c: sqlite3.Connection, excluded: list[str]) -> list[dict[str, Any]]:
@@ -531,13 +556,15 @@ def main() -> None:
         )  # a file of an earlier build must not outlive the switch
     for source in (*STATIC_FILES, *((DIGEST_SCRIPT,) if DIGEST_SIGNUP_ENABLED else ())):
         text = Path(source).read_text(encoding="utf-8")
-        text = apply_digest_switch(text)
+        text = apply_assistant_switch(apply_digest_switch(text))
         text = text.replace("__SUPABASE_URL__", SUPABASE_URL).replace("__SUPABASE_ANON_KEY__", SUPABASE_ANON_KEY)
         for placeholder, value in coverage_words(covered).items():
             text = text.replace(placeholder, value)
         text = text.replace("__PAGE_DATA__", page_data)  # last: the data is never searched for placeholders
         (out / OUTPUT_NAMES.get(source, Path(source).name)).write_text(text, encoding="utf-8")
-    for legal in LEGAL_PAGES:
+    if not ASSISTANT_PAGE_ENABLED:
+        (out / ASSISTANT_PAGE.output).unlink(missing_ok=True)  # a file of an earlier build must not outlive the switch
+    for legal in (*LEGAL_PAGES, *((ASSISTANT_PAGE,) if ASSISTANT_PAGE_ENABLED else ())):
         (out / legal.output).write_text(render_legal(legal, docs=out), encoding="utf-8")
     for source in VENDORED_FILES:
         shutil.copyfile(source, out / Path(source).name)

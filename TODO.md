@@ -54,7 +54,8 @@ Observations about live sites below come from checks made on 2026-11-14 and may 
   review it before it goes live; the note for him is `~/Desktop/misra-lawyer-note-assistant.md`). Where: `supabase/README.md`,
   "Assistant endpoint", "Turn it on". How: apply `supabase/migrations/20261125100000_assistant_endpoint.sql`, deploy `mcp`, set the
   secret `ASSISTANT_ENDPOINT_ENABLED=true`, run the live check; then set `ASSISTANT_PAGE_ENABLED = True` in `build_dashboard.py`
-  (PLAN.md step 8.2, the "Connect your assistant" page) and test a real assistant. Done when: a real assistant lists the
+  (PLAN.md step 8.2, the "Connect your assistant" page, from `ASSISTANT.md` with the lawyer's wording), add the page to `llms.txt`
+  (`tests/test_assistant_page.py` requires both together) and test a real assistant with someone who is not technical. Done when: a real assistant lists the
   tools, searches and reads one job, and PLAN.md steps 8.1 and 8.2 are ticked.
 
 ## Yearly security review
@@ -304,7 +305,7 @@ Observations about live sites below come from checks made on 2026-11-14 and may 
 
 ## Step 9.1 live checks
 
-Added when the history moved to Supabase (v0.52.0; `CONTRIBUTING.md`, "The history lives in Supabase"). What the rehearsal
+Added when the history moved to Supabase (v0.53.0; `CONTRIBUTING.md`, "The history lives in Supabase"). What the rehearsal
 could not prove: a real PostgREST, a real Supabase project and a real Actions run.
 
 - [ ] **Check the first daily runs after the move.** Trigger: the PR of step 9.1 is merged and the one-time copy of the

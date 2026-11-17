@@ -327,6 +327,12 @@ Decisions made in planning (they change the PRD's wording, so update the PRD in 
 - [ ] 8.2 "Connect your assistant" page on the dashboard with plain step-by-step instructions for the common assistants
   tested by hand, README cut to a short developer note, `llms.txt` updated. Done when: FR-6 AC 5 to 7 hold; a person with
   no technical skills connects in a couple of minutes (hand test).
+  **Built, off, waiting for the lawyer (2026-11-17), so not ticked.** `ASSISTANT.md` (the words, by the technical writer, steps for
+  Claude and ChatGPT checked against their current help pages on 2026-11-17, and any other assistant) becomes `docs/assistant.html`
+  in the template of the privacy page, with a footer link, both behind `ASSISTANT_PAGE_ENABLED` in `build_dashboard.py`
+  (`False`); the README has a short developer note. To finish: the lawyer's answers (his wording goes into the page, the
+  terms and the privacy notice), then set the constant to `True` together with the function secret, add the page to `llms.txt`
+  (a test requires it), and do the hand test with a person who is not technical (Claude and ChatGPT).
 
 ## Retire SQLite (last, only when the Supabase path has run clean for a while)
 
@@ -334,7 +340,7 @@ Decisions made in planning (they change the PRD's wording, so update the PRD in 
   restore path) before `data/jobs.db` stops being committed. Update `AGENTS.md`, the workflow, the deploy flow and the
   `protect-main` ruleset note together. Done when: a daily run works without `data/jobs.db`, a restore from the export
   is rehearsed, and the Notes for the plan in `PRD.md` are all met.
-  Done in v0.52.0 (the design is in `CONTRIBUTING.md`, "The history lives in Supabase", with the rehearsal of 2026-11-17):
+  Done in v0.53.0 (the design is in `CONTRIBUTING.md`, "The history lives in Supabase", with the rehearsal of 2026-11-17):
   `data/jobs.db` is a per-run scratch file, rebuilt from Supabase by the new first step `sync_supabase.py --pull` (every
   row of `jobs`, open and closed, without the text, and the whole `crawl_log`; it fails closed, and refuses an empty
   `jobs` table), and no longer committed (git-ignored). `run.py` is unchanged in what it does; its two small tables,

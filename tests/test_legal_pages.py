@@ -436,6 +436,7 @@ def test_the_publish_workflow_starts_on_the_sources_of_the_pages_and_never_on_it
         "PRIVACY.md",
         "TERMS.md",
         "SECURITY.md",
+        "ASSISTANT.md",
         "templates/**",
         "design-system/**",
         "vendor/**",
