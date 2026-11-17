@@ -69,7 +69,7 @@ def build_site(db: sqlite3.Connection, workdir: Path, fill: Callable[[sqlite3.Co
     shutil.copytree(REPO / "templates", workdir / "templates", dirs_exist_ok=True)
     shutil.copytree(REPO / "design-system", workdir / "design-system")
     shutil.copytree(REPO / "vendor", workdir / "vendor")
-    for legal in build_dashboard.LEGAL_PAGES:
+    for legal in (*build_dashboard.LEGAL_PAGES, build_dashboard.ASSISTANT_PAGE):
         shutil.copy(REPO / legal.source, workdir / legal.source)
     write_json(
         workdir / "data" / "companies.json",

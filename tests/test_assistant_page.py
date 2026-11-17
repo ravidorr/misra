@@ -3,7 +3,6 @@ template of the privacy page, and the link to it in the dashboard footer. Both a
 which is True since the lawyer approved the assistant endpoint (PLAN.md step 8.1)."""
 
 import re
-import shutil
 import sqlite3
 from pathlib import Path
 
@@ -64,7 +63,8 @@ def test_the_markdown_carries_the_lawyers_block_of_2026_11_17_word_for_word_and_
     ):
         assert sentence in text, sentence
     assert "(only a daily, non-reversible hash is used to count rate limits; see the privacy notice)" in text
-    assert "Do not copy the postings in bulk, republish them, or use them to train models." in text
+    assert text.count("\n## What your assistant can see\n") == 1  # the bullets stand alone, no paragraph repeats them
+    assert "Postings belong to the employers" not in text
     assert "It resets the next day (UTC)." in text
     assert text.index("](TERMS.md)") < text.index("## Claude")  # the links sit next to the address
 
@@ -95,7 +95,6 @@ def assistant_site(db: sqlite3.Connection, workdir: Path, monkeypatch: pytest.Mo
     """The real page built with the assistant switch on (and the daily-email one off, as the other page tests do)."""
     monkeypatch.setattr(build_dashboard, "DIGEST_SIGNUP_ENABLED", False)
     monkeypatch.setattr(build_dashboard, "ASSISTANT_PAGE_ENABLED", True)
-    shutil.copy(REPO / "ASSISTANT.md", workdir / "ASSISTANT.md")
     return build_site(db, workdir)
 
 
