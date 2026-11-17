@@ -36,8 +36,9 @@ const JOB = {
   locations: [],
   snippet: 'We build rockets',
   description: 'We build rockets with Rust. The full posting, a long text.',
-  details: { employment_type: 'Full time' },
+  details: { employment_type: 'Full time', departments: ['R&D'], is_remote: false, text_sha256: 'abc', requisition_id: 'R-77', recruiter: 'x@example.com', raw: '<script>x()</script>', offices: [1] },
 };
+const SAFE_DETAILS = { employment_type: 'Full time', departments: ['R&D'], is_remote: false };
 const PUBLIC = { company: 'Acme', job_id: 'j1', title: 'Junior Rust Developer', team: null, location: 'Tel Aviv', url: null, first_seen: '2026-11-10', level: 'Junior', role_types: ['R&D'], regions: ['Tel Aviv area'], locations: [], snippet: 'We build rockets' };
 // A database function that wrongly returned the text: the handler must still not pass it on.
 const FOUND = { total: 1, jobs: [{ ...PUBLIC, description: 'THE FULL TEXT', details: { x: 1 } }, 'junk'] };
@@ -50,7 +51,7 @@ interface World {
 }
 
 /** A fake of the database: the counter function (same rules as the migration), the search and the jobs table. */
-function fakeWorld(options: { database?: 'down' | 'garbage' | 'search-garbage'; jobs?: unknown[]; enabled?: boolean } = {}): World {
+function fakeWorld(options: { database?: 'down' | 'garbage' | 'search-garbage' | 'jobs-error' | 'release-down'; jobs?: unknown[]; enabled?: boolean } = {}): World {
   const counters = new Map<string, number>();
   const calls: World['calls'] = [];
   const fakeFetch = vi.fn<Fetch>((url, init) => {
@@ -65,10 +66,18 @@ function fakeWorld(options: { database?: 'down' | 'garbage' | 'search-garbage'; 
       counters.set(key, used + 1);
       return Promise.resolve(Response.json('ok'));
     }
+    if (url.endsWith('/rpc/assistant_release')) {
+      if (options.database === 'release-down') return Promise.reject(new Error('down'));
+      const key = `${String(body?.p_day)}|${String(body?.p_ip_hash)}`;
+      counters.set(key, Math.max((counters.get(key) ?? 0) - 1, 0));
+      return Promise.resolve(Response.json('ok'));
+    }
     if (url.endsWith('/rpc/search_jobs')) {
       return Promise.resolve(options.database === 'search-garbage' ? Response.json({ nope: true }) : Response.json(FOUND));
     }
-    if (url.includes('/rest/v1/jobs?')) return Promise.resolve(Response.json(options.jobs ?? [JOB]));
+    if (url.includes('/rest/v1/jobs?')) {
+      return Promise.resolve(options.database === 'jobs-error' ? new Response('no', { status: 500 }) : Response.json(options.jobs ?? [JOB]));
+    }
     return Promise.resolve(new Response('unexpected', { status: 404 }));
   });
   return {
@@ -328,7 +337,8 @@ describe('get_job', () => {
     const world = fakeWorld();
     const answer = await tool(world, 'get_job', { company: 'Acme', job_id: 'j1' });
     expect(answer.isError).toBe(false);
-    expect(answer.data).toEqual(JOB);
+    expect(answer.data).toEqual({ ...JOB, details: SAFE_DETAILS }); // only the candidate-facing details, no ATS metadata, hash, HTML or ids
+    expect(answer.text).not.toMatch(/text_sha256|requisition|recruiter|<script/u);
     expect(answer.data?.description).toContain('full posting');
     const read = world.calls.find((c) => c.url.includes('/rest/v1/jobs?'));
     const query = new URL(read?.url ?? '').searchParams;
@@ -380,6 +390,35 @@ describe('get_job', () => {
     expect(capped.text).toContain('by everyone together');
     // the cap is for get_job only: the search still works
     expect((await tool(world, 'search_jobs', {}, { 'cf-connecting-ip': '203.0.113.9' })).isError).toBe(false);
+  });
+
+  it('gives the places back when a call fails or serves nothing, so only served calls count', async () => {
+    silence();
+    const left = (world: World): number[] => [...world.counters.values()];
+    const none = fakeWorld({ jobs: [] });
+    await tool(none, 'get_job', { company: 'Acme', job_id: 'nope' });
+    expect(left(none).every((n) => n === 0)).toBe(true);
+    const failing = fakeWorld({ database: 'jobs-error' });
+    expect((await tool(failing, 'get_job', { company: 'Acme', job_id: 'j1' })).isError).toBe(true);
+    expect(left(failing).every((n) => n === 0)).toBe(true);
+    const searching = fakeWorld({ database: 'search-garbage' });
+    await tool(searching, 'search_jobs', {});
+    expect(left(searching).every((n) => n === 0)).toBe(true);
+    const served = fakeWorld();
+    await tool(served, 'get_job', { company: 'Acme', job_id: 'j1' });
+    expect(left(served).sort()).toEqual([1, 1]); // a served call takes one place of the caller and one of the cap
+    // over the cap of everyone: the caller's own place is given back too
+    const capped = fakeWorld();
+    capped.counters.set('2026-11-17|get_job:all', JOB_DAILY_CAP);
+    await tool(capped, 'get_job', { company: 'Acme', job_id: 'j1' });
+    expect([...capped.counters.entries()].filter(([k]) => !k.endsWith('get_job:all')).every(([, n]) => n === 0)).toBe(true);
+  });
+
+  it('does not fail the answer when giving a place back fails', async () => {
+    silence();
+    const world = fakeWorld({ database: 'release-down', jobs: [] });
+    const answer = await tool(world, 'get_job', { company: 'Acme', job_id: 'nope' });
+    expect(answer.text).toContain('No open job');
   });
 
   it('does not read anything when the counter cannot be reached (fail closed)', async () => {

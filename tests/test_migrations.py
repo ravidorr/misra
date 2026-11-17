@@ -85,6 +85,7 @@ REPORT_FUNCTIONS = {
     "report_site_release": "p_day date, p_ip_hash text",
     "report_site_cleanup": "p_day date",
     "assistant_reserve": "p_day date, p_ip_hash text, p_limit integer",
+    "assistant_release": "p_day date, p_ip_hash text",
 }
 # Step 6.2: the spam guard of the confirmation email (counter tables) and the functions that turn the digest on and off
 # for a signed-in user. Only the service role may touch any of it. The functions touch the subscription tables or these
@@ -138,7 +139,7 @@ HOOK_GRANTS = {
 }
 REPORT_FUNCTION = re.compile(
     r"create (?:or replace )?function public\.(?P<name>report_site_reserve|report_site_release|report_site_cleanup"
-    r"|assistant_reserve)"
+    r"|assistant_reserve|assistant_release)"
     r"\((?P<args>[a-z_0-9 ,]*)\) "
     r"returns (?:text|void|integer) language plpgsql set search_path = '' as \$\$(?P<body>.*)\$\$"
 )
@@ -163,7 +164,7 @@ REVOKE_FUNCTION = re.compile(
 )
 GRANT_REPORT_FUNCTION = re.compile(
     r"grant execute on function public\.(?P<name>report_site_reserve|report_site_release|report_site_cleanup"
-    r"|assistant_reserve)"
+    r"|assistant_reserve|assistant_release)"
     r"\((?:date, text, integer, integer|date, text, integer|date, text|date)\) to service_role"
 )
 GRANT_SUBSCRIBE_FUNCTION = re.compile(

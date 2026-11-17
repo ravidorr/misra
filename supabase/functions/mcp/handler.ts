@@ -25,9 +25,9 @@ import type { Config as DatabaseConfig, Fetch } from '../_shared/subscription.ts
 import { hashVisitor, visitorNetwork } from '../_shared/visitor.ts';
 import { TOOLS, parseJob, parseSearch } from './tools.ts';
 
-export const SEARCH_DAILY_LIMIT = 200;
-export const JOB_DAILY_LIMIT = 30;
-export const JOB_DAILY_CAP = 1000;
+export const SEARCH_DAILY_LIMIT = 100;
+export const JOB_DAILY_LIMIT = 15;
+export const JOB_DAILY_CAP = 500;
 export const MAX_BODY_BYTES = 16_384;
 /** A closed job's text is deleted 30 days after it closes (`jobs_text_trim`); it is not offered after that either. */
 const CLOSED_DAYS = 30;
@@ -43,6 +43,41 @@ const INSTRUCTIONS =
 const SEARCH_COLUMNS = ['company', 'job_id', 'title', 'team', 'location', 'url', 'first_seen', 'level', 'role_types', 'regions', 'locations', 'snippet'] as const;
 const JOB_COLUMNS =
   'company,job_id,title,team,location,url,posted,first_seen,last_seen,status,level,role_types,regions,locations,snippet,description,details';
+/**
+ * The only keys of a job's `details` an assistant gets: what a candidate reads on a posting. These are the keys the
+ * adapters store (`adapters.py`); the sync's own fingerprint (`text_sha256`) and any key not listed here never leave.
+ * A value is text, a flag or a short list of text (`descriptions.clean_details` keeps nothing else), and anything else is
+ * dropped here too.
+ */
+export const DETAIL_KEYS = [
+  'employment_type',
+  'department',
+  'departments',
+  'function',
+  'job_family',
+  'workplace_type',
+  'is_remote',
+  'telecommuting',
+  'experience',
+  'experience_level',
+  'education',
+  'industry',
+  'country',
+  'offices',
+  'description_truncated',
+] as const;
+
+/** The candidate-facing part of a job's details; an empty object when there is none. */
+export function candidateDetails(details: unknown): Record<string, unknown> {
+  if (!isRecord(details)) return {};
+  const out: Record<string, unknown> = {};
+  for (const key of DETAIL_KEYS) {
+    const value = details[key];
+    if (typeof value === 'string' || typeof value === 'boolean') out[key] = value;
+    else if (Array.isArray(value) && value.every((item) => typeof item === 'string')) out[key] = value;
+  }
+  return out;
+}
 
 export interface Config extends DatabaseConfig {
   ipHashSecret: string;
@@ -114,6 +149,15 @@ async function reserve(deps: Deps, config: Config, day: string, key: string, lim
   return (await callDatabase(deps, config, 'assistant_reserve', args, ['ok', 'limit'])) === 'ok';
 }
 
+/** Gives one place back, for a call that failed or served nothing. Best effort: a failure here only costs the caller a place. */
+async function release(deps: Deps, config: Config, day: string, key: string): Promise<void> {
+  try {
+    await callDatabase(deps, config, 'assistant_release', { p_day: day, p_ip_hash: key }, ['ok']);
+  } catch (error) {
+    console.error('mcp: release failed', describe(error));
+  }
+}
+
 /** The one job with this key, when it is open or closed for less than 30 days; undefined otherwise. */
 async function readJob(deps: Deps, config: Config, company: string, jobId: string): Promise<Record<string, unknown> | undefined> {
   const since = new Date(deps.now().getTime() - CLOSED_DAYS * 86_400_000).toISOString().slice(0, 10);
@@ -150,8 +194,19 @@ const UNAVAILABLE = 'The job data could not be reached right now. Try again late
 
 async function callTool(deps: Deps, config: Config, id: Id, name: string, args: unknown, network: string): Promise<Response> {
   const day = deps.now().toISOString().slice(0, 10);
+  // The places taken from the counters by this call. A call that fails or serves nothing gives them back.
+  const held: string[] = [];
+  const take = async (key: string, limit: number): Promise<boolean> => {
+    const taken = await reserve(deps, config, day, key, limit);
+    if (taken) held.push(key);
+    return taken;
+  };
   const caller = async (tool: string, limit: number): Promise<boolean> =>
-    reserve(deps, config, day, await hashVisitor(config.ipHashSecret, day, `${tool}|${network}`), limit);
+    take(await hashVisitor(config.ipHashSecret, day, `${tool}|${network}`), limit);
+  const refund = async (response: Response): Promise<Response> => {
+    for (const key of held) await release(deps, config, day, key);
+    return response;
+  };
   try {
     if (name === 'search_jobs') {
       const parsed = parseSearch(args);
@@ -181,13 +236,13 @@ async function callTool(deps: Deps, config: Config, id: Id, name: string, args: 
     const parsed = parseJob(args);
     if (!parsed.ok) return toolError(id, parsed.message);
     if (!(await caller('get_job', JOB_DAILY_LIMIT))) return toolError(id, LIMITED);
-    if (!(await reserve(deps, config, day, 'get_job:all', JOB_DAILY_CAP))) return toolError(id, LIMITED_ALL);
+    if (!(await take('get_job:all', JOB_DAILY_CAP))) return await refund(toolError(id, LIMITED_ALL));
     const job = await readJob(deps, config, parsed.value.company, parsed.value.jobId);
-    if (!job) return toolError(id, 'No open job, or job closed in the last 30 days, has this company and job_id. Search again with search_jobs.');
-    return toolResult(id, job);
+    if (!job) return await refund(toolError(id, 'No open job, or job closed in the last 30 days, has this company and job_id. Search again with search_jobs.'));
+    return toolResult(id, { ...job, details: candidateDetails(job.details) });
   } catch (error) {
     console.error(`mcp: ${name} failed`, describe(error));
-    return toolError(id, UNAVAILABLE);
+    return await refund(toolError(id, UNAVAILABLE));
   }
 }
 
