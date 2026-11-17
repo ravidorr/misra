@@ -4,6 +4,16 @@ All notable changes are documented here. Format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
+## [0.64.0] - 2026-11-17
+
+### Added
+
+- `npm run lint` now fails on an emoji or an em dash: `eslint-plugin-no-emoji` and `eslint-plugin-no-em-dash` check the strings of the JS and TS files, and `scripts/lint-text.mjs` (`npm run lint:text`) checks every Markdown, Python, HTML, CSS, YAML, SQL, JS and TS file, comments included. The lawyer's approved files (`PRIVACY.md`, `TERMS.md`, `SECURITY.md`, `ASSISTANT.md`, `supabase/email-texts.md`, `templates/email.js`) are skipped for the em dash rule only; `TODO.md` asks him about the five in `ASSISTANT.md`. A vitest file proves both checks fire.
+
+### Changed
+
+- The arrow after "Apply" and "Read full description" on a card comes from `String.fromCodePoint` (the same character), because the emoji rule reads the arrow as an emoji when it is a string literal.
+
 ## [0.63.0] - 2026-11-17
 
 ### Added

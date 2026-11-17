@@ -1,6 +1,6 @@
 {
   "name": "misra",
-  "version": "0.63.0",
+  "version": "0.64.0",
   "private": true,
   "type": "module",
   "description": "Daily batch pipeline that crawls career pages, keeps history in SQLite, and emails a digest.",
@@ -11,9 +11,10 @@
   "packageManager": "npm@11.20.0",
   "scripts": {
     "prepare": "husky",
-    "lint": "npm run lint:py && npm run lint:js && npm run lint:css && npm run lint:html && npm run lint:md",
+    "lint": "npm run lint:py && npm run lint:js && npm run lint:text && npm run lint:css && npm run lint:html && npm run lint:md",
     "lint:py": ".venv/bin/python -m ruff check . && .venv/bin/python -m ruff format --check .",
     "lint:js": "eslint --max-warnings=0 .",
+    "lint:text": "node scripts/lint-text.mjs",
     "lint:css": "stylelint --max-warnings=0 --allow-empty-input \"**/*.css\"",
     "lint:html": "node scripts/lint-html.mjs",
     "lint:md": "markdownlint-cli2",
@@ -26,6 +27,8 @@
     "@eslint/js": "10.0.1",
     "axe-core": "4.14.0",
     "eslint": "10.15.0",
+    "eslint-plugin-no-em-dash": "1.0.15",
+    "eslint-plugin-no-emoji": "2.0.22",
     "globals": "17.14.0",
     "html-validate": "11.21.1",
     "husky": "9.1.7",

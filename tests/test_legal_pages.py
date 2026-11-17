@@ -687,7 +687,7 @@ def test_the_about_page_is_built_from_about_md_and_not_among_the_lawyers_documen
 def test_about_md_names_no_address_and_says_nothing_the_pages_do_not_back() -> None:
     text = (REPO / "ABOUT.md").read_text(encoding="utf-8")
     assert "@" not in text
-    assert "—" not in text
+    assert "\u2014" not in text
     assert text.startswith("# About Misra\n")
     for sentence in ("once a day", "Sundays", "no sign-in"):
         assert sentence in text
