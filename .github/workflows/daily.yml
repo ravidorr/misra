@@ -20,6 +20,10 @@ on:
         description: "Digest step only: pass --dry-run (counts in the log, nothing sent, nothing recorded)"
         type: boolean
         default: false
+      allow_shrink:
+        description: "Pull step only: pass --allow-shrink, to accept a history with under half of the open jobs the dashboard last published (a real loss; never for a wrong key)"
+        type: boolean
+        default: false
       source:
         description: "Leave empty. cron-job.org sends source=cron-job.org: the guard then skips the start if a scheduled or cron-job.org run already succeeded today"
         type: string
@@ -84,6 +88,10 @@ jobs:
       - uses: actions/checkout@v7
         id: checkout
         with:
+          # The tip of main when this job starts, not the commit the run was queued at. A run that waited in the group
+          # behind a publish-docs run (or another daily run) would otherwise build on the commit from before that run's
+          # push, and its own push of docs/ would conflict with it (2026-11-17: "push to main failed after 3 attempts").
+          ref: main
           persist-credentials: false
       - name: Verify the deploy key before crawling or emailing
         id: verify
@@ -112,12 +120,15 @@ jobs:
         timeout-minutes: 10
         # The history lives in Supabase (PLAN.md step 9.1); data/jobs.db is a scratch file rebuilt here on every run and
         # never committed. This step, the sync, the digests and the backup are the only ones that hold the service-role
-        # key: the crawl, which runs third-party pages in a browser, never does. An empty secret or an empty `jobs` table fails
-        # the step, so the crawl (and everything after it that needs the history) does not run.
+        # key: the crawl, which runs third-party pages in a browser, never does. An empty secret, an empty `jobs` table or
+        # one with under half of the jobs last published fails the step, so the crawl (and everything after it that
+        # needs the history) does not run.
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-        run: python sync_supabase.py --pull
+          # "--allow-shrink" for a manual run with allow_shrink ticked (a boolean, so nothing typed reaches the shell).
+          ALLOW_SHRINK_FLAG: ${{ inputs.allow_shrink && '--allow-shrink' || '' }}
+        run: python sync_supabase.py --pull $ALLOW_SHRINK_FLAG
       - run: playwright install --with-deps chromium
       - name: Crawl and diff
         id: crawl
@@ -132,7 +143,9 @@ jobs:
         run: python run.py --gaps
       - name: Sync jobs to Supabase
         id: sync
-        if: ${{ always() && steps.crawl.outcome == 'success' }}
+        # Also after a crawl that failed part of the way: run.py commits each company as it goes, so what it recorded
+        # is stored (the run is red anyway). Not when the pull failed (the crawl is then skipped).
+        if: ${{ always() && steps.pull.outcome == 'success' && steps.crawl.outcome != 'skipped' }}
         timeout-minutes: 10
         env:
           # Exposed to this step only, after the crawl. An unset secret arrives empty and fails the step.
@@ -155,12 +168,15 @@ jobs:
           DRY_RUN_FLAG: ${{ inputs.digest_dry_run && '--dry-run' || '' }}
         run: python send_digests.py $DRY_RUN_FLAG
       - name: Build dashboard
-        # Needs the pulled history: without it the build would stop on the missing file, and must not publish less.
-        if: ${{ always() && steps.pull.outcome == 'success' }}
+        id: build
+        # Only after a good sync: a failed pull or sync means the history here and Supabase may differ, and the dashboard
+        # must not publish either. (A failed crawl, a failed digest or a failed gaps step still build.)
+        if: ${{ always() && steps.sync.outcome == 'success' }}
         run: python build_dashboard.py
       - name: Commit the dashboard
         id: commit
-        if: ${{ always() && steps.checkout.outcome == 'success' }}
+        # Only after a good build, so a build that stopped half way never commits half a dashboard.
+        if: ${{ always() && steps.build.outcome == 'success' }}
         env:
           DEPLOY_KEY: ${{ secrets.DEPLOY_KEY }}
           GH_TOKEN: ${{ github.token }}
@@ -227,5 +243,5 @@ jobs:
           GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
           DIGEST_TO: ${{ secrets.DIGEST_TO }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-          STEPS: verify=${{ steps.verify.outcome }} pull=${{ steps.pull.outcome }} crawl=${{ steps.crawl.outcome }} gaps=${{ steps.gaps.outcome }} sync=${{ steps.sync.outcome }} digests=${{ steps.digests.outcome }} commit=${{ steps.commit.outcome }} backup=${{ steps.backup.outcome }}
+          STEPS: verify=${{ steps.verify.outcome }} pull=${{ steps.pull.outcome }} crawl=${{ steps.crawl.outcome }} gaps=${{ steps.gaps.outcome }} sync=${{ steps.sync.outcome }} digests=${{ steps.digests.outcome }} build=${{ steps.build.outcome }} commit=${{ steps.commit.outcome }} backup=${{ steps.backup.outcome }}
         run: python3 send_alert.py "$RUN_URL"

@@ -296,7 +296,7 @@ def save_descriptions(texts: list[dict[str, Any]], crawled: list[tuple[str, list
         print(f"::warning::the descriptions could not be handed to the sync step, {type(exc).__name__}")
 
 
-def main() -> None:  # noqa: PLR0912, PLR0915
+def main() -> None:  # noqa: PLR0915
     excluded = load_excluded()  # a bad list stops the run: nobody can say who must not be crawled
     with open("data/companies.json") as fh:
         every = json.load(fh)
@@ -310,89 +310,105 @@ def main() -> None:  # noqa: PLR0912, PLR0915
     now = time.strftime("%Y-%m-%dT%H:%M:%S")
     api = [co for co in companies if co["ats"] != "browser"]
     br = [co for co in companies if co["ats"] == "browser"]
-    with ThreadPoolExecutor(8) as ex:
-        results = list(ex.map(crawl, api))
-    if br:
-        got = crawl_many([co["slug"] for co in br])
-        results.extend((co, got.get(co["slug"])) for co in br)
     failed: list[str] = []
     skipped: list[str] = []
     attempted: set[str] = set()  # companies with any result that is not a robots skip: crawled, held or failed
     crawled: list[tuple[str, list[dict[str, Any]]]] = []  # (ats, jobs) of every crawl that gave a list
     texts: list[dict[str, Any]] = []  # the descriptions for the sync step: never stored in the database
-    for co, fetched in results:
-        name = co["name"]
-        jobs = fetched
-        if jobs is None and robots_skipped(co):  # not a failure: logged on its own, nothing closes
-            skipped.append(name)
+
+    def record(batch: list[tuple[dict[str, Any], list[dict[str, Any]] | None]]) -> None:  # noqa: PLR0912
+        """Write the results of these companies into the history and commit them, company by company. A crash later
+        (the browser crawl, a bad page, the end of the run) then loses only the company it was in: the workflow still
+        runs the sync after a failed crawl, so what was recorded reaches Supabase and the run goes red as it should."""
+        for co, fetched in batch:
+            c.commit()  # the previous company is complete: keep it whatever comes next
+            name = co["name"]
+            jobs = fetched
+            if jobs is None and robots_skipped(co):  # not a failure: logged on its own, nothing closes
+                skipped.append(name)
+                c.execute(
+                    "INSERT INTO crawl_log(ts,company,ats,ok,n_jobs,note) VALUES(?,?,?,?,?,?)",
+                    (now, name, co["ats"], False, 0, WHY[co["slug"]]),
+                )
+                continue
+            attempted.add(name)
+            if fetched is not None and co.get("israel_only"):  # large multinational boards: keep Israel jobs only
+                jobs = [j for j in fetched if ISRAEL.search(j["location"] or "")]
+            drop, held = (
+                sharp_drop(c, name, len(jobs), now[:10]) if jobs is not None and co["ats"] == "browser" else ("", False)
+            )
+            if drop:  # keep the crawler's own reason for an empty page next to the hold
+                reason = WHY.get(co["slug"], "")
+                if reason.startswith((DROP_NOTE, DROP_BELIEVED)):
+                    reason = ""  # our own note from an earlier run in this process, not the crawler's
+                WHY[co["slug"]] = f"{drop} ({reason})" if reason else drop
+            note = drop
+            if jobs is None:
+                note = WHY.get(co["slug"], "request failed")
+            elif not jobs and co["ats"] == "browser":
+                note = WHY.get(co["slug"], "")
             c.execute(
                 "INSERT INTO crawl_log(ts,company,ats,ok,n_jobs,note) VALUES(?,?,?,?,?,?)",
-                (now, name, co["ats"], False, 0, WHY[co["slug"]]),
+                (now, name, co["ats"], jobs is not None and not held, len(jobs or []), note),
             )
-            continue
-        attempted.add(name)
-        if fetched is not None and co.get("israel_only"):  # large multinational boards: keep Israel jobs only
-            jobs = [j for j in fetched if ISRAEL.search(j["location"] or "")]
-        drop, held = (
-            sharp_drop(c, name, len(jobs), now[:10]) if jobs is not None and co["ats"] == "browser" else ("", False)
-        )
-        if drop:  # keep the crawler's own reason for an empty page next to the hold
-            reason = WHY.get(co["slug"], "")
-            if reason.startswith((DROP_NOTE, DROP_BELIEVED)):
-                reason = ""  # our own note from an earlier run in this process, not the crawler's
-            WHY[co["slug"]] = f"{drop} ({reason})" if reason else drop
-        note = drop
-        if jobs is None:
-            note = WHY.get(co["slug"], "request failed")
-        elif not jobs and co["ats"] == "browser":
-            note = WHY.get(co["slug"], "")
-        c.execute(
-            "INSERT INTO crawl_log(ts,company,ats,ok,n_jobs,note) VALUES(?,?,?,?,?,?)",
-            (now, name, co["ats"], jobs is not None and not held, len(jobs or []), note),
-        )
-        if jobs is None:
-            failed.append(name)  # never close jobs when the crawl failed
-            continue
-        if held:
-            failed.append(name)  # a crawl that probably lost most of the list: record what it saw, close nothing
-        crawled.append((co["ats"], jobs))
-        texts.extend(
-            {"company": name, "job_id": j["job_id"], "description": j["description"], "details": j.get("details") or {}}
-            for j in jobs
-            if j.get("description")
-        )
-        seen: set[str] = set()
-        known = is_known(c, co, now)
-        for j in jobs:
-            seen.add(j["job_id"])
-            cur = c.execute("SELECT 1 FROM jobs WHERE company=? AND job_id=?", (name, j["job_id"])).fetchone()
-            if cur:
-                c.execute(
-                    "UPDATE jobs SET last_seen=?, status='open', title=?, location=?, url=? "
-                    "WHERE company=? AND job_id=?",
-                    (now, j["title"], j["location"], j["url"], name, j["job_id"]),
-                )
-            else:
-                # a company seen for the first time gets a silent baseline (reported=1). Nothing reads the column
-                # any more (send_digests.py goes by first_seen and the emailed table)
-                c.execute(
-                    "INSERT INTO jobs(company,job_id,title,team,location,url,posted,first_seen,last_seen,reported) "
-                    "VALUES(?,?,?,?,?,?,?,?,?,?)",
-                    (
-                        name,
-                        j["job_id"],
-                        j["title"],
-                        j["team"],
-                        j["location"],
-                        j["url"],
-                        j["posted"],
-                        now,
-                        now,
-                        0 if known else 1,
-                    ),
-                )
-        if not held:
-            close_unseen(c, name, seen)
+            if jobs is None:
+                failed.append(name)  # never close jobs when the crawl failed
+                continue
+            if held:
+                failed.append(name)  # a crawl that probably lost most of the list: record what it saw, close nothing
+            crawled.append((co["ats"], jobs))
+            texts.extend(
+                {
+                    "company": name,
+                    "job_id": j["job_id"],
+                    "description": j["description"],
+                    "details": j.get("details") or {},
+                }
+                for j in jobs
+                if j.get("description")
+            )
+            seen: set[str] = set()
+            known = is_known(c, co, now)
+            for j in jobs:
+                seen.add(j["job_id"])
+                cur = c.execute("SELECT 1 FROM jobs WHERE company=? AND job_id=?", (name, j["job_id"])).fetchone()
+                if cur:
+                    c.execute(
+                        "UPDATE jobs SET last_seen=?, status='open', title=?, location=?, url=? "
+                        "WHERE company=? AND job_id=?",
+                        (now, j["title"], j["location"], j["url"], name, j["job_id"]),
+                    )
+                else:
+                    # a company seen for the first time gets a silent baseline (reported=1). Nothing reads the column
+                    # any more (send_digests.py goes by first_seen and the emailed table)
+                    c.execute(
+                        "INSERT INTO jobs(company,job_id,title,team,location,url,posted,first_seen,last_seen,reported) "
+                        "VALUES(?,?,?,?,?,?,?,?,?,?)",
+                        (
+                            name,
+                            j["job_id"],
+                            j["title"],
+                            j["team"],
+                            j["location"],
+                            j["url"],
+                            j["posted"],
+                            now,
+                            now,
+                            0 if known else 1,
+                        ),
+                    )
+            if not held:
+                close_unseen(c, name, seen)
+        c.commit()
+
+    with ThreadPoolExecutor(8) as ex:
+        results = list(ex.map(crawl, api))
+    record(results)  # the API companies are in the history before the slow browser crawl starts
+    if br:
+        got = crawl_many([co["slug"] for co in br])
+        later = [(co, got.get(co["slug"])) for co in br]
+        record(later)
+        results.extend(later)
     closed_companies, closed_jobs = track_robots_skips(c, set(skipped), attempted, now[:10])
     c.commit()
     n_open = c.execute("SELECT COUNT(*) FROM jobs WHERE status='open'").fetchone()[0]

@@ -1,7 +1,9 @@
+import json
 import runpy
 import sqlite3
 import sys
 from datetime import UTC, date, datetime, timedelta
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -533,8 +535,24 @@ def log_json(n: int, ts: str, company: str = "Acme", note: str | None = None) ->
     return {"id": n, "ts": ts, "company": company, "ats": "lever", "ok": 1, "n_jobs": 4, "note": note}
 
 
-def pull_from(tables: dict[str, list[dict[str, Any]]], path: Any) -> tuple[int, int]:
-    return sync_supabase.pull(export_accounts.Source(Pages(tables), URL, KEY), str(path))  # type: ignore[arg-type]
+def pull_from(tables: dict[str, list[dict[str, Any]]], path: Any, allow_shrink: bool = False) -> tuple[int, int]:
+    source = export_accounts.Source(Pages(tables), URL, KEY)  # type: ignore[arg-type]
+    return sync_supabase.pull(source, str(path), allow_shrink)
+
+
+@pytest.fixture(autouse=True)
+def published(tmp_path_factory: pytest.TempPathFactory, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """A stand-in for docs/jobs.json that publishes no job, so no pull is compared with the repository's real file."""
+    path = tmp_path_factory.mktemp("published") / "jobs.json"
+    path.write_text('{"jobs": []}', encoding="utf-8")
+    monkeypatch.setattr(sync_supabase, "PUBLISHED", str(path))
+    return path
+
+
+def publish_count(n: int | str) -> None:
+    """The dashboard's last published jobs: n jobs, or the text given."""
+    text = n if isinstance(n, str) else json.dumps({"jobs": [{}] * n})
+    Path(sync_supabase.PUBLISHED).write_text(text, encoding="utf-8")
 
 
 def test_the_pull_rebuilds_the_history_with_the_closed_jobs_and_the_whole_log(tmp_path: Any) -> None:
@@ -679,3 +697,64 @@ def test_a_crawl_log_that_fails_half_way_is_finished_by_the_next_sync_without_a_
     fake.request = real  # type: ignore[method-assign]
     assert sync(jobs, client(fake)).logged == REST
     assert len(fake.others["crawl_log"]) == TOTAL
+
+
+def test_a_pull_with_under_half_of_the_published_open_jobs_is_refused_and_writes_nothing(
+    tmp_path: Any, workdir: Any
+) -> None:
+    publish_count(11)
+    rows = [job_row("Acme", str(n), "open" if n % 2 == 0 else "closed") for n in range(9)]  # 5 open, 4 closed
+    path = tmp_path / "jobs.db"
+    with pytest.raises(
+        sync_supabase.SyncError, match=r"holds 5 open jobs and the dashboard last published 11.*--allow"
+    ):
+        pull_from({"jobs": rows, "crawl_log": []}, path)
+    assert not path.exists()
+    assert pull_from({"jobs": rows, "crawl_log": []}, path, allow_shrink=True) == (9, 0)  # a real loss, on purpose
+
+
+def test_a_pull_with_half_or_more_of_the_published_jobs_or_too_few_to_judge_is_accepted(
+    tmp_path: Any, workdir: Any
+) -> None:
+    publish_count(10)
+    five = [job_row("Acme", str(n)) for n in range(5)]
+    assert pull_from({"jobs": five, "crawl_log": []}, tmp_path / "a.db") == (5, 0)  # exactly half
+    publish_count(4)
+    assert pull_from({"jobs": five[:1], "crawl_log": []}, tmp_path / "b.db") == (
+        1,
+        0,
+    )  # under 5 published: no yardstick
+
+
+def test_a_pull_without_a_readable_published_file_fails_closed_unless_the_check_is_skipped(
+    tmp_path: Any, capsys: pytest.CaptureFixture[str]
+) -> None:
+    tables = {"jobs": [job_row("Acme", "1")], "crawl_log": []}
+    for text in (None, "not json", "[]", '{"jobs": 3}'):
+        if text is None:
+            Path(sync_supabase.PUBLISHED).unlink()
+        else:
+            publish_count(text)
+        with pytest.raises(sync_supabase.SyncError, match=r"could not be read.*--allow-shrink"):
+            pull_from(tables, tmp_path / "x.db")
+        assert not (tmp_path / "x.db").exists()
+    assert pull_from(tables, tmp_path / "y.db", allow_shrink=True) == (1, 0)  # the override does not look at the file
+    assert capsys.readouterr().out == ""
+
+
+def test_main_pull_warns_when_the_crawl_log_is_empty_and_passes_the_override(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], workdir: Any
+) -> None:
+    (workdir / "data" / "jobs.db").unlink()
+    publish_count(100)
+    monkeypatch.setenv("SUPABASE_URL", URL)
+    monkeypatch.setenv("SUPABASE_SERVICE_ROLE_KEY", KEY)
+    pages = Pages({"jobs": [job_row("Acme", "1")], "crawl_log": []})
+    monkeypatch.setattr(sync_supabase.requests, "Session", lambda: pages)
+    with pytest.raises(SystemExit, match="refusing to crawl from a history that lost more than half"):
+        sync_supabase.main(["--pull"])
+    sync_supabase.main(["--pull", "--allow-shrink"])  # an empty log is a warning with no row counts, never a failure
+    assert capsys.readouterr().out.splitlines() == [
+        "Supabase: pulled 1 jobs and 0 crawl log rows into data/jobs.db",
+        "::warning::the crawl log is empty: robots.txt streaks and held drops start again",
+    ]

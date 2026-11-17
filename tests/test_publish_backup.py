@@ -340,3 +340,30 @@ def test_a_remote_whose_tip_has_no_table_files_is_not_judged_as_shrunk(tmp_path:
     run(seed, "-c", "user.name=o", "-c", "user.email=o@o", "commit", "--quiet", "-m", "readme")
     run(seed, "push", "--quiet", "origin", "HEAD:main")
     assert publish(big_export(tmp_path / "x", 0), str(remote), tmp_path / "w", NOW).startswith("backup committed")
+
+
+def test_the_first_backup_after_a_table_joins_the_export_still_guards_the_other_tables(
+    tmp_path: Path, remote: Path
+) -> None:
+    """The move of the history added `jobs` and `crawl_log`: the remote's tip had no such files, and that must not
+    switch the shrink guard off for `profiles`, nor leave the new tables unguarded for good."""
+    old = big_export(tmp_path / "x", 10)
+    seed = tmp_path / "seed"
+    run(tmp_path, "clone", "--quiet", str(remote), str(seed))
+    for table in publish_backup.ALL_TABLES:
+        if table.account:
+            (seed / f"{table.name}.json").write_bytes((old / f"{table.name}.json").read_bytes())
+    run(seed, "add", "--all")
+    run(seed, "-c", "user.name=o", "-c", "user.email=o@o", "commit", "--quiet", "-m", "five tables")
+    run(seed, "push", "--quiet", "origin", "HEAD:main")
+    assert publish_backup.previous_counts(seed) == {
+        "profiles": 10,
+        "user_prefs": 0,
+        "user_jobs": 0,
+        "subscriptions": 0,
+        "emailed": 0,
+    }
+    with pytest.raises(BackupError, match=r"profiles fell by more than half"):
+        publish(big_export(tmp_path / "e", 0), str(remote), tmp_path / "w", NOW)
+    assert publish(big_export(tmp_path / "e2", 10), str(remote), tmp_path / "w2", NOW).startswith("backup committed")
+    assert publish_backup.previous_counts(tmp_path / "w2")["jobs"] == 0  # from the next day on, the new tables count
