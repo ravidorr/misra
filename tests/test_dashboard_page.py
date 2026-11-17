@@ -82,7 +82,7 @@ def build_site(db: sqlite3.Connection, workdir: Path, fill: Callable[[sqlite3.Co
         "Parked,parked.test,,deeptech,site_unusable,Domain parked at GoDaddy\r\n"
         f'LongName,long.test,https://long.test/careers,deeptech,needs_reader,"{LONG_NOTE}"\r\n'
         "Walled,walled.test,https://walled.test/jobs,multinational,bot_protection,\r\n"
-        f"Guarded,guarded.test,https://guarded.test/careers,deeptech,robots_disallowed,\r\n",
+        "Guarded,guarded.test,https://guarded.test/careers,deeptech,robots_disallowed,\r\n",
         encoding="utf-8",
     )
     if fill is not None:
@@ -710,7 +710,6 @@ async def test_the_coverage_gap_card_has_two_parts_and_no_internal_reasons(page:
     # the reason stays in the page for agents
     assert await page.locator("li[data-company=Parked]").get_attribute("data-reason") == "site_unusable"
     assert await page.locator("li[data-company=Walled]").text_content() == "Walled (opens in a new tab)"
-    assert await page.locator("#gaps .gap-why").count() == 0
     # the cards are in alphabetical order inside a part
     names = await page.locator("[data-part=cannot-read] li").evaluate_all("els => els.map(e => e.dataset.company)")
     assert names == ["LongName", "Nowhere", "Parked", "Walled"]

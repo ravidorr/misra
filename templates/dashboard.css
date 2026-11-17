@@ -618,11 +618,6 @@ html:has(.sheet:modal) {
   overflow-wrap: anywhere;
 }
 
-/* A skipped company says why in a sentence, so its cards are wider. */
-.gap-part[data-part='skipped'] .gap-list {
-  grid-template-columns: repeat(auto-fill, minmax(min(15rem, 100%), 1fr));
-}
-
 /* A company is a small position card: the same border and panel as a role card, without its shadow. */
 .gap-card {
   display: flex;

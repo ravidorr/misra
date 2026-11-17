@@ -505,7 +505,7 @@ def pull_main(url: str, key: str, allow_shrink: bool = False) -> None:
     except (SyncError, ExportError) as exc:
         sys.exit(f"Supabase pull failed: {exc}")
     print(f"Supabase: pulled {jobs} jobs and {log} crawl log rows into {DB}")
-    if not log:  # not a failure (a new project has none), but every robots.txt streak and sharp-drop hold starts again
+    if not log:  # not a failure (a new project has none), but every sharp-drop hold starts again
         print("::warning::the crawl log is empty: held drops start again")
 
 
