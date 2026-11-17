@@ -893,6 +893,7 @@ def test_with_the_contact_switch_off_the_page_has_no_form_script_connect_source_
     assert "connect-src" not in html
     assert "contactForm" not in html
     assert "<!--" not in html
+    assert "__SRI" not in html
     assert not (docs / "contact.js").exists()
 
 

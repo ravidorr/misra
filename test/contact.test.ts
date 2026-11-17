@@ -99,7 +99,7 @@ describe('the switch', () => {
     expect(world.fakeFetch).not.toHaveBeenCalled();
   });
 
-  it('is on only for exactly "true"', () => {
+  it('is on only for "true" (white space around it is trimmed like every secret)', () => {
     const env = (value: string) => (name: string): string | undefined =>
       ({ CONTACT_FORM_ENABLED: value, RESEND_API_KEY: 'k', CONTACT_TO: 'a@b.test', IP_HASH_SECRET: 'x'.repeat(16), SUPABASE_URL: 'https://p.test/', SUPABASE_SERVICE_ROLE_KEY: 's' })[name];
     expect(loadConfig(env('true')).enabled).toBe(true);
@@ -186,15 +186,27 @@ describe('the request', () => {
     expect(world.emails).toEqual([]);
   });
 
-  it('answers a bot (honeypot, too fast, no time at all) with a fake success and does nothing', async () => {
+  it('answers a filled honeypot with a fake success and does nothing', async () => {
     const world = fakeWorld();
-    for (const extra of [{ website: 'http://spam.test' }, { website: true }, { elapsed: MIN_FILL_MS - 1 }, { elapsed: undefined }, { elapsed: '99999' }, { elapsed: Number.NaN }]) {
+    for (const extra of [{ website: 'http://spam.test' }, { website: true }]) {
       const response = await handleContact(post({ ...GOOD, ...extra }), world.deps);
       expect(response.status).toBe(200);
       expect(await json(response)).toEqual({ ok: true });
     }
     expect(world.emails).toEqual([]);
     expect(world.counters.size).toBe(0);
+  });
+
+  it('answers a form sent too fast (or with no time at all) with an honest error, not a success', async () => {
+    const world = fakeWorld();
+    for (const extra of [{ elapsed: MIN_FILL_MS - 1 }, { elapsed: undefined }, { elapsed: '99999' }, { elapsed: Number.NaN }]) {
+      const response = await handleContact(post({ ...GOOD, ...extra }), world.deps);
+      expect(response.status).toBe(400);
+      expect((await json(response)).error.code).toBe('too_fast');
+    }
+    expect((await handleContact(post({ ...GOOD, elapsed: MIN_FILL_MS }), world.deps)).status).toBe(200);
+    expect(world.emails).toHaveLength(1);
+    expect(world.counters.get('contact:all')).toBe(1);
   });
 
   it('does not treat an empty or false honeypot as a bot', async () => {
@@ -222,19 +234,17 @@ describe('the request', () => {
     expect(world.emails.length).toBe(DAILY_CAP);
   });
 
-  it('keeps the places when the outcome is unknown and gives them back when Resend refuses', async () => {
-    const unknown = fakeWorld({ resend: 503 });
-    expect((await handleContact(post(GOOD), unknown.deps)).status).toBe(502);
-    expect(unknown.counters.get('contact:all')).toBe(1);
-    const network = fakeWorld({ resend: 'network' });
-    expect((await handleContact(post(GOOD), network.deps)).status).toBe(502);
-    expect(network.counters.get('contact:all')).toBe(1);
-    const refused = fakeWorld({ resend: 422 });
-    const response = await handleContact(post(GOOD), refused.deps);
-    expect(response.status).toBe(502);
-    expect((await json(response)).error.code).toBe('send_failed');
-    expect(refused.counters.get('contact:all')).toBe(0);
-    expect([...refused.counters.values()].every((v) => v === 0)).toBe(true);
+  it('never gives a place back after a send was tried, so Resend refusing a Reply-To is no way round the limits', async () => {
+    for (const resend of [503, 422, 429, 'network'] as const) {
+      const world = fakeWorld({ resend });
+      for (let n = 0; n < CALLER_DAILY_LIMIT; n += 1) {
+        const response = await handleContact(post(GOOD), world.deps);
+        expect(response.status).toBe(502);
+        expect((await json(response)).error.code).toBe('send_failed');
+      }
+      expect((await handleContact(post(GOOD), world.deps)).status).toBe(429);
+      expect(world.counters.get('contact:all')).toBe(CALLER_DAILY_LIMIT);
+    }
   });
 
   it('fails closed when the database is down or answers nonsense, and survives a failed release', async () => {
@@ -244,8 +254,9 @@ describe('the request', () => {
       expect(response.status).toBe(500);
       expect(world.emails).toEqual([]);
     }
-    const world = fakeWorld({ database: 'release-down', resend: 422 });
-    expect((await handleContact(post(GOOD), world.deps)).status).toBe(502);
+    const world = fakeWorld({ database: 'release-down' });
+    world.counters.set('contact:all', DAILY_CAP);
+    expect((await handleContact(post(GOOD), world.deps)).status).toBe(503); // the cap refuses and the caller's place goes back, though the release fails
   });
 
   it('never logs the message, the name, the address or the network', async () => {
@@ -298,6 +309,24 @@ describe('the protocol', () => {
     expect(response.status).toBe(400);
     expect((await json(response)).error).toMatchObject({ code: 'invalid_input', fields: { message: 'Enter your message.' } });
   });
+  it('turns an unexpected failure into a plain 500 that the site can read', async () => {
+    const w = world();
+    const body = new ReadableStream({
+      start(controller): void {
+        controller.error(new Error('client hung up'));
+      },
+    });
+    const request = new Request('https://x.test/', {
+      method: 'POST',
+      headers: { origin: ORIGIN, 'content-type': 'application/json' },
+      body,
+      duplex: 'half',
+    } as RequestInit);
+    const response = await handleContact(request, w.deps);
+    expect(response.status).toBe(500);
+    expect(response.headers.get('access-control-allow-origin')).toBe(ORIGIN);
+  });
+
   it('turns an unexpected failure into a plain 500', async () => {
     const w = world();
     const request = post(GOOD);

@@ -12,8 +12,9 @@
 //
 // What keeps the maintainer's inbox and the sending domain safe, in the order the checks run:
 //   1. the switch; then only the site's origin may call it from a browser (CORS), and the body must be small JSON;
-//   2. a honeypot field and a minimum time to fill the form: either one is answered with a fake success and nothing
-//      happens. The time is sent by the page, so it only stops bots that do not know it (a filter, not a guarantee);
+//   2. a honeypot field (a filled one is answered with a fake success and nothing happens) and a minimum time to fill the
+//      form (answered with an honest error, because autofill can make a person that fast). The time is sent by the page,
+//      so it only stops bots that do not know it (a filter, not a guarantee);
 //   3. every field is validated (validate.ts) before anything is counted or sent;
 //   4. at most CALLER_DAILY_LIMIT messages per visitor per day, then at most DAILY_CAP in all, counted in the database with
 //      assistant_reserve against a keyed hash of the visitor's network and the day (the address is never stored or logged).
@@ -22,7 +23,7 @@
 //      visitor's address (when given and valid) is only the Reply-To, so nothing can inject a header or a recipient.
 // Nothing personal is logged: a log line holds a function name and a status.
 
-import { SendFailed, SendRefused, sendMail } from '../_shared/resend.ts';
+import { SendFailed, sendMail } from '../_shared/resend.ts';
 import { ALLOWED_ORIGIN, callDatabase, describe, readLimited, reply } from '../_shared/subscription.ts';
 import type { Config as DatabaseConfig, Fetch } from '../_shared/subscription.ts';
 import { hashVisitor, visitorNetwork } from '../_shared/visitor.ts';
@@ -101,6 +102,7 @@ type ErrorCode =
   | 'payload_too_large'
   | 'invalid_request'
   | 'invalid_input'
+  | 'too_fast'
   | 'rate_limited'
   | 'daily_cap_reached'
   | 'send_failed'
@@ -174,24 +176,30 @@ async function readJson(request: Request): Promise<Record<string, unknown> | 'to
   return parsed as Record<string, unknown>;
 }
 
-/** A bot: the hidden field has something in it (an empty string, null or false is nothing), or the form was sent too fast. */
-function looksLikeBot(body: Record<string, unknown>): boolean {
+/** The hidden field has something in it (an empty string, null or false is nothing): no person sees it, so it is a bot. */
+function filledTrap(body: Record<string, unknown>): boolean {
   const trap = body.website;
-  const filled = typeof trap === 'string' ? trap.trim() !== '' : trap !== undefined && trap !== null && trap !== false;
+  return typeof trap === 'string' ? trap.trim() !== '' : trap !== undefined && trap !== null && trap !== false;
+}
+
+/** Sent faster than a person can write. A missing or non-numeric time counts as too fast: the page always sends it. */
+function tooFast(body: Record<string, unknown>): boolean {
   const elapsed = body.elapsed;
-  // A missing or non-numeric time counts as too fast: the page always sends it.
-  return filled || typeof elapsed !== 'number' || !Number.isFinite(elapsed) || elapsed < MIN_FILL_MS;
+  return typeof elapsed !== 'number' || !Number.isFinite(elapsed) || elapsed < MIN_FILL_MS;
 }
 
 export async function handleContact(request: Request, deps: Deps): Promise<Response> {
   if (!deps.enabled) {
     return new Response('{"error":"not_found"}', { status: 404, headers: { 'content-type': 'application/json' } });
   }
+  let origin: string | null = null;
   try {
-    return await route(request, deps, request.headers.get('origin'));
+    origin = request.headers.get('origin');
+    return await route(request, deps, origin);
   } catch (error) {
     console.error('contact: failed', describe(error));
-    return fail(null, 500, 'server_error', 'Something went wrong. Try again later.');
+    // With the CORS headers of the site, so the page shows the real answer and not "could not reach the service".
+    return fail(origin === ALLOWED_ORIGIN ? origin : null, 500, 'server_error', 'Something went wrong. Try again later.');
   }
 }
 
@@ -219,7 +227,9 @@ async function route(request: Request, deps: Deps, origin: string | null): Promi
   if (body === 'not_an_object') {
     return fail(origin, 400, 'invalid_request', 'Send a JSON object with name, email and message.');
   }
-  if (looksLikeBot(body)) return reply(origin, 200, { ok: true }); // a fake success: a bot learns nothing
+  if (filledTrap(body)) return reply(origin, 200, { ok: true }); // a fake success: a bot learns nothing
+  // A real error, not a fake success: autofill or a restored page can make a person this fast, and they must not think it was sent.
+  if (tooFast(body)) return fail(origin, 400, 'too_fast', 'That was sent too fast. Wait a few seconds and send it again.');
 
   const validation = validateContact(body);
   if (!validation.ok) {
@@ -265,8 +275,8 @@ async function route(request: Request, deps: Deps, origin: string | null): Promi
     });
   } catch (error) {
     console.error('contact: sending failed', error instanceof SendFailed ? error.message : describe(error));
-    // Keep the places when the outcome is unknown (timeout, network error, 5xx): the cap is the stricter side.
-    if (error instanceof SendRefused) await refund();
+    // The places are never given back after a send was tried, even when Resend refused it: a visitor who can make Resend
+    // refuse (a Reply-To it dislikes) would otherwise send unlimited requests that cost an API call each.
     return fail(origin, 502, 'send_failed', 'The message could not be sent. Try again later.');
   }
   return reply(origin, 200, { ok: true });

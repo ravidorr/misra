@@ -15,7 +15,7 @@ const TIMEOUT_MS = 35000; /* longer than the function's own worst case: 10 s for
 const LIMITS = { name: 100, email: 254, message: 2000 };
 const FIELDS = ['name', 'email', 'message'];
 const loadedAt = performance.now();
-const STATUS = { badRequest: 400, forbidden: 403, tooLarge: 413, limited: 429, unavailable: 503, failed: 502 };
+const NOT_FOUND = 404; /* the function is deployed but its switch is off, or it is not deployed */
 const MESSAGES = {
   unreachable: 'We could not reach the service, so your message was most likely not sent. Check your connection and try again.',
   slow: "The service took too long to answer, so we cannot tell whether your message arrived. Wait a minute, then try again. If the first one did arrive, we get the message twice and the repeat counts toward today's limit.",
@@ -28,9 +28,12 @@ const MESSAGES = {
   paused: 'Messages are paused until tomorrow: we have received as many as we can read today, so this one was not sent. Try again tomorrow.',
   refused: 'We could not confirm that your message was passed on to us. Try again later, or open an issue on GitHub (see below).',
   server: 'Something went wrong on our side, so nothing was sent. Try again later.',
+  fast: 'That was sent too fast, so nothing was sent. Wait a few seconds and send it again.',
+  closed: 'The contact form is not available right now, so nothing was sent. Open an issue on GitHub instead (see below).',
 };
 const BY_CODE = {
   invalid_input: 'invalid',
+  too_fast: 'fast',
   invalid_request: 'request',
   origin_not_allowed: 'origin',
   method_not_allowed: 'server',
@@ -41,15 +44,6 @@ const BY_CODE = {
   send_failed: 'refused',
   server_error: 'server',
 };
-const BY_STATUS = {
-  [STATUS.badRequest]: 'invalid',
-  [STATUS.forbidden]: 'origin',
-  [STATUS.tooLarge]: 'large',
-  [STATUS.limited]: 'limited',
-  [STATUS.unavailable]: 'paused',
-  [STATUS.failed]: 'refused',
-};
-
 /* The same checks as supabase/functions/contact/validate.ts, with the same words, on the same cleaned text. Each
    returns a message, or '' when the value is fine. The function stays the authority. */
 const UNSAFE = /(?![\t\n])[\p{Cc}\p{Zl}\p{Zp}\p{Bidi_Control}]/gu;
@@ -122,7 +116,9 @@ if (form) {
     const answer = await response.json().catch(() => null);
     if (response.ok && answer?.ok === true) return { sent: true };
     if (response.ok) return { message: MESSAGES.unclear }; /* a 200 that is not the function's answer: never "sent" */
-    const key = BY_CODE[answer?.error?.code] ?? BY_STATUS[response.status] ?? 'unclear';
+    /* Only the function's own code says what happened: a status alone can come from the platform in front of it, and then
+       we cannot say whether the message was sent. */
+    const key = BY_CODE[answer?.error?.code] ?? (response.status === NOT_FOUND ? 'closed' : 'unclear');
     return { message: MESSAGES[key], fields: key === 'invalid' ? answer?.error?.fields : null };
   }
 
@@ -182,5 +178,6 @@ if (form) {
     (showServerFields(outcome.fields) ?? problem).focus();
   });
 
+  $('contactFallback').hidden = true;
   form.hidden = false;
 }

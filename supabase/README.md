@@ -153,16 +153,16 @@ everything unless the function secret `CONTACT_FORM_ENABLED` is exactly `true`. 
 
 `POST <project url>/functions/v1/contact` with `{"name", "email", "message", "website", "elapsed"}`: only `message` (1 to 2000 characters) is required,
 `name` is up to 100, `email` up to 254 and one plain address. `website` is the hidden field and `elapsed` the milliseconds since the page loaded:
-a filled `website`, or an `elapsed` under 3000 or missing, gets a fake `{"ok": true}` and nothing happens (a filter, not a guarantee: the page sends
-the time, so a bot that knows can lie). One plain-text email goes to the secret `CONTACT_TO` from `Misra contact <digest@send.avidor.org>` (secret
+a filled `website` gets a fake `{"ok": true}` and nothing happens; an `elapsed` under 3000 or missing gets an honest 400 `too_fast` (autofill can make a person
+that fast; a filter, not a guarantee: the page sends the time, so a bot that knows can lie). One plain-text email goes to the secret `CONTACT_TO` from `Misra contact <digest@send.avidor.org>` (secret
 `CONTACT_FROM_EMAIL` to change it) with the fixed subject `Misra contact form`; the visitor's name and message are in the body and the visitor's
 address is only the `Reply-To`. The visitor is never emailed. Nothing is stored. A log line holds a function name and a status: never an address, an
-IP, a name or a message (Resend's answer is not logged either, it can echo the `Reply-To`).
+IP, a name or a message (of Resend's answer only the status and its short error name are logged: the rest can echo the `Reply-To`).
 
 Limits: `CALLER_DAILY_LIMIT` (3) per visitor and day, `DAILY_CAP` (10) in all, counted with `assistant_reserve` and `assistant_release` (table
 `assistant_ip_limits`; keys `contact|<network>` hashed with `IP_HASH_SECRET` and the day, and `contact:all`), so there is no migration, and
 `report_site_cleanup` already deletes the rows of earlier days. Resend's free plan is 100 emails a day for everything: `report-site` 20, job alerts
-and the digest up to 30 and the rest, this form 10. A place is given back only when Resend answers 4xx; a timeout or 5xx keeps it. If the database cannot be
+and the digest up to 30 and the rest, this form 10. A place is given back only when the daily cap refuses; once a send was tried it is never given back, so a visitor cannot make Resend refuse a Reply-To to get unlimited tries. If the database cannot be
 reached nothing is sent. Only `https://ravidorr.github.io` may call it from a browser.
 
 ### Turn it on (only after the lawyer has agreed and `PRIVACY.md` says it)

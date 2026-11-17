@@ -31,6 +31,7 @@ describe('TypeScript of the Edge Functions and their tests', () => {
       'email-html.test.ts',
       'mcp.test.ts',
       'contact.test.ts',
+      'resend.test.ts',
     ];
     for (const name of names) {
       expect(parsed.fileNames.some((file) => file.endsWith(`/${name}`)), name).toBe(true);

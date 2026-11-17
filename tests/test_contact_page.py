@@ -82,7 +82,7 @@ async def test_with_the_form_off_the_page_has_only_the_static_routes_and_no_addr
         ("privacy notice", "privacy.html#contact"),
     ]:
         assert await page.get_by_role("link", name=name).get_attribute("href") == href
-    assert await page.locator("form, textarea").count() == 0
+    assert await page.locator("form, textarea, #contactFallback").count() == 0
 
 
 @pytest.mark.parametrize("state", ["off_site", "contact_site"])
@@ -199,13 +199,17 @@ FAILURES = [
         "Some details were not accepted",
     ),
     (400, {"code": "invalid_request", "message": "x"}, "could not be read, so nothing was sent"),
+    (400, {"code": "too_fast", "message": "x"}, "sent too fast, so nothing was sent"),
     (403, {"code": "origin_not_allowed", "message": "x"}, "only be sent from the live page"),
     (413, {"code": "payload_too_large", "message": "x"}, "too large, so nothing was sent"),
     (429, {"code": "rate_limited", "message": "x"}, "as many messages as are allowed today"),
     (503, {"code": "daily_cap_reached", "message": "x"}, "Messages are paused until tomorrow"),
     (502, {"code": "send_failed", "message": "x"}, "open an issue on GitHub"),
     (500, {"code": "server_error", "message": "x"}, "Something went wrong on our side, so nothing was sent"),
-    (429, {"code": "something_new", "message": "x"}, "as many messages as are allowed today"),
+    # no code of the function (the platform in front of it answered): the page cannot say whether anything was sent
+    (503, {"code": "something_new", "message": "x"}, "could not confirm that your message was sent"),
+    (429, {"code": "something_new", "message": "x"}, "could not confirm that your message was sent"),
+    (404, {"code": "something_new", "message": "x"}, "contact form is not available right now, so nothing was sent"),
     (418, {"code": "something_new", "message": "x"}, "could not confirm that your message was sent"),
 ]
 
@@ -269,6 +273,13 @@ async def test_a_slow_answer_says_it_cannot_tell(page: Page, contact_site: Path)
     assert backend.requests == []
 
 
+async def test_with_the_form_on_the_fallback_note_goes_away_when_the_script_has_run(
+    page: Page, contact_site: Path
+) -> None:
+    await open_form(page, contact_site)
+    await expect(page.locator("#contactFallback")).to_be_hidden()
+
+
 async def test_a_second_click_while_sending_does_not_send_twice(page: Page, contact_site: Path) -> None:
     backend = await open_form(page, contact_site)
     await page.fill("#contactMessage", "Hello")
@@ -291,7 +302,8 @@ async def test_without_javascript_the_form_stays_hidden_and_the_note_points_to_g
     )
     await page.goto("https://misra.test/contact.html")
     await expect(page.locator("#contactForm")).to_be_hidden()
-    await expect(page.locator("noscript")).to_have_count(1)
+    await expect(page.locator("#contactFallback")).to_be_visible()
+    assert await page.locator("#contactFallback a").get_attribute("href") == "https://github.com/ravidorr/misra/issues"
     await context.close()
 
 

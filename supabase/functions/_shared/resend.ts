@@ -20,7 +20,7 @@ export interface Mail {
 }
 
 /**
- * Sends the email. Throws when it was not accepted: `SendRefused` for a 4xx, `SendFailed` for a 5xx (the email may have been queued). The message holds the status only: Resend's own answer can echo what the visitor wrote.
+ * Sends the email. Throws when it was not accepted: `SendRefused` for a 4xx, `SendFailed` for a 5xx (the email may have been queued). The message holds the status and Resend's short error name only: the rest of its answer can echo what the visitor wrote.
  */
 export async function sendMail(
   fetcher: (url: string, init: RequestInit) => Promise<Response>,
@@ -40,8 +40,12 @@ export async function sendMail(
     signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
   });
   if (!response.ok) {
-    await response.body?.cancel().catch(() => undefined);
-    const message = `Resend answered ${String(response.status)}`;
+    // Resend's error has a short `name` (restricted_api_key, validation_error...) that never holds what the visitor wrote;
+    // the rest of its answer can echo the Reply-To, so nothing else is read.
+    const answer: unknown = await response.json().catch(() => undefined);
+    const name = (answer as { name?: unknown } | undefined)?.name;
+    const kind = typeof name === 'string' && /^[a-z_]{1,40}$/u.test(name) ? ` ${name}` : '';
+    const message = `Resend answered ${String(response.status)}${kind}`;
     throw response.status < 500 ? new SendRefused(message) : new SendFailed(message);
   }
 }
