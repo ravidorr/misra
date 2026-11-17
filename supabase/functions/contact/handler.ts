@@ -1,4 +1,4 @@
-// The logic of the `contact` Edge Function (TODO.md "Dashboard and site review", the Contact page): a visitor of the Contact
+// The logic of the `contact` Edge Function (the Contact page): a visitor of the Contact
 // page writes to the maintainer, and the maintainer gets one plain-text email through Resend. Nothing is stored: not the
 // message, not the name, not the address. The visitor is never emailed (no copy, no acknowledgement), so it cannot be
 // used to send mail to someone else.

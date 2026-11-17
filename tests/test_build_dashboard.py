@@ -287,6 +287,7 @@ def test_site_files_are_written_next_to_the_page(db: sqlite3.Connection, workdir
         "assistant.html",
         "auth.js",
         "contact.html",
+        "contact.js",
         "dashboard.css",
         "dashboard.js",
         "digest.js",
@@ -893,10 +894,10 @@ def test_the_google_verification_file_is_the_one_google_gave_and_is_built_unchan
     assert source.read_bytes() == b"google-site-verification: google0e1aa15dbd543e2f.html"
 
 
-def test_the_contact_form_is_off_in_the_repository() -> None:
-    """The form goes live only when the lawyer agrees (the TODO.md item about the Contact page), together with the
-    function secret CONTACT_FORM_ENABLED. Whoever flips this constant also updates this test and PRIVACY.md."""
-    assert build_dashboard.CONTACT_FORM_ENABLED is False
+def test_the_contact_form_is_on_in_the_repository() -> None:
+    """Switched on after the lawyer's PRIVACY.md bullet of round 12 (the guard in tests/test_legal_wording.py), with
+    the function secret CONTACT_FORM_ENABLED set to true. To close the form unset the secret, then set this back."""
+    assert build_dashboard.CONTACT_FORM_ENABLED is True
 
 
 CONTACT_PAGE = (
