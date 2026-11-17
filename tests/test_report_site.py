@@ -314,6 +314,20 @@ async def test_an_answer_is_shown_even_if_the_dialog_was_closed_while_it_waited(
     await confirmed(page)
 
 
+async def test_a_late_close_event_does_not_wipe_the_answer_of_a_dialog_that_is_open_again(
+    page: Page, site: Path
+) -> None:
+    # the close event is a queued task: on a busy machine it can come after the answer has reopened the dialog
+    backend = await ready(page, site)
+    await open_form(page)
+    await send_good(page)
+    await confirmed(page)
+    await page.evaluate("document.getElementById('reportDialog').dispatchEvent(new Event('close'))")
+    await expect(page.locator(DIALOG)).to_be_visible()
+    await confirmed(page)
+    assert len(backend.requests) == 1
+
+
 @pytest.mark.parametrize(("status", "error", "words"), FAILURES)
 async def test_fr7_ac4_each_failure_is_explained_and_never_called_a_success(
     page: Page,
