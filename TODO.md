@@ -32,7 +32,7 @@ Observations about live sites below come from checks made on 2026-11-14 and may 
 
 ## Dashboard and site review (added 2026-11-17, from a hand review of the live site)
 
-Screenshots are in `todo-images/`. Rules for all items here: KISS and DRY (prefer removing text and controls over adding
+Rules for all items here: KISS and DRY (prefer removing text and controls over adding
 them). Where an item says "ask", get the opinion of Claude Design (a design pass on the screen), the UI/UX expert and,
 for wording, the technical-writer agent, before building; the maintainer may be wrong, so say so if the experts
 disagree. The wording of `PRIVACY.md`, `TERMS.md` and `ASSISTANT.md` is the lawyer's (`AGENTS.md`): a change to them
@@ -61,11 +61,8 @@ waits for him. Do not write the maintainer's email address in this repository (i
   `templates/email.js`, whether "Send the confirmation again" (named in an approved sentence there) may become "Resend
   confirmation", and whether the agreement links in the job alerts dialog (pinned as raw HTML in
   `tests/test_legal_wording.py`) may open in a new tab like the ones in the sign-in dialog.
-- [ ] **Google's account chooser says "to continue to `<project>.supabase.co`"** (![google account chooser](todo-images/google-account-chooser.webp)). Find how
-  to show "Misra" or our own domain instead: the usual ways are the OAuth consent screen branding in Google Cloud and
-  a Supabase custom domain (check whether it needs a paid plan and what it costs before doing anything).
 
-### Footer and pages (![footer](todo-images/footer.png))
+### Footer and pages
 
 - [ ] **Ask the lawyer about the Contact page and its form (turn-on gate).** The page is built and live without the form
   (GitHub issues, the security note, the privacy notice; the footer link replaced the email link). The form, the
@@ -104,14 +101,10 @@ waits for him. Do not write the maintainer's email address in this repository (i
 
 - [ ] **Ask the lawyer about two lines found while writing the About page** (his files were not touched). `PRIVACY.md`
   ("The jobs data is public") still says the job history `data/jobs.db` is in the public repository; since step 9.1 the
-  history lives in Supabase and the file is not committed. `ASSISTANT.md` repeats a heading and uses em dashes.
-
-### Tooling
-
-- [ ] **Linters.** The project already runs ruff, ESLint, Stylelint, html-validate and markdownlint (`npm run lint`).
-  Check the siblings' configs for what ours lacks, and add `eslint-plugin-no-emoji` and `eslint-plugin-no-em-dash` (check
-  that both exist, are maintained and work with our ESLint version first). Done when `npm run lint` fails on an emoji
-  or an em dash in the checked files.
+  history lives in Supabase and the file is not committed. `ASSISTANT.md` repeats a heading and uses five em dashes (in
+  "What your assistant can see"; his other files have none). `npm run lint` fails on an em dash everywhere else, so it skips his files
+  (`LAWYER_FILES` in `scripts/lint-text.mjs`): if he agrees to hyphens or commas, change the five, and drop the file
+  from that list.
 
 ## Yearly security review
 
