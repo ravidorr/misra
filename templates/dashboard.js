@@ -1757,7 +1757,7 @@ const gaps = DATA.gaps ?? { blocked: [], untracked: [], total: 0, groups: [], cl
 {
   /* The card is always there: "Report a site" (report.js) sits under the list and stays in view while the list is
      closed, even when no company is known to be missing. The reader gets two lists, not the internal reasons: the
-     companies we choose not to read (their robots.txt does not allow it) first, then the ones we cannot read yet.
+     companies we choose not to read (their robots.txt does not allow it) first, then the ones our crawler cannot read.
      Each company keeps its reason in data-reason, and the reasons stay in the page data. */
   const parts = [
     {
@@ -1768,8 +1768,8 @@ const gaps = DATA.gaps ?? { blocked: [], untracked: [], total: 0, groups: [], cl
     },
     {
       part: 'cannot-read',
-      title: 'We cannot read these yet',
-      note: 'Their roles may be missing or old.',
+      title: 'Our crawler cannot read these',
+      note: "These career pages block or fail our daily crawl, so their roles here may be missing or out of date. Each name opens the company's own page in a new tab.",
       sites: [],
     },
   ];

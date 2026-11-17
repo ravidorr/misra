@@ -51,7 +51,7 @@ SITES = {
     "Nowhere": "https://nowhere.test/jobs",
     "Guarded": "https://guarded.test/careers",
 }
-GAP_PARTS = [("We choose not to read these", 1), ("We cannot read these yet", 4)]
+GAP_PARTS = [("We choose not to read these", 1), ("Our crawler cannot read these", 4)]
 
 
 @pytest.fixture
@@ -733,7 +733,10 @@ async def test_the_coverage_gap_card_says_in_plain_words_which_sites_we_choose_n
     assert await card.locator(".gap-why").text_content() == GUARDED_NOTE
     assert await skipped.locator("a").get_attribute("href") == "https://guarded.test/careers"
     unread = await page.locator("[data-part=cannot-read] .gap-part-note").inner_text()
-    assert unread == "Their roles may be missing or old."
+    assert unread == (
+        "These career pages block or fail our daily crawl, so their roles here may be missing or out of date. "
+        "Each name opens the company's own page in a new tab."
+    )
 
 
 async def test_every_site_on_the_coverage_gap_card_is_a_safe_link_that_the_keyboard_reaches(
