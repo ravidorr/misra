@@ -13,7 +13,7 @@ Misra reads the career pages once a day. The bottom of the dashboard shows when 
 - It does not apply for you. **Apply** opens the employer's own page.
 - It does not rank roles by anything about you. You sort them by newest, company or title.
 - It shows the start of a posting, when the posting has text. The full posting is on the employer's page.
-- It lists roles in Israel. A switch in **Filters** also shows remote roles whose posting does not say where they are.
+- It lists roles in Israel unless you choose otherwise: the **Abroad** region in **Filters** shows roles elsewhere, and a switch also shows remote roles whose posting does not say where they are.
 - It does not cover every company. It can miss roles, and some listings can be out of date.
 
 ## Coverage gaps
@@ -33,7 +33,7 @@ Sign in with Google to keep them in your account, so they follow you to your oth
 
 ## Job alerts (optional)
 
-Signed in, open **Job alerts** in the account menu to get new roles that match your filters by email.
+Signed in, open **Job alerts** in the account menu to get new roles in Israel that match your filters by email.
 
 - Choose daily or weekly (Sundays).
 - Misra sends a confirmation email first. Nothing else is sent until you confirm.

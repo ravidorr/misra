@@ -749,3 +749,13 @@ async def test_the_text_pages_are_not_laid_out_like_a_role_card_on_a_phone(page:
     await page.set_viewport_size(PHONE)  # type: ignore[arg-type]
     await open_legal(page, site, "privacy.html")
     assert await page.locator("main.legal").evaluate("e => getComputedStyle(e).display") == "block"
+
+
+async def test_the_logo_link_is_as_wide_as_the_logo_and_not_the_whole_header(page: Page, site: Path) -> None:
+    await page.set_viewport_size({"width": 1280, "height": 900})
+    await open_legal(page, site, "privacy.html")
+    home = await page.locator("a.top-home").bounding_box()
+    theme = await page.locator("#theme").bounding_box()
+    assert home is not None
+    assert theme is not None
+    assert home["x"] + home["width"] < theme["x"] - 100  # a tap beside the logo goes nowhere

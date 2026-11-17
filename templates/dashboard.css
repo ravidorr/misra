@@ -94,11 +94,12 @@ a {
   transform: rotate(-2deg);
 }
 
-/* The mark and the name are one link to the dashboard (44px tall); it takes the free space, so the controls sit at the end. */
+/* The mark and the name are one link to the dashboard (44px tall) that is only as wide as they are; the auto margin
+   pushes the controls to the end, so an empty part of the header is not a link. */
 .top-home {
   display: flex;
-  flex: 1;
   align-items: center;
+  margin-inline-end: auto;
   gap: var(--space-3);
   min-width: 0;
   min-height: var(--tap);
