@@ -8,7 +8,7 @@ Misra's readers are students and early-career people in Israel (early 20s). They
 
 - Big type and one primary action per card (Apply). "Not for me" is a secondary button (`btn btn-pill`) beside Star.
 - Loud only about what is new. Lime means new, violet means act, amber means be careful.
-- Chunky borders and hard offset shadows keep it playful. Two colors keep it calm. It is a feed with a headline number, not a table with a filter bar.
+- Chunky borders and hard offset shadows keep it playful. Two colors keep it calm. In dark the hard shadow of every control, card and dialog is one deeper shade of the purple fill (`--shadow`, derived from `--solid` in `tokens.css`, never a grey), and the primary button (`btn-primary`) wears it too (`--solid-shadow`) with a border equal to its fill: one family, so no grey slab under the purple and no loud purple bars on a dialog. The label is white on the fill (5.3:1) and the fill is 3:1 against the panel; light mode is unchanged (ink border and shadow). Under forced colors the shadow goes and the 2px border stays. It is a feed with a headline number, not a table with a filter bar.
 - Mobile first: most readers are on a phone. Light and dark follow the phone's setting by default, with a manual switch. `theme-color` tints the browser bar in both, safe-area insets clear notches, and hover effects only apply where a hover exists.
 - Readable by agents: semantic markup, `data-*` hooks, JSON-LD (`jobs.jsonld`), and WebMCP tools.
 
