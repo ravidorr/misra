@@ -133,9 +133,9 @@ Jobs outside Israel are not a concern for now.
   "Remote, US", are not shown as Remote. When the posting does not say, the job is not shown as Remote by default, and
   a user can choose to include these.
 - AC: No job in Israel is dropped because we could not group its location.
-- AC: Jobs outside Israel keep working as they do today behind the existing Israel / all locations choice, and
-  regions apply to Israeli jobs only.
-- AC: A user can pick one or more regions or locations, and the choice is remembered when signed in.
+- AC: Jobs outside Israel are the "Abroad" region: nothing chosen shows roles in Israel, and "Abroad" adds the roles
+  outside Israel to any other chosen regions. The daily email never carries them.
+- AC: A user can pick one or more regions, and the choice is remembered when signed in.
 - AC: The region or location is visible on the card and available to AI assistants reading the page.
 - AC: At least 95% of jobs in Israel fall into a region, and the locations we could not group are reported so we can
   improve.
@@ -155,7 +155,7 @@ starting with the ones that matter most to users.
 - AC: Each card shows a short description of the role: the first 255 characters of the posting's description. It is
   taken as written, with no AI involved, and nothing more is forced onto the card. It is stored in a public `snippet`
   column.
-- AC: A user can open a detail view from a card. It shows the same short description (the snippet) and a prominent link
+- AC: A card shows the short description (the snippet) in full and, under it, a prominent link
   "Read full description & apply on `<Company>`" to the employer's page. The full text is not shown on the dashboard.
 - AC: Search finds jobs by words in the full posting text, not only in the title and company. It runs through a
   database function that returns matching job keys only, never the text.

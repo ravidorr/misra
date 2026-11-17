@@ -172,7 +172,7 @@ let page = 0;
 let ready = false;
 let announceTimer;
 let announcedQuery = ''; /* the search the live region last spoke for */
-let undoTimer; /* "Reset filters" can be undone for a few seconds (see hideUndo) */
+let undoTimer; /* "Reset" can be undone for a few seconds (see hideUndo) */
 let undoFilters = null;
 let view = 'roles';
 /* Signed out, the choices live in this browser: `gone` maps a job key to the day it was discarded, `starred` maps it to
@@ -189,22 +189,18 @@ const withExtras = (names, found) => [...new Set([...names, ...found])];
 const LEVELS = withExtras(DATA.names.levels, JOBS.map((j) => j.lv));
 const ROLE_TYPES = withExtras(DATA.names.roleTypes, JOBS.flatMap((j) => j.rt));
 const REGIONS = withExtras(DATA.names.regions, JOBS.flatMap((j) => j.rg));
-/* Every distinct place of a job in Israel as written in the data: its location string, and the ungrouped places
-   (including "Israel, city not given") the backend found in it. The same city can appear under several spellings. */
-const PLACES = [...new Set(JOBS.filter((j) => j.il).flatMap((j) => [j.l, ...j.lo]).filter(Boolean))].sort((a, b) =>
-  a.localeCompare(b),
-);
-const CHOICES = { levels: LEVELS, types: ROLE_TYPES, regions: REGIONS, places: PLACES };
+/* "Abroad" is a Region chip of the page only: the backend has no such region (a job outside Israel has none), so it is
+   never in `DATA.names`, in the digest filters or in the assistant endpoint. */
+const ABROAD = 'Abroad';
+const CHOICES = { levels: LEVELS, types: ROLE_TYPES, regions: [...REGIONS, ABROAD] };
 
 const defaults = () => ({
   q: '',
   company: '',
-  loc: 'il',
   sort: 'new',
   levels: [],
   types: [],
   regions: [],
-  places: [],
   remote: false,
   onlyNew: false,
   showGone: false,
@@ -215,14 +211,16 @@ const defaults = () => ({
 /* A filters object (saved in this browser or read from the account), made safe: every field the right type, minus values
    the data no longer has (a stale choice would hide jobs with no way to see why). */
 function cleanFilters(saved) {
-  const f = { ...defaults(), ...(saved && typeof saved === 'object' ? saved : {}) };
   const base = defaults();
+  /* Only the keys of today's filters are kept: the removed "Location" and "Places" (an older save) are dropped here, so
+     they are never written back. A saved "All locations" shows the Israel default; a saved place shows every place. */
+  const given = saved && typeof saved === 'object' ? saved : {};
+  const f = { ...base, ...Object.fromEntries(Object.keys(base).filter((name) => name in given).map((name) => [name, given[name]])) };
   for (const [name, known] of Object.entries(CHOICES)) {
     f[name] = Array.isArray(f[name]) ? f[name].filter((v) => known.includes(v)) : [];
   }
-  for (const name of ['q', 'company', 'loc', 'sort']) if (typeof f[name] !== 'string') f[name] = base[name];
+  for (const name of ['q', 'company', 'sort']) if (typeof f[name] !== 'string') f[name] = base[name];
   for (const name of ['remote', 'onlyNew', 'showGone', 'hideStale']) f[name] = f[name] === true;
-  if (!['il', 'all'].includes(f.loc)) f.loc = base.loc;
   if (!['new', 'co', 'title'].includes(f.sort)) f.sort = base.sort;
   if (!SIZES.includes(Number(f.size))) f.size = base.size;
   if (f.company !== '' && !JOBS.some((j) => j.c === f.company)) f.company = '';
@@ -1017,20 +1015,19 @@ function friendlyTime(stamp) {
 $('upd').textContent = friendlyTime(DATA.generated);
 $('upd').setAttribute('datetime', DATA.generated.replace(' UTC', 'Z').replace(' ', 'T'));
 
-/* A job is in scope when it is in Israel, or the choice is all locations, or it is a remote role that does not say
+/* A job is in scope when it is in Israel, or the Region chips include Abroad, or it is a remote role that does not say
    where and the user chose to include those. */
-const inScope = (j, f) => f.loc === 'all' || j.il || (f.remote && j.ru);
+const inScope = (j, f) => j.il || f.regions.includes(ABROAD) || (f.remote && j.ru);
 
-/* The regions a job counts under: its own, plus Remote for a remote role that does not say when the user chose to
-   include those. */
-const regionsOf = (j, f) => (f.remote && j.ru ? [...j.rg, REMOTE_REGION] : j.rg);
+/* The regions a job counts under: its own (Abroad for a job outside Israel), plus Remote for a remote role that does not
+   say when the user chose to include those. */
+const regionsOf = (j, f) => [...(j.il ? j.rg : [ABROAD]), ...(f.remote && j.ru ? [REMOTE_REGION] : [])];
 
-/* Regions and places are one choice: a job matches when it is in any chosen region or at any chosen place. They apply
-   to jobs in Israel (a job abroad has neither), so choosing one narrows the list to Israel. Nothing chosen means all. */
+/* The Region chips: a job matches when it is in any chosen one. Nothing chosen means every role in scope (Israel). */
 function placeMatches(j, f) {
-  if (f.regions.length + f.places.length === 0) return true;
+  if (f.regions.length === 0) return true;
   const regions = regionsOf(j, f);
-  return f.regions.some((r) => regions.includes(r)) || f.places.some((p) => j.il && (j.l === p || j.lo.includes(p)));
+  return f.regions.some((r) => regions.includes(r));
 }
 
 /* Within one filter any chosen value matches; the filters combine (a job fits the levels and the role types). A filter
@@ -1146,7 +1143,6 @@ function sync() {
   $('q').value = F.q;
   searchText();
   $('company').value = F.company;
-  $('loc').value = F.loc;
   $('sort').value = F.sort;
   $('size').value = SIZES.includes(Number(F.size)) ? Number(F.size) : defaults().size;
   $('hideStale').checked = F.hideStale;
@@ -1157,18 +1153,16 @@ function sync() {
     const chosen = F[chip.dataset.group];
     chip.setAttribute('aria-pressed', String(chip.dataset.value === '' ? chosen.length === 0 : chosen.includes(chip.dataset.value)));
   }
-  for (const box of $('places').querySelectorAll('input')) box.checked = F.places.includes(box.value);
-  $('places-title').textContent = F.places.length > 0 ? `Places (${F.places.length} chosen)` : 'Places';
   const active = activeFilterCount(F);
   $('filtersOpen').textContent = active > 0 ? `Filters (${active})` : 'Filters';
 }
 
-/* How many filters differ from the defaults, a group of values (levels, role types, regions, places) counting once.
+/* How many filters differ from the defaults, a group of values (levels, role types, regions) counting once.
    The search words are not a filter: the search box shows them. */
 function activeFilterCount(f) {
   const base = defaults();
-  const groups = ['levels', 'types', 'regions', 'places'].filter((name) => f[name].length > 0);
-  const settings = ['company', 'loc', 'sort'].filter((name) => f[name] !== base[name]);
+  const groups = ['levels', 'types', 'regions'].filter((name) => f[name].length > 0);
+  const settings = ['company', 'sort'].filter((name) => f[name] !== base[name]);
   const switches = ['remote', 'onlyNew', 'showGone', 'hideStale'].filter((name) => f[name]);
   return groups.length + settings.length + switches.length;
 }
@@ -1189,15 +1183,8 @@ function buildChips(group, names) {
   );
 }
 for (const group of ['levels', 'types', 'regions']) buildChips(group, CHOICES[group]);
-$('places').replaceChildren(
-  ...PLACES.map((place) =>
-    h('li', { 'data-place': place }, [
-      h('label', { class: 'place' }, [h('input', { type: 'checkbox', value: place }), h('span', { text: place })]),
-    ]),
-  ),
-);
 
-/* The new roles (this week, in Israel unless the Location says otherwise, not discarded) that the filters let through,
+/* The new roles (this week, in scope, not discarded) that the filters let through,
    Company aside: one count per company. The row and the headline both read it, so they never disagree, and a tap on a
    circle (which sets Company) shows at least that many new roles. */
 function newRoles() {
@@ -1247,16 +1234,16 @@ function renderStories(counts) {
 
 /* The headline: the new roles that match the filters, "95 new this week." With a filter on it says "12 new matches."
    and, when none is new, how many open roles match ("40 open matches."). Without a filter and without new roles it is
-   the open count. The Location is not a filter here: Israel is the default, and the headline does not name a place. */
+   the open count, "in Israel" unless the Abroad chip is on. */
 function renderHero(newN, filteredCount) {
-  const filtered = F.q.trim() !== '' || activeFilterCount({ ...F, company: '', loc: 'il', sort: 'new', onlyNew: false, showGone: false }) > 0;
+  const filtered = F.q.trim() !== '' || activeFilterCount({ ...F, company: '', sort: 'new', onlyNew: false, showGone: false }) > 0;
   const many = (n) => (n === 1 ? 'match.' : 'matches.');
   let top;
   let bottom;
   if (view === 'starred') [top, bottom] = ['Starred', 'roles.'];
   else if (newN > 0) [top, bottom] = [`${newN} new`, filtered ? many(newN) : 'this week.'];
   else if (filtered) [top, bottom] = filteredCount > 0 ? [`${filteredCount} open`, many(filteredCount)] : ['No', 'matches.'];
-  else [top, bottom] = [`${filteredCount} open`, F.loc === 'il' ? 'in Israel.' : 'roles.'];
+  else [top, bottom] = [`${filteredCount} open`, F.regions.includes(ABROAD) ? 'roles.' : 'in Israel.'];
   $('heroTop').textContent = top;
   $('heroBottom').textContent = bottom;
 }
@@ -1355,7 +1342,7 @@ function closedCardEl(e) {
   return h('li', {}, [art]);
 }
 
-/* The place, level, role types and team of a role, and when it was first seen: on the card and in its detail view. */
+/* The place, level, role types and team of a role, and when it was first seen: on the card. */
 const tagsEl = (j) =>
   h('p', { class: 'card-tags' }, [
     j.l && h('span', { class: 'pill', text: j.l.slice(0, MAX_LOCATION) }),
@@ -1415,6 +1402,17 @@ function cardEl(j) {
     ]),
     /* Third-party text, so text and never markup; dir="auto" lets a Hebrew posting run right to left. */
     j.sn && h('p', { class: 'card-snippet', dir: 'auto' }, [j.sn, cutMark(j)]),
+    /* The lawyer's link under every snippet: the posting in full is on the employer's page. */
+    j.sn &&
+      h('p', { class: 'card-more' }, [
+        h('a', { href: url, target: '_blank', rel: 'noopener noreferrer' }, [
+          'Read full description & apply on ',
+          j.c,
+          ' ',
+          h('span', { 'aria-hidden': 'true', text: '↗' }),
+          h('span', { class: 'sr-only', text: NEW_TAB }),
+        ]),
+      ]),
     tagsEl(j),
     h('p', { class: 'card-actions' }, [
       h('a', { class: 'btn btn-primary', href: url, target: '_blank', rel: 'noopener noreferrer' }, [
@@ -1423,19 +1421,9 @@ function cardEl(j) {
         h('span', { class: 'sr-only', text: ` to ${what}${NEW_TAB}` }),
       ]),
       starButton(k, what, starredNow),
-      /* Only a role with a snippet has more to show than the card: the detail view is the snippet and the link to the
-         employer's page. Not a [data-act]: that list is how the focus finds its place after a star or a discard. */
-      j.sn &&
-        h('button', {
-          type: 'button',
-          class: 'btn',
-          'data-detail': k,
-          'aria-label': `Details: ${what}`,
-          text: 'Details',
-        }),
       h('button', {
         type: 'button',
-        class: 'btn btn-link',
+        class: 'btn btn-pill',
         'data-act': 'toggle',
         'data-k': k,
         'aria-label': `${discarded ? 'Restore' : 'Not for me'}: ${what}`,
@@ -1510,11 +1498,14 @@ function render(focusIdx) {
   const scope = JOBS.filter((j) => inScope(j, F)).length;
   $('goneN').textContent = goneN;
   $('showGone').disabled = goneN === 0;
+  const staleN = JOBS.filter((j) => j.s && inScope(j, F)).length;
+  $('staleN').textContent = staleN;
+  $('hideStale').disabled = staleN === 0 && !F.hideStale; /* a ticked box can always be unticked */
   const { counts, total } = newRoles();
   renderHero(total, select({ ...F, company: '', showGone: false, onlyNew: false }).length);
   if (!starredView) {
     const note = searchNote();
-    const summary = `Showing ${res.length} of ${scope} open roles ${F.loc === 'il' ? 'in Israel' : 'in all locations'}. ${goneN} discarded.${note && ` ${note}`}`;
+    const summary = `Showing ${res.length} of ${scope} open roles${F.regions.includes(ABROAD) ? '' : ' in Israel'}. ${goneN} discarded.${note && ` ${note}`}`;
     $('summary').textContent = summary;
     if (searchPending()) clearTimeout(announceTimer);
     else announce(summary);
@@ -1564,10 +1555,6 @@ $('company').addEventListener('change', (e) => {
   F.company = e.target.value;
   update();
 });
-$('loc').addEventListener('change', (e) => {
-  F.loc = e.target.value;
-  update();
-});
 $('sort').addEventListener('change', (e) => {
   F.sort = e.target.value;
   update();
@@ -1601,20 +1588,13 @@ for (const chip of document.querySelectorAll('.chip[data-group]')) {
     toggleChoice(chip.dataset.group, chip.dataset.value);
   });
 }
-$('places').addEventListener('change', (e) => {
-  toggleChoice('places', e.target.value);
-});
-$('placeSearch').addEventListener('input', (e) => {
-  const words = e.target.value.trim().toLowerCase();
-  for (const item of $('places').children) item.hidden = !item.dataset.place.toLowerCase().includes(words);
-});
 $('stories').addEventListener('click', (e) => {
   const button = e.target.closest('.story');
   if (!button) return;
   F.company = F.company === button.dataset.company ? '' : button.dataset.company;
   update();
 });
-/* "Reset filters" can be undone for a few seconds: the filters as they were are kept in memory only, with no history
+/* "Reset" can be undone for a few seconds: the filters as they were are kept in memory only, with no history
    and no dialog. Any other change to the filters ends the offer (update() hides it), so it never restores stale state. */
 const UNDO_MS = 6000;
 function hideUndo() {
@@ -1627,8 +1607,6 @@ function hideUndo() {
 $('reset').addEventListener('click', () => {
   const before = F;
   F = { ...defaults(), q: F.q }; /* the search words are not a filter: the search box keeps them */
-  $('placeSearch').value = '';
-  for (const item of $('places').children) item.hidden = false;
   update();
   undoFilters = before;
   $('resetNote').replaceChildren(h('span', { text: 'Filters reset.' }), h('button', { type: 'button', class: 'btn btn-pill', id: 'undoReset', text: 'Undo' }));
@@ -1708,42 +1686,6 @@ $('list').addEventListener('click', (e) => {
   if (button.dataset.act === 'star') setChoice(item, isStarred(k) ? null : 'star');
   else setChoice(item, isDiscarded(k) ? null : 'discard');
   render(index);
-});
-
-/* The detail view of a role (PLAN.md step 7.3, FR-4 AC 5): one dialog, outside the list, filled for the role. It shows
-   the snippet in full and the link to the employer's page for the rest; the full text of the posting is never in the
-   page. The focus goes to its title (the other dialogs do the same) and comes back to the role's button on closing. When
-   that button is gone (the list was drawn again meanwhile), it goes to the list heading. */
-const detail = $('detailDialog');
-let detailKey = '';
-
-function openDetail(j) {
-  detailKey = key(j);
-  $('detailCompany').textContent = j.c;
-  $('detailTitle').textContent = j.t;
-  $('detailTags').replaceChildren(...tagsEl(j).childNodes);
-  $('detailText').replaceChildren(j.sn, cutMark(j) || '');
-  $('detailLink').replaceChildren(
-    'Read full description & apply on ',
-    j.c,
-    ' ',
-    h('span', { 'aria-hidden': 'true', text: '↗' }),
-    h('span', { class: 'sr-only', text: NEW_TAB }),
-  );
-  $('detailLink').href = safeUrl(j.u);
-  detail.showModal();
-  $('detailTitle').focus();
-}
-
-detail.addEventListener('close', () => {
-  const back = [...$('list').querySelectorAll('[data-detail]')].find((button) => button.dataset.detail === detailKey);
-  (back ?? $('list-h')).focus();
-});
-$('detailClose').addEventListener('click', () => detail.close());
-
-$('list').addEventListener('click', (e) => {
-  const button = e.target.closest('[data-detail]');
-  if (button) openDetail(JOB_BY_KEY.get(button.dataset.detail));
 });
 
 $('starredView').addEventListener('click', () => {
@@ -1853,7 +1795,10 @@ const asList = (value) => (Array.isArray(value) ? value : [value]).filter((v) =>
 function argumentWarnings(a) {
   const warnings = [];
   if ('category' in a) warnings.push('category was replaced by levels and roleTypes and is ignored');
-  for (const [arg, known] of [['levels', LEVELS], ['roleTypes', ROLE_TYPES], ['regions', REGIONS], ['locations', PLACES]]) {
+  for (const old of ['allLocations', 'locations']) {
+    if (old in a) warnings.push(`${old} was replaced by the "${ABROAD}" value of regions and is ignored`);
+  }
+  for (const [arg, known] of [['levels', LEVELS], ['roleTypes', ROLE_TYPES], ['regions', CHOICES.regions]]) {
     const given = a[arg] === undefined || a[arg] === null ? [] : [a[arg]].flat();
     for (const value of given) {
       if (typeof value !== 'string') warnings.push(`${arg}: ${JSON.stringify(value)} is not a string and is ignored`);
@@ -1869,12 +1814,10 @@ function search(a) {
   f.company = a.company ?? '';
   f.onlyNew = Boolean(a.newOnly);
   f.showGone = Boolean(a.includeDiscarded);
-  f.loc = a.allLocations ? 'all' : 'il';
   f.sort = { newest: 'new', company: 'co', title: 'title' }[a.sort] ?? 'new';
   f.levels = asList(a.levels);
   f.types = asList(a.roleTypes);
   f.regions = asList(a.regions);
-  f.places = asList(a.locations);
   f.remote = Boolean(a.includeRemoteNotSaid);
   const warnings = argumentWarnings(a);
   const res = select(f);
@@ -1912,15 +1855,9 @@ const TOOLS = [
         },
         regions: {
           type: 'array',
-          items: { type: 'string', enum: REGIONS },
+          items: { type: 'string', enum: CHOICES.regions },
           description:
-            'Regions of Israel to include (any of them, together with locations). Choosing regions or locations returns roles in Israel only. Empty or missing means every region.',
-        },
-        locations: {
-          type: 'array',
-          items: { type: 'string' },
-          description:
-            'Exact places in Israel as written in the data (see list_filters), for places that are not grouped in a region. Combined with regions as "any of them".',
+            `Regions of Israel to include (any of them), and "${ABROAD}" for roles outside Israel. Empty or missing means every region of Israel.`,
         },
         includeRemoteNotSaid: {
           type: 'boolean',
@@ -1930,7 +1867,6 @@ const TOOLS = [
         company: { type: 'string', description: 'Exact company name.' },
         newOnly: { type: 'boolean', description: 'Only roles first seen in the last 7 days.' },
         includeDiscarded: { type: 'boolean' },
-        allLocations: { type: 'boolean', description: 'Include roles outside Israel.' },
         sort: { type: 'string', enum: ['newest', 'company', 'title'] },
         limit: { type: 'integer', minimum: 1, maximum: 100, description: 'Default 20.' },
       },
@@ -1941,17 +1877,17 @@ const TOOLS = [
   {
     name: 'list_filters',
     description:
-      'List the values the search_jobs filters accept, with the number of open roles in Israel for each: levels, roleTypes, regions and locations (the distinct places in Israel as written in the data).',
+      'List the values the search_jobs filters accept, with the number of open roles in Israel for each: levels, roleTypes and regions ("Abroad" counts the roles outside Israel).',
     inputSchema: { type: 'object', properties: {} },
     annotations: { readOnlyHint: true },
     execute: () => {
-      const counts = (names, of) => names.map((name) => ({ name, roles: JOBS.filter((j) => j.il && of(j).includes(name)).length }));
+      const counts = (names, of) =>
+        names.map((name) => ({ name, roles: JOBS.filter((j) => (name === ABROAD ? !j.il : j.il && of(j).includes(name))).length }));
       return Promise.resolve(
         reply({
           levels: counts(LEVELS, (j) => [j.lv]),
           roleTypes: counts(ROLE_TYPES, (j) => j.rt),
-          regions: counts(REGIONS, (j) => j.rg),
-          locations: counts(PLACES, (j) => [j.l, ...j.lo]),
+          regions: counts(CHOICES.regions, (j) => j.rg),
         }),
       );
     },
@@ -2089,7 +2025,7 @@ if (modelContext) {
    them when the user presses "Use the page filters now"; it is a read-only copy taken at that moment, so later
    changes to the page's filters, such as a quick search, never reach the email by themselves. */
 globalThis.misraEmailFilters = () => ({
-  regions: [...F.regions],
+  regions: F.regions.filter((region) => region !== ABROAD), /* the email carries roles in Israel only */
   levels: [...F.levels],
   role_types: [...F.types],
   keywords: F.q.trim().slice(0, MAX_QUERY),

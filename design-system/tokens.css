@@ -38,6 +38,8 @@
   --accent: #6c47ff;
   --solid: #6c47ff;
   --on-solid: #fff;
+  --solid-line: var(--line); /* the primary button's border and shadow: the ink in light, the fill itself in dark */
+  --solid-shadow: var(--shadow);
   --accent-bg: #e6deff;
   --lime: #d4ff4f;
   --on-lime: #111;
@@ -61,6 +63,8 @@
     --accent: #a58fff;
     --accent-bg: #2b2447;
     --warn-bg: #4a3512;
+    --solid-line: var(--solid);
+    --solid-shadow: var(--line);
   }
 }
 
@@ -76,4 +80,6 @@
   --accent: #a58fff;
   --accent-bg: #2b2447;
   --warn-bg: #4a3512;
+  --solid-line: var(--solid);
+  --solid-shadow: var(--line);
 }

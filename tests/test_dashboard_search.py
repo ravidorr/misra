@@ -203,10 +203,10 @@ async def test_a_search_of_one_or_two_characters_says_three_are_needed_and_the_n
 
 
 def opener(page: Page, job_id: str = "title") -> Locator:
-    return page.locator(f"article[data-job-id='Acme|{job_id}'] [data-detail]")
+    return page.locator(f"article[data-job-id='Acme|{job_id}'] [data-act=toggle]")
 
 
-ON_OPENER = "document.activeElement.matches(\"article[data-job-id='Acme|title'] [data-detail]\")"
+ON_OPENER = "document.activeElement.matches(\"article[data-job-id='Acme|title'] [data-act=toggle]\")"
 
 
 def with_snippets() -> Backend:
@@ -216,39 +216,12 @@ def with_snippets() -> Backend:
     return fake
 
 
-async def test_a_late_answer_keeps_the_focus_in_the_open_dialog_and_gives_it_back_to_the_button(
-    page: Page, site: Path
-) -> None:
-    fake = with_snippets()
-    await serve(page, site, backend=fake)
-    await page.fill("#q", "rust")
-    await asked(page, fake)
-    await opener(page).click()  # the answer has not come
-    await expect(page.locator("#detailDialog")).to_be_visible()
-    await expect(page.locator("#list article")).to_have_count(2, timeout=SEARCH_WAIT)  # drawn again behind the dialog
-    assert await page.evaluate("document.activeElement.id") == "detailTitle"
-    await page.keyboard.press("Escape")
-    assert await page.evaluate(ON_OPENER)  # the same role's button, found in the new list
-
-
 async def test_a_late_answer_does_not_take_the_focus_from_a_button_the_reader_is_on(page: Page, site: Path) -> None:
     fake = with_snippets()
     await serve(page, site, backend=fake)
     await page.fill("#q", "rust")
     await asked(page, fake)
     await opener(page).focus()
-    await expect(page.locator("#list article")).to_have_count(2, timeout=SEARCH_WAIT)
-    assert await page.evaluate(ON_OPENER)
-
-
-async def test_an_answer_just_after_the_dialog_closed_does_not_lose_the_focus(page: Page, site: Path) -> None:
-    fake = with_snippets()
-    await serve(page, site, backend=fake)
-    await page.fill("#q", "rust")
-    await asked(page, fake)
-    await opener(page).click()
-    await page.keyboard.press("Escape")
-    assert await page.evaluate(ON_OPENER)
     await expect(page.locator("#list article")).to_have_count(2, timeout=SEARCH_WAIT)
     assert await page.evaluate(ON_OPENER)
 
@@ -320,9 +293,9 @@ async def test_the_text_matches_combine_with_the_other_filters(page: Page, site:
     await serve(page, site, backend=fake)
     await page.fill("#q", "rust")
     await expect(page.locator("#list article")).to_have_count(2, timeout=SEARCH_WAIT)
-    assert await shown(page) == {"title", "text"}  # "far" is abroad: the location filter still applies
-    await page.select_option("#loc", "all")
-    assert await shown(page) == {"title", "text", "far"}
+    assert await shown(page) == {"title", "text"}  # "far" is abroad: Israel is the default
+    await page.click(".chip[data-group=regions][data-value=Abroad]")
+    assert await shown(page) == {"far"}
 
 
 async def test_an_answer_one_short_of_the_cap_has_no_note_and_a_hebrew_word_is_a_word(page: Page, site: Path) -> None:

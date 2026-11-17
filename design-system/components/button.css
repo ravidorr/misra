@@ -23,8 +23,10 @@
 }
 
 .btn-primary {
+  border-color: var(--solid-line);
   background: var(--solid);
   color: var(--on-solid);
+  box-shadow: 3px 3px 0 var(--solid-shadow);
 }
 
 .btn-danger {
@@ -65,11 +67,19 @@
     transform: translate(-1px, -1px);
     box-shadow: 4px 4px 0 var(--shadow);
   }
+
+  .btn.btn-primary:not(.btn-link):hover {
+    box-shadow: 4px 4px 0 var(--solid-shadow);
+  }
 }
 
 .btn:not(.btn-link):active {
   transform: translate(2px, 2px);
   box-shadow: 1px 1px 0 var(--shadow);
+}
+
+.btn.btn-primary:not(.btn-link):active {
+  box-shadow: 1px 1px 0 var(--solid-shadow);
 }
 
 /* Icon-only theme switch: one icon per mode, picked by the theme on <html> so it never flashes. */

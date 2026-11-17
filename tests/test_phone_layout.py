@@ -257,7 +257,6 @@ async def test_every_control_is_a_44px_target_on_a_phone(page: Page, crowd: Path
         assert box["width"] >= TAP, name
         assert 0 <= box["x"] <= box["x"] + box["width"] <= width, name
     await open_sheet(page)
-    await page.locator("#places-title").click()
     assert await page.locator(SHEET).evaluate(
         "e => e.scrollWidth <= e.clientWidth"
     )  # the sheet does not scroll sideways
@@ -728,9 +727,8 @@ async def test_the_headline_follows_the_filters(page: Page, crowd: Path, level: 
     assert await hero(page) == words
 
 
-async def test_the_headline_for_all_locations_and_for_starred_names_no_place(page: Page, crowd: Path) -> None:
+async def test_the_headline_for_starred_names_no_place(page: Page, crowd: Path) -> None:
     await open_page(page, crowd, 1650)
-    await page.select_option("#loc", "all")
     assert await hero(page) == f"{HIRING_COMPANIES} new this week."
     await page.click("#starredView")
     assert await hero(page) == "Starred roles."
@@ -778,8 +776,8 @@ async def test_the_headline_counts_open_roles_when_nothing_is_new(page: Page, st
     await open_page(page, stale, 1650)
     assert await hero(page) == "3 open in Israel."
     assert await page.locator("#hiring").is_hidden()
-    await page.select_option("#loc", "all")
-    assert await hero(page) == "4 open roles."
+    await page.click(".chip[data-group=regions][data-value=Abroad]")
+    assert await hero(page) == "1 open match."  # Abroad is a region like the others: it shows the roles abroad
 
 
 @pytest.fixture
@@ -797,15 +795,15 @@ def abroad(db: sqlite3.Connection, workdir: Path, monkeypatch: pytest.MonkeyPatc
     return build_site(db, workdir, fill)
 
 
-async def test_all_locations_adds_the_new_roles_abroad_to_the_headline_and_the_row(page: Page, abroad: Path) -> None:
+async def test_the_abroad_region_shows_the_new_roles_abroad_in_the_headline_and_row(page: Page, abroad: Path) -> None:
     await open_page(page, abroad, 1650)
     assert await hero(page) == f"{HIRING_COMPANIES} new this week."
     await open_hiring(page)
     assert await page.locator("#stories .story").count() == HIRING_COMPANIES
-    await page.select_option("#loc", "all")
-    assert await hero(page) == f"{HIRING_COMPANIES + 1} new this week."
-    await open_hiring(page)
-    assert await page.locator("#stories .story").count() == HIRING_COMPANIES  # the 15 most, Far company is the 16th
+    await page.click(".chip[data-group=regions][data-value=Abroad]")
+    assert await hero(page) == "1 new match."  # only the roles abroad
+    assert await page.locator("#stories .story").count() == 1
+    assert await page.locator("#stories .story").get_attribute("data-company") == "Far company"
 
 
 async def test_a_tap_leaves_the_headline_and_the_other_circles_alone(page: Page, crowd: Path) -> None:
