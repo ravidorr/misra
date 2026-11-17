@@ -171,7 +171,7 @@ async def test_an_answer_at_the_cap_says_some_matches_may_be_missing_and_shows_w
     fake.text_hits = {"rust": [["Acme", "text"], *([["Acme", f"x{n}"] for n in range(2999)])]}
     await serve(page, site, backend=fake)
     await page.fill("#q", "rust")
-    capped = "Too many description matches, so some may be missing."
+    capped = "Too many description matches, so some may be missing. Add a word to narrow it."
     await said(page, f"Showing 2 of 3 open roles in Israel. 0 discarded. {capped}")
     assert await shown(page) == {"title", "text"}
 
@@ -255,3 +255,18 @@ async def test_the_text_matches_combine_with_the_other_filters(page: Page, site:
     assert await shown(page) == {"title", "text"}  # "far" is abroad: the location filter still applies
     await page.select_option("#loc", "all")
     assert await shown(page) == {"title", "text", "far"}
+
+
+async def test_an_answer_one_short_of_the_cap_has_no_note_and_a_hebrew_word_is_a_word(page: Page, site: Path) -> None:
+    fake = backend()
+    fake.text_hits = {"rust": [["Acme", "text"], *([["Acme", f"x{n}"] for n in range(2998)])]}  # 2999 keys
+    await serve(page, site, backend=fake)
+    await page.fill("#q", "rust")
+    await expect(page.locator("#list article")).to_have_count(2, timeout=SEARCH_WAIT)
+    assert await page.locator("#summary").inner_text() == "Showing 2 of 3 open roles in Israel. 0 discarded."
+    await page.fill("#q", "מוצר")  # a word of three letters or more in Hebrew is sent
+    for _ in range(100):
+        if fake.searches[-1] == "מוצר":
+            break
+        await page.wait_for_timeout(50)
+    assert fake.searches == ["rust", "מוצר"]

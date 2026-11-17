@@ -1046,7 +1046,7 @@ const SEARCH_KEPT = 30; /* answers kept */
 const SEARCH_CAP = 3000; /* the most keys the function returns: a full answer may be missing some */
 const SEARCH_NOTES = {
   failed: 'Description search failed. These results match titles, companies and places only.',
-  capped: 'Too many description matches, so some may be missing.',
+  capped: 'Too many description matches, so some may be missing. Add a word to narrow it.',
   short: 'Searching inside job descriptions needs a word of 3 or more letters or digits.',
 };
 const textKeys = new Map();
@@ -1095,7 +1095,7 @@ function searchText() {
       if (capped) textCapped.add(query);
       if (searchFailed === query) searchFailed = '';
     } catch {
-      searchFailed = query; /* the title match stays and says so; a later change asks again */
+      if (!textKeys.has(query)) searchFailed = query; /* an older ask of the same words may fail after a newer one answered; the title match stays and says so; a later change asks again */
     }
     if (ready && view === 'roles' && searchQuery(F.q) === query) render();
   }, SEARCH_DELAY_MS);
@@ -1476,7 +1476,7 @@ function drawList(nodes, keepFocus) {
   list.replaceChildren(...nodes);
   if (!held || !keepFocus) return;
   const again = [...list.querySelectorAll('article')].find((art) => art.dataset.jobId === jobId);
-  (again?.querySelectorAll('a[href], button')[spot] ?? $('list-h')).focus();
+  (again?.querySelectorAll('a[href], button')[spot] ?? $('list-h')).focus({ preventScroll: true }); /* a late answer must not scroll the page */
 }
 
 function render(focusIdx) {
@@ -1505,6 +1505,7 @@ function render(focusIdx) {
         text: starredView ? 'No starred roles yet. Use Star on a role to keep it here.' : 'No roles match. Change the search or the filters.',
       }),
     ], focusIdx === undefined);
+    if (focusIdx !== undefined) $('list-h').focus(); /* the last role was starred or discarded: the focus stays on the page's list */
     $('pager').hidden = true;
     return;
   }
