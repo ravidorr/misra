@@ -555,6 +555,18 @@ async def test_enter_in_a_field_sends_and_esc_closes_an_idle_form_and_forgets_th
     assert len(backend.requests) == 1
 
 
+async def test_the_corner_close_closes_an_idle_form_sends_nothing_and_gives_the_focus_back(
+    page: Page, site: Path
+) -> None:
+    backend = await ready(page, site)
+    await open_form(page)
+    await fill(page)
+    await page.click("#reportClose")
+    await expect(page.locator(DIALOG)).to_be_hidden()
+    assert await page.evaluate("document.activeElement.id") == "reportOpen"
+    assert backend.requests == []
+
+
 async def test_cancel_closes_the_form_and_sends_nothing(page: Page, site: Path) -> None:
     backend = await ready(page, site)
     await open_form(page)
