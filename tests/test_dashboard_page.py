@@ -1332,50 +1332,40 @@ async def test_reset_keeps_the_search_words(page: Page, site: Path) -> None:
     assert json.loads(await page.evaluate("localStorage.getItem('il-jobs-filters-v3')"))["q"] == "product"
 
 
-async def test_reset_can_be_undone_for_a_few_seconds(page: Page, site: Path) -> None:
+async def test_reset_is_announced_to_screen_readers_and_shows_nothing_new(page: Page, site: Path) -> None:
     await serve_filters(page, site)
     await page.fill("#q", "product")
     await page.click(".chip[data-group=levels][data-value=Junior]")
+    await page.evaluate(
+        """() => {
+            window.heard = [];
+            new MutationObserver(() => window.heard.push(document.getElementById('status').textContent))
+                .observe(document.getElementById('status'), { childList: true, characterData: true, subtree: true });
+        }"""
+    )
+    foot = page.locator("#moreFilters .sheet-foot")
+    before = (await foot.bounding_box() or {})["height"]
     await page.click("#reset")
-    note = page.locator("#resetNote")
-    assert await note.get_attribute("role") == "status"
-    await expect(note).to_contain_text("Filters reset.")
-    undo = page.locator("#undoReset")
-    box = await undo.bounding_box()
-    assert box is not None
-    assert box["height"] >= TAP_MIN
-    await page.fill("#q", "product manager")  # typed while the offer shows: the search words stay what they are now
-    assert await note.inner_text() == ""  # any other change ends the offer: it would restore stale state
-    await page.click(".chip[data-group=levels][data-value=Junior]")
-    await page.click("#reset")
-    await page.click("#undoReset")
-    assert await page.locator("#levels .chip[aria-pressed=true]").all_text_contents() == ["Junior"]
-    assert await page.input_value("#q") == "product manager"
-    assert await note.inner_text() == ""
-    assert await page.evaluate("document.activeElement.id") == "reset"  # the focus goes back, never to the page
-    saved = json.loads(await page.evaluate("localStorage.getItem('il-jobs-filters-v3')"))
-    assert saved["levels"] == ["Junior"]
+    await page.wait_for_function("window.heard.includes('Filters reset.')")
+    status = page.locator("#status")
+    assert await status.get_attribute("role") == "status"
+    assert "sr-only" in (await status.get_attribute("class") or "")
+    assert await foot.evaluate("el => [...el.children].map((c) => c.id)") == ["reset", "filtersDone"]
+    assert (await foot.bounding_box() or {})["height"] == before  # nothing visible was added to the footer
+    for gone in ("#resetNote", "#undoReset"):
+        await expect(page.locator(gone)).to_have_count(0)
+    assert await page.locator("#levels .chip[aria-pressed=true]").all_text_contents() == ["All"]
+    assert await page.input_value("#q") == "product"  # the search words stay
+    await expect(status).to_contain_text("Showing")  # the results summary takes the line over
 
 
-async def test_reset_puts_the_sort_and_the_checkbox_back_and_undo_restores_them(page: Page, site: Path) -> None:
+async def test_reset_puts_the_sort_and_the_checkbox_back(page: Page, site: Path) -> None:
     await serve_filters(page, site)
     await page.select_option("#sort", "co")
     await page.check("#hideStale")
     await page.click("#reset")
     assert await page.input_value("#sort") == "new"
     assert not await page.is_checked("#hideStale")
-    await page.click("#undoReset")
-    assert await page.input_value("#sort") == "co"
-    assert await page.is_checked("#hideStale")
-
-
-async def test_the_reset_offer_goes_away_by_itself(page: Page, site: Path) -> None:
-    await serve_filters(page, site)
-    await page.click(".chip[data-group=levels][data-value=Junior]")
-    await page.click("#reset")
-    await expect(page.locator("#undoReset")).to_have_count(1)
-    await expect(page.locator("#resetNote")).to_be_empty(timeout=9000)
-    assert await page.locator("#levels .chip[aria-pressed=true]").all_text_contents() == ["All"]
 
 
 async def test_a_filter_saved_with_the_removed_location_or_places_shows_the_default_and_is_not_written_back(

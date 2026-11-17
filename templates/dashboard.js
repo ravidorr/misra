@@ -143,8 +143,6 @@ let page = 0;
 let ready = false;
 let announceTimer;
 let announcedQuery = ''; /* the search the live region last spoke for */
-let undoTimer; /* "Reset" can be undone for a few seconds (see hideUndo) */
-let undoFilters = null;
 let view = 'roles';
 /* Signed out, the choices live in this browser: `gone` maps a job key to the day it was discarded, `starred` maps it to
    what the page needs to show it later (company, id, title, location, link). Signed in, they live in the account (see
@@ -1112,7 +1110,6 @@ function select(f) {
 }
 
 function sync() {
-  hideUndo(); /* every change to F, from the reader or from the account, ends the offer of an undo (reset sets it after) */
   $('q').value = F.q;
   searchText();
   $('company').value = F.company;
@@ -1567,28 +1564,10 @@ $('stories').addEventListener('click', (e) => {
   F.company = F.company === button.dataset.company ? '' : button.dataset.company;
   update();
 });
-/* "Reset" can be undone for a few seconds: the filters as they were are kept in memory only, with no history
-   and no dialog. Any other change to the filters ends the offer (update() hides it), so it never restores stale state. */
-const UNDO_MS = 6000;
-function hideUndo() {
-  clearTimeout(undoTimer);
-  undoFilters = null;
-  const note = $('resetNote');
-  if (note.contains(document.activeElement)) $('reset').focus(); /* the focus never falls to the page when it goes */
-  note.replaceChildren();
-}
 $('reset').addEventListener('click', () => {
-  const before = F;
   F = { ...defaults(), q: F.q }; /* the search words are not a filter: the search box keeps them */
   update();
-  undoFilters = before;
-  $('resetNote').replaceChildren(h('span', { text: 'Filters reset.' }), h('button', { type: 'button', class: 'btn btn-pill', id: 'undoReset', text: 'Undo' }));
-  undoTimer = setTimeout(hideUndo, UNDO_MS);
-});
-$('resetNote').addEventListener('click', (e) => {
-  if (!e.target.closest('#undoReset')) return;
-  F = { ...undoFilters, q: F.q }; /* the search words typed meanwhile stay */
-  update();
+  $('status').textContent = 'Filters reset.'; /* heard by screen readers; the results summary replaces it a moment later */
 });
 /* The filters are a panel in the page on a wide screen and a bottom sheet on a phone. It is one native <dialog>: open
    as a panel (show) on a wide screen, and opened modally (showModal) from "Filters" on a narrow one, where the browser

@@ -4,6 +4,10 @@ All notable changes are documented here. Format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
+### Removed
+
+- The "Filters reset." line with an "Undo" button that showed for 6 seconds after "Reset" (`#resetNote`, its timer and the code that restored the filters), and its `.reset-note` styles. "Reset" is unchanged and still acts at once; the `sr-only` status region now says "Filters reset." so screen readers still hear it.
+
 ### Added
 
 - A Copy button under every code block of the legal pages (the address on "Connect your assistant", the command for Claude Code), in `templates/theme.js`.
