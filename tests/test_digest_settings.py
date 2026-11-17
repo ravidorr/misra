@@ -1019,10 +1019,17 @@ async def test_the_confirmation_disclosure_is_read_once_in_every_state_the_form_
     await page.click("#digestSend")
     await expect(page.locator("#digestState")).to_contain_text("start only after you open it")
     await assert_disclosed_once(page, line=True)
+    await page.fill("#digestAddress", OTHER)  # the note names the first address: for another one the paragraph says it
+    await assert_disclosed_once(page, line=False, other=True)
+    await page.fill("#digestAddress", EMAIL)
+    await assert_disclosed_once(page, line=True)
 
     # a preference saved while waiting replaces the waiting words with "Saved.": the paragraph must say it again
     await page.check("input[name=digestFrequency][value=weekly]")
     await expect(page.locator("#digestState")).to_have_text("Saved. Your next job alert uses this.")
+    await assert_disclosed_once(page, line=False)
+    await page.click("#digestUseFilters")  # "Copied." or "Saved." replaces the waiting words alike
+    await expect(page.locator("#digestState")).not_to_contain_text("start only after")
     await assert_disclosed_once(page, line=False)
 
     # the waiting words themselves (the dialog read again)
@@ -1071,6 +1078,9 @@ async def test_the_confirmation_disclosure_is_read_once_when_on_and_after_an_uns
     assert await state_of(page) == "unsubscribed"
     # the line says a new confirmation email comes first, not that nothing is sent before it: the paragraph stays whole
     await assert_disclosed_once(page, line=False)
+    await page.click("#digestSend")  # starting again: the outcome says it, so the paragraph keeps the two sentences
+    await expect(page.locator("#digestState")).to_contain_text("start only after you open it")
+    await assert_disclosed_once(page, line=True)
 
 
 async def test_while_the_settings_are_not_read_the_form_with_the_disclosure_is_not_shown(
