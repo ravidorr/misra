@@ -1357,6 +1357,18 @@ async def test_reset_can_be_undone_for_a_few_seconds(page: Page, site: Path) -> 
     assert saved["levels"] == ["Junior"]
 
 
+async def test_reset_puts_the_sort_and_the_checkbox_back_and_undo_restores_them(page: Page, site: Path) -> None:
+    await serve_filters(page, site)
+    await page.select_option("#sort", "co")
+    await page.check("#hideStale")
+    await page.click("#reset")
+    assert await page.input_value("#sort") == "new"
+    assert not await page.is_checked("#hideStale")
+    await page.click("#undoReset")
+    assert await page.input_value("#sort") == "co"
+    assert await page.is_checked("#hideStale")
+
+
 async def test_the_reset_offer_goes_away_by_itself(page: Page, site: Path) -> None:
     await serve_filters(page, site)
     await page.click(".chip[data-group=levels][data-value=Junior]")
