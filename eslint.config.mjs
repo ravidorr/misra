@@ -1,6 +1,9 @@
 import js from '@eslint/js';
+import noEmDash from 'eslint-plugin-no-em-dash';
+import noEmoji from 'eslint-plugin-no-emoji';
 import globals from 'globals';
 import tseslint from 'typescript-eslint';
+import { LAWYER_FILES } from './scripts/lint-text.mjs';
 
 export default tseslint.config(
   // docs/ is generated from templates/ (linted there); vendor/ holds unmodified third-party files.
@@ -25,6 +28,20 @@ export default tseslint.config(
       '@typescript-eslint/no-explicit-any': 'error',
     },
   },
+  {
+    // No emoji and no em dash in strings (Markdown and Python: scripts/lint-text.mjs).
+    plugins: { 'no-emoji': noEmoji, 'no-em-dash': noEmDash },
+    rules: { 'no-emoji/no-emoji': 'error', 'no-em-dash/no-em-dash': 'error' },
+  },
+  ...(LAWYER_FILES.length > 0
+    ? [
+        {
+          // The lawyer's approved wording is not ours to change (see LAWYER_FILES); the emoji rule still applies.
+          files: LAWYER_FILES.filter((file) => file.endsWith('.js')),
+          rules: { 'no-em-dash/no-em-dash': 'off' },
+        },
+      ]
+    : []),
   {
     files: ['**/*.{js,mjs,cjs}'],
     languageOptions: { globals: globals.node },

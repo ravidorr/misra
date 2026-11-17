@@ -32,7 +32,7 @@ Observations about live sites below come from checks made on 2026-11-14 and may 
 
 ## Dashboard and site review (added 2026-11-17, from a hand review of the live site)
 
-Screenshots are in `todo-images/`. Rules for all items here: KISS and DRY (prefer removing text and controls over adding
+Rules for all items here: KISS and DRY (prefer removing text and controls over adding
 them). Where an item says "ask", get the opinion of Claude Design (a design pass on the screen), the UI/UX expert and,
 for wording, the technical-writer agent, before building; the maintainer may be wrong, so say so if the experts
 disagree. The wording of `PRIVACY.md`, `TERMS.md` and `ASSISTANT.md` is the lawyer's (`AGENTS.md`): a change to them
@@ -43,9 +43,6 @@ waits for him. Do not write the maintainer's email address in this repository (i
 - [ ] **Follow-ups from the modals review** (the experts' reasons are in the PR that closed the rest of this section).
   The report dialog and the filters sheet keep their "Close" buttons: move them to the corner (x)
   (`.dialog-close`, `design-system/components/dialog.css`) so all dialogs match.
-- [ ] **Google's account chooser says "to continue to `<project>.supabase.co`"** (![google account chooser](todo-images/google-account-chooser.webp)). Find how
-  to show "Misra" or our own domain instead: the usual ways are the OAuth consent screen branding in Google Cloud and
-  a Supabase custom domain (check whether it needs a paid plan and what it costs before doing anything).
 
 ### Turn the contact form on
 
@@ -60,16 +57,6 @@ waits for him. Do not write the maintainer's email address in this repository (i
   - For his next round (not asked yet, his words are not changed here): the "What we store" bullet for the form is
     assembled from his approved sentences, so he should confirm it; "The short version" still says the spam counter
     exists only "if you report a site"; the "Provider logs" bullet lists the Edge Functions without the contact form.
-  - His em dash answer covered `ASSISTANT.md` and `PRIVACY.md` only. No other lawyer-approved text (`TERMS.md`,
-    `SECURITY.md`, `supabase/email-texts.md`, `templates/email.js`, `templates/digest.js`, `templates/dashboard.html`) has an
-    em dash today, so there is nothing to ask him.
-
-### Tooling
-
-- [ ] **Linters.** The project already runs ruff, ESLint, Stylelint, html-validate and markdownlint (`npm run lint`).
-  Check the siblings' configs for what ours lacks, and add `eslint-plugin-no-emoji` and `eslint-plugin-no-em-dash` (check
-  that both exist, are maintained and work with our ESLint version first). Done when `npm run lint` fails on an emoji
-  or an em dash in the checked files.
 
 ## Yearly security review
 

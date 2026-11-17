@@ -1216,12 +1216,6 @@ dialog.sheet[hidden],
   margin-top: var(--space-3);
 }
 
-.filter-hint {
-  margin: var(--space-3) 0 0;
-  color: var(--muted);
-  font-size: var(--text-sm);
-}
-
 .search {
   display: block;
   margin-bottom: var(--space-3);

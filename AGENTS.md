@@ -9,7 +9,7 @@ Daily batch pipeline that crawls career pages, keeps its history in Supabase, an
 ## Commands
 
 - Install: `npm ci`, then `python3 -m venv .venv && .venv/bin/pip install -e '.[dev]'`
-- Lint: `npm run lint` (ruff, ESLint, Stylelint, html-validate, markdownlint)
+- Lint: `npm run lint` (ruff, ESLint, Stylelint, html-validate, markdownlint; no emoji and no em dash in any source file, the lawyer's files included: `scripts/lint-text.mjs`)
 - Typecheck: `npm run typecheck` (mypy, strict)
 - Test: `npm run test`
 - Coverage: `npm run test:coverage` (pytest, 100% line and branch coverage; mandatory on push and in CI)

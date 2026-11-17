@@ -1260,6 +1260,8 @@ new ResizeObserver(() => {
 }).observe($('hiring'));
 
 const NEW_TAB = ' (opens in a new tab)';
+// The north-east arrow (U+2197) is text, but no-emoji treats it as an emoji when it is written in a string.
+const EXTERNAL_ARROW = String.fromCodePoint(0x2197);
 const MAX_LOCATION = 80;
 /* Separator of the list-valued data-* hooks; places can contain commas, never a bar. */
 const LIST_SEP = '|';
@@ -1382,7 +1384,7 @@ function cardEl(j) {
           'Read full description & apply on ',
           j.c,
           ' ',
-          h('span', { 'aria-hidden': 'true', text: '↗' }),
+          h('span', { 'aria-hidden': 'true', text: EXTERNAL_ARROW }),
           h('span', { class: 'sr-only', text: NEW_TAB }),
         ]),
       ]),
@@ -1390,7 +1392,7 @@ function cardEl(j) {
     h('p', { class: 'card-actions' }, [
       h('a', { class: 'btn btn-primary', href: url, target: '_blank', rel: 'noopener noreferrer' }, [
         'Apply ',
-        h('span', { 'aria-hidden': 'true', text: '↗' }),
+        h('span', { 'aria-hidden': 'true', text: EXTERNAL_ARROW }),
         h('span', { class: 'sr-only', text: ` to ${what}${NEW_TAB}` }),
       ]),
       starButton(k, what, starredNow),
