@@ -14,6 +14,10 @@ if (loaded.enabled && 'missing' in loaded) {
   console.error('mcp: missing or malformed secrets:', loaded.missing.join(', '));
 }
 
+if (!loaded.enabled && (Deno.env.get('ASSISTANT_ENDPOINT_ENABLED') ?? '') !== '') {
+  console.warn('mcp: ASSISTANT_ENDPOINT_ENABLED is set but is not exactly "true", so the endpoint stays off');
+}
+
 Deno.serve((request) =>
   handleMcp(request, {
     enabled: loaded.enabled,

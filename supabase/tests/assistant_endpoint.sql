@@ -19,6 +19,7 @@ begin
   assert public.assistant_reserve('2026-11-17', 'h2', 2) = 'ok', 'another caller shares the limit';
   assert public.assistant_reserve('2026-11-18', 'h1', 2) = 'ok', 'a new day does not reset';
   assert public.assistant_reserve('2026-11-18', 'h3', 0) = 'limit', 'a limit of 0 allowed a call';
+  assert public.assistant_reserve('2026-11-18', 'h5', null) = 'limit', 'a null limit allowed a call';
   -- rows older than yesterday go with the next call
   assert not exists (select 1 from public.assistant_ip_limits where day < '2026-11-17'), 'an old row stayed';
   perform public.assistant_reserve('2026-11-20', 'h4', 2);

@@ -18,14 +18,14 @@ describe('the filter values the assistant is told', () => {
   it('are the role types of classify.py, then Other', () => {
     const table = /^ROLE_TYPES: dict\[str, tuple\[str, \.\.\.\]\] = \{(.*?)^\}/msu.exec(classify)?.[1] ?? '';
     const types = [...table.matchAll(/^ {4}"([^"]+)": \(/gmu)].map((match) => match[1]);
-    expect(types.length).toBeGreaterThan(5);
+    expect(types.slice(0, 2)).toEqual(['Product', 'R&D']);
     expect([...ROLE_TYPES]).toEqual([...types, constant(classify, 'OTHER')]);
   });
 
-  it('are the regions of regions.py without Remote, which no job row has (the dashboard adds it for roles that do not say)', () => {
+  it('are the regions of regions.py', () => {
     const names = [...(/^REGION_NAMES = \(([^)]*)\)/mu.exec(regions)?.[1] ?? '').matchAll(/\w+/gu)].map((match) => match[0]);
     const values = names.map((name) => constant(regions, name));
-    expect(values.at(-1)).toBe('Remote');
-    expect([...REGIONS]).toEqual(values.slice(0, -1));
+    expect(values.length).toBeGreaterThan(5);
+    expect([...REGIONS]).toEqual(values);
   });
 });

@@ -1,8 +1,7 @@
 // The two tools of the assistant endpoint (PLAN.md step 8.1; PRD FR-6): what an assistant is told about them and how their
 // arguments are read. No network and no database here, so the vitest suite runs this file as it is.
 //
-// The three lists below are the values of the dashboard's filters (`classify.py` and `regions.py`, without the Remote
-// region, which no job row has); a test compares them with those files, so a role type added there cannot be forgotten here.
+// The three lists below are the values of the dashboard's filters (`classify.py` and `regions.py`); a test compares them with those files, so a role type added there cannot be forgotten here.
 
 export const LEVELS = ['Intern', 'Junior', 'Not specified'] as const;
 export const ROLE_TYPES = [
@@ -17,12 +16,14 @@ export const ROLE_TYPES = [
   'Customer success & support',
   'Other',
 ] as const;
-export const REGIONS = ['Tel Aviv area', 'Sharon', 'Center', 'Jerusalem', 'Haifa and the north', 'South'] as const;
+export const REGIONS = ['Tel Aviv area', 'Sharon', 'Center', 'Jerusalem', 'Haifa and the north', 'South', 'Remote'] as const;
 
 export const DEFAULT_LIMIT = 20;
 export const MAX_LIMIT = 50;
 const MAX_OFFSET = 10_000;
 const MAX_TEXT = 300;
+/** The SQL search cuts the query here, so a longer one is refused rather than cut in the middle of a word. */
+const MAX_QUERY = 200;
 const MAX_LIST = 20;
 
 const list = (values: readonly string[]): string => values.join(', ');
@@ -116,14 +117,14 @@ type Parsed<T> = { ok: true; value: T } | { ok: false; message: string };
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
 
-function text(value: unknown, name: string, required: boolean): Parsed<string> {
+function text(value: unknown, name: string, required: boolean, max = MAX_TEXT): Parsed<string> {
   if (value === undefined || value === null) {
     return required ? { ok: false, message: `${name} is required.` } : { ok: true, value: '' };
   }
   if (typeof value !== 'string') return { ok: false, message: `${name} must be a string.` };
   const trimmed = value.trim();
   if (required && trimmed === '') return { ok: false, message: `${name} is required.` };
-  if (trimmed.length > MAX_TEXT) return { ok: false, message: `${name} can be at most ${String(MAX_TEXT)} characters.` };
+  if (trimmed.length > max) return { ok: false, message: `${name} can be at most ${String(max)} characters.` };
   return { ok: true, value: trimmed };
 }
 
@@ -150,13 +151,18 @@ function whole(value: unknown, name: string, fallback: number, min: number, max:
 export function parseSearch(args: unknown): Parsed<SearchArguments> {
   if (!isRecord(args)) return { ok: false, message: 'The arguments must be an object.' };
   const warnings: string[] = [];
-  const query = text(args.query, 'query', false);
+  const query = text(args.query, 'query', false, MAX_QUERY);
   const levels = strings(args.levels, 'levels', LEVELS, warnings);
   const roleTypes = strings(args.roleTypes, 'roleTypes', ROLE_TYPES, warnings);
   const regions = strings(args.regions, 'regions', REGIONS, warnings);
   const limit = whole(args.limit, 'limit', DEFAULT_LIMIT, 1, MAX_LIMIT);
   const offset = whole(args.offset, 'offset', 0, 0, MAX_OFFSET);
   if (!query.ok) return query;
+  for (const word of query.value.split(/\s+/u)) {
+    if (word !== '' && !/[\p{L}\p{N}]{3}/u.test(word)) {
+      warnings.push(`query: "${word}" has fewer than 3 letters or digits, so the full text is not searched for it (the company, title, team and location are)`);
+    }
+  }
   if (!levels.ok) return levels;
   if (!roleTypes.ok) return roleTypes;
   if (!regions.ok) return regions;

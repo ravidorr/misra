@@ -38,10 +38,9 @@ const JOB = {
   description: 'We build rockets with Rust. The full posting, a long text.',
   details: { employment_type: 'Full time' },
 };
-const FOUND = {
-  total: 1,
-  jobs: [{ company: 'Acme', job_id: 'j1', title: 'Junior Rust Developer', snippet: 'We build rockets' }],
-};
+const PUBLIC = { company: 'Acme', job_id: 'j1', title: 'Junior Rust Developer', team: null, location: 'Tel Aviv', url: null, first_seen: '2026-11-10', level: 'Junior', role_types: ['R&D'], regions: ['Tel Aviv area'], locations: [], snippet: 'We build rockets' };
+// A database function that wrongly returned the text: the handler must still not pass it on.
+const FOUND = { total: 1, jobs: [{ ...PUBLIC, description: 'THE FULL TEXT', details: { x: 1 } }, 'junk'] };
 
 interface World {
   deps: Deps;
@@ -267,9 +266,10 @@ describe('search_jobs', () => {
     const world = fakeWorld();
     const answer = await tool(world, 'search_jobs', { query: ' rust  ', levels: ['Junior'], roleTypes: 'R&D', regions: ['Tel Aviv area'], limit: 5, offset: 10 });
     expect(answer.isError).toBe(false);
-    expect(answer.data).toEqual({ total: 1, returned: 1, offset: 10, jobs: FOUND.jobs });
+    expect(answer.data).toEqual({ total: 1, returned: 1, offset: 10, jobs: [PUBLIC] });
     const search = world.calls.find((c) => c.url.endsWith('/rpc/search_jobs'));
     expect(search?.body).toEqual({ p_query: 'rust', p_levels: ['Junior'], p_role_types: ['R&D'], p_regions: ['Tel Aviv area'], p_limit: 5, p_offset: 10 });
+    expect(answer.text).not.toContain('THE FULL TEXT');
     expect(answer.text).not.toContain('description');
     expect(world.calls.every((c) => !c.url.includes('/rest/v1/jobs?'))).toBe(true); // never reads the table itself
   });
@@ -279,6 +279,8 @@ describe('search_jobs', () => {
     const bare = await tool(world, 'search_jobs', {});
     expect(bare.data).not.toHaveProperty('warnings');
     expect(world.calls.find((c) => c.url.endsWith('/rpc/search_jobs'))?.body).toMatchObject({ p_query: '', p_levels: [], p_limit: 20, p_offset: 0 });
+    const short = await tool(world, 'search_jobs', { query: 'qa rust', regions: ['Remote'] });
+    expect(short.data?.warnings).toEqual([expect.stringContaining('"qa" has fewer than 3')]); // Remote is a region
     const big = await tool(world, 'search_jobs', { limit: 9999, offset: -4, levels: ['junior'], regions: ['Mars'] });
     const last = world.calls.filter((c) => c.url.endsWith('/rpc/search_jobs')).at(-1);
     expect(last?.body).toMatchObject({ p_limit: 50, p_offset: 0 });
@@ -290,7 +292,7 @@ describe('search_jobs', () => {
 
   it('turns a bad argument into a message the assistant reads, without counting it or asking the database', async () => {
     const world = fakeWorld();
-    for (const args of [{ query: 5 }, { levels: [1] }, { levels: 'x'.repeat(400) }, { regions: Array(21).fill('South') }, { limit: 'ten' }, { offset: 1.5 }, 'text', [], { query: 'q'.repeat(301) }]) {
+    for (const args of [{ query: 5 }, { levels: [1] }, { levels: 'x'.repeat(400) }, { regions: Array(21).fill('South') }, { limit: 'ten' }, { offset: 1.5 }, 'text', [], { query: 'q'.repeat(201) }]) {
       const answer = await tool(world, 'search_jobs', args);
       expect(answer.isError, JSON.stringify(args)).toBe(true);
       expect(answer.text.length).toBeGreaterThan(10);
@@ -367,13 +369,15 @@ describe('get_job', () => {
     for (let i = 0; i < JOB_DAILY_LIMIT; i += 1) expect((await ask1('203.0.113.7')).isError).toBe(false);
     const before = world.calls.filter((c) => c.url.includes('/rest/v1/jobs?')).length;
     expect(before).toBe(JOB_DAILY_LIMIT);
+    const allBefore = world.counters.get('2026-11-17|get_job:all');
     expect((await ask1('203.0.113.7')).isError).toBe(true);
+    expect(world.counters.get('2026-11-17|get_job:all')).toBe(allBefore); // a caller over their own limit does not use the cap of everyone
     expect(world.calls.filter((c) => c.url.includes('/rest/v1/jobs?')).length).toBe(before); // a refused call reads nothing
     // another caller still reads, until the cap of everyone is used up
     world.counters.set(`2026-11-17|get_job:all`, JOB_DAILY_CAP);
     const capped = await ask1('203.0.113.9');
     expect(capped.isError).toBe(true);
-    expect(capped.text).toContain('limit for today');
+    expect(capped.text).toContain('by everyone together');
     // the cap is for get_job only: the search still works
     expect((await tool(world, 'search_jobs', {}, { 'cf-connecting-ip': '203.0.113.9' })).isError).toBe(false);
   });

@@ -39,6 +39,8 @@ const INSTRUCTIONS =
   'Misra lists open entry-level, student and product roles in Israel, read daily from company career pages. ' +
   'Use search_jobs to find roles and get_job to read one posting in full. The data is public and read-only. ' +
   'Always link the employer page (url) when you present a role, and say that the posting belongs to the employer.';
+/** What a search result holds: the public columns the dashboard reads, never the text. */
+const SEARCH_COLUMNS = ['company', 'job_id', 'title', 'team', 'location', 'url', 'first_seen', 'level', 'role_types', 'regions', 'locations', 'snippet'] as const;
 const JOB_COLUMNS =
   'company,job_id,title,team,location,url,posted,first_seen,last_seen,status,level,role_types,regions,locations,snippet,description,details';
 
@@ -142,6 +144,8 @@ async function readJob(deps: Deps, config: Config, company: string, jobId: strin
 
 const LIMITED =
   'This assistant connection has reached its limit for today. It starts again tomorrow (UTC). Tell the person, and send them to the Misra dashboard for more.';
+const LIMITED_ALL =
+  'The job texts have been read too many times today, by everyone together. Try again tomorrow (UTC), and send the person to the Misra dashboard for now.';
 const UNAVAILABLE = 'The job data could not be reached right now. Try again later.';
 
 async function callTool(deps: Deps, config: Config, id: Id, name: string, args: unknown, network: string): Promise<Response> {
@@ -163,7 +167,8 @@ async function callTool(deps: Deps, config: Config, id: Id, name: string, args: 
         p_offset: offset,
       })) as { total?: unknown; jobs?: unknown } | null;
       if (typeof found?.total !== 'number' || !Array.isArray(found.jobs)) throw new DatabaseError('search_jobs gave an unknown answer');
-      const jobs = found.jobs as unknown[];
+      // Defence in depth: only the public columns of a role ever leave, whatever the database function returns.
+      const jobs = found.jobs.filter(isRecord).map((job) => Object.fromEntries(SEARCH_COLUMNS.map((column) => [column, job[column] ?? null])));
       return toolResult(id, {
         total: found.total,
         returned: jobs.length,
@@ -175,9 +180,8 @@ async function callTool(deps: Deps, config: Config, id: Id, name: string, args: 
     // get_job: the per-caller limit first, so one caller cannot use up the cap of everyone.
     const parsed = parseJob(args);
     if (!parsed.ok) return toolError(id, parsed.message);
-    if (!(await caller('get_job', JOB_DAILY_LIMIT)) || !(await reserve(deps, config, day, 'get_job:all', JOB_DAILY_CAP))) {
-      return toolError(id, LIMITED);
-    }
+    if (!(await caller('get_job', JOB_DAILY_LIMIT))) return toolError(id, LIMITED);
+    if (!(await reserve(deps, config, day, 'get_job:all', JOB_DAILY_CAP))) return toolError(id, LIMITED_ALL);
     const job = await readJob(deps, config, parsed.value.company, parsed.value.jobId);
     if (!job) return toolError(id, 'No open job, or job closed in the last 30 days, has this company and job_id. Search again with search_jobs.');
     return toolResult(id, job);
@@ -197,6 +201,15 @@ function negotiate(requested: unknown): string {
 }
 
 export async function handleMcp(request: Request, deps: Deps): Promise<Response> {
+  try {
+    return await route(request, deps);
+  } catch (error) {
+    console.error('mcp: failed', describe(error)); // e.g. a client that hangs up in the middle of its message
+    return rpcError(null, -32603, 'Something went wrong. Try again later.', 500);
+  }
+}
+
+async function route(request: Request, deps: Deps): Promise<Response> {
   if (!deps.enabled) return new Response('{"error":"not_found"}', { status: 404, headers: { 'content-type': 'application/json' } });
   if (request.method === 'OPTIONS') return answer(204, null);
   if (request.method !== 'POST') return answer(405, { error: 'method_not_allowed' }, { allow: 'POST, OPTIONS' });

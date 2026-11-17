@@ -44,7 +44,7 @@ declare
   used integer;
 begin
   delete from public.assistant_ip_limits where day < p_day - 1;
-  if p_limit < 1 then
+  if p_limit is null or p_limit < 1 then
     return 'limit';
   end if;
   insert into public.assistant_ip_limits as l (day, ip_hash, calls) values (p_day, p_ip_hash, 1)
@@ -97,7 +97,7 @@ set search_path = ''
 as $$
   with q as (
     select array_remove(regexp_split_to_array(lower(btrim(left(coalesce(p_query, ''), 200))), '\s+'), '') as terms
-  ), text_hits as (
+  ), text_hits as materialized (
     select e ->> 0 as company, e ->> 1 as job_id
       from q, jsonb_array_elements(public.search_job_keys(array_to_string(q.terms, ' '))) e
   ), matched as (
