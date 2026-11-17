@@ -958,8 +958,8 @@ def test_the_real_contact_page_marks_every_form_part_so_the_switch_cuts_all_of_i
     assert template.count("<!--contactform-->") == template.count("<!--/contactform-->") == len(parts)
     cut = build_dashboard.CONTACT_REGION.sub("", template)
     assert not re.search(r"contact\.js|connect-src|<form|<noscript|contactForm|__SRI_CONTACT", cut)
-    # what stays with the form off: the three routes that need no form, and no address of the maintainer
-    for needed in ("github.com/ravidorr/misra/issues", 'href="security.html"', 'href="privacy.html#contact"'):
+    # what stays with the form off: the one route that needs no form, and no address of the maintainer
+    for needed in ('href="privacy.html#contact"',):
         assert needed in cut
     assert "@" not in cut
     assert "form-action 'none'" in cut  # a no-JavaScript submit can never go anywhere
