@@ -366,13 +366,14 @@
  {
   "name": "Nayax",
   "domain": "nayax.com",
-  "careers_url": "https://www.nayax.com/careers/",
-  "ats": "browser",
-  "slug": "https://www.nayax.com/careers/",
+  "careers_url": "",
+  "ats": "comeet",
+  "slug": "nayax/13.009",
   "source": "override",
   "status": "ok",
-  "n_jobs": null,
-  "n_israel": null
+  "n_jobs": 26,
+  "n_israel": 5,
+  "israel_only": true
  },
  {
   "name": "Lemonade",
@@ -554,13 +555,14 @@
  {
   "name": "Papaya Global",
   "domain": "papayaglobal.com",
-  "careers_url": "https://www.papayaglobal.com/careers/",
-  "ats": "browser",
-  "slug": "https://www.papayaglobal.com/careers/",
+  "careers_url": "",
+  "ats": "comeet",
+  "slug": "papayaglobal/16.005",
   "source": "override",
   "status": "ok",
-  "n_jobs": null,
-  "n_israel": null
+  "n_jobs": 47,
+  "n_israel": 8,
+  "israel_only": true
  },
  {
   "name": "Deel",
@@ -764,13 +766,14 @@
  {
   "name": "Unity",
   "domain": "unity.com",
-  "careers_url": "https://unity.com/careers/positions",
-  "ats": "browser",
-  "slug": "https://unity.com/careers/positions",
+  "careers_url": "",
+  "ats": "workday",
+  "slug": "unitytech/wd1/Unity",
   "source": "override",
   "status": "ok",
-  "n_jobs": null,
-  "n_israel": null
+  "n_jobs": 9,
+  "n_israel": 9,
+  "israel_only": true
  },
  {
   "name": "Mend",
@@ -1327,13 +1330,14 @@
  {
   "name": "DriveNets",
   "domain": "drivenets.com",
-  "careers_url": "https://drivenets.com/careers/",
-  "ats": "browser",
-  "slug": "https://drivenets.com/careers/",
+  "careers_url": "",
+  "ats": "comeet",
+  "slug": "drivenets/72.006",
   "source": "override",
   "status": "ok",
-  "n_jobs": null,
-  "n_israel": null
+  "n_jobs": 51,
+  "n_israel": 42,
+  "israel_only": true
  },
  {
   "name": "Lightbits Labs",

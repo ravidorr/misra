@@ -283,7 +283,7 @@ def test_the_columns_match_the_migrations() -> None:
 def test_the_job_history_is_exported_without_the_text_of_the_postings() -> None:
     """`jobs` and `crawl_log` columns match the migrations, except the text, which never leaves Supabase."""
     sql = "\n".join(path.read_text(encoding="utf-8") for path in sorted(MIGRATIONS.glob("*.sql")))
-    text = {"description", "details", "snippet"}
+    text = {"description", "details", "snippet", "snippet_cut"}
     for table, hidden in ((JOBS, text), (CRAWL_LOG, set())):
         block = re.search(rf"create table public\.{table.name} \(\n(.*?)\n\);", sql, flags=re.DOTALL)
         assert block, table.name
@@ -302,7 +302,7 @@ def test_the_job_tables_are_read_by_named_columns_never_by_star() -> None:
     source(fake).read(JOBS)
     select = fake.calls[0]["params"]["select"]
     assert select == ",".join(JOBS.columns)
-    assert not {"description", "details", "snippet"} & set(select.split(","))
+    assert not {"description", "details", "snippet", "snippet_cut"} & set(select.split(","))
     source(fake).read(TABLES[0])
     assert fake.calls[-1]["params"]["select"] == "*"
 

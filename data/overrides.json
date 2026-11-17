@@ -72,8 +72,9 @@
   "slug": "https://monday.com/careers"
  },
  "Papaya Global": {
-  "ats": "browser",
-  "slug": "https://www.papayaglobal.com/careers/"
+  "ats": "comeet",
+  "slug": "papayaglobal/16.005",
+  "israel_only": true
  },
  "Perion": {
   "ats": "browser",
@@ -84,12 +85,14 @@
   "slug": "https://hibob-fa0ad69d0cb34a.careers.hibob.com/jobs"
  },
  "Unity": {
-  "ats": "browser",
-  "slug": "https://unity.com/careers/positions"
+  "ats": "workday",
+  "slug": "unitytech/wd1/Unity",
+  "israel_only": true
  },
  "Nayax": {
-  "ats": "browser",
-  "slug": "https://www.nayax.com/careers/"
+  "ats": "comeet",
+  "slug": "nayax/13.009",
+  "israel_only": true
  },
  "Sapiens": {
   "ats": "browser",
@@ -250,8 +253,9 @@
   "slug": "nexarinc"
  },
  "DriveNets": {
-  "ats": "browser",
-  "slug": "https://drivenets.com/careers/"
+  "ats": "comeet",
+  "slug": "drivenets/72.006",
+  "israel_only": true
  },
  "Lightbits Labs": {
   "ats": "browser",
