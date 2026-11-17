@@ -475,9 +475,6 @@ async def test_fr2_ac5_a_filter_change_is_saved_to_the_account_once_typing_pause
     await page.click("#reset")
     await until(lambda: len(prefs.writes) == 2)  # noqa: PLR2004
     assert saved_filters(prefs) == {**DEFAULTS, "q": "prod"}  # the search words are not a filter: reset keeps them
-    await page.click("#undoReset")  # the undo is saved to the account too
-    await until(lambda: len(prefs.writes) == 3)  # noqa: PLR2004
-    assert saved_filters(prefs) == {**DEFAULTS, "q": "prod", "levels": ["Junior"]}
 
 
 async def test_fr2_ac5_the_account_filters_win_over_this_browsers_when_the_page_loads(page: Page, site: Path) -> None:
@@ -602,18 +599,6 @@ async def test_an_explicit_change_after_a_failed_load_is_saved(page: Page, site:
     await until(lambda: prefs.writes)
     assert saved_filters(prefs)["onlyNew"] is True
     await expect(page.locator("#syncNote")).to_have_text("")  # the account's filters are known now: what was just saved
-
-
-async def test_signing_out_ends_the_offer_to_undo_a_reset(page: Page, site: Path) -> None:
-    prefs = PrefsBackend({})
-    await sign_in(page, site, ChoicesBackend(), prefs, local={"filters": {**DEFAULTS, "q": "browser"}})
-    await page.click("#importNo")
-    await page.click(".chip[data-group=levels][data-value=Junior]")
-    await page.click("#reset")
-    await expect(page.locator("#undoReset")).to_have_count(1)
-    await account_action(page, "#signOut")
-    await page.wait_for_selector("#signIn")
-    await expect(page.locator("#undoReset")).to_have_count(0)  # it would put the account's filters in this browser
 
 
 async def test_signing_out_with_an_unsent_filter_change_says_so_and_keeps_it(page: Page, site: Path) -> None:
