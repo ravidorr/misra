@@ -156,8 +156,21 @@ def test_the_privacy_notice_covers_the_contact_form_with_the_lawyers_words_of_20
         "we store nothing about you. The one exception is the short-lived spam counter described below, "
         "if you report a site or use the contact form."
     ) in parts["What we store"]
-    # No bullet for the form until he words or confirms one (the TODO item): a bullet we assembled is not his text.
-    assert "**Contact form**" not in text
+    assert (  # A: his bullet of round 12, word for word
+        "- **Contact form** needs no sign-in. Your message, and your name and email address if you give them, are "
+        "emailed to the maintainer's mailbox through Resend and not stored by us anywhere else. To prevent spam, we "
+        "store a daily non-reversible hash of your network address that is deleted in the next daily cleanup.\n"
+    ) in text
+    assert (
+        text.index("- **Reporting a missing career site**")
+        < text.index("- **Contact form**")
+        < text.index("- **AI assistant connection**")
+    )
+    assert (  # B1, his sentences of round 12
+        "- Signing in is optional and voluntary. Without it the dashboard works the same, and nothing about you is "
+        "kept by us, apart from the short-lived spam counter described below if you report a site or use the contact "
+        "form.\n"
+    ) in parts["The short version"]
     assert (  # A2
         "Emails sent through the contact form (and the site-report form) are not stored in our database. They remain "
         "in the maintainer's mailbox until the conversation is resolved or you ask us to delete them, and in "
@@ -395,14 +408,17 @@ def test_the_lawyers_round_of_2026_11_16_editorial_wording_is_in_the_notice_the_
     ) in parts["What we store"]
     assert 'mark "Not for me" (the dashboard also calls them discards)' in parts["The short version"]
     assert "Supabase's free plan keeps no backups for us." in parts["How long we keep it"]
-    assert "apart from the short-lived spam counter described below if you report a site" in parts["The short version"]
+    assert (
+        "apart from the short-lived spam counter described below if you report a site or use the contact form."
+        in parts["The short version"]
+    )
     assert "which signs the link (a keyed signature)" in privacy
     assert "The signed sign-in pass (token) your browser holds" in privacy
     assert "one-way codes (keyed hashes, made with a secret that changes every day;" in privacy
     assert "Supabase may keep database backups" not in privacy
     assert (
-        "the small programs (Edge Functions) behind the report form, account deletion, job alerts, the confirmation and"
-        in privacy
+        "the small programs (Edge Functions) behind the report form, the contact form, account deletion, job alerts, "
+        "the confirmation and" in privacy
     )
     assert "Gmail (Google SMTP)" not in privacy
     assert "daily summary email" not in privacy
@@ -481,8 +497,10 @@ def test_the_lawyers_assistant_wording_of_2026_11_17_is_in_the_notice_and_the_te
         "next daily cleanup."
     ) in privacy
     assert (
-        "behind the report form, account deletion, job alerts, the confirmation and unsubscribe links, and the AI "
-        "assistant connection: the caller's IP address, approximate location, user agent, and the request path."
+        "- **Provider logs.** Supabase's own platform logs record each request to its services, including the small "
+        "programs (Edge Functions) behind the report form, the contact form, account deletion, job alerts, the "
+        "confirmation and unsubscribe links, and the AI assistant connection: the caller's IP address, approximate "
+        "location, user agent, and the request path."
     ) in privacy
     assert (
         "- **AI assistant connection:** You may connect an AI assistant to Misra solely for your own personal, "
@@ -493,11 +511,11 @@ def test_the_lawyers_assistant_wording_of_2026_11_17_is_in_the_notice_and_the_te
     ) in read("TERMS.md")
 
 
-def test_the_contact_form_is_approved_but_stays_off_until_the_maintainer_deploys_the_function() -> None:
-    """The lawyer agreed on 2026-11-17 (round 11) to the form with his PRIVACY.md wording, which is in. The build
-    constant and the function secret stay off until the maintainer has set the secrets and deployed the function;
-    a later PR flips the constant and this pin with it. The page never writes the address."""
-    assert build_dashboard.CONTACT_FORM_ENABLED is False
+def test_the_contact_form_is_on_with_the_lawyers_wording_and_the_page_never_writes_the_address() -> None:
+    """The lawyer agreed on 2026-11-17 (round 11) to the form and gave his PRIVACY.md bullet on 2026-11-18
+    (round 12): both are in, so the build constant is on. The function answers 404 until its secret is true.
+    Closing the form later means unsetting that secret, and then setting the constant back to False."""
+    assert build_dashboard.CONTACT_FORM_ENABLED is True
     function = (REPO / "supabase" / "functions" / "contact" / "handler.ts").read_text(encoding="utf-8")
     assert "CONTACT_FORM_ENABLED" in function
     assert "deps.enabled" in function
@@ -511,6 +529,5 @@ def test_the_contact_form_is_approved_but_stays_off_until_the_maintainer_deploys
     ) in page
     assert page.index('id="contactPrivacy"') < page.index('id="contactSend"')
     todo = (REPO / "TODO.md").read_text(encoding="utf-8")
-    assert "Turn the contact form on" in todo
-    assert "Ask the lawyer to confirm one bullet" in todo  # the form stays off until he confirms it
-    assert "Ask the lawyer about the Contact page and its form" not in todo
+    assert "Turn the contact form on" not in todo
+    assert "Ask the lawyer to confirm one bullet" not in todo

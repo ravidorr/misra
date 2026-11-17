@@ -43,7 +43,7 @@ verify_jwt = false
 
 # The Contact page posts here from the browser with no sign-in, and a CORS preflight carries no token, so the platform must
 # not demand a JWT. The function protects itself: it answers 404 to everything unless the secret CONTACT_FORM_ENABLED is
-# "true" (off until the lawyer has agreed), then origin check, validation, honeypot, minimum fill time, a limit per
-# visitor and a daily cap. Not deployed yet.
+# "true" (the lawyer agreed on 2026-11-17 and 2026-11-18), then origin check, validation, honeypot, minimum fill time,
+# a limit per visitor and a daily cap.
 [functions.contact]
 verify_jwt = false

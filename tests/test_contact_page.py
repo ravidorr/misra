@@ -1,9 +1,9 @@
-"""The Contact page (TODO.md "Dashboard and site review"), in a real browser against the built page.
+"""The Contact page, in a real browser against the built page.
 
-The form is off in the repository (build_dashboard.CONTACT_FORM_ENABLED), so two builds are checked: the one that ships
-(static contact information only) and one with the switch on, run against a fake `contact` Edge Function. The function
-itself is tested in test/contact.test.ts. Locally the tests skip when Chromium is missing; in CI a missing browser
-fails."""
+The form is on in the repository (build_dashboard.CONTACT_FORM_ENABLED), so two builds are checked: one with the switch
+on, run against a fake `contact` Edge Function, and one with it forced off (static contact information only). The
+function itself is tested in test/contact.test.ts. Locally the tests skip when Chromium is missing; in CI a missing
+browser fails."""
 
 import json
 import sqlite3
@@ -35,6 +35,7 @@ def contact_site(db: sqlite3.Connection, workdir: Path, monkeypatch: pytest.Monk
 @pytest.fixture
 def off_site(db: sqlite3.Connection, workdir: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     monkeypatch.setattr(build_dashboard, "DIGEST_SIGNUP_ENABLED", False)
+    monkeypatch.setattr(build_dashboard, "CONTACT_FORM_ENABLED", False)
     return build_site(db, workdir)
 
 
