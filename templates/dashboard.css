@@ -416,7 +416,7 @@ dialog.sheet[hidden],
 
 .stories > li {
   display: flex;
-  flex: 0 0 5.5rem;
+  flex: 0 0 6.5rem;
   align-items: flex-start; /* a button centres its content when stretched: keep it as tall as its content */
   justify-content: center;
 }

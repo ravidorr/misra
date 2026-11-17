@@ -84,6 +84,10 @@ EXTREME_NAMES = {
     "Supercalifragilisticexpialidocious": 4,
     "monday.com": 3,
     "Palo Alto Networks": 2,
+    # The longest single words among all the companies the data held on the day this was written (names only,
+    # frozen here so a daily publish never changes the test): none may break inside the word.
+    "Semiconductor Technologies": 1,
+    "DoubleVerify Incredibuild Lifesciences": 1,
 }
 NAME_SETS = {"real": REAL_NAMES, "extremes": EXTREME_NAMES}
 SAME_TOP = 0.5  # px
