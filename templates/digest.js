@@ -410,7 +410,7 @@ if (open && dialog) {
   useFilters.addEventListener('click', copyFilters);
   address.addEventListener('input', () => {
     if (address.hasAttribute('aria-invalid')) fieldError(checkAddress());
-    render({ keepAddress: true }); /* the "Change the address" button appears once the address differs */
+    render({ keepAddress: true }); /* the "Confirm new address" button appears once the address differs */
   });
   for (const radio of frequencies) {
     radio.addEventListener('change', () => {

@@ -808,7 +808,7 @@ async def test_the_focus_goes_to_the_outcome_when_the_pressed_button_goes_away(p
     await page.fill("#digestAddress", OTHER)
     await page.click("#digestSend")
     await expect(page.locator("#digestState")).to_contain_text("for a confirmation link")
-    assert await page.evaluate("document.activeElement.id") in {"digestSend", "digestState"}
+    assert await page.evaluate("document.activeElement.id") == "digestState"
     world.row = stored("on")
     await page.click("#digestClose")
     await account_action(page, "#digestOpen")
@@ -1094,3 +1094,21 @@ async def test_choosing_job_alerts_closes_the_menu_and_closing_the_dialog_return
     await expect(page.locator(DIALOG)).to_be_hidden()
     assert await page.evaluate("document.activeElement.id") == "accountMenuButton"
     await expect(page.locator("#accountMenu")).to_be_hidden()
+
+
+@pytest.mark.parametrize(
+    ("row", "words"),
+    [
+        (stored("waiting"), ["Waiting for you to confirm", "until then nothing is sent", "7 days"]),
+        (stored("on"), ["New matching roles go to", "on days with new matches"]),
+        (stored("on", frequency="weekly"), ["on Sundays, when there are new matches"]),
+    ],
+)
+async def test_the_state_line_says_each_state_in_words(
+    page: Page, digest_site: Path, row: dict[str, Any], words: list[str]
+) -> None:
+    await signed_in(page, digest_site, World(row))
+    await open_dialog(page)
+    text = await page.locator("#digestState").inner_text()
+    for word in words:
+        assert word in text
