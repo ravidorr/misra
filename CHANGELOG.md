@@ -8,6 +8,12 @@ All notable changes are documented here. Format follows [Keep a Changelog](https
 
 - A Copy button under every code block of the legal pages (the address on "Connect your assistant", the command for Claude Code), in `templates/theme.js`.
 
+## [0.65.1] - 2026-11-18
+
+### Changed
+
+- The browser tests share one Chromium and one Playwright driver per worker (a new context for each test) instead of starting both for every test; the pytest event loop is shared for the session so the browser can be.
+
 ## [0.65.0] - 2026-11-17
 
 ### Changed

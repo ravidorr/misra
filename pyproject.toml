@@ -1,6 +1,6 @@
 [project]
 name = "misra"
-version = "0.65.0"
+version = "0.65.1"
 description = "Daily batch pipeline: crawls career pages, keeps history in SQLite, and emails a digest."
 readme = "README.md"
 license = "MIT"
@@ -65,6 +65,8 @@ select = ["E", "F", "W", "I", "B", "UP", "SIM", "C4", "PL", "RUF"]
 testpaths = ["tests"]
 pythonpath = ["."]
 asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "session"
+asyncio_default_test_loop_scope = "session"
 addopts = "-n auto"
 
 [tool.coverage.run]
