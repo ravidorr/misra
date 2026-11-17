@@ -182,6 +182,19 @@ Observations about live sites below come from checks made on 2026-11-14 and may 
       Robotics' list shows "No items found"; Guesty's page is a Next.js app that shows no uid even on a job page. Guessing
       the Greenhouse, Lever, Ashby and Workable slugs of the 21 companies without a careers URL found only an unrelated
       company (`air` on Greenhouse). Western Digital's board is on SmartRecruiters, which robots.txt skips.
+    - **Known limitation, checked on 2026-11-17: pinned Workday boards that fail only from GitHub's servers.** In the
+      builds of 2026-11-15 to 2026-11-17 these companies show "request failed" on the coverage gap card: Adobe,
+      Broadcom, Cadence, Criteo, CrowdStrike, DoubleVerify, Edwards Lifesciences, Integral Ad Science, Kyndryl,
+      Medtronic, Motorola Solutions, Palo Alto Networks, Philips, Proofpoint, Salesforce, Samsung, Visa and Workday
+      (KLA, Marvell and Zoom joined later, and Check Point is blocked the same way as a browser crawl). Tested from a
+      normal network on 2026-11-17, one request each at our pace and with our User-Agent: Salesforce (17 Israeli
+      jobs) and Broadcom (1) answer with jobs, Adobe, Visa, Criteo and Zoom answer with an empty list (read as no
+      Israeli job there, not proven), none failed. The other tenants in the list were not tested. So the tenants
+      probably refuse the runner's address range; the runner itself has not been tried again. It is not worked
+      around (no proxy, no other address, no changed User-Agent): the companies stay on the card, which says its
+      roles "may be missing or old", until a tenant lets the runner in or the crawl moves to a network it accepts.
+      Their old jobs stay listed until a good crawl or the failure rules close them. The Workday pins of 2026-11-17
+      (Intel, Autodesk, Ex Libris, Unity) may hit the same block on the runner.
     - Checked on 2026-11-17 (third batch, do not repeat): Ormat and Stratasys are SuccessFactors career sites whose
       `/search/?q=&locationsearch=Israel` page the generic browser crawl reads without an adapter (3 and 18 Israeli
       jobs, the same on two runs); robots.txt of `careers.ormat.com` and `careers.stratasys.com` only blocks
