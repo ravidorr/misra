@@ -1919,3 +1919,12 @@ def test_a_page_of_another_host_is_not_asked_for_its_job_posting() -> None:
     assert adapters._browser_wants_page(LD_PAGE, {"url": "https://www.weka.io/careers/1"})
     assert not adapters._browser_wants_page(LD_PAGE, {"url": "https://other.test/careers/1"})
     assert not adapters._browser_wants_page(LD_PAGE, {})
+
+
+@pytest.mark.parametrize(
+    "url", ["https://www.weka.io.evil.test/x", "https://careers.weka.io/x", "https://other.test/x"]
+)
+def test_no_request_goes_to_another_host_than_the_career_page(monkeypatch: pytest.MonkeyPatch, url: str) -> None:
+    urls = fake_get(monkeypatch, FakeHttpResponse(text=ld_html({"@type": "JobPosting", "description": "Text"})))
+    assert adapters.add_descriptions("browser", LD_PAGE, "Weka", [{"job_id": "1", "url": url}], set()) == (0, 0, 0)
+    assert urls == []

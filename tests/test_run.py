@@ -662,3 +662,41 @@ def test_no_job_page_is_read_for_a_job_an_israel_only_company_does_not_keep(
     inside, outside = {**job("1"), "location": "Haifa, Israel", "detail_url": "d"}, {**job("2"), "detail_url": "d"}
     run.read_job_pages({**co("Br", ats="browser"), "israel_only": True}, [inside, outside])
     assert asked == ["1"]
+
+
+def test_a_company_that_is_not_israel_only_has_every_job_read_and_a_crash_costs_only_the_texts(
+    workdir: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    asked: list[str] = []
+
+    def page(_slug: str, j: dict[str, str]) -> tuple[str, dict[str, Any]]:
+        asked.append(j["job_id"])
+        return "text", {}
+
+    monkeypatch.setitem(adapters.DETAILS, "browser", page)
+    jobs = [{**job("1"), "location": None, "detail_url": "d"}, {**job("2"), "detail_url": "d"}]
+    run.read_job_pages(co("Br", ats="browser"), jobs)
+    assert asked == ["1", "2"]
+    assert all(j["description"] == "text" for j in jobs)
+
+    def boom(*_a: Any) -> None:
+        raise RuntimeError("secret detail")
+
+    monkeypatch.setattr(run, "add_descriptions", boom)
+    run.DETAIL_STATS.clear()
+    run.read_job_pages(co("Br", ats="browser"), jobs)
+    assert "::warning::job pages of Br failed: RuntimeError" in capsys.readouterr().out
+    assert run.DETAIL_STATS == {}
+
+
+def test_a_browser_company_whose_crawl_failed_gets_no_job_pages_and_the_others_do(
+    workdir: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    write_json(
+        workdir / "data" / "companies.json",
+        [co("Down", ats="browser", slug="https://down.test/c"), co("Up", ats="browser", slug="https://up.test/c")],
+    )
+    monkeypatch.setattr(run, "crawl_many", lambda urls: {"https://up.test/c": [{**job("1"), "detail_url": "d"}]})
+    monkeypatch.setitem(adapters.DETAILS, "browser", lambda _slug, j: ("text", {}))
+    run.main()
+    assert list(descriptions.read_work_file()) == [("Up", "1")]
