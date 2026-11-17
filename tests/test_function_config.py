@@ -9,7 +9,7 @@ import pytest
 SUPABASE = Path(__file__).resolve().parents[1] / "supabase"
 
 
-@pytest.mark.parametrize("name", ["confirm-email", "unsubscribe", "report-site", "delete-account", "mcp"])
+@pytest.mark.parametrize("name", ["confirm-email", "unsubscribe", "report-site", "delete-account", "mcp", "contact"])
 def test_the_function_does_not_ask_the_gateway_for_a_jwt(name: str) -> None:
     config = tomllib.loads((SUPABASE / "config.toml").read_text(encoding="utf-8"))
     assert config["functions"][name]["verify_jwt"] is False

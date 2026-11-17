@@ -176,6 +176,7 @@ def test_the_build_writes_the_pages_from_the_markdown_files(workdir: Path, db: s
     assert sorted(p.name for p in (workdir / "docs").glob("*.html")) == [
         "about.html",
         "assistant.html",
+        "contact.html",
         "email.html",
         "google0e1aa15dbd543e2f.html",
         "index.html",
@@ -596,7 +597,14 @@ async def test_the_logo_and_the_name_are_one_link_to_the_dashboard(page: Page, s
 
 # ---- The header and the footer every page shares (templates/parts/) ----
 
-PAGES_WITH_CHROME = ["index.html", "email.html", "about.html", "assistant.html", *(out for _s, out in DOCUMENTS)]
+PAGES_WITH_CHROME = [
+    "index.html",
+    "email.html",
+    "about.html",
+    "contact.html",
+    "assistant.html",
+    *(out for _s, out in DOCUMENTS),
+]
 
 
 def chrome_of(html: str) -> tuple[str, str]:
@@ -655,10 +663,10 @@ def test_with_the_assistant_switch_off_no_page_links_to_the_assistant_page(
 def test_the_footer_lists_each_page_once_in_the_order_the_writer_chose() -> None:
     footer = (REPO / "templates" / "parts" / "footer.inc").read_text(encoding="utf-8")
     hrefs = re.findall(r'<a href="([^"]+)"', footer)
-    assert [h.split("@")[0] for h in hrefs] == [
+    assert hrefs == [
         "about.html",
         "assistant.html",
-        "mailto:raanan",
+        "contact.html",
         "privacy.html",
         "terms.html",
         "security.html",

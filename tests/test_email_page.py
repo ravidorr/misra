@@ -346,7 +346,7 @@ async def test_every_state_sits_in_one_card_with_the_dashboard_header_and_footer
     assert [await link.get_attribute("href") for link in await links.all()] == [
         "about.html",
         "assistant.html",
-        "mailto:raanan@avidor.org",
+        "contact.html",
         "privacy.html",
         "terms.html",
         "security.html",
