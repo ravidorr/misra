@@ -960,6 +960,130 @@ async def test_the_lawyers_wording_is_on_the_control_with_big_links(page: Page, 
     assert [t.strip() for t in labels] == ["Daily", "Weekly (Sundays)"]
 
 
+CONFIRM_FIRST = "We first send a confirmation link to"
+CONFIRM_NOTHING = "Nothing is sent until you confirm, and you get an email only when there are new matches."
+HINT_MORE = "Either way, the address gets a confirmation email first, and nothing else until its owner confirms."
+UNSUBSCRIBE = "One-click unsubscribe is in every email. By turning this on you agree to the"
+# What the state line says when it carries the confirmation disclosure itself (the waiting words, or the outcome of
+# pressing the button); the lawyer's round 11 (B1) lets the paragraph keep only the unsubscribe and agreement
+# sentences then, and only then.
+LINE_DISCLOSES = ("until then nothing is sent", "start only after you open it")
+
+
+async def seen(page: Page) -> tuple[str, str, str]:
+    """What the user reads (visible text only, so a hidden sentence is not counted): state line, paragraph, hint."""
+    state = await page.locator("#digestState").inner_text()
+    paragraph = await page.locator("#digestConsent").inner_text()
+    hint = await page.locator("#digestAddressHint").inner_text()
+    return state, paragraph, hint
+
+
+async def assert_disclosed_once(page: Page, *, line: bool, other: bool = False) -> None:
+    """The confirmation disclosure is read once: in the state line, or in the paragraph, never in neither or both. The
+    unsubscribe and agreement sentences are always there, and so is the hint's first sentence. `other`: the user typed
+    an address that is not the one the waiting words name, so those words are about another address and do not count."""
+    state, paragraph, hint = await seen(page)
+    in_line = any(words in state for words in LINE_DISCLOSES) and not other
+    assert in_line is line, state
+    in_paragraph = CONFIRM_FIRST in paragraph
+    assert in_paragraph is not line, paragraph
+    assert (CONFIRM_NOTHING in paragraph) is in_paragraph
+    assert in_line + in_paragraph == 1
+    assert paragraph.count(UNSUBSCRIBE) == 1
+    assert "the Terms" in paragraph
+    assert "the privacy notice" in paragraph
+    assert hint.startswith("Your Google email, unless you type another one.")
+    assert (HINT_MORE in hint) is not line  # the hint is cut with the paragraph, and only then
+
+
+@pytest.mark.parametrize("scheme", ["light", "dark"])
+@pytest.mark.parametrize("width", ["phone", "desktop"])
+async def test_the_confirmation_disclosure_is_read_once_in_every_state_the_form_is_shown(
+    page: Page, digest_site: Path, scheme: str, width: str
+) -> None:
+    """Round 11 (B1): the paragraph keeps only the unsubscribe and agreement sentences while the state line already says
+    a confirmation link comes first and nothing is sent until it is opened. In every other state it says it whole, so
+    the user is never left without it."""
+    await page.emulate_media(color_scheme=scheme)  # type: ignore[arg-type]
+    if width == "phone":
+        await page.set_viewport_size(PHONE)
+    world = World()
+    await signed_in(page, digest_site, world)
+    await open_dialog(page)
+
+    # off: the line has no disclosure, the paragraph says it whole
+    assert await state_of(page) == "off"
+    await assert_disclosed_once(page, line=False)
+
+    # turning it on: the outcome says a link was sent and nothing starts before it is opened
+    await page.click("#digestSend")
+    await expect(page.locator("#digestState")).to_contain_text("start only after you open it")
+    await assert_disclosed_once(page, line=True)
+
+    # a preference saved while waiting replaces the waiting words with "Saved.": the paragraph must say it again
+    await page.check("input[name=digestFrequency][value=weekly]")
+    await expect(page.locator("#digestState")).to_have_text("Saved. Your next job alert uses this.")
+    await assert_disclosed_once(page, line=False)
+
+    # the waiting words themselves (the dialog read again)
+    await page.click("#digestClose")
+    await account_action(page, "#digestOpen")
+    await page.wait_for_selector("#digestDialog:not([data-state=loading])")
+    assert await state_of(page) == "waiting"
+    await expect(page.locator("#digestState")).to_contain_text("until then nothing is sent")
+    await assert_disclosed_once(page, line=True)
+
+    # another address typed: the line names the old one, so the paragraph and the hint speak for the new one
+    await page.fill("#digestAddress", OTHER)
+    await expect(page.locator("#digestConsentTo")).to_have_text(OTHER)
+    await assert_disclosed_once(page, line=False, other=True)
+    await page.fill("#digestAddress", EMAIL.upper())  # the same address in another case is the same address
+    await assert_disclosed_once(page, line=True)
+
+    # ending it: the line says nothing is sent but no confirmation; the paragraph is whole again
+    await page.click("#digestOff")
+    await expect(page.locator("#digestState")).to_contain_text("Job alerts are off")
+    await assert_disclosed_once(page, line=False)
+
+
+@pytest.mark.parametrize("scheme", ["light", "dark"])
+async def test_the_confirmation_disclosure_is_read_once_when_on_and_after_an_unsubscribe(
+    page: Page, digest_site: Path, scheme: str
+) -> None:
+    await page.emulate_media(color_scheme=scheme)  # type: ignore[arg-type]
+    world = World(stored("on"))
+    world.state_after = "on"
+    await signed_in(page, digest_site, world)
+    await open_dialog(page)
+    await assert_disclosed_once(page, line=False)  # on: the line says nothing of a confirmation
+    await page.fill("#digestAddress", OTHER)  # a changed address of a running email: "Confirm new address"
+    await assert_disclosed_once(page, line=False)
+    await page.click("#digestSend")
+    await expect(page.locator("#digestState")).to_contain_text("already on")  # an outcome that sent nothing
+    await assert_disclosed_once(page, line=False)
+
+    unsubscribed = World(stored("unsubscribed"))
+    await page.click("#digestClose")
+    await page.click("#accountMenuButton")
+    await account_action(page, "#signOut")
+    await signed_in(page, digest_site, unsubscribed)
+    await open_dialog(page)
+    assert await state_of(page) == "unsubscribed"
+    # the line says a new confirmation email comes first, not that nothing is sent before it: the paragraph stays whole
+    await assert_disclosed_once(page, line=False)
+
+
+async def test_while_the_settings_are_not_read_the_form_with_the_disclosure_is_not_shown(
+    page: Page, digest_site: Path
+) -> None:
+    world = World(stored("on"))
+    world.table_mode = "read_error"
+    await signed_in(page, digest_site, world, wait=False)
+    await account_action(page, "#digestOpen")
+    await expect(page.locator("#digestError")).to_be_visible()
+    assert await page.locator("#digestForm").is_hidden()  # nothing can be turned on, so nothing is left unsaid
+
+
 @pytest.mark.parametrize("word", ["daily", "weekly"])
 async def test_after_turning_it_on_the_status_names_the_address_and_the_schedule(
     page: Page, digest_site: Path, word: str
