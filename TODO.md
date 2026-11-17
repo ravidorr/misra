@@ -1,76 +1,16 @@
 # TODO
 
-Open work, as of 2026-11-14. Each item says what triggers it, how to do it and when it is done. When one is finished,
+Open work, as of 2026-11-17. Each item says what triggers it, how to do it and when it is done. When one is finished,
 delete it and update the counts in the others: the 85 and the four segment counts in the research item (a pin removes
-one row from one segment), its "(28)" if the company had no careers URL, else its "(54 today)".
+one row from one segment), its "(28)" if the company had no careers URL, else its "(53 today)".
 An item with a screenshot in `todo-images/` goes with it: delete the image file in the same PR.
 Observations about live sites below come from checks made on 2026-11-14 and may have changed.
-
-## Emails
-
-- [ ] **Make the emails designed HTML documents.** Trigger: both emails people receive from Misra (the confirmation
-  email and the job-alert digest) are plain text today. A designed email, in the look of the web app, is easier to read
-  and to act on, and looks like the same product. Plain text stays as the fallback.
-  - Where: the digest is built in `send_digests.py` (Resend payload, `"text"` today; add `"html"` so the message is
-    multipart); the confirmation email in the Edge Function `supabase/functions/email-settings` (and its plain modules
-    under `supabase/functions/`); the approved wording in `supabase/email-texts.md`, pinned by
-    `tests/test_legal_wording.py` and `test/email-texts.test.mjs`; colours and type from `design-system/tokens.css`
-    (emails cannot use CSS variables, so the tokens are copied as fixed values into one place and a test keeps them
-    equal to `tokens.css`). The site-report email to the maintainer and the failure alerts (`send_alert.py`, Gmail)
-    stay plain text: nobody else reads them.
-  - How: consult before building, and record every answer in the PR. 1) Claude Designer plus the UI/UX experts
-    (`design-super-agent`, `ui-design-review`, `ux-web-review`, `accessibility-expert`): a simple single-column layout
-    (about 600px, fluid on a phone), the logo as text or a small inline image with alt text (many clients block
-    images, so nothing may depend on one), the digest list (company, title, place, one clear "view role" link per job),
-    the confirmation email with one primary button (email clients do not support the HTML `<button>` tag: a button is a link
-    styled as one, with padding and a background colour, and it needs a version that still looks right in Outlook), light and dark (`prefers-color-scheme` where supported, and colours
-    that stay readable where the client forces its own), 44px targets, contrast WCAG AA. Two or three layouts, one
-    picked with reasons. 2) The `technical-writer` agent: wording stays EXACTLY as in `supabase/email-texts.md`
-    (the lawyer approved it; the HTML only changes the layout, never the words, the footer, the postal address, the
-    unsubscribe link or the explanation of why the person got it). No word is changed, added or removed.
-    Ask the experts whether the full URL should be shown next to the button link, for copying and pasting
-    (a common habit; it may no longer be needed). KISS: leave it out unless they show it helps, and it must not add
-    or change any approved word.
-    3) The `advisor`, before choosing the approach and before calling it done.
-  - Build it for email clients, not browsers: table layout, inline styles (a build step may inline a small stylesheet),
-    no JavaScript, no web fonts (system font stack), no background images, `role="presentation"` on layout tables,
-    `lang` and `dir` set, preheader text, and keep the whole HTML well
-    below Gmail's clipping size (about 100 KB; a digest with many jobs must stay under it, so cap or split the list as
-    the digest already does). Keep the `List-Unsubscribe` and `List-Unsubscribe-Post` headers and the unsubscribe link in
-    the footer exactly as now. A test that the plain text and the HTML carry the same words and links (strip the tags and
-    compare), one that every approved sentence appears, one that the HTML has no script, no remote image and no
-    external stylesheet, and a test of the size limit. Render checks: Playwright at 600px and 375px, light and dark;
-    send test messages to the maintainer's own address only (never to a subscriber) and look at them in Gmail (web and
-    phone) and one other client; list what was checked.
-  - Status: built in the HTML emails PR (layout, tests, screenshots). Left: the maintainer looks at both emails in Gmail
-    (web and phone) and one other client, then this item is removed.
-  - Done when: both emails go out as multipart (plain text plus HTML) with the same approved words, the maintainer has
-    looked at both in Gmail and one other client, the tests above pass, `npm run lint` and `npm run test:coverage` pass,
-    and the PR shows screenshots. A change to `send_digests.py` needs a version bump and a changelog entry.
-
-## Focus after a late search answer
-
-- [ ] **Give the focus a visible place when the role under it leaves the page.** Trigger: a late description-search
-  answer redraws the list (`drawList()` in `templates/dashboard.js`) while a reader is on a control of a role that is no
-  longer on the page (it moved to the next page). The focus then goes to the `sr-only` heading `#list-h`, so a sighted
-  keyboard user sees no focus ring (WCAG 2.4.7). Not tested yet. Done when: the case is covered by a test and the focus
-  lands on something visible, or the heading shows a focus ring.
-
-## Snippet ellipsis
-
-- [ ] **Make the ellipsis on a snippet exact.** Trigger: `cutMark()` in `templates/dashboard.js` guesses that a snippet
-  of 200 or more characters that does not end in `.`, `!` or `?` was cut, because the page cannot tell a whole text of up
-  to 255 characters from a cut one. Where: a `jobs.snippet_cut` boolean (true when `descriptions.snippet` cut the text),
-  set by `sync_supabase.py`, read with the other `JOB_COLUMNS`, and `cutMark` shows the mark when it is true. Done when:
-  the heuristic and its comment are gone and a test covers a cut under 200 and a whole text over 200 ending in `)`.
 
 ## Assistant endpoint
 
 - [ ] **Hand-test the assistant connection with someone who is not technical.** Trigger: the endpoint and the page "Connect your
-  assistant" are on since 2026-11-17 (the lawyer approved them), and PLAN.md steps 8.1 and 8.2 stay unticked until a real
-  assistant has done it. How: someone who is not technical follows `https://ravidorr.github.io/misra/assistant.html` in Claude
-  and in ChatGPT, asks for junior roles, has one read in full and a cover letter drafted. Done when: both connect in a couple of
-  minutes without help, the wording of the page is fixed only with the lawyer's agreement, and steps 8.1 and 8.2 are ticked.
+  assistant" are on since 2026-11-17. How and done when: the hand test plan in `PLAN.md`, step 8.2. Steps 8.1 and 8.2 are
+  ticked when it passes.
 - [ ] **Revisit the missing per-caller limit on `search_job_keys`.** Decided 2026-11-17 to leave it: a counter for dashboard
   searchers needs new `PRIVACY.md` wording, and a global cap would let one scraper switch the search off for everyone (reasons
   and what a limit would need: `supabase/README.md`, "Why `search_job_keys` has no per-caller limit"). Trigger: any sign of
@@ -123,14 +63,14 @@ Observations about live sites below come from checks made on 2026-11-14 and may 
 
 ## Research the remaining unresolved companies
 
-- [ ] `data/unresolved_candidates.csv` lists 78 researched companies with no usable job feed (as of 2026-11-14: 22
-  multinational, 35 deeptech, 11 cyber_infra, 10 biz_software). Each needs
+- [ ] `data/unresolved_candidates.csv` lists 76 researched companies with no usable job feed (as of 2026-11-14: 22
+  multinational, 33 deeptech, 11 cyber_infra, 10 biz_software). Each needs
   its own research; there is no batch fix left. Every observation about a live site below is from the checks of
-  2026-11-14, a crawl of the 105 rows that had a careers URL that day (54 today) and a scan of their rendered pages. The
+  2026-11-14, a crawl of the 105 rows that had a careers URL that day (53 today) and a scan of their rendered pages. The
   remaining work falls into these groups:
-  - **No careers URL (24).** Status `not_found` in `data/new/*_companies.json`: Upsolver, Speedata,
+  - **No careers URL (23).** Status `not_found` in `data/new/*_companies.json`: Upsolver, Speedata,
     Teramount, X-Globe, Q Factor, Gilat, Siklu, Silicom, Sight Diagnostics, Brainsway, EarlySign, Diagnostic Robotics,
-    Tevel Aerobotics, SolarEdge, Watergen, Stratasys, AIR, SAP, eBay,
+    Tevel Aerobotics, SolarEdge, Watergen, AIR, SAP, eBay,
     Akamai, Ford, Ericsson, Uber, Keysight. Find the real
     career page first, then continue with the groups below. The large multinationals will need a location-filtered
     address or their ATS (see the last group).
@@ -155,8 +95,7 @@ Observations about live sites below come from checks made on 2026-11-14 and may 
     - Cloudflare: the Greenhouse board's locations are "Hybrid" or "Distributed", never a city, so an Israel job could
       not be recognised. The adapter would need to read the offices (`?content=true`) first.
   - **The page returned links, not jobs.** Checked on 2026-11-14: Ex Libris links to `careers.clarivate.com`, a
-    worldwide Phenom board of its parent Clarivate (not Ex Libris only); Ormat's list is a ViziRecruiter board
-    (`vizi.vizirecruiter.com/OrmatTechnologiesInc-4638`, one company so no adapter); Optibus is a Comeet plugin
+    worldwide Phenom board of its parent Clarivate (not Ex Libris only); Ormat is pinned on 2026-11-17 (see below); Optibus is a Comeet plugin
     page, done on 2026-11-16 below; REE Automotive is in the next group.
   - **Large multinational boards that show a worldwide first page.** Google, Intuit, Apple, IBM
     and others returned jobs, but almost none in Israel (Apple's page had one), because the page is a worldwide search.
@@ -230,8 +169,7 @@ Observations about live sites below come from checks made on 2026-11-14 and may 
       (`/open-position/<slug>`, 1 Tel Aviv job), Walnut (`/jobs/<slug>`), env0 (`/careers/<slug>`), Deep Instinct (PDF job
       descriptions, none in Israel), Firefly's own `/positions/` pages (Firefly itself is pinned above), Syte (job list
       by script, no job link), Tyto Care and StoreDot (list or CV form with no job link), Swimm (an email address).
-    - Checked on 2026-11-16 (first batch, do not repeat): Stratasys is SuccessFactors (`careers.stratasys.com`, no
-      adapter); Speedata's jobs are on Viola Group's Getro board and its own page is a Wix site with no feed; Siklu is
+    - Checked on 2026-11-16 (first batch, do not repeat): Stratasys is SuccessFactors (pinned on 2026-11-17, see below); Speedata's jobs are on Viola Group's Getro board and its own page is a Wix site with no feed; Siklu is
       now part of Ceragon, whose Comeet board is Ceragon's; CytoReason's old plugin page answers 404; Diagnostic
       Robotics' list shows "No items found"; Guesty's page is a Next.js app that shows no uid even on a job page. Guessing
       the Greenhouse, Lever, Ashby and Workable slugs of the 21 companies without a careers URL found only an unrelated
@@ -249,6 +187,15 @@ Observations about live sites below come from checks made on 2026-11-14 and may 
       roles "may be missing or old", until a tenant lets the runner in or the crawl moves to a network it accepts.
       Their old jobs stay listed until a good crawl or the failure rules close them. The Workday pins of 2026-11-17
       (Intel, Autodesk, Ex Libris, Unity) may hit the same block on the runner.
+    - Checked on 2026-11-17 (third batch, do not repeat): Ormat and Stratasys are SuccessFactors career sites whose
+      `/search/?q=&locationsearch=Israel` page the generic browser crawl reads without an adapter (3 and 18 Israeli
+      jobs, the same on two runs); robots.txt of `careers.ormat.com` and `careers.stratasys.com` only blocks
+      `/applybutton/`, `/talentcommunity/`, `/services/` and similar, so both are pinned with `israel_only`. Jobvite
+      (`jobs.jobvite.com`) has no robots.txt, but Varonis's public board `/varonis/jobs` shows no job to the crawl (the
+      `varonis-internal` board did: it is not the public one), and Playstudios' Jobvite board has no job location; no
+      adapter. Pinpoint (`jobs.aligntech.com`: robots.txt allows the pages and `jobs.rss`) serves Align Technology
+      alone. SAP's SuccessFactors host answers 403 to a plain request: not read. Redefine Meat's Comeet board
+      (`redefinemeat/28.004`) lists 1 job, in the Netherlands.
     - Checked on 2026-11-16 (second batch, do not repeat): no adapter for iCIMS (AMD, Keysight: robots.txt of
       `careers-amd.icims.com` and `careers-keysight.icims.com` is `Disallow: /`) or Avature (Synopsys alone: the
       robots.txt of `generalmotors.avature.net` disallows `/careers`) or SuccessFactors (Stratasys alone) or Pinpoint
@@ -339,15 +286,16 @@ Added when the history moved to Supabase (v0.53.0; `CONTRIBUTING.md`, "The histo
 could not prove: a real PostgREST, a real Supabase project and a real Actions run.
 
 - [ ] **Check the first daily runs after the move.** Trigger: the PR of step 9.1 is merged and the one-time copy of the
-  old history is done. How: in the log of the first run, `pull` says `pulled <jobs> jobs and <log> crawl log rows`, the
+  old history is done. Status (2026-11-17): the 04:30 UTC cron-job.org run was green; two other runs that morning failed
+  at the commit step on a stale checkout, fixed in #152 (`ref: main`); no run after #152 yet. How: in the log of the first run, `pull` says `pulled <jobs> jobs and <log> crawl log rows`, the
   sync says `<n> crawl log rows written` and a second run the next day does not repeat them; `docs/` is committed and
   `data/` is not; the `backup` step commits to `ravidorr/misra-backups` with `jobs` and `crawl_log` in its counts. Done
-  when two runs in a row are green and the coverage card and the robots.txt closing still work (the five SmartRecruiters
-  companies close on their seventh skipped day).
+  when two runs in a row after #152 are green and the coverage card and the robots.txt deletion still work (the five SmartRecruiters
+  companies lose their `jobs` rows on the first sync after v0.57.0: the log says `Supabase: robots.txt, deleted <n> jobs of 5 companies`).
 - [ ] **Measure the size of `crawl_log` and `jobs` after a month.** Trigger: 30 days after the move. How: Supabase
   dashboard, Reports, Database. `crawl_log` keeps 90 days (`CRAWL_LOG_DAYS`, about 250 rows a day), the pull reads all of
-  it every run, and the backup exports it; if the pull gets slow or the table is large, shorten it. Done when: the
-  numbers are in `CONTRIBUTING.md`, "Real data against the limits".
+  it every run, and the backup exports it; if the pull gets slow or the table is large, shorten it. The same check serves PLAN.md step 7.4 (the size of the description
+  text, a month after 2026-11-16). Done when: the numbers are in `CONTRIBUTING.md`, "Real data against the limits".
 - [ ] **Rehearse a restore into a scratch Supabase project.** Trigger: the first `backup` commit with `jobs` and
   `crawl_log` exists. How: `CONTRIBUTING.md`, "Restore", into a new free project, with `--create-auth-users`; then the
   pull and a daily run against it. Done when: counts match the backup commit and the run is green.
@@ -363,3 +311,6 @@ could not prove: a real PostgREST, a real Supabase project and a real Actions ru
 
 - Dashboard description search has no per-visitor limit; to add one we would store a daily hashed-address counter for people who
   search without signing in, which needs new `PRIVACY.md` wording: do you want that?
+- `PRIVACY.md` (the "Reporting a missing career site" bullet, line 42) names the dashboard button "Report a site", and the
+  short version and the line about the spam counter say "if you report a site". The button now reads "Add a company"
+  (the form is the same). Do you want the notice to say "Add a company" too? Left as approved until you answer.

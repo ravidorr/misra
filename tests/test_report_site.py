@@ -134,7 +134,7 @@ async def test_fr7_ac1_the_gap_card_has_a_report_a_site_action_that_opens_the_fo
     await ready(page, site)
     button = page.locator("#gapsCard #reportOpen")
     await page.locator("#gaps-title").click()
-    assert await button.inner_text() == "Report a site"
+    assert await button.inner_text() == "Add a company"
     assert await button.get_attribute("data-report") == "open"
     assert await button.get_attribute("aria-haspopup") == "dialog"
     await expect(page.locator(DIALOG)).to_be_hidden()
@@ -143,7 +143,7 @@ async def test_fr7_ac1_the_gap_card_has_a_report_a_site_action_that_opens_the_fo
     await expect(dialog).to_be_visible()
     assert await dialog.get_attribute("aria-labelledby") == "reportTitle"
     assert await dialog.get_attribute("aria-describedby") == "reportIntro"
-    assert await page.locator("#reportTitle").inner_text() == "Report a site"
+    assert await page.locator("#reportTitle").inner_text() == "Add a company"
     assert await page.evaluate("document.activeElement.id") == "reportCompany"
     assert await dialog.get_attribute("data-state") == "idle"
 

@@ -4,6 +4,20 @@ All notable changes are documented here. Format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
+## [0.57.0] - 2026-11-17
+
+### Changed
+
+- A company whose `robots.txt` does not allow us to read its jobs loses them at once, not after 7 days: the crawl removes them from the scratch history and the sync deletes the company's `jobs` rows in Supabase (open and closed, with the stored text, snippet and details). Only `jobs` is touched, by exact name: the crawl log (the company stays on the coverage card), the stars and the emailed keys of users stay, and a star keeps its own title and link and shows as no longer listed. Only a read `robots.txt` that disallows us counts: a timeout, a 403 or any other failure deletes nothing, a `robots.txt` that cannot be read counts as allowed, and a name with another board that crawled or failed is left alone. More than 10 such companies in one run are refused with a warning (a host answering `Disallow: /` by mistake must not empty the table), a failed delete is a warning and the next run tries again, and the log holds counts only (`Supabase: robots.txt, deleted <n> jobs of <m> companies`). The 7-day streak, `ROBOTS_CLOSE_DAYS` and `track_robots_skips` are gone.
+- The coverage card says "Their policy does not allow automated access, so we respect it." under "We choose not to read these" and each company shows only its name and link (the per-company text with the days skipped and the last good crawl is gone). `jobs.json` keeps its shape: the `why` of those sites is an empty string, the `days` of `gaps.blocked` and `gaps.closeDays` are removed.
+- The button on the coverage card that opens the form reads "Add a company" (was "Report a site"), the sentence before it is gone, and the form's heading is "Add a company". The intro also invites a report about a company we read wrong. `PRIVACY.md` still names the old button (lawyer's text; question in `TODO.md`).
+
+## [0.56.0] - 2026-11-17
+
+### Changed
+
+- The ellipsis after a job snippet is exact. A new column `jobs.snippet_cut` (migration `20261126100000_jobs_snippet_cut.sql`, readable by everyone like `snippet`) is true when the 255-character snippet is shorter than the posting, false when it is the whole text and null when there is no snippet. The sync sets it (`descriptions.snippet_cut`) and writes again a row whose flag differs, the migration fills it in for the rows already stored, and the page shows the ellipsis exactly when the flag is true (and nothing when it is missing) instead of guessing from the length and the last character. The column is left out of the account backup like `snippet`.
+
 ## [0.55.0] - 2026-11-17
 
 ### Changed

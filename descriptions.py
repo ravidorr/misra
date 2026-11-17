@@ -142,6 +142,13 @@ def snippet(text: str | None) -> str | None:
     return cut.rstrip(_SNIPPET_TAIL) or None
 
 
+def snippet_cut(text: str | None) -> bool | None:
+    """Whether `snippet(text)` is shorter than the text, so the page shows an ellipsis after it: True when it was cut,
+    False when it is the whole text, None when there is no snippet (no text, or one word longer than the snippet)."""
+    short = snippet(text)
+    return None if short is None else len(short) < len((text or "").strip())
+
+
 def clean_details(details: dict[str, Any]) -> dict[str, Any]:
     """The details a site gave, as short text, a flag or a short list of text: nothing else is kept (a site's own
     structures can carry fields nobody meant to publish), empty values are dropped and control characters removed."""

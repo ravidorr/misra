@@ -116,7 +116,7 @@ All of these hold after the run:
   means allowed (a 5xx or a timeout is logged). An ATS's public API (Greenhouse, Lever, Ashby, Workable,
   Workday, Oracle, Phenom) counts as published for programs: a blanket `Disallow: /` does not stop it, a rule naming its
   path does. A company whose host forbids the address is skipped, not failed: it is not retried, does not count as a
-  failure, sends no alert and shows on the coverage gap card as "robots.txt does not allow it".
+  failure, sends no alert and shows on the coverage gap card under "We choose not to read these".
 - The switch is `ROBOTS_ENFORCED` in `common.py`. Set to `False`, the crawl ignores the rules but logs which hosts it would
   have refused. Every run prints which state it is in.
 - Audit on 2026-11-15 (read-only: only each host's `/robots.txt` was fetched, once, politely): 234 companies on 75
@@ -127,13 +127,21 @@ All of these hold after the run:
 - No host is exempt. `ROBOTS_API_EXCEPTION_HOSTS` in `common.py` is the place for a host that has given written
   permission to be called despite a blanket `Disallow: /`; it is empty on purpose (a test pins that), and such a
   permission is the only reason to add a host back. A rule that names an API path is honoured either way.
-- A company skipped because of `robots.txt` on every run for 7 days in a row (`ROBOTS_CLOSE_DAYS` in `common.py`) gets
-  its open jobs closed, by the same close the crawl uses, so the Supabase sync marks them closed and a later successful
-  crawl reopens them. Not earlier: a temporary `robots.txt` glitch at a host must not wipe the jobs and bring them back
-  as new. The streak is read from the crawl log: it is the company's latest crawls that carry the robots.txt note,
-  and it starts on the day of the first of them, so any other result (crawled, held or failed) ends it and the week
-  starts again (nothing else is stored: the history is rebuilt from Supabase on every run). The rule never applies to failures, to excluded
-  companies (they have their own removal path) or to a name with any other result in the same run (a second board that crawled or failed). The run logs counts only.
+- A company skipped because of `robots.txt` loses its jobs at once: we hold no role of a site whose policy does not
+  allow us to read it. `run.py` deletes its rows from the scratch history (so the dashboard build and the upsert no longer
+  see them) and the sync deletes its `jobs` rows in Supabase, open and closed, with the stored text, snippet and details
+  (`delete_robots_skipped` in `sync_supabase.py`). Only `jobs` is touched, by exact company name: the crawl log stays (it
+  is what puts the company on the coverage card, under "We choose not to read these"), and so do the stars and emailed
+  keys of users (a star keeps its own title, company and link and shows as no longer listed). A company counts as skipped
+  only when every crawl of that name in the run was a `robots.txt` skip, so a second board of the same name that crawled
+  or failed protects it, and a failure of any other kind (a timeout, a 403, bot protection) never deletes anything. A
+  `robots.txt` that cannot be read counts as allowed (see "Known limits"), so a glitch at a host is a normal crawl, not a
+  skip. A delete that fails is a warning and the next run tries again (meanwhile the sync closes the jobs). More than
+  `ROBOTS_MAX_PURGE_COMPANIES` companies with jobs in one run are refused with a warning, the same safety as the
+  exclusion list's: a host that answered `Disallow: /` by mistake must not empty the table. The next run has nothing
+  left to delete and sends no delete; the log says `Supabase: robots.txt, deleted <n> jobs of <m> companies`, counts only.
+  If the host later allows us, the next crawl brings the jobs back, and the digest treats them as the baseline of a
+  company seen for the first time (they share one `first_seen`), so nobody gets them as new.
 
 ### Known limits
 
@@ -272,7 +280,9 @@ PLAN.md step 7.1. Where the text of a posting lives, and how it gets there:
   a word boundary, no ellipsis in the data (the page adds one), trailing punctuation trimmed when the text was cut, the
   whole text when it fits, none when the job has no description or its first 255 characters have no space. The dashboard
   shows it with a link to the employer. It is refreshed with the text, and also when the stored snippet is not the one
-  computed (so a stored text gets its snippet on the next run).
+  computed (so a stored text gets its snippet on the next run). Next to it, `snippet_cut` (migration `20261126100000_jobs_snippet_cut.sql`, `descriptions.snippet_cut`) says whether the snippet is
+  shorter than the text: the page shows the ellipsis exactly when it is true, and a row without it shows none. The migration fills it
+  in for the rows stored before it, and the sync corrects any row whose flag differs from what it computes. Apply the migration before merging the change that reads it.
 - **The 30-day trim.** The full text of a closed job is deleted 30 days after the job closes. The table has no closed-at
   column; `last_seen` is the last crawl that saw the job open, and the sync does not change it when it closes the job, so
   `jobs_text_trim(p_day)` (migration `20261123100000_jobs_text_trim.sql`, service role only) sets `description`, `details`
@@ -505,7 +515,7 @@ Not covered, and said plainly: a real PostgREST and a real Supabase project (the
 
 ## Reported sites
 
-Visitors report a missing company with "Report a site" on the dashboard's coverage gap card (PLAN.md step 5.2). Each report reaches the maintainer by email (company, career page link and why it matters). Nothing is stored about it, so the email is the record: act on it or answer it, then do one of these in a PR:
+Visitors report a missing company with "Add a company" on the dashboard's coverage gap card (PLAN.md step 5.2). Each report reaches the maintainer by email (company, career page link and why it matters). Nothing is stored about it, so the email is the record: act on it or answer it, then do one of these in a PR:
 
 1. **Accept it for the crawl.** Check that the link is the company's own career page and that it lists roles in Israel, then add the company to `data/seed_companies.csv` (`name,domain`). Run `python3 discover.py` (it rewrites `data/companies.json` with each company's careers URL and job feed) and commit the result; the daily crawl then reads the company. If `discover.py` finds no feed for it, the next step applies.
 2. **Keep it on the gap card, with a reason.** Add a row to `data/unresolved_candidates.csv` (`name,domain,careers_url,segment,reason,note`, CRLF line endings). `reason` must be one of the keys of `REASONS` in `build_dashboard.py` (for example `no_feed_found` or `needs_reader`) and `note` says in a few words why we cannot read the site; the dashboard shows both on the coverage gap card. `careers_url` is the company's career page over `https` (leave it empty only for `no_careers_url`, which has none); the card links every site, to the career page, or to `https://<domain>` when there is none, and `tests/test_build_dashboard.py` fails when a row has no usable address.

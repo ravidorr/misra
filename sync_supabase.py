@@ -67,6 +67,8 @@ from common import (
     EXCLUDED_MIN_NAME,
     MAX_PURGE_COMPANIES,
     PULLED,
+    ROBOTS_MAX_PURGE_COMPANIES,
+    ROBOTS_NOTE,
     SCHEMA,
     ExclusionError,
     is_excluded,
@@ -110,6 +112,7 @@ class Result:
     upserted: int
     closed: int
     purged: int = 0  # rows deleted for the companies on the exclusion list
+    robots_deleted: int = 0  # jobs deleted for the companies that robots.txt kept us away from
     texts: int = 0  # jobs whose description was written
     texts_same: int = 0  # jobs whose description was already stored as it is
     texts_failed: int = 0  # jobs whose description could not be written (a warning, not a failure)
@@ -186,12 +189,13 @@ class Client:
     def open_keys(self) -> set[tuple[str, str]]:
         return set(self.open_text_hashes("company,job_id"))
 
-    def stored_texts(self) -> dict[tuple[str, str], tuple[str | None, str | None]]:
-        """The fingerprint of the stored description and the stored snippet of every open job (None when none)."""
-        return self.open_text_hashes("company,job_id,snippet,hash:details->>" + descriptions.HASH_KEY)
+    def stored_texts(self) -> dict[tuple[str, str], tuple[str | None, str | None, bool | None]]:
+        """The fingerprint of the stored description, the stored snippet and its cut flag of every open job (None
+        when none)."""
+        return self.open_text_hashes("company,job_id,snippet,snippet_cut,hash:details->>" + descriptions.HASH_KEY)
 
-    def open_text_hashes(self, select: str) -> dict[tuple[str, str], tuple[str | None, str | None]]:
-        keys: dict[tuple[str, str], tuple[str | None, str | None]] = {}
+    def open_text_hashes(self, select: str) -> dict[tuple[str, str], tuple[str | None, str | None, bool | None]]:
+        keys: dict[tuple[str, str], tuple[str | None, str | None, bool | None]] = {}
         offset = 0
         while True:
             params: dict[str, str | int] = {
@@ -206,7 +210,10 @@ class Client:
                 raise SyncError("GET jobs returned something other than a list")
             if not page:  # a server may cap a response below PAGE, so only an empty page ends the read
                 return keys
-            keys.update(((row["company"], row["job_id"]), (row.get("hash"), row.get("snippet"))) for row in page)
+            keys.update(
+                ((row["company"], row["job_id"]), (row.get("hash"), row.get("snippet"), row.get("snippet_cut")))
+                for row in page
+            )
             offset += len(page)
 
 
@@ -242,6 +249,46 @@ def purge(client: Client, excluded: Sequence[str]) -> int:
         total += sum(counts.values())
         print(f"Supabase: exclusion list, deleted {counts} for {name}")
     return total
+
+
+def robots_skipped(conn: sqlite3.Connection) -> list[str]:
+    """The companies whose every crawl in this run (the log rows with no Supabase id yet) was skipped because of
+    robots.txt. A name with any other result in the run, such as a second board that crawled or failed, is not one."""
+    rows = conn.execute(
+        "SELECT company FROM crawl_log WHERE id IS NULL AND company IS NOT NULL GROUP BY company "
+        "HAVING MIN(substr(COALESCE(note, ''), 1, ?) = ?) = 1 ORDER BY company",
+        (len(ROBOTS_NOTE), ROBOTS_NOTE),
+    )
+    return [name for (name,) in rows]
+
+
+def delete_robots_skipped(client: Client, names: Sequence[str]) -> tuple[int, int]:
+    """Delete the jobs, open and closed with their text, of the companies that robots.txt kept us away from, so we hold
+    no role of a site whose policy does not allow us to read it. Only the `jobs` rows, by exact company name: the
+    crawl log (it is the coverage card) and the stars and emailed keys of users stay, and a star keeps its own title and
+    link and shows as no longer listed. A company without rows sends no delete, so a second run does nothing.
+    More than ROBOTS_MAX_PURGE_COMPANIES companies with rows at once is refused (a host that answered `Disallow: /` by
+    mistake must not empty the table): the sync then closes their jobs, as before. Never fails the sync: a failure is a
+    warning and the next run tries again. Prints counts only. Returns (jobs deleted, companies)."""
+    try:
+        present = [name for name in names if client.has_rows("jobs", name)]
+    except SyncError as exc:
+        print(f"::warning::the jobs of robots.txt-skipped companies could not be looked up: {exc}")
+        return 0, 0
+    if len(present) > ROBOTS_MAX_PURGE_COMPANIES:
+        print(
+            f"::warning::robots.txt skipped {len(present)} companies with jobs "
+            f"(limit {ROBOTS_MAX_PURGE_COMPANIES}): nothing deleted"
+        )
+        return 0, 0
+    jobs = companies = 0
+    for name in present:
+        try:
+            jobs += client.delete_company("jobs", name)
+            companies += 1
+        except SyncError as exc:
+            print(f"::warning::the jobs of a robots.txt-skipped company could not be deleted: {exc}")
+    return jobs, companies
 
 
 def published_count() -> int:
@@ -329,6 +376,13 @@ def trim_crawl_log(client: Client, today: date) -> None:
 
 def sync(conn: sqlite3.Connection, client: Client, excluded: Sequence[str] = ()) -> Result:
     purged = purge(client, excluded)
+    skipped = robots_skipped(conn)
+    robots_jobs, robots_companies = delete_robots_skipped(client, skipped)
+    print(f"Supabase: robots.txt, deleted {robots_jobs} jobs of {robots_companies} companies")
+    # a crawl that crashed after its robots skips can leave their jobs in the scratch history: drop them there too, so
+    # neither this sync nor a retry on the same file (the log rows are marked written by then) sends them back
+    conn.executemany("DELETE FROM jobs WHERE company=?", [(name,) for name in skipped])
+    conn.commit()
     rows = [row for row in open_rows(conn) if not is_excluded(row["company"], list(excluded))]
     if not rows:
         raise SyncError("no open jobs in the local database: refusing to close every job in Supabase")
@@ -341,6 +395,7 @@ def sync(conn: sqlite3.Connection, client: Client, excluded: Sequence[str] = ())
         upserted=len(rows),
         closed=len(stale),
         purged=purged,
+        robots_deleted=robots_jobs,
         texts=written,
         texts_same=same,
         texts_failed=failed,
@@ -375,13 +430,19 @@ def push_texts(
     for company, job_id in wanted:
         text, details = texts[(company, job_id)]
         digest, short = descriptions.fingerprint(text, details), descriptions.snippet(text)
-        if stored.get((company, job_id)) != (digest, short):  # a text, its details or its snippet is not stored as is
+        cut = descriptions.snippet_cut(text)
+        if stored.get((company, job_id)) != (
+            digest,
+            short,
+            cut,
+        ):  # the text, details, snippet or flag is not stored as is
             fresh.append(
                 {
                     "company": company,
                     "job_id": job_id,
                     "description": text,
                     "snippet": short,
+                    "snippet_cut": cut,
                     "details": {**details, descriptions.HASH_KEY: digest},
                 }
             )
@@ -453,8 +514,8 @@ def pull_main(url: str, key: str, allow_shrink: bool = False) -> None:
     except (SyncError, ExportError) as exc:
         sys.exit(f"Supabase pull failed: {exc}")
     print(f"Supabase: pulled {jobs} jobs and {log} crawl log rows into {DB}")
-    if not log:  # not a failure (a new project has none), but every robots.txt streak and sharp-drop hold starts again
-        print("::warning::the crawl log is empty: robots.txt streaks and held drops start again")
+    if not log:  # not a failure (a new project has none), but every sharp-drop hold starts again
+        print("::warning::the crawl log is empty: held drops start again")
 
 
 def main(argv: Sequence[str] | None = None) -> None:

@@ -28,7 +28,7 @@ a request to `crawl_log`, and any `POST`, `PATCH` or `DELETE` with the anon key,
   posting) and `details` are never readable by them (migration `20261121100000_jobs_text_not_public.sql`; the lawyer's
   decision of 2026-11-16: the text is for search and the assistant), so a request that names them, or `select=*`, is
   refused with a permission error. `snippet`, the first 255 characters of the description at a word boundary, is
-  readable (migration `20261122100000_jobs_snippet.sql`). The dashboard shows only the snippet and a link to the employer. The full-text search (step 7.3) will be a database function that returns matching job keys only, and `get_job` (step 8.1) returns the full text to the assistant, rate limited; the text stays unreadable with the public key. The grant is per column, so a column added later stays closed
+  readable (migration `20261122100000_jobs_snippet.sql`). `snippet_cut`, a boolean that is true when the snippet is shorter than the full text (migration `20261126100000_jobs_snippet_cut.sql`), is readable too; the sync sets it and the dashboard shows the ellipsis exactly when it is true. The dashboard shows only the snippet and a link to the employer. The full-text search (step 7.3) will be a database function that returns matching job keys only, and `get_job` (step 8.1) returns the full text to the assistant, rate limited; the text stays unreadable with the public key. The grant is per column, so a column added later stays closed
   until a migration grants it. Nobody but the service role writes, and the service role reads and writes everything.
 - `crawl_log`: no policy, so only the service role reads or writes it.
 - `profiles` (user id, email): a signed-in user reads their own row. Nobody writes it but the trigger below and the
@@ -148,7 +148,7 @@ In the Supabase dashboard, Authentication:
 
 PLAN.md step 5.1, PRD FR-7. A visitor with no account reports a company whose career page is missing from the crawl; the
 maintainer gets one plain-text email through Resend. Nothing in the repository or the browser holds a secret: the
-function reads them from Supabase function secrets. The dashboard form is step 5.2 (`templates/report.js`, the "Report a site" button on the coverage gap card).
+function reads them from Supabase function secrets. The dashboard form is step 5.2 (`templates/report.js`, the "Add a company" button on the coverage gap card).
 
 Files: `supabase/functions/report-site/` (`index.ts` starts the server and is the only file that knows Deno,
 `handler.ts` holds the logic, `validate.ts` the input checks), the migration `20261116110000_report_site_limits.sql`

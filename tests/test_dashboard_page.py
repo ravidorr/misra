@@ -42,7 +42,6 @@ USER_ID = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
 EMAIL = "ann@test.example"
 NAME = "Ann Example"
 PHOTO = "https://photos.test/ann.png"
-GUARDED_NOTE = "robots.txt does not allow it; skipped for 2 days, its roles are kept for up to 7 days and then closed"
 # What the card shows: two coarse parts, never the eight internal reasons.
 SITES = {
     "Walled": "https://walled.test/jobs",  # blocked: the careers page itself
@@ -83,7 +82,7 @@ def build_site(db: sqlite3.Connection, workdir: Path, fill: Callable[[sqlite3.Co
         "Parked,parked.test,,deeptech,site_unusable,Domain parked at GoDaddy\r\n"
         f'LongName,long.test,https://long.test/careers,deeptech,needs_reader,"{LONG_NOTE}"\r\n'
         "Walled,walled.test,https://walled.test/jobs,multinational,bot_protection,\r\n"
-        f'Guarded,guarded.test,https://guarded.test/careers,deeptech,robots_disallowed,"{GUARDED_NOTE}"\r\n',
+        "Guarded,guarded.test,https://guarded.test/careers,deeptech,robots_disallowed,\r\n",
         encoding="utf-8",
     )
     if fill is not None:
@@ -506,6 +505,8 @@ async def test_paging_moves_focus_to_the_list_heading(page: Page, site: Path) ->
     await serve(page, site)
     await page.click("#next")
     assert await page.evaluate("document.activeElement.id") == "list-h"
+    box = await page.locator("#list-h").bounding_box()
+    assert box and box["width"] <= 1 and box["height"] <= 1  # a click is not the keyboard: the heading stays hidden
     assert await page.locator("#pageInfo").inner_text() == "Page 2 of 2"
     assert await page.locator("#list > li").count() == ISRAEL_JOBS - PAGE_SIZE
 
@@ -711,7 +712,6 @@ async def test_the_coverage_gap_card_has_two_parts_and_no_internal_reasons(page:
     # the reason stays in the page for agents
     assert await page.locator("li[data-company=Parked]").get_attribute("data-reason") == "site_unusable"
     assert await page.locator("li[data-company=Walled]").text_content() == "Walled (opens in a new tab)"
-    assert await page.locator("[data-part=cannot-read] .gap-why").count() == 0
     # the cards are in alphabetical order inside a part
     names = await page.locator("[data-part=cannot-read] li").evaluate_all("els => els.map(e => e.dataset.company)")
     assert names == ["LongName", "Nowhere", "Parked", "Walled"]
@@ -725,12 +725,11 @@ async def test_the_coverage_gap_card_says_in_plain_words_which_sites_we_choose_n
     skipped = page.locator("[data-part=skipped]")
     assert await skipped.locator("h3 span").first.inner_text() == "We choose not to read these"
     note = await skipped.locator(".gap-part-note").inner_text()
-    assert "robots.txt does not allow automated access" in note
-    assert "kept for up to 7 days and then closed" in note
+    assert note == "Their policy does not allow automated access, so we respect it."
     card = skipped.locator("li")
     assert await card.get_attribute("data-company") == "Guarded"
     assert await card.get_attribute("data-reason") == "robots_disallowed"
-    assert await card.locator(".gap-why").text_content() == GUARDED_NOTE
+    assert await card.text_content() == "Guarded (opens in a new tab)"  # the name and its link, nothing else
     assert await skipped.locator("a").get_attribute("href") == "https://guarded.test/careers"
     unread = await page.locator("[data-part=cannot-read] .gap-part-note").inner_text()
     assert unread == (
@@ -802,15 +801,13 @@ async def test_the_coverage_gap_card_opens_and_closes_and_says_so(page: Page, si
     assert await details.evaluate("d => d.open") is False
 
 
-async def test_report_a_site_stays_in_view_while_the_coverage_gap_card_is_closed(page: Page, site: Path) -> None:
+async def test_add_a_company_stays_in_view_while_the_coverage_gap_card_is_closed(page: Page, site: Path) -> None:
     await serve(page, site)
     assert await page.locator("#gaps").evaluate("d => d.open") is False
     button = page.locator("#gapsCard #reportOpen")
     await expect(button).to_be_visible()
-    assert (
-        await page.locator("#gapReportText").inner_text()
-        == "Is a company missing from this list? Tell us where it hires."
-    )
+    assert await button.inner_text() == "Add a company"
+    assert await page.locator("#gapReport p").count() == 0  # the button stands alone, with no sentence
     assert await page.locator("#gaps .gap-part").first.is_hidden()  # the list is closed, the report row is not
 
 
@@ -823,7 +820,7 @@ async def test_the_coverage_gap_card_reads_well_on_a_phone(page: Page, site: Pat
     summary = await page.locator("#gaps summary").bounding_box()
     assert summary is not None
     assert summary["height"] >= TAP
-    for note in await page.locator("#gaps .gap-why, #gaps .gap-part-note").all():
+    for note in await page.locator("#gaps .gap-part-note").all():
         box = await note.bounding_box()
         assert box is not None
         assert box["x"] >= 0
@@ -1376,8 +1373,8 @@ HTML = "<script>window.pwned = 1</script><b>bold</b> text"
 
 async def test_a_card_shows_its_snippet_as_text_and_none_when_there_is_none(page: Page, site: Path) -> None:
     rows = [
-        job("cut", "Cut", "Haifa, Israel", snippet=CUT.strip()),
-        job("whole", "Whole", "Haifa, Israel", snippet=WHOLE),
+        job("cut", "Cut", "Haifa, Israel", snippet=CUT.strip(), snippet_cut=True),
+        job("whole", "Whole", "Haifa, Israel", snippet=WHOLE, snippet_cut=False),
         job("html", "Html", "Haifa, Israel", snippet=HTML),
         job("none", "None", "Haifa, Israel", snippet=None),
         job("blank", "Blank", "Haifa, Israel", snippet="  "),
@@ -1411,16 +1408,27 @@ async def test_an_assistant_gets_the_snippet_and_null_when_a_role_has_none(page:
     assert jobs["Acme|b"]["snippet"] is None
 
 
-async def test_the_ellipsis_starts_at_200_characters_and_never_follows_a_sentence_end(page: Page, site: Path) -> None:
-    unpunctuated = {"s199": "a" * 199, "s200": "a" * 200}
-    sentences = {f"end{ch}": "a" * 199 + ch for ch in ".!?"}
+async def test_the_ellipsis_follows_the_stored_cut_flag_and_nothing_else(page: Page, site: Path) -> None:
+    cases = {
+        "cut-short": ("a" * 50, True),  # a cut under 200 characters (a very long word follows): the flag decides
+        "whole-long-bracket": ("a" * 254 + ")", False),  # a whole text of 200 or more that ends in a bracket
+        "whole-long-no-end": ("a" * 230, False),
+        "cut-sentence": ("a" * 199 + ".", True),  # a cut can end a sentence too
+        "missing": ("a" * 230, None),  # a row from before the column: nothing, not a guess
+    }
     rows = [
-        job(job_id, job_id, "Haifa, Israel", snippet=text) for job_id, text in {**unpunctuated, **sentences}.items()
+        job(job_id, job_id, "Haifa, Israel", snippet=text, **({} if flag is None else {"snippet_cut": flag}))
+        for job_id, (text, flag) in cases.items()
     ]
     assert await serve(page, site, backend=Backend(rows)) == []
 
     async def ellipses(job_id: str) -> int:
         return await page.locator(f"article[data-job-id='Acme|{job_id}'] .card-snippet [aria-hidden=true]").count()
 
-    assert [await ellipses(j) for j in unpunctuated] == [0, 1]  # a short text is whole; 200 or more was cut
-    assert [await ellipses(j) for j in sentences] == [0, 0, 0]  # a cut never ends a sentence, so this one is whole
+    assert [await ellipses(j) for j in cases] == [1, 0, 0, 1, 0]
+
+
+async def test_the_page_asks_for_the_cut_flag_with_the_other_public_columns(page: Page, site: Path) -> None:
+    backend = Backend([job("a", "A", "Haifa, Israel", snippet="Some text", snippet_cut=True)])
+    await serve(page, site, backend=backend)
+    assert "snippet_cut" in parse_qs(urlparse(backend.requests[0].url).query)["select"][0].split(",")

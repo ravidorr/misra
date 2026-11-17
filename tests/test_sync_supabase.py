@@ -487,6 +487,134 @@ def test_the_exclusion_list_deletes_the_crawl_log_of_the_company_too(jobs: sqlit
     assert [row["company"] for row in fake.others["crawl_log"]] == ["Beta"]
 
 
+def robots_log(*companies: str, note: str = common.ROBOTS_NOTE + " (walled.test)") -> list[tuple[Any, ...]]:
+    return [("2026-11-17T04:30:00", name, "fake", 0, 0, note) for name in companies]
+
+
+def stored(fake: FakeSupabase, company: str, *ids: str) -> None:
+    for job_id in ids:
+        fake.table[(company, job_id)] = {"company": company, "job_id": job_id, "status": "open"}
+
+
+def test_the_jobs_of_a_company_robots_txt_kept_us_from_are_deleted_and_nothing_else_of_it(
+    jobs: sqlite3.Connection, capsys: pytest.CaptureFixture[str]
+) -> None:
+    add_log(jobs, *robots_log("Walled"))
+    fake = FakeSupabase()
+    stored(fake, "Walled", "1", "2")
+    stored(fake, "Acme", "1")
+    fake.others["user_jobs"] = [{"company": "Walled"}]
+    fake.others["emailed"] = [{"company": "Walled"}]
+    fake.others["crawl_log"] = [{"ts": "2026-11-16T04:30", "company": "Walled"}]
+    result = sync(jobs, client(fake))
+    deleted = 2
+    assert result.robots_deleted == deleted
+    assert not [key for key in fake.table if key[0] == "Walled"]  # open or closed, the whole row goes
+    assert ("Acme", "1") in fake.table
+    assert fake.others["user_jobs"] == [{"company": "Walled"}]  # a star keeps its own title and link
+    assert fake.others["emailed"] == [{"company": "Walled"}]
+    assert any(row["company"] == "Walled" for row in fake.others["crawl_log"])  # the coverage card reads the log
+    out = capsys.readouterr().out
+    assert "Supabase: robots.txt, deleted 2 jobs of 1 companies" in out
+    assert "Walled" not in out  # counts only
+
+
+def test_jobs_a_crashed_crawl_left_in_the_history_are_not_sent_back_after_the_delete(jobs: sqlite3.Connection) -> None:
+    add_job(jobs, "Walled", "1", "Left over")  # the crawl crashed before run.py deleted it
+    add_log(jobs, *robots_log("Walled"))
+    fake = FakeSupabase()
+    stored(fake, "Walled", "1")
+    sync(jobs, client(fake))
+    assert ("Walled", "1") not in fake.table
+    sync(jobs, client(fake))  # a retry on the same file: the log rows are marked written, the jobs must stay gone
+    assert ("Walled", "1") not in fake.table
+
+
+def test_a_second_sync_finds_nothing_to_delete_and_sends_no_delete(jobs: sqlite3.Connection) -> None:
+    add_log(jobs, *robots_log("Walled"))
+    fake = FakeSupabase()
+    stored(fake, "Walled", "1")
+    sync(jobs, client(fake))
+    fake.calls.clear()
+    add_log(jobs, *robots_log("Walled"))
+    assert sync(jobs, client(fake)).robots_deleted == 0
+    assert not [c for c in fake.calls if c["method"] == "DELETE"]
+
+
+def test_only_a_company_whose_every_crawl_this_run_was_a_robots_skip_is_deleted(jobs: sqlite3.Connection) -> None:
+    add_log(
+        jobs,
+        *robots_log("Walled", "Twin", "Old"),
+        log_row("2026-11-17T04:31:00", "Twin", ok=0, note="boom"),  # a second board of Twin failed
+        log_row("2026-11-17T04:31:00", "Down", ok=0, note="HTTP 403"),
+        log_row("2026-11-17T04:31:00", "Quiet", note=None),
+    )
+    add_log(jobs, *robots_log("Old"), pulled=True)  # a skip of an earlier run does not count
+    assert sync_supabase.robots_skipped(jobs) == ["Old", "Walled"]
+    add_log(jobs, log_row("2026-11-17T04:32:00", "Old", note="fine"))
+    assert sync_supabase.robots_skipped(jobs) == ["Walled"]
+
+
+def test_a_failing_company_that_is_not_a_robots_skip_loses_nothing(jobs: sqlite3.Connection) -> None:
+    add_log(jobs, log_row("2026-11-17T04:30:00", "Walled", ok=0, note="HTTP 403 bot protection"))
+    fake = FakeSupabase()
+    stored(fake, "Walled", "1")
+    assert sync(jobs, client(fake)).robots_deleted == 0
+    assert ("Walled", "1") in fake.table  # the row is still there (the stale pass only closes it)
+
+
+def test_more_skipped_companies_than_the_limit_are_refused_and_their_jobs_are_only_closed(
+    jobs: sqlite3.Connection, capsys: pytest.CaptureFixture[str]
+) -> None:
+    names = [f"Walled{i}" for i in range(common.ROBOTS_MAX_PURGE_COMPANIES + 1)]
+    add_log(jobs, *robots_log(*names))
+    fake = FakeSupabase()
+    for name in names:
+        stored(fake, name, "1")
+    assert sync(jobs, client(fake)).robots_deleted == 0
+    assert "::warning::robots.txt skipped 11 companies with jobs (limit 10): nothing deleted" in capsys.readouterr().out
+    assert {fake.table[(n, "1")]["status"] for n in names} == {"closed"}
+
+
+def test_the_limit_itself_is_allowed(jobs: sqlite3.Connection) -> None:
+    names = [f"Walled{i}" for i in range(common.ROBOTS_MAX_PURGE_COMPANIES)]
+    add_log(jobs, *robots_log(*names))
+    fake = FakeSupabase()
+    for name in names:
+        stored(fake, name, "1")
+    assert sync(jobs, client(fake)).robots_deleted == len(names)
+
+
+def test_a_failed_lookup_or_delete_is_a_warning_and_the_sync_goes_on(
+    jobs: sqlite3.Connection, capsys: pytest.CaptureFixture[str]
+) -> None:
+    fake = FakeSupabase(fail_on="GET")
+    assert sync_supabase.delete_robots_skipped(client(fake), ["Walled"]) == (0, 0)
+    assert "::warning::the jobs of robots.txt-skipped companies could not be looked up" in capsys.readouterr().out
+    fake = FakeSupabase(fail_on="DELETE")
+    stored(fake, "Walled", "1")
+    assert sync_supabase.delete_robots_skipped(client(fake), ["Walled"]) == (0, 0)
+    assert "::warning::the jobs of a robots.txt-skipped company could not be deleted" in capsys.readouterr().out
+    add_log(jobs, *robots_log("Walled"))
+    assert sync(jobs, client(FakeSupabase(fail_on="DELETE"))).robots_deleted == 0  # the run is not stopped
+
+
+def test_one_company_that_cannot_be_deleted_does_not_stop_the_next(monkeypatch: pytest.MonkeyPatch) -> None:
+    fake = FakeSupabase()
+    stored(fake, "Aa", "1")
+    stored(fake, "Bb", "1")
+    api = client(fake)
+    real = api.delete_company
+
+    def delete(table: str, company: str) -> int:
+        if company == "Aa":
+            raise SyncError("boom")
+        return real(table, company)
+
+    monkeypatch.setattr(api, "delete_company", delete)
+    assert sync_supabase.delete_robots_skipped(api, ["Aa", "Bb"]) == (1, 1)
+
+
 def test_main_writes_the_log_and_trims_it(
     jobs: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
@@ -756,5 +884,5 @@ def test_main_pull_warns_when_the_crawl_log_is_empty_and_passes_the_override(
     sync_supabase.main(["--pull", "--allow-shrink"])  # an empty log is a warning with no row counts, never a failure
     assert capsys.readouterr().out.splitlines() == [
         "Supabase: pulled 1 jobs and 0 crawl log rows into data/jobs.db",
-        "::warning::the crawl log is empty: robots.txt streaks and held drops start again",
+        "::warning::the crawl log is empty: held drops start again",
     ]

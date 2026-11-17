@@ -64,7 +64,7 @@ const SUPABASE_URL = '__SUPABASE_URL__';
 const SUPABASE_ANON_KEY = '__SUPABASE_ANON_KEY__';
 const FETCH_TIMEOUT_MS = 20000;
 const REST_PAGE = 1000; /* PostgREST answers at most 1,000 rows at a time */
-const JOB_COLUMNS = 'company,job_id,title,team,location,url,first_seen,level,role_types,regions,locations,snippet';
+const JOB_COLUMNS = 'company,job_id,title,team,location,url,first_seen,level,role_types,regions,locations,snippet,snippet_cut';
 
 async function fetchJson(url, headers = {}) {
   const response = await fetch(url, { headers, signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) });
@@ -99,7 +99,8 @@ function remoteNotSaid(location) {
 /* A row of the jobs table as the page uses it: c company, i id, t title, m team, l location as written, u url,
    f first seen, lv level, rt role types, rg regions, lo places in Israel without a region, il in Israel, ru remote
    with no country given, n not on the company's first day of listings, s company's crawl is failing, sn the snippet:
-   the start of the posting as written, up to 255 characters ('' when the job has no text). */
+   the start of the posting as written, up to 255 characters ('' when the job has no text), sc whether
+   that snippet is shorter than the full text (the stored flag snippet_cut; false when it is null). */
 function toJob(row, failing, firstDay) {
   /* A row without the classification columns is a backend fault (sync lag, a missing migration), not a role that is
      "Not specified" and "Other": fail loudly instead of showing every role as unclassified. */
@@ -127,6 +128,7 @@ function toJob(row, failing, firstDay) {
     n: f !== '' && f > (firstDay[row.company] ?? f),
     s: failing.has(row.company),
     sn: typeof row.snippet === 'string' ? row.snippet.trim() : '',
+    sc: row.snippet_cut === true,
   };
 }
 
@@ -1366,14 +1368,9 @@ const tagsEl = (j) =>
     j.f && h('time', { class: 'card-seen', datetime: j.f, text: ago(j.f) }),
   ]);
 
-/* A heuristic, and no exact rule exists on the page: the snippet is the first 255 characters of the text cut at a word
-   boundary, and the data holds no flag or length of the full text, so a whole text of up to 255 characters and a cut one
-   look the same. A cut never ends in `.`, `!` or `?` (the sync trims them) and is nearly always close to 255, so a text
-   of 200 or more characters that does not end so is treated as cut and gets the ellipsis, hidden from screen readers.
-   Wrong in two rare cases: a whole text of that length that ends in a quote, a bracket or no punctuation gets a false
-   one, and a cut that is shorter than 200 (a very long word) gets none. An exact rule
-   needs a stored flag (see TODO.md, "Snippet ellipsis"). */
-const cutMark = (text) => text.length >= 200 && !/[.!?]$/.test(text) && h('span', { 'aria-hidden': 'true', text: '…' });
+/* The ellipsis after a snippet that is shorter than the full text: exactly when the stored flag `snippet_cut` is true (the
+   sync sets it, see descriptions.snippet_cut). A row without the flag (null) shows nothing. Hidden from screen readers. */
+const cutMark = (j) => j.sc && h('span', { 'aria-hidden': 'true', text: '…' });
 
 function cardEl(j) {
   const k = key(j);
@@ -1417,7 +1414,7 @@ function cardEl(j) {
       ]),
     ]),
     /* Third-party text, so text and never markup; dir="auto" lets a Hebrew posting run right to left. */
-    j.sn && h('p', { class: 'card-snippet', dir: 'auto' }, [j.sn, cutMark(j.sn)]),
+    j.sn && h('p', { class: 'card-snippet', dir: 'auto' }, [j.sn, cutMark(j)]),
     tagsEl(j),
     h('p', { class: 'card-actions' }, [
       h('a', { class: 'btn btn-primary', href: url, target: '_blank', rel: 'noopener noreferrer' }, [
@@ -1489,7 +1486,7 @@ function renderStarred() {
 
 /* Draw the list. replaceChildren drops the focus, and a late search answer draws the list while a reader is on one of
    its controls: put the focus back on the same control of the same role, or on the list heading when that role is not
-   on the page any more. A caller that places the focus itself (a star or a discard) passes false. A modal dialog that is
+   on the page any more (the heading shows itself while it holds the focus, so the reader sees where they are). A caller that places the focus itself (a star or a discard) passes false. A modal dialog that is
    open holds the focus, so it never finds it in the list. */
 function drawList(nodes, keepFocus) {
   const list = $('list');
@@ -1500,7 +1497,9 @@ function drawList(nodes, keepFocus) {
   list.replaceChildren(...nodes);
   if (!held || !keepFocus) return;
   const again = [...list.querySelectorAll('article')].find((art) => art.dataset.jobId === jobId);
-  (again?.querySelectorAll('a[href], button')[spot] ?? $('list-h')).focus({ preventScroll: true }); /* a late answer must not scroll the page */
+  const control = again?.querySelectorAll('a[href], button')[spot];
+  if (control) control.focus({ preventScroll: true }); /* a late answer must not scroll the page */
+  else $('list-h').focus(); /* it shows a focus ring (.list-heading) and may be out of view: let the browser scroll to it */
 }
 
 function render(focusIdx) {
@@ -1723,7 +1722,7 @@ function openDetail(j) {
   $('detailCompany').textContent = j.c;
   $('detailTitle').textContent = j.t;
   $('detailTags').replaceChildren(...tagsEl(j).childNodes);
-  $('detailText').replaceChildren(j.sn, cutMark(j.sn) || '');
+  $('detailText').replaceChildren(j.sn, cutMark(j) || '');
   $('detailLink').replaceChildren(
     'Read full description & apply on ',
     j.c,
@@ -1753,9 +1752,9 @@ $('starredView').addEventListener('click', () => {
   render();
 });
 
-const gaps = DATA.gaps ?? { blocked: [], untracked: [], total: 0, groups: [], closeDays: 0 };
+const gaps = DATA.gaps ?? { blocked: [], untracked: [], total: 0, groups: [] };
 {
-  /* The card is always there: "Report a site" (report.js) sits under the list and stays in view while the list is
+  /* The card is always there: "Add a company" (report.js) sits under the list and stays in view while the list is
      closed, even when no company is known to be missing. The reader gets two lists, not the internal reasons: the
      companies we choose not to read (their robots.txt does not allow it) first, then the ones our crawler cannot read.
      Each company keeps its reason in data-reason, and the reasons stay in the page data. */
@@ -1763,7 +1762,7 @@ const gaps = DATA.gaps ?? { blocked: [], untracked: [], total: 0, groups: [], cl
     {
       part: 'skipped',
       title: 'We choose not to read these',
-      note: `Their robots.txt does not allow automated access, so we respect it. Roles we already had are kept for up to ${gaps.closeDays} days and then closed.`,
+      note: 'Their policy does not allow automated access, so we respect it.',
       sites: [],
     },
     {
@@ -1791,12 +1790,9 @@ const gaps = DATA.gaps ?? { blocked: [], untracked: [], total: 0, groups: [], cl
               h('span', { class: 'sr-only', text: NEW_TAB }),
             ])
           : site.c;
-        /* Only a skipped company says why: it is the one fact the reader may want (roles close after the days). */
-        const why = part.part === 'skipped' && site.why ? h('span', { class: 'gap-why', text: site.why }) : null;
         list.append(
           h('li', { class: 'gap-card', 'data-company': site.c, 'data-reason': site.reason }, [
             h('b', { class: 'gap-name' }, [name]),
-            why,
           ]),
         );
       }
