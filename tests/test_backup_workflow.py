@@ -102,7 +102,7 @@ def test_a_failed_backup_fails_the_run_and_is_named_in_the_alert_without_blockin
     assert "backup=${{ steps.backup.outcome }}" in alert()
     assert "failure() || cancelled()" in alert()
     assert "continue-on-error" not in WORKFLOW
-    for name in ("commit", "Build dashboard"):
+    for name in ("commit", "build"):
         assert "steps.backup" not in all_steps[name]  # nothing the deploy needs waits for it
 
 

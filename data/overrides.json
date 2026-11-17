@@ -878,5 +878,55 @@
   "ats": "comeet_page",
   "slug": "https://optibus.com/company/careers/jobs/",
   "israel_only": true
+ },
+ "CytoReason": {
+  "ats": "comeet",
+  "slug": "cytoreason/16.002",
+  "israel_only": true
+ },
+ "Mitiga": {
+  "ats": "comeet",
+  "slug": "mitiga/26.00B",
+  "israel_only": true
+ },
+ "Lusha": {
+  "ats": "comeet",
+  "slug": "lusha/73.00B",
+  "israel_only": true
+ },
+ "Quantum Machines": {
+  "ats": "comeet",
+  "slug": "quantummachines/D6.000",
+  "israel_only": true
+ },
+ "Papaya Gaming": {
+  "ats": "comeet",
+  "slug": "papayagaming/46.00B",
+  "israel_only": true
+ },
+ "Intel": {
+  "ats": "workday",
+  "slug": "intel/wd1/External",
+  "israel_only": true
+ },
+ "Autodesk": {
+  "ats": "workday",
+  "slug": "autodesk/wd1/Ext",
+  "israel_only": true
+ },
+ "Ex Libris": {
+  "ats": "workday",
+  "slug": "clarivate/wd3/Clarivate_Careers",
+  "israel_only": true
+ },
+ "Classiq": {
+  "ats": "browser",
+  "slug": "https://www.classiq.io/careers-page",
+  "israel_only": true
+ },
+ "Amdocs": {
+  "ats": "browser",
+  "slug": "https://jobs.amdocs.com/careers?location=Israel",
+  "israel_only": true
  }
 }

@@ -42,7 +42,7 @@ def order() -> list[str]:
 def test_the_digest_step_runs_after_the_sync_and_before_the_build_and_the_deploy_push() -> None:
     ids = order()
     assert ids.index("sync") < ids.index("digests") < ids.index("commit")
-    assert ids.index("digests") < ids.index("Build dashboard")
+    assert ids.index("digests") < ids.index("build")
     assert ids.index("crawl") < ids.index("sync")
 
 
@@ -85,8 +85,8 @@ def test_the_dry_run_input_is_a_boolean_that_only_adds_the_flag() -> None:
 
 def test_a_failed_digest_still_builds_and_commits_and_triggers_the_alert() -> None:
     all_steps = steps()
-    assert "always() && steps.pull.outcome == 'success'" in all_steps["Build dashboard"]
-    assert "always() && steps.checkout.outcome == 'success'" in all_steps["commit"]
+    assert "always() && steps.sync.outcome == 'success'" in all_steps["build"]  # the digest is not in the condition
+    assert "always() && steps.build.outcome == 'success'" in all_steps["commit"]
     alert = next(step for name, step in all_steps.items() if name.startswith("Email an alert"))
     assert "failure() || cancelled()" in alert
     assert "digests=${{ steps.digests.outcome }}" in alert
@@ -340,7 +340,7 @@ def test_the_history_is_pulled_from_supabase_before_the_crawl() -> None:
     ids = order()
     assert ids.index("verify") < ids.index("pull") < ids.index("crawl") < ids.index("sync")
     pull = steps()["pull"]
-    assert "run: python sync_supabase.py --pull\n" in pull
+    assert "run: python sync_supabase.py --pull $ALLOW_SHRINK_FLAG\n" in pull
     assert set(SECRET_REF.findall(pull)) == {"SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY"}
     assert "if:" not in pull and "if:" not in steps()["crawl"]  # a failed pull stops the crawl
     assert "continue-on-error" not in pull
@@ -351,3 +351,37 @@ def test_nothing_commits_or_uploads_the_history() -> None:
     assert "data/jobs.db" not in steps()["commit"]
     assert "upload-artifact" not in WORKFLOW
     assert "integrity_check" not in WORKFLOW
+
+
+def test_nothing_is_built_or_committed_after_a_failed_pull_or_sync_and_the_alert_names_the_build() -> None:
+    """A bad pull or a failed sync must never publish: the build needs a good sync, the commit a good build."""
+    ids = order()
+    assert ids.index("sync") < ids.index("digests") < ids.index("build") < ids.index("commit")
+    assert "if: ${{ always() && steps.sync.outcome == 'success' }}" in steps()["build"]
+    assert "if: ${{ always() && steps.build.outcome == 'success' }}" in steps()["commit"]
+    assert "build=${{ steps.build.outcome }}" in next(s for n, s in steps().items() if n.startswith("Email an alert"))
+
+
+def test_a_crawl_that_failed_part_way_is_still_synced_but_a_failed_pull_syncs_nothing() -> None:
+    """run.py commits each company as it goes, so the sync runs after a failed crawl; not after a failed pull (the
+    crawl is then skipped)."""
+    condition = "if: ${{ !cancelled() && steps.pull.outcome == 'success' && steps.crawl.outcome != 'skipped' }}"
+    assert condition in steps()["sync"]
+
+
+def test_the_daily_checkout_is_the_tip_of_main_not_the_commit_the_run_was_queued_at() -> None:
+    """2026-11-17: a run queued behind a publish-docs run checked out the older commit and its docs/ push conflicted."""
+    checkout = steps()["checkout"]
+    assert re.search(r"(?m)^          ref: main$", checkout)
+    assert "persist-credentials: false" in checkout
+    assert "ssh-key" not in checkout
+
+
+def test_the_shrink_override_is_a_boolean_input_that_only_adds_the_flag_to_the_pull() -> None:
+    assert re.search(
+        r"(?m)^      allow_shrink:\n(?:        .+\n)*?        type: boolean\n        default: false$", WORKFLOW
+    )
+    pull = steps()["pull"]
+    assert "ALLOW_SHRINK_FLAG: ${{ inputs.allow_shrink && '--allow-shrink' || '' }}" in pull
+    assert "run: python sync_supabase.py --pull $ALLOW_SHRINK_FLAG\n" in pull
+    assert "inputs." not in pull.split("run:", 1)[1]

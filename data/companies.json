@@ -168,12 +168,13 @@
   "name": "Papaya Gaming",
   "domain": "papayagaming.com",
   "careers_url": "",
-  "ats": "",
-  "slug": "",
-  "source": "",
-  "status": "not_found",
-  "n_jobs": null,
-  "n_israel": null
+  "ats": "comeet",
+  "slug": "papayagaming/46.00B",
+  "source": "override",
+  "status": "ok",
+  "n_jobs": 17,
+  "n_israel": 13,
+  "israel_only": true
  },
  {
   "name": "SentinelOne",
@@ -420,13 +421,14 @@
  {
   "name": "Lusha",
   "domain": "lusha.com",
-  "careers_url": "https://www.lusha.com/careers/",
-  "ats": "",
-  "slug": "",
-  "source": "",
-  "status": "careers_page_only",
-  "n_jobs": null,
-  "n_israel": null
+  "careers_url": "",
+  "ats": "comeet",
+  "slug": "lusha/73.00B",
+  "source": "override",
+  "status": "ok",
+  "n_jobs": 11,
+  "n_israel": 10,
+  "israel_only": true
  },
  {
   "name": "Cloudinary",
@@ -717,13 +719,14 @@
  {
   "name": "Amdocs",
   "domain": "amdocs.com",
-  "careers_url": "https://www.amdocs.com/careers/home",
-  "ats": "",
-  "slug": "",
-  "source": "",
-  "status": "careers_page_only",
+  "careers_url": "https://jobs.amdocs.com/careers?location=Israel",
+  "ats": "browser",
+  "slug": "https://jobs.amdocs.com/careers?location=Israel",
+  "source": "override",
+  "status": "ok",
   "n_jobs": null,
-  "n_israel": null
+  "n_israel": null,
+  "israel_only": true
  },
  {
   "name": "Verint",
@@ -916,23 +919,25 @@
   "name": "Quantum Machines",
   "domain": "quantum-machines.co",
   "careers_url": "",
-  "ats": "",
-  "slug": "",
-  "source": "",
-  "status": "not_found",
-  "n_jobs": null,
-  "n_israel": null
+  "ats": "comeet",
+  "slug": "quantummachines/D6.000",
+  "source": "override",
+  "status": "ok",
+  "n_jobs": 67,
+  "n_israel": 23,
+  "israel_only": true
  },
  {
   "name": "Classiq",
   "domain": "classiq.io",
-  "careers_url": "",
-  "ats": "",
-  "slug": "",
-  "source": "",
-  "status": "not_found",
+  "careers_url": "https://www.classiq.io/careers-page",
+  "ats": "browser",
+  "slug": "https://www.classiq.io/careers-page",
+  "source": "override",
+  "status": "ok",
   "n_jobs": null,
-  "n_israel": null
+  "n_israel": null,
+  "israel_only": true
  },
  {
   "name": "Vayyar",
@@ -2947,6 +2952,66 @@
   "status": "ok",
   "n_jobs": 1,
   "n_israel": 1,
+  "israel_only": true
+ },
+ {
+  "name": "CytoReason",
+  "domain": "cytoreason.com",
+  "careers_url": "",
+  "ats": "comeet",
+  "slug": "cytoreason/16.002",
+  "source": "override",
+  "status": "ok",
+  "n_jobs": 2,
+  "n_israel": 2,
+  "israel_only": true
+ },
+ {
+  "name": "Mitiga",
+  "domain": "mitiga.io",
+  "careers_url": "",
+  "ats": "comeet",
+  "slug": "mitiga/26.00B",
+  "source": "override",
+  "status": "ok",
+  "n_jobs": 2,
+  "n_israel": 2,
+  "israel_only": true
+ },
+ {
+  "name": "Intel",
+  "domain": "intel.com",
+  "careers_url": "",
+  "ats": "workday",
+  "slug": "intel/wd1/External",
+  "source": "override",
+  "status": "ok",
+  "n_jobs": 21,
+  "n_israel": 21,
+  "israel_only": true
+ },
+ {
+  "name": "Autodesk",
+  "domain": "autodesk.com",
+  "careers_url": "",
+  "ats": "workday",
+  "slug": "autodesk/wd1/Ext",
+  "source": "override",
+  "status": "ok",
+  "n_jobs": 1,
+  "n_israel": 1,
+  "israel_only": true
+ },
+ {
+  "name": "Ex Libris",
+  "domain": "exlibrisgroup.com",
+  "careers_url": "",
+  "ats": "workday",
+  "slug": "clarivate/wd3/Clarivate_Careers",
+  "source": "override",
+  "status": "ok",
+  "n_jobs": 2,
+  "n_israel": 2,
   "israel_only": true
  }
 ]

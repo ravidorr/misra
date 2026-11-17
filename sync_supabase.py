@@ -4,8 +4,10 @@
 open and closed, without the text of the postings, and the whole `crawl_log`, each row with its Supabase id). It
 reads through the export's `Source`, which checks every table against its exact row count, and it refuses an empty
 `jobs` table: a crawl that starts from nothing would take every job for a new one (and the digest would email them
-all). The file is written beside and renamed over, so there is never a half-built one, and the crawl and the dashboard
-build refuse a missing file.
+all), and a `jobs` table that holds fewer than half of the open jobs the dashboard last published (docs/jobs.json; a
+partly hidden table would look like jobs that closed; `--allow-shrink` for a real loss; a docs/jobs.json that cannot be
+read fails the pull too). An empty `crawl_log` is a warning (a new project has none). The file is written beside and
+renamed over, so there is never a half-built one, and the crawl and the dashboard build refuse a missing file.
 
 `python sync_supabase.py` runs after the crawl: it copies the open jobs of data/jobs.db into the Supabase `jobs` table
 (PostgREST over HTTPS), closes the jobs that are no longer open, writes the crawl log rows of this run (the ones with
@@ -44,6 +46,7 @@ text until `jobs_text_trim` sets description, details and snippet to null 30 day
 this pass); the removal of an excluded company deletes the whole row, text included. A failure in this pass or in the
 trim is a warning, never a failed step: the jobs are already stored and the day's update goes on."""
 
+import json
 import os
 import sqlite3
 import sys
@@ -70,7 +73,7 @@ from common import (
     load_excluded,
     open_history,
 )
-from export_accounts import CRAWL_LOG, JOBS, ExportError, Source
+from export_accounts import ALLOW_SHRINK, CRAWL_LOG, JOBS, ExportError, Source, fell_by_half
 from export_accounts import HttpSession as ExportSession
 
 BATCH = 500  # rows per upsert request
@@ -83,6 +86,7 @@ OPEN_JOBS = f"SELECT {', '.join(COLUMNS)} FROM jobs WHERE status='open' ORDER BY
 HISTORY_COLUMNS = (*COLUMNS, "status")  # the columns of `jobs` that the scratch history keeps
 LOG_COLUMNS = ("ts", "company", "ats", "ok", "n_jobs", "note")
 PURGE_TABLES = ("user_jobs", "emailed", "jobs", "crawl_log")  # where a company's rows live: stars, emailed keys, jobs
+PUBLISHED = "docs/jobs.json"  # the dashboard's last published jobs: the pull's yardstick for a partial read
 EMPTY_SECRETS = "SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY is empty: the history lives in Supabase, so nothing can run"
 
 
@@ -240,16 +244,37 @@ def purge(client: Client, excluded: Sequence[str]) -> int:
     return total
 
 
-def pull(source: Source, path: str = DB) -> tuple[int, int]:
+def published_count() -> int:
+    """How many open jobs the dashboard last published. docs/jobs.json is committed, so every checkout has it: one that
+    cannot be read is an error (the pull fails closed), not a reason to skip the check."""
+    try:
+        return len(json.loads(Path(PUBLISHED).read_text(encoding="utf-8"))["jobs"])
+    except (OSError, ValueError, KeyError, TypeError):
+        raise SyncError(
+            f"{PUBLISHED} could not be read, so the pulled jobs cannot be compared with the last published ones "
+            f"(run again with {ALLOW_SHRINK} to skip the check)"
+        ) from None
+
+
+def pull(source: Source, path: str = DB, allow_shrink: bool = False) -> tuple[int, int]:
     """Rebuild the scratch history at `path` from Supabase and return (jobs, crawl log rows). Everything is read before
-    anything is written; an empty `jobs` table is refused (see the module's note). The file is built beside and renamed
-    over the old one."""
+    anything is written; an empty `jobs` table is refused (see the module's note), and so is one that holds fewer than
+    half of the open jobs the dashboard last published (a partly hidden or partly lost table would look like jobs that
+    closed, and the digest would email the rest as new); `allow_shrink` skips that second check for a real loss. The
+    file is built beside and renamed over the old one."""
     jobs = source.read(JOBS)
     log = source.read(CRAWL_LOG)
     if not jobs:
         raise SyncError(
             "Supabase holds no jobs: refusing to start a crawl from an empty history "
             "(restore the backup first, CONTRIBUTING.md, 'Backups')"
+        )
+    open_jobs = sum(row["status"] == "open" for row in jobs)
+    if not allow_shrink and fell_by_half(last := published_count(), open_jobs):
+        raise SyncError(
+            f"Supabase holds {open_jobs} open jobs and the dashboard last published {last}: refusing to crawl from a "
+            f"history that lost more than half of them (a wrong key or a policy change?); if it is real, run again "
+            f"with {ALLOW_SHRINK}"
         )
     part = Path(path + ".part")
     part.unlink(missing_ok=True)
@@ -422,18 +447,21 @@ def credentials() -> tuple[str, str]:
     return url, key
 
 
-def pull_main(url: str, key: str) -> None:
+def pull_main(url: str, key: str, allow_shrink: bool = False) -> None:
     try:
-        jobs, log = pull(Source(cast("ExportSession", requests.Session()), url, key))
+        jobs, log = pull(Source(cast("ExportSession", requests.Session()), url, key), allow_shrink=allow_shrink)
     except (SyncError, ExportError) as exc:
         sys.exit(f"Supabase pull failed: {exc}")
     print(f"Supabase: pulled {jobs} jobs and {log} crawl log rows into {DB}")
+    if not log:  # not a failure (a new project has none), but every robots.txt streak and sharp-drop hold starts again
+        print("::warning::the crawl log is empty: robots.txt streaks and held drops start again")
 
 
 def main(argv: Sequence[str] | None = None) -> None:
     url, key = credentials()
-    if "--pull" in (sys.argv[1:] if argv is None else argv):
-        pull_main(url, key)
+    args = sys.argv[1:] if argv is None else argv
+    if "--pull" in args:
+        pull_main(url, key, ALLOW_SHRINK in args)
         return
     conn = open_history()
     if conn.execute("PRAGMA user_version").fetchone()[0] != PULLED:
