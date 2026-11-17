@@ -13,6 +13,15 @@ All notable changes are documented here. Format follows [Keep a Changelog](https
 ### Added
 
 - A way home on every page but the dashboard: an icon-only house button in the header, in the place the dashboard gives to the account controls (`btn btn-pill btn-icon`, named "Home", so it looks and acts like the profile and theme buttons), and a "Home" link first in the footer. The logo link stays. `build_dashboard.SLOTS` now says what each slot holds on the dashboard and on every other page (`templates/parts/home-button.inc`, `home-link.inc`).
+## [0.66.1] - 2026-11-18
+
+### Changed
+
+- The browser tests share one Chromium and one Playwright driver per worker (a new context for each test) instead of starting both for every test; the pytest event loop is shared for the session so the browser can be.
+
+### Fixed
+
+- The report form no longer loses its "Report sent" answer when the dialog's `close` event arrives late, after the answer has reopened the dialog (`templates/report.js`). It showed up as a flaky test on a busy machine.
 
 ## [0.66.0] - 2026-11-18
 
