@@ -1,9 +1,9 @@
 """The Contact page, in a real browser against the built page.
 
-The form is off in the repository (build_dashboard.CONTACT_FORM_ENABLED), so two builds are checked: the one that ships
-(static contact information only) and one with the switch on, run against a fake `contact` Edge Function. The function
-itself is tested in test/contact.test.ts. Locally the tests skip when Chromium is missing; in CI a missing browser
-fails."""
+The form is on in the repository (build_dashboard.CONTACT_FORM_ENABLED), so two builds are checked: one with the switch
+on, run against a fake `contact` Edge Function, and one with it forced off (static contact information only). The
+function itself is tested in test/contact.test.ts. Locally the tests skip when Chromium is missing; in CI a missing
+browser fails."""
 
 import json
 import sqlite3
