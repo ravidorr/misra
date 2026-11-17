@@ -475,3 +475,7 @@ Recorded 2026-11-15, one line per decision, newest last. The first lines were ma
   closed job is deleted (set to NULL) 30 days after the job closes, and at once when a company asks for removal (the
   exclusion list deletes the whole row). After the 30-day trim, title, company, place, link, dates and the snippet stay. `PRIVACY.md` and `TERMS.md` carry
   his wording.
+- 2026-11-17: The lawyer wants to review the assistant endpoint (FR-6, `PLAN.md` step 8.1) before it goes live, because
+  `get_job` returns the full text of a posting. It is built and switched off: the Edge Function `mcp` answers 404 to everything
+  unless the function secret `ASSISTANT_ENDPOINT_ENABLED` is `true`, and it is not deployed. Nobody turns it on before he
+  confirms the rate limits, that the full text may be returned to AI assistants at all, and the wording of `TERMS.md`.

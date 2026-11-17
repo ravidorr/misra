@@ -315,6 +315,15 @@ Decisions made in planning (they change the PRD's wording, so update the PRD in 
   text; it returns keys, titles and snippets), `get_job` (everything collected, including the full text, for the
   assistant), no user data, rate limited. Same query code path as the dashboard (shared SQL function) so the results
   match. The text is exposed to assistants and search only by this step and 7.3, as the lawyer approved on 2026-11-16. Done when: FR-6 AC 1 to 4 and 8 hold against a real MCP client.
+  **Built, off, waiting for the lawyer (2026-11-17), so not ticked.** The Edge Function `mcp` (MCP over HTTP, JSON answers,
+  no sessions) with `search_jobs` (the SQL function `search_jobs`, the dashboard's rules, `search_job_keys` for the text) and
+  `get_job` (one job by company and job_id, the full text, open or closed for less than 30 days), rate limited per caller
+  and for everyone through hashed addresses (`assistant_ip_limits`, cleaned by the daily cleanup). It answers 404 unless
+  the function secret `ASSISTANT_ENDPOINT_ENABLED` is `true`; it is not deployed and nobody sets the secret before the lawyer
+  confirms (his request of 2026-11-17). The migration `20261125100000_assistant_endpoint.sql` is harmless while it is off and
+  is applied by the maintainer. Tested with the protocol over HTTP in vitest and once with the official TypeScript client.
+  To finish: the lawyer's answers, the migration, `supabase functions deploy mcp`, the secret, the live check in
+  `supabase/README.md` ("Assistant endpoint"), a real assistant, then tick this step.
 - [ ] 8.2 "Connect your assistant" page on the dashboard with plain step-by-step instructions for the common assistants
   tested by hand, README cut to a short developer note, `llms.txt` updated. Done when: FR-6 AC 5 to 7 hold; a person with
   no technical skills connects in a couple of minutes (hand test).

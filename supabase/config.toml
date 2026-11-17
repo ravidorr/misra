@@ -33,3 +33,10 @@ verify_jwt = false
 # user id only from that answer).
 [functions.email-settings]
 verify_jwt = true
+
+# The assistant endpoint (MCP over HTTP): anyone's AI assistant calls it with no sign-in and no key, so the platform must
+# not demand a JWT. The function protects itself: it answers 404 to everything unless the secret
+# ASSISTANT_ENDPOINT_ENABLED is "true" (off until the lawyer has reviewed it), it is read-only, and it rate limits per
+# caller and for everyone. Not deployed yet.
+[functions.mcp]
+verify_jwt = false

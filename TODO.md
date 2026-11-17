@@ -48,6 +48,15 @@ Observations about live sites below come from checks made on 2026-11-14 and may 
     looked at both in Gmail and one other client, the tests above pass, `npm run lint` and `npm run test:coverage` pass,
     and the PR shows screenshots. A change to `send_digests.py` needs a version bump and a changelog entry.
 
+## Assistant endpoint
+
+- [ ] **Turn on the assistant endpoint after the lawyer has reviewed it.** Trigger: his confirmation (he asked on 2026-11-17 to
+  review it before it goes live; the note for him is `~/Desktop/misra-lawyer-note-assistant.md`). Where: `supabase/README.md`,
+  "Assistant endpoint", "Turn it on". How: apply `supabase/migrations/20261125100000_assistant_endpoint.sql`, deploy `mcp`, set the
+  secret `ASSISTANT_ENDPOINT_ENABLED=true`, run the live check; then set `ASSISTANT_PAGE_ENABLED = True` in `build_dashboard.py`
+  (PLAN.md step 8.2, the "Connect your assistant" page) and test a real assistant. Done when: a real assistant lists the
+  tools, searches and reads one job, and PLAN.md steps 8.1 and 8.2 are ticked.
+
 ## Yearly security review
 
 - [ ] **Do the yearly security review by 2027-11-15, then every year.** Trigger: the date. Where: the
