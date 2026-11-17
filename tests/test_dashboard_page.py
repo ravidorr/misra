@@ -30,6 +30,7 @@ PAGE_SIZE = 10
 DEBOUNCE_MS = 600
 LONG_NOTE = "A very long note without a break " + "x" * 120
 PHONE = {"width": 375, "height": 800}
+PHONE_MAX = 561  # the width under which the filters are a modal sheet
 TAP = 44
 # Chrome measures a 44 px box as 43.999999 now and then; the rule is still 44 (a 43 px target fails).
 TAP_MIN = TAP - 0.01
@@ -1332,31 +1333,36 @@ async def test_reset_keeps_the_search_words(page: Page, site: Path) -> None:
     assert json.loads(await page.evaluate("localStorage.getItem('il-jobs-filters-v3')"))["q"] == "product"
 
 
-async def test_reset_is_announced_to_screen_readers_and_shows_nothing_new(page: Page, site: Path) -> None:
+@pytest.mark.parametrize("width", [1280, 375])
+async def test_reset_is_announced_to_screen_readers_and_shows_nothing_new(page: Page, site: Path, width: int) -> None:
+    await page.set_viewport_size({"width": width, "height": 800})
     await serve_filters(page, site)
     await page.fill("#q", "product")
+    if width < PHONE_MAX:
+        await page.click("#filtersOpen")  # a modal sheet: the rest of the page is inert, so the message lives inside it
     await page.click(".chip[data-group=levels][data-value=Junior]")
-    await page.evaluate(
-        """() => {
-            window.heard = [];
-            new MutationObserver(() => window.heard.push(document.getElementById('status').textContent))
-                .observe(document.getElementById('status'), { childList: true, characterData: true, subtree: true });
-        }"""
-    )
     foot = page.locator("#moreFilters .sheet-foot")
     before = (await foot.bounding_box() or {})["height"]
     await page.click("#reset")
-    await page.wait_for_function("window.heard.includes('Filters reset.')")
-    status = page.locator("#status")
+    status = page.locator("#resetStatus")
+    await expect(status).to_have_text("Filters reset.")
     assert await status.get_attribute("role") == "status"
     assert "sr-only" in (await status.get_attribute("class") or "")
-    assert await foot.evaluate("el => [...el.children].map((c) => c.id)") == ["reset", "filtersDone"]
-    assert (await foot.bounding_box() or {})["height"] == before  # nothing visible was added to the footer
+    assert await page.evaluate(
+        "document.getElementById('moreFilters').contains(document.getElementById('resetStatus'))"
+    )
+    assert await foot.locator("button").evaluate_all("els => els.map((e) => e.id)") == ["reset", "filtersDone"]
+    box = await status.bounding_box()
+    assert box is not None
+    assert box["width"] <= 1
+    assert box["height"] <= 1  # nothing visible was added to the footer
+    assert (await foot.bounding_box() or {})["height"] == before
     for gone in ("#resetNote", "#undoReset"):
         await expect(page.locator(gone)).to_have_count(0)
     assert await page.locator("#levels .chip[aria-pressed=true]").all_text_contents() == ["All"]
     assert await page.input_value("#q") == "product"  # the search words stay
-    await expect(status).to_contain_text("Showing")  # the results summary takes the line over
+    await page.click(".chip[data-group=levels][data-value=Junior]")
+    await expect(status).to_have_text("")  # any other change clears it
 
 
 async def test_reset_puts_the_sort_and_the_checkbox_back(page: Page, site: Path) -> None:

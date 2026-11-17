@@ -1110,6 +1110,7 @@ function select(f) {
 }
 
 function sync() {
+  $('resetStatus').textContent = ''; /* the next Reset says it again */
   $('q').value = F.q;
   searchText();
   $('company').value = F.company;
@@ -1597,7 +1598,7 @@ $('stories').addEventListener('click', (e) => {
 $('reset').addEventListener('click', () => {
   F = { ...defaults(), q: F.q }; /* the search words are not a filter: the search box keeps them */
   update();
-  $('status').textContent = 'Filters reset.'; /* heard by screen readers; the results summary replaces it a moment later */
+  $('resetStatus').textContent = 'Filters reset.'; /* in the sheet: the rest of the page is inert while the sheet is modal */
 });
 /* The filters are a panel in the page on a wide screen and a bottom sheet on a phone. It is one native <dialog>: open
    as a panel (show) on a wide screen, and opened modally (showModal) from "Filters" on a narrow one, where the browser
