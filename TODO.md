@@ -2,7 +2,7 @@
 
 Open work, as of 2026-11-14. Each item says what triggers it, how to do it and when it is done. When one is finished,
 delete it and update the counts in the others: the 85 and the four segment counts in the research item (a pin removes
-one row from one segment), its "(28)" if the company had no careers URL, else its "(56 today)".
+one row from one segment), its "(28)" if the company had no careers URL, else its "(54 today)".
 An item with a screenshot in `todo-images/` goes with it: delete the image file in the same PR.
 Observations about live sites below come from checks made on 2026-11-14 and may have changed.
 
@@ -104,15 +104,15 @@ Observations about live sites below come from checks made on 2026-11-14 and may 
 
 ## Research the remaining unresolved companies
 
-- [ ] `data/unresolved_candidates.csv` lists 83 researched companies with no usable job feed (as of 2026-11-14: 24
-  multinational, 36 deeptech, 12 cyber_infra, 11 biz_software). Each needs
+- [ ] `data/unresolved_candidates.csv` lists 78 researched companies with no usable job feed (as of 2026-11-14: 22
+  multinational, 35 deeptech, 11 cyber_infra, 10 biz_software). Each needs
   its own research; there is no batch fix left. Every observation about a live site below is from the checks of
-  2026-11-14, a crawl of the 105 rows that had a careers URL that day (56 today) and a scan of their rendered pages. The
+  2026-11-14, a crawl of the 105 rows that had a careers URL that day (54 today) and a scan of their rendered pages. The
   remaining work falls into these groups:
-  - **No careers URL (27).** Status `not_found` in `data/new/*_companies.json`: Upsolver, Speedata,
+  - **No careers URL (24).** Status `not_found` in `data/new/*_companies.json`: Upsolver, Speedata,
     Teramount, X-Globe, Q Factor, Gilat, Siklu, Silicom, Sight Diagnostics, Brainsway, EarlySign, Diagnostic Robotics,
-    Tevel Aerobotics, CytoReason, SolarEdge, Watergen, Stratasys, AIR, Intel, SAP, eBay,
-    Autodesk, Akamai, Ford, Ericsson, Uber, Keysight. Find the real
+    Tevel Aerobotics, SolarEdge, Watergen, Stratasys, AIR, SAP, eBay,
+    Akamai, Ford, Ericsson, Uber, Keysight. Find the real
     career page first, then continue with the groups below. The large multinationals will need a location-filtered
     address or their ATS (see the last group).
   - **A job board was found but there is no adapter.** Playstudios and Booking.com. Playstudios was listed as a Jobvite
@@ -144,13 +144,11 @@ Observations about live sites below come from checks made on 2026-11-14 and may 
     They need a career address filtered to Israel (as `citi.eightfold.ai/careers?location=Israel` is) with `israel_only`,
     or their ATS. Check that the filter works before pinning.
     Findings on the 24 multinationals left after the pins of 2026-11-14 (so the next person does not repeat them):
-    - Workday guesses that still do not answer (checked again on 2026-11-14 after the adapter fix): Intel
-      (`intel/wd1/External`) and Autodesk (`autodesk/wd1/Ext`, `autodesk/wd1/uni`) are sent to Workday's maintenance
-      page, which is also what a tenant that does not exist on that data centre gets, and Akamai
-      (`akamai/wd1/akamaicareers`) answers 500. The tenant, data centre or site name is still unknown: find it from the
-      company's own career page, not by guessing.
-    - Bot protection (403 to a plain request, 2026-11-14; not to be bypassed): Intel (`jobs.intel.com`), Autodesk,
-      Akamai, General Motors (`search-careers.gm.com`), Ford, SAP, Uber, Booking.com.
+    - Workday guess that still does not answer: Akamai (`akamai/wd1/akamaicareers`) answers 500. The tenant, data
+      centre or site name is still unknown: find it from the company's own career page, not by guessing. Intel
+      (`intel/wd1/External`) and Autodesk (`autodesk/wd1/Ext`) were pinned on 2026-11-17 from the Workday addresses on
+      their career pages.
+    - Bot protection (403 to a plain request, 2026-11-14; not to be bypassed): Akamai, General Motors (`search-careers.gm.com`), Ford, SAP, Uber, Booking.com.
     - Other platforms with no adapter yet: AMD and Keysight (iCIMS: `careers-amd.icims.com`,
       `careers-keysight.icims.com`), Synopsys (Avature: `synopsys.avature.net`), Intuit (Radancy: the search takes a
       location only with coordinates and shows "Multiple Locations" for many jobs), Google (the results page embeds
@@ -207,7 +205,7 @@ Observations about live sites below come from checks made on 2026-11-14 and may 
       Israel). NeuReality (89.002) answers no job through the `comeet` adapter (its hosted page is not served), but its
       career page is a Comeet plugin page that the `comeet_page` adapter reads: pinned on 2026-11-16, `israel_only`,
       "We don't have any open positions" today, so the first Israel job is reported as new.
-    - No openings at all, no feed to pin: Mitiga ("We don't have any openings right now"), Applitools ("No openings
+    - No openings at all, no feed to pin: Applitools ("No openings
       available"), H2Pro and Madgicx (no open positions; Madgicx takes CVs through a ClickUp form).
     - Own-site pages the crawler's link pattern does not match, no ATS behind them: Pillar Security
       (`/open-position/<slug>`, 1 Tel Aviv job), Walnut (`/jobs/<slug>`), env0 (`/careers/<slug>`), Deep Instinct (PDF job
