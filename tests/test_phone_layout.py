@@ -274,20 +274,25 @@ async def test_hiring_now_is_one_line_with_the_rest_behind_a_button(page: Page, 
 
 
 async def test_hiring_now_is_reached_and_operated_by_keyboard(page: Page, crowd: Path) -> None:
+    """The Tab order follows the picture: the heading's button first, then the circles it shows."""
     await open_page(page, crowd, 375)
     shown = len(await visible_stories(page))
-    await page.locator("#stories .story").first.focus()
-    for _ in range(shown - 1):  # only the circles on the line are in the Tab order
-        await page.keyboard.press("Tab")
-        assert await page.evaluate("document.activeElement.classList.contains('story')")
-    await page.keyboard.press("Tab")
-    assert await page.evaluate("document.activeElement.id") == "hiringToggle"  # then the button, at the end of the line
+    await page.locator("#filtersOpen").focus()
+    await page.locator("#hiringToggle").focus()
     await page.keyboard.press("Enter")
     assert await page.locator("#hiringToggle").get_attribute("aria-expanded") == "true"
     assert len(await visible_stories(page)) == HIRING_COMPANIES
+    assert shown < HIRING_COMPANIES
+    for n in range(HIRING_COMPANIES):  # the next Tab goes into the circles that just appeared, all of them
+        await page.keyboard.press("Tab")
+        assert await page.evaluate("document.activeElement.classList.contains('story')"), n
+    await page.locator("#hiringToggle").focus()
     await page.keyboard.press("Space")
     assert await page.locator("#hiringToggle").get_attribute("aria-expanded") == "false"
     assert await page.evaluate("document.activeElement.id") == "hiringToggle"
+    for _ in range(shown):  # only the circles on the line are in the Tab order
+        await page.keyboard.press("Tab")
+        assert await page.evaluate("document.activeElement.classList.contains('story')")
 
 
 async def test_hiring_now_keeps_its_choice_for_the_page_and_follows_the_width(page: Page, crowd: Path) -> None:
@@ -1045,7 +1050,10 @@ async def test_the_strip_is_lined_up_and_no_name_is_cut(
             "ellipsis: getComputedStyle(e).textOverflow, clamp: getComputedStyle(e).webkitLineClamp})"
         )
         assert measure == {"cut": 0, "wide": 0, "ellipsis": "clip", "clamp": "none"}, await names.nth(n).inner_text()
-    assert [word for word in await page.evaluate(BROKEN_WORDS) if word != LONG_WORD] == []
+    broken = await page.evaluate(BROKEN_WORDS)
+    assert [word for word in broken if word != LONG_WORD] == []
+    if LONG_WORD in await page.locator("#stories").inner_text():
+        assert broken == [LONG_WORD]  # the detector sees a break when there is one
     assert await page.evaluate(NO_SIDEWAYS)
     assert await page.locator("#stories").evaluate("e => e.scrollWidth <= e.clientWidth")
     for story in await page.locator("#stories > li:not([hidden]) .story").all():
@@ -1056,13 +1064,12 @@ async def test_the_strip_is_lined_up_and_no_name_is_cut(
     assert await page.evaluate("axe.run('#hiring').then(r => r.violations.map(v => v.id))") == []
 
 
-@pytest.mark.parametrize("width", [320, 375, 559, 1280])
+@pytest.mark.parametrize("width", [320, 375, 559])
 async def test_show_all_and_show_fewer_stay_in_one_place_above_the_circles(page: Page, mixed: Path, width: int) -> None:
     """The button sits at the right of the heading, level with it, and does not move when it is pressed."""
     await open_page(page, mixed, width)
     toggle = page.locator("#hiringToggle")
-    if not await toggle.is_visible():
-        pytest.skip("every circle fits on the line: no button")
+    assert await toggle.is_visible()  # more circles than fit on the line at these widths
     await toggle.scroll_into_view_if_needed()  # the click would scroll it: measure where the page stays still
     before = await toggle.bounding_box()
     heading = await page.locator("#hiring-h").bounding_box()
