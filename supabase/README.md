@@ -28,7 +28,7 @@ a request to `crawl_log`, and any `POST`, `PATCH` or `DELETE` with the anon key,
   posting) and `details` are never readable by them (migration `20261121100000_jobs_text_not_public.sql`; the lawyer's
   decision of 2026-11-16: the text is for search and the assistant), so a request that names them, or `select=*`, is
   refused with a permission error. `snippet`, the first 255 characters of the description at a word boundary, is
-  readable (migration `20261122100000_jobs_snippet.sql`). The dashboard shows only the snippet and a link to the employer. The full-text search (step 7.3) will be a database function that returns matching job keys only, and `get_job` (step 8.1) returns the full text to the assistant, rate limited; the text stays unreadable with the public key. The grant is per column, so a column added later stays closed
+  readable (migration `20261122100000_jobs_snippet.sql`). `snippet_cut`, a boolean that is true when the snippet is shorter than the full text (migration `20261126100000_jobs_snippet_cut.sql`), is readable too; the sync sets it and the dashboard shows the ellipsis exactly when it is true. The dashboard shows only the snippet and a link to the employer. The full-text search (step 7.3) will be a database function that returns matching job keys only, and `get_job` (step 8.1) returns the full text to the assistant, rate limited; the text stays unreadable with the public key. The grant is per column, so a column added later stays closed
   until a migration grants it. Nobody but the service role writes, and the service role reads and writes everything.
 - `crawl_log`: no policy, so only the service role reads or writes it.
 - `profiles` (user id, email): a signed-in user reads their own row. Nobody writes it but the trigger below and the
@@ -877,11 +877,45 @@ changes every day and no address is stored or logged:
 - The `job_id` is the employer's own posting id (the id in its public career-page link), not an internal counter. A caller needs
   both `company` and `job_id`, can only reach jobs that are in the table (open, or closed for less than 30 days), and is
   limited to 15 reads a day, so guessing ids gives nothing that `search_jobs` does not already show.
-- `search_job_keys` (the dashboard's full-text function, open to the public key) has no per-caller limit; see `TODO.md`.
+- `search_job_keys` (the dashboard's full-text function, open to the public key) has no per-caller limit, on purpose: see
+  "Why `search_job_keys` has no per-caller limit" below.
 - If the database cannot be reached nothing is answered (fail closed).
 - Rows of earlier days are deleted by the next call and by `report_site_cleanup`, which the daily run already calls (the migration
   replaces it so it also clears this table; nothing else changes in the daily run).
 - Nothing else is stored: no query, no job key, no address. A log line holds a function name and a status.
+
+### Why `search_job_keys` has no per-caller limit
+
+Decision of 2026-11-17: there is none, and no global daily cap either.
+
+- **What it reveals.** That the text of an open job holds every word of the query (words of 3 letters or digits or more, ANDed,
+  no operators), as a list of at most 3,000 `[company, job_id]` keys. Never a character of the text, a rank or a snippet. A
+  scraper with the public key can therefore ask which jobs contain which words (an oracle on text otherwise closed to that key),
+  but only one word set per call, and `get_job`, the only way to read the text, is limited to 15 reads a day per caller.
+- **Why it is not limited per caller.** A limit needs a counter per caller, and the dashboard calls the function directly with
+  no sign-in. A counter row for every visitor who searches descriptions makes `PRIVACY.md` wrong: it says that without signing
+  in "nothing about you is kept by us" apart from the report-a-site counter (lines 9 and 27), and the counter wording covers
+  reports and the assistant only (lines 42 and 43). New wording needs the lawyer. It also carries technical risks (below).
+- **Why not a global cap.** One scraper could use it up and switch description search off for everyone until the next day.
+- **If abuse appears, what a per-caller limit needs:**
+  - the lawyer's wording for a daily hashed-address counter for people who search without signing in;
+  - an empirical check of which address PostgREST gives SQL in `request.headers` (`cf-connecting-ip` may not reach it; the first
+    `x-forwarded-for` entry can be forged; if the key is a gateway address every visitor shares one bucket and description search
+    breaks for all). Check with the public key only: trip the limit over IPv4, confirm IPv6 is not tripped, resend with forged
+    `cf-connecting-ip` and `x-forwarded-for` and confirm it is still refused;
+  - a random key in a locked one-row table (nothing in the database holds a secret today; the Edge Functions' `IP_HASH_SECRET` is
+    not readable from SQL), so anyone who can read the database could brute-force IPv4 hashes, which the README must say;
+  - the same counter as the assistant (`assistant_reserve`, `assistant_ip_limits`, `report_site_cleanup`), keyed on the tool, the
+    network (IPv6 as /64) and the day, and about 300 calls per caller per day: the dashboard asks once per distinct query after
+    400 ms of no typing, so a person makes 2 to 4 calls per search (about 100 searches a day), and an enumerator gets about 300
+    word sets per address per day. Shared addresses (mobile carrier NAT, offices) pool their users;
+  - the exemption for the service role by `request.jwt.claims ->> 'role'` (inside a SECURITY DEFINER function `current_user` is the
+    owner), checked before any write, because `send_digests.py` and `search_jobs` call it as `service_role`, and `search_jobs`
+    is STABLE; the function becomes plpgsql and volatile, so the `search_job_keys` lints in `tests/test_migrations.py` change;
+  - over the limit: `raise exception ... using errcode = 'PT429'` (PostgREST answers 429). The dashboard already shows "Could not
+    search job descriptions..." for any failed answer and keeps matching titles, so it needs no change;
+  - a rollback migration with the current body ready before applying, because `create or replace` changes the live function at once.
+- **When to revisit:** any sign of scraping of `rpc/search_job_keys` in the Supabase API logs, or a request from the lawyer.
 
 ### How the assistant endpoint is tested
 

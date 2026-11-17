@@ -15,9 +15,10 @@ SNIPPET = "We are looking for a product manager to join a small team that builds
 CUT = SNIPPET + " people who plan their week and"  # 255-ish characters, no final punctuation: cut by the data
 HTML = "<script>window.pwned = 1</script><b>bold</b> text"
 ROWS = [
-    job("cut", "Product Manager", "Haifa, Israel", snippet=CUT * 3),
-    job("whole", "Designer", "Haifa, Israel", snippet="Short posting that ends here."),
+    job("cut", "Product Manager", "Haifa, Israel", snippet=CUT * 3, snippet_cut=True),
+    job("whole", "Designer", "Haifa, Israel", snippet="Short posting that ends here.", snippet_cut=False),
     job("html", "Engineer", "Haifa, Israel", snippet=HTML),
+    job("short-cut", "Cutter", "Haifa, Israel", snippet="A short start", snippet_cut=True),
     job("none", "Analyst", "Haifa, Israel", snippet=None),
     job("hebrew", "מנהל מוצר", "Haifa, Israel", snippet="משרה בחיפה"),
 ]
@@ -83,6 +84,9 @@ async def test_the_snippet_is_text_never_markup_runs_right_to_left_for_hebrew_an
     )  # the data has no ellipsis: the page adds one, hidden from readers
     assert await text.locator("[aria-hidden=true]").text_content() == "…"
     assert await text.evaluate("e => e.scrollHeight <= e.clientHeight + 1")  # not clamped here, unlike on the card
+    await page.keyboard.press("Escape")
+    await open_detail(page, "short-cut")  # a cut under 200 characters: the flag decides, not the length
+    assert await page.locator("#detailText").text_content() == "A short start…"
     await page.keyboard.press("Escape")
     await open_detail(page, "hebrew")
     assert await page.locator("#detailText").get_attribute("dir") == "auto"

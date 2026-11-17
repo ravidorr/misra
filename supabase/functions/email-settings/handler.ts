@@ -140,6 +140,7 @@ export function renderEmail(frequency: TurnOn['frequency'], to: string, link: st
     'Open this link and press "Confirm my email" to start receiving new matching roles:',
     link,
     'The link works for 7 days.',
+    'If you get more than one of these emails, use the newest one: each new email stops the link in the older ones from working.',
     '',
     'No emails will be sent until you press "Confirm my email" on that page. Once confirmed, your first email will include only roles that appear after confirmation.',
     '',

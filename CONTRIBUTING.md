@@ -272,7 +272,9 @@ PLAN.md step 7.1. Where the text of a posting lives, and how it gets there:
   a word boundary, no ellipsis in the data (the page adds one), trailing punctuation trimmed when the text was cut, the
   whole text when it fits, none when the job has no description or its first 255 characters have no space. The dashboard
   shows it with a link to the employer. It is refreshed with the text, and also when the stored snippet is not the one
-  computed (so a stored text gets its snippet on the next run).
+  computed (so a stored text gets its snippet on the next run). Next to it, `snippet_cut` (migration `20261126100000_jobs_snippet_cut.sql`, `descriptions.snippet_cut`) says whether the snippet is
+  shorter than the text: the page shows the ellipsis exactly when it is true, and a row without it shows none. The migration fills it
+  in for the rows stored before it, and the sync corrects any row whose flag differs from what it computes. Apply the migration before merging the change that reads it.
 - **The 30-day trim.** The full text of a closed job is deleted 30 days after the job closes. The table has no closed-at
   column; `last_seen` is the last crawl that saw the job open, and the sync does not change it when it closes the job, so
   `jobs_text_trim(p_day)` (migration `20261123100000_jobs_text_trim.sql`, service role only) sets `description`, `details`

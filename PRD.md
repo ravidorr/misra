@@ -4,7 +4,9 @@ Status: agreed. Updated 2026-11-15 with the decisions made in planning and since
 work is broken into a step-by-step plan tracked in `PLAN.md`; steps 1.1 to 6.3, 6.5 and 6.6 are built and merged (the coverage
 gap card, jobs in Supabase, level, role type and region, sign-in, stars, discards and synced filters, account deletion,
 report a site, and job alerts, now open to signups). Step 6.4 is done (the old maintainer digest was removed in v0.47.0), the
-account backups of step 9.1 are built, and FR-4 and FR-6 (steps 7 and 8) are not built yet.
+account backups and the history in Supabase (step 9.1) are built, and FR-4 and FR-6 (steps 7 and 8) are built and live (step 7.1 for the first adapters)
+(descriptions, the snippet, the detail view, full-text search, the assistant endpoint and its page); what is left is in `PLAN.md`
+and `TODO.md`.
 
 ## Background
 

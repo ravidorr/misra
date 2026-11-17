@@ -4,12 +4,18 @@ All notable changes are documented here. Format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
-## [0.55.0] - 2026-11-17
+## [0.58.0] - 2026-11-17
 
 ### Added
 
 - Descriptions for Workday (PLAN.md step 7.1, 24 companies, 318 jobs): the list has no text, so the crawl opens each job's page on the tenant's own host (`/wday/cxs/<tenant>/<site>/job/...`, the same `/wday/cxs/` path as the list, so the same `robots.txt` rule and the same one request a second) and reads `jobPostingInfo.jobDescription` and the employment type. A page that fails, is refused by `robots.txt` or has no text gives no description and never touches the list: the company is not skipped and no job closes.
 - The request budget: a job page is asked for only when Supabase holds no text for the job. `sync_supabase.py --pull` leaves the keys (company and job id, never a text) of the open jobs that hold one in `$RUNNER_TEMP/misra-held-texts.jsonl`, the crawl reads it, and at most 40 job pages are opened per company and run (`descriptions.DETAIL_CAP`), the rest wait for the next run: the first fill of the 318 jobs takes up to three days (Palo Alto Networks 115 and KLA 82 are the largest), a steady day asks only for the new jobs. A text edited in place is not fetched again (`TODO.md`). A job that holds a text counts in the description share of the crawl log; a new log line, `job pages: workday N requests, N with a text, N left for later runs`, has the counts.
+
+## [0.56.0] - 2026-11-17
+
+### Changed
+
+- The ellipsis after a job snippet is exact. A new column `jobs.snippet_cut` (migration `20261126100000_jobs_snippet_cut.sql`, readable by everyone like `snippet`) is true when the 255-character snippet is shorter than the posting, false when it is the whole text and null when there is no snippet. The sync sets it (`descriptions.snippet_cut`) and writes again a row whose flag differs, the migration fills it in for the rows already stored, and the page shows the ellipsis exactly when the flag is true (and nothing when it is missing) instead of guessing from the length and the last character. The column is left out of the account backup like `snippet`.
 
 ## [0.55.0] - 2026-11-17
 

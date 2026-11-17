@@ -193,9 +193,10 @@ def test_the_sync_writes_the_description_and_details_with_a_hash_in_their_own_re
     assert ("Beta", "old") not in fake.table  # a job that is not open is never sent
     posts = [c["json"] for c in fake.calls if c["method"] == "POST"]
     assert {frozenset(r) for batch in posts for r in batch if "description" in r} == {
-        frozenset({"company", "job_id", "description", "snippet", "details"})
+        frozenset({"company", "job_id", "description", "snippet", "snippet_cut", "details"})
     }
     assert one["snippet"] == "Text one"  # short enough to be shown whole
+    assert one["snippet_cut"] is False
     assert all(r.get("description") is not None for batch in posts for r in batch if "description" in r)  # never null
 
 
@@ -282,7 +283,9 @@ def test_the_hash_read_pages_through_every_open_job() -> None:
     fake = FakeSupabase(page=2)
     for n in range(5):
         fake.table[("Acme", str(n))] = {"status": "open", "details": {HASH_KEY: f"h{n}"} if n % 2 else None}
-    assert client(fake).stored_texts() == {("Acme", str(n)): ((f"h{n}" if n % 2 else None), None) for n in range(5)}
+    assert client(fake).stored_texts() == {
+        ("Acme", str(n)): ((f"h{n}" if n % 2 else None), None, None) for n in range(5)
+    }
 
 
 def test_an_excluded_company_loses_its_text_with_its_jobs(seeded: sqlite3.Connection) -> None:
@@ -444,6 +447,30 @@ def test_a_cut_snippet_never_ends_inside_a_word_or_on_punctuation() -> None:
         assert result in text and text.startswith(result)
 
 
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [
+        (None, None),
+        ("", None),
+        ("Short text", False),
+        ("x" * 255, False),  # exactly as long as the snippet: whole
+        (f"  {'x' * 255}  ", False),  # white space around is not text
+        (f"{'x' * 255} y", True),  # one more word: cut
+        ("Build it. " * 60, True),
+        (("Build it (now) " * 17)[:254] + ")", False),  # a whole text of 200 or more that ends in a bracket
+        ("a" * 400, None),  # one long word: no snippet, so no flag
+    ],
+)
+def test_the_snippet_is_cut_exactly_when_it_is_shorter_than_the_text(text: str | None, expected: bool | None) -> None:
+    assert descriptions.snippet_cut(text) is expected
+
+
+def test_a_cut_under_200_characters_is_flagged_when_a_long_word_ends_the_snippet() -> None:
+    text = f"{'x' * 150} {'y' * 200}"  # the second word does not fit: the snippet is the first word alone
+    assert descriptions.snippet(text) == "x" * 150
+    assert descriptions.snippet_cut(text) is True
+
+
 def stored(fake: FakeSupabase, key: tuple[str, str]) -> dict[str, Any]:
     return fake.table[key]
 
@@ -458,6 +485,18 @@ def test_the_sync_writes_the_snippet_with_the_text_and_nothing_else_of_it(seeded
     assert row["snippet"] == descriptions.snippet(long_text)
     assert len(row["snippet"]) <= descriptions.SNIPPET_CHARS
     assert "snippet" not in stored(fake, ("Beta", "9"))  # no text today: nothing sent, nothing erased
+
+
+def test_the_sync_writes_the_cut_flag_and_fills_it_in_for_a_row_stored_without_one(seeded: sqlite3.Connection) -> None:
+    work({("Acme", "1"): "Build it. " * 60, ("Acme", "2"): "Text two"})
+    fake = FakeSupabase()
+    sync(seeded, client(fake))
+    assert stored(fake, ("Acme", "1"))["snippet_cut"] is True
+    assert stored(fake, ("Acme", "2"))["snippet_cut"] is False
+    del fake.table[("Acme", "2")]["snippet_cut"]  # a row stored before the column existed
+    assert sync(seeded, client(fake)).texts == 1  # only that row is written again
+    assert stored(fake, ("Acme", "2"))["snippet_cut"] is False
+    assert sync(seeded, client(fake)).texts == 0
 
 
 def test_a_stored_text_without_a_snippet_gets_one_on_the_next_sync_and_then_is_left_alone(
@@ -477,6 +516,7 @@ def test_a_text_with_no_snippet_is_not_rewritten_every_day(seeded: sqlite3.Conne
     fake = FakeSupabase()
     assert sync(seeded, client(fake)).texts == 1
     assert stored(fake, ("Acme", "1"))["snippet"] is None
+    assert stored(fake, ("Acme", "1"))["snippet_cut"] is None
     assert sync(seeded, client(fake)).texts == 0
 
 

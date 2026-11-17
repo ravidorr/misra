@@ -110,6 +110,12 @@ BACKFILL = (
     "on conflict do nothing"
 )
 
+# The one backfill of snippet_cut (migration 20261126100000_jobs_snippet_cut.sql): a flag computed from the stored text,
+# which never leaves the database.
+SNIPPET_CUT_BACKFILL = (
+    "update public.jobs set snippet_cut = length(snippet) < "
+    "length(regexp_replace(description, '^\\s+|\\s+$', '', 'g')) where snippet is not null and description is not null"
+)
 CREATE_TABLE = re.compile(r"create table public\.(?P<table>\w+) \((?P<body>.*)\)")
 CREATE_INDEX = re.compile(
     r"create index \w+ on public\.\w+ (?:using gin )?\(\w+(?:, \w+)*\)(?: where state = 'discard')?"
@@ -183,7 +189,7 @@ TRIGGER = re.compile(
     r"(?:when \([^)]*\) )?execute function public\.(?P<function>\w+)\(\)"
 )
 # Step 7.2: the one column added to `jobs` after the first migration, and the daily trim of the text of closed jobs.
-ADD_JOBS_COLUMN = re.compile(r"alter table public\.jobs add column (?P<column>\w+) text")
+ADD_JOBS_COLUMN = re.compile(r"alter table public\.jobs add column (?P<column>\w+) (?:text|boolean)")
 JOBS_TRIM_FUNCTION = re.compile(
     r"create function public\.jobs_text_trim\((?P<args>[a-z_0-9 ,]*)\) returns integer language plpgsql "
     r"set search_path = '' as \$\$(?P<body>.*)\$\$"
@@ -301,7 +307,7 @@ def grant_problem(s: str) -> str | None:
 # characters of the text, is the public part (migration 20261122100000_jobs_snippet.sql).
 JOBS_PUBLIC_COLUMNS = {
     "company", "job_id", "title", "team", "location", "url", "posted", "first_seen", "last_seen", "status",
-    "level", "role_types", "regions", "locations", "snippet",
+    "level", "role_types", "regions", "locations", "snippet", "snippet_cut",
 }  # fmt: skip
 JOBS_CLOSED_COLUMNS = {"description", "details"}
 
@@ -459,7 +465,7 @@ def problems(stmts: list[str]) -> list[str]:
             or GRANT_SUBSCRIPTION_FUNCTION.fullmatch(s)
             or GRANT_SUBSCRIBE_FUNCTION.fullmatch(s)
             or s in HOOK_GRANTS
-            or s == BACKFILL
+            or s in (BACKFILL, SNIPPET_CUT_BACKFILL)
         ):
             found.append(f"statement kind not allowed by the lint: {s}")
         found.extend(p for p in (grant_problem(s), policy_problem(s)) if p)
@@ -1036,8 +1042,8 @@ def test_the_text_of_a_posting_is_closed_to_the_public_roles_and_every_other_col
     assert table_level < revoke
     column_grants = [m for s in stmts[revoke:] if (m := COLUMN_GRANT.fullmatch(s)) and m["table"] == "jobs"]
     assert [words(g["columns"]) for g in column_grants][-1] == {
-        "snippet"
-    }  # the snippet is granted by its own migration
+        "snippet_cut"
+    }  # the snippet and its flag are granted by their own migrations
     assert set().union(*(words(g["columns"]) for g in column_grants)) == JOBS_PUBLIC_COLUMNS
     assert not any(words(g["columns"]) & JOBS_CLOSED_COLUMNS for g in column_grants)
     assert not [s for s in stmts[revoke:] if GRANT.fullmatch(s) and "public.jobs" in s]  # no table-level grant again
