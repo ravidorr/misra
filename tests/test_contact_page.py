@@ -214,7 +214,7 @@ FAILURES = [
     (413, {"code": "payload_too_large", "message": "x"}, "too large, so nothing was sent"),
     (429, {"code": "rate_limited", "message": "x"}, "as many messages as are allowed today"),
     (503, {"code": "daily_cap_reached", "message": "x"}, "Messages are paused until tomorrow"),
-    (502, {"code": "send_failed", "message": "x"}, "open an issue on GitHub"),
+    (502, {"code": "send_failed", "message": "x"}, "was passed on to us. Try again later."),
     (500, {"code": "server_error", "message": "x"}, "Something went wrong on our side, so nothing was sent"),
     # no code of the function (the platform in front of it answered): the page cannot say whether anything was sent
     (503, {"code": "something_new", "message": "x"}, "could not confirm that your message was sent"),
