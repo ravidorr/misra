@@ -1,6 +1,6 @@
 # TODO
 
-Open work, as of 2026-11-14. Each item says what triggers it, how to do it and when it is done. When one is finished,
+Open work, as of 2026-11-17. Each item says what triggers it, how to do it and when it is done. When one is finished,
 delete it and update the counts in the others: the 85 and the four segment counts in the research item (a pin removes
 one row from one segment), its "(28)" if the company had no careers URL, else its "(54 today)".
 An item with a screenshot in `todo-images/` goes with it: delete the image file in the same PR.
@@ -59,14 +59,13 @@ Observations about live sites below come from checks made on 2026-11-14 and may 
 ## Assistant endpoint
 
 - [ ] **Hand-test the assistant connection with someone who is not technical.** Trigger: the endpoint and the page "Connect your
-  assistant" are on since 2026-11-17 (the lawyer approved them), and PLAN.md steps 8.1 and 8.2 stay unticked until a real
-  assistant has done it. How: someone who is not technical follows `https://ravidorr.github.io/misra/assistant.html` in Claude
-  and in ChatGPT, asks for junior roles, has one read in full and a cover letter drafted. Done when: both connect in a couple of
-  minutes without help, the wording of the page is fixed only with the lawyer's agreement, and steps 8.1 and 8.2 are ticked.
-- [ ] **A per-caller limit on `search_job_keys`.** Trigger: the full-text function the dashboard uses is open to the public key and
-  has no limit per caller, so the assistant's `search_jobs` limit of 100 a day can be bypassed by calling it directly (it returns
-  keys only, never text). How: only if it matters; it needs the dashboard to call it through a function that counts. Done when:
-  a caller has a daily limit on it or the decision to leave it is written in `supabase/README.md`.
+  assistant" are on since 2026-11-17. How and done when: the hand test plan in `PLAN.md`, step 8.2. Steps 8.1 and 8.2 are
+  ticked when it passes.
+- [ ] **Revisit the missing per-caller limit on `search_job_keys`.** Decided 2026-11-17 to leave it: a counter for dashboard
+  searchers needs new `PRIVACY.md` wording, and a global cap would let one scraper switch the search off for everyone (reasons
+  and what a limit would need: `supabase/README.md`, "Why `search_job_keys` has no per-caller limit"). Trigger: any sign of
+  scraping of `rpc/search_job_keys` in the Supabase API logs, or the lawyer asking for it. Done when: a per-caller limit is
+  built as that section describes, or the lawyer confirms in writing that none is wanted and this item is deleted.
 
 ## Yearly security review
 
@@ -317,15 +316,16 @@ Added when the history moved to Supabase (v0.53.0; `CONTRIBUTING.md`, "The histo
 could not prove: a real PostgREST, a real Supabase project and a real Actions run.
 
 - [ ] **Check the first daily runs after the move.** Trigger: the PR of step 9.1 is merged and the one-time copy of the
-  old history is done. How: in the log of the first run, `pull` says `pulled <jobs> jobs and <log> crawl log rows`, the
+  old history is done. Status (2026-11-17): the 04:30 UTC cron-job.org run was green; two other runs that morning failed
+  at the commit step on a stale checkout, fixed in #152 (`ref: main`); no run after #152 yet. How: in the log of the first run, `pull` says `pulled <jobs> jobs and <log> crawl log rows`, the
   sync says `<n> crawl log rows written` and a second run the next day does not repeat them; `docs/` is committed and
   `data/` is not; the `backup` step commits to `ravidorr/misra-backups` with `jobs` and `crawl_log` in its counts. Done
-  when two runs in a row are green and the coverage card and the robots.txt closing still work (the five SmartRecruiters
+  when two runs in a row after #152 are green and the coverage card and the robots.txt closing still work (the five SmartRecruiters
   companies close on their seventh skipped day).
 - [ ] **Measure the size of `crawl_log` and `jobs` after a month.** Trigger: 30 days after the move. How: Supabase
   dashboard, Reports, Database. `crawl_log` keeps 90 days (`CRAWL_LOG_DAYS`, about 250 rows a day), the pull reads all of
-  it every run, and the backup exports it; if the pull gets slow or the table is large, shorten it. Done when: the
-  numbers are in `CONTRIBUTING.md`, "Real data against the limits".
+  it every run, and the backup exports it; if the pull gets slow or the table is large, shorten it. The same check serves PLAN.md step 7.4 (the size of the description
+  text, a month after 2026-11-16). Done when: the numbers are in `CONTRIBUTING.md`, "Real data against the limits".
 - [ ] **Rehearse a restore into a scratch Supabase project.** Trigger: the first `backup` commit with `jobs` and
   `crawl_log` exists. How: `CONTRIBUTING.md`, "Restore", into a new free project, with `--create-auth-users`; then the
   pull and a daily run against it. Done when: counts match the backup commit and the run is green.
@@ -336,3 +336,8 @@ could not prove: a real PostgREST, a real Supabase project and a real Actions ru
   it loses the browser companies of that day. Trigger: it happens in a real run (the alert shows `crawl=failure` and the
   log stops in the browser crawl). How: let `crawl_many` hand over each company as it finishes (a callback or a
   generator) and record it then. Done when a timeout in the browser crawl keeps the companies already crawled.
+
+## Questions for the lawyer
+
+- Dashboard description search has no per-visitor limit; to add one we would store a daily hashed-address counter for people who
+  search without signing in, which needs new `PRIVACY.md` wording: do you want that?
