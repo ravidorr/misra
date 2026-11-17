@@ -9,7 +9,7 @@
   "*.css": [
     "stylelint --max-warnings=0"
   ],
-  "*.html": [
+  "!(google*).html": [
     "html-validate"
   ],
   "*.md": [
