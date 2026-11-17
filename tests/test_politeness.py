@@ -441,8 +441,8 @@ async def test_the_browser_crawl_goes_on_when_the_switch_is_off(monkeypatch: pyt
     assert browser_crawl.WHY.get(URL, "") != ROBOTS_NOTE
 
 
-def co(name: str, ats: str = "fake", slug: str | None = None, status: str = "ok") -> dict[str, str]:
-    return {"name": name, "ats": ats, "slug": slug or name.lower(), "status": status}
+def co(name: str, ats: str = "fake", slug: str | None = None, status: str = "ok") -> dict[str, Any]:
+    return {"name": name, "crawl": True, "ats": ats, "slug": slug or name.lower(), "status": status}
 
 
 def job(job_id: str) -> dict[str, str]:
@@ -693,16 +693,27 @@ def test_a_bad_exclusion_list_stops_the_run_before_any_crawl(workdir: Path, monk
 
 
 def test_discover_skips_an_excluded_seed_row(workdir: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    write_json(workdir / "data" / "overrides.json", {})
-    (workdir / "data" / "seed_companies.csv").write_text("name,domain\nAcme,acme.test\nBeta,beta.test\n")
+    write_json(
+        workdir / "data" / "companies.json",
+        [
+            {"name": "Acme", "domain": "acme.test", "crawl": True},
+            {"name": "Beta", "domain": "beta.test", "crawl": True},
+            {"name": "Parked", "domain": "parked.test", "crawl": False},
+        ],
+    )
     exclude(workdir, "Acme")
     seen: list[str] = []
     monkeypatch.setattr(
-        discover, "discover", lambda row: seen.append(row["name"]) or {"name": row["name"], "status": "x"}
+        discover,
+        "discover",
+        lambda row: seen.append(row["name"]) or dict.fromkeys(discover.DISCOVERED, "x"),
     )
     monkeypatch.setattr(sys, "argv", ["discover.py"])
     discover.main()
-    assert seen == ["Beta"]
+    assert seen == ["Beta"]  # not the excluded one, not the one that is not crawled
+    rows = {r["name"]: r for r in json.loads((workdir / "data" / "companies.json").read_text())}
+    assert rows["Beta"]["status"] == "x"
+    assert "Acme" not in rows  # the record of an excluded company goes, as its jobs do
 
 
 def test_the_dashboard_never_lists_an_excluded_company(db: sqlite3.Connection, workdir: Path) -> None:
@@ -710,11 +721,12 @@ def test_the_dashboard_never_lists_an_excluded_company(db: sqlite3.Connection, w
     write_static(workdir)
     write_json(
         workdir / "data" / "companies.json",
-        [{"name": "Acme", "status": "careers_page_only"}, {"name": "Beta", "status": "not_found"}],
-    )
-    (workdir / "data" / "unresolved_candidates.csv").write_text(
-        "name,domain,segment,reason,note\r\nAcme,a.test,x,no_openings,\r\nGamma,g.test,x,no_openings,\r\n",
-        encoding="utf-8",
+        [
+            {"name": "Acme", "crawl": True, "status": "careers_page_only"},
+            {"name": "Beta", "crawl": True, "status": "not_found"},
+            {"name": "Acme", "crawl": False, "domain": "a.test", "gap": {"reason": "no_openings", "note": ""}},
+            {"name": "Gamma", "crawl": False, "domain": "g.test", "gap": {"reason": "no_openings", "note": ""}},
+        ],
     )
     add_crawls(db, "Acme", [(0, "boom"), (0, "boom")], ats="fake")
     add_crawls(db, "Gamma", [(0, "boom"), (0, "boom")], ats="fake")
@@ -729,14 +741,6 @@ def test_the_dashboard_never_lists_an_excluded_company(db: sqlite3.Connection, w
     assert [j["c"] for j in payload["jobs"]] == ["Beta"]
     assert "Acme" not in (workdir / "docs" / "index.html").read_text(encoding="utf-8")
     assert "Acme" not in (workdir / "docs" / "jobs.jsonld").read_text(encoding="utf-8")
-
-
-def test_an_unresolved_row_is_read_whatever_the_exclusion_list(workdir: Path) -> None:
-    (workdir / "data" / "unresolved_candidates.csv").write_text(
-        "name,domain,segment,reason,note\r\nAcme,a.test,x,no_openings,\r\n", encoding="utf-8"
-    )
-    assert [r["name"] for r in build_dashboard.read_unresolved()] == ["Acme"]
-    assert build_dashboard.read_unresolved(["acme"]) == []
 
 
 # --- the Supabase side ---------------------------------------------------------------------------------------
