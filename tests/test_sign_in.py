@@ -36,7 +36,7 @@ from tests.test_dashboard_page import (
 
 AXE_RUN = "axe.run().then(r => r.violations.map(v => v.id + ': ' + v.nodes.map(n => n.html).join(' | ')))"
 STORAGE_KEY = "misra-auth"
-FOOTER_LINKS = 4
+FOOTER_LINKS = 6
 RETRIES = 50
 HEADER_GAP = 8
 POLL_SECONDS = 0.1
@@ -605,7 +605,7 @@ async def test_fr1_ac7_the_notice_reads_well_on_a_phone_in_both_themes(page: Pag
 
 async def test_the_footer_links_to_the_privacy_notice_the_terms_and_the_contact(page: Page, site: Path) -> None:
     await serve(page, site)
-    nav = page.get_by_role("navigation", name="About Misra")
+    nav = page.get_by_role("navigation", name="Site pages")
     links = nav.locator("a")
     assert await links.count() == FOOTER_LINKS
     privacy = nav.get_by_role("link", name="Privacy")
@@ -613,6 +613,8 @@ async def test_the_footer_links_to_the_privacy_notice_the_terms_and_the_contact(
     assert await nav.get_by_role("link", name="Terms").get_attribute("href") == "terms.html"
     assert await nav.get_by_role("link", name="Connect your assistant").get_attribute("href") == "assistant.html"
     assert await nav.get_by_role("link", name="Contact").get_attribute("href") == "mailto:raanan@avidor.org"
+    assert await nav.get_by_role("link", name="About").get_attribute("href") == "about.html"
+    assert await nav.get_by_role("link", name="Security").get_attribute("href") == "security.html"
     for link in await links.all():
         box = await link.bounding_box()
         assert box is not None

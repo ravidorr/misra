@@ -625,7 +625,7 @@ async def test_the_footer_fits_and_has_44px_links(page: Page, crowd: Path, width
         assert link_box["width"] >= TAP_MIN
         assert box["x"] <= link_box["x"] <= link_box["x"] + link_box["width"] <= box["x"] + box["width"]
         names.append(await link.inner_text())
-    assert names == ["Privacy", "Terms", "Connect your assistant", "Contact"]
+    assert names == ["About", "Connect your assistant", "Contact", "Privacy", "Terms", "Security"]
     links = await foot.locator("nav").bounding_box()
     text = await page.locator(".foot-updated").bounding_box()
     assert links is not None

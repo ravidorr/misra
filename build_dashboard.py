@@ -112,9 +112,35 @@ ASSISTANT_PAGE = LegalPage(
     "Connect your assistant - Misra",
     "How to connect your own AI assistant, such as Claude or ChatGPT, to the Misra jobs, step by step.",
 )
-# A link from one of these pages to another page of the set stays on the site.
-LEGAL_LINKS = {page.source: page.output for page in (*LEGAL_PAGES, ASSISTANT_PAGE)}
+# The About page (the Markdown file ABOUT.md, in the same template): always built.
+ABOUT_PAGE = LegalPage(
+    "ABOUT.md",
+    "about.html",
+    "About - Misra",
+    "What Misra is, where its roles in Israel come from, how often it updates, what it does not do, and how the "
+    "optional job alerts work.",
+)
+
+
+def built_pages() -> tuple[LegalPage, ...]:
+    """The pages built from a Markdown file: the assistant page only while its switch is on."""
+    return (*LEGAL_PAGES, ABOUT_PAGE, *((ASSISTANT_PAGE,) if ASSISTANT_PAGE_ENABLED else ()))
+
+
+def legal_links() -> dict[str, str]:
+    """A link from one of these pages to another page of the set stays on the site. The assistant page is in the set
+    only while it is built: with its switch off a link to ASSISTANT.md goes to the file on GitHub, never to a missing
+    page."""
+    return {page.source: page.output for page in built_pages()}
+
+
 NEW_TAB = '<span class="sr-only"> (opens in a new tab)</span>'
+
+# The header and the footer of every page, written once (templates/parts/). A page template holds `__HEADER__` and
+# `__FOOTER__`. Two slots only the dashboard fills: the account controls (they need auth.js) and the "last read" line
+# (it needs dashboard.js); every other page leaves them empty. The link to the page being shown gets aria-current.
+PARTS = "templates/parts"
+SLOTS = {"__ACCOUNT__": "account.inc", "__FOOT_NOTE__": "updated.inc"}
 
 # The backend the page reads the jobs from: the one place for the project URL and the PUBLIC anon key. Row-level
 # security lets the anon key read open jobs only, so the key may live in docs/. The build puts both values into the
@@ -304,8 +330,9 @@ def rewrite_href(href: str) -> str:
     path = posixpath.normpath(parts.path.lstrip("/"))
     if path == "." or path.startswith(".."):
         raise ValueError(f"{href!r} does not point to a file of the repository")
-    if path in LEGAL_LINKS:
-        target = LEGAL_LINKS[path]
+    links = legal_links()
+    if path in links:
+        target = links[path]
     else:
         kind = "tree" if parts.path.endswith("/") else "blob"
         target = f"{REPO_URL}/{kind}/main/{path}"
@@ -348,14 +375,37 @@ def markdown_to_html(text: str) -> str:
     return html
 
 
+def apply_chrome(text: str, output: str, root: Path = Path(), dashboard: bool = False) -> str:
+    """Put the shared header and footer into a page template. `output` is the page's file name in docs/, so its own
+    link in the header and the footer is marked `aria-current="page"`. Only the dashboard (`dashboard=True`) fills
+    the slots of the account controls and of the "last read" line."""
+    parts = root / PARTS
+    here = "./" if output == "index.html" else output
+    shared = {
+        "__HEADER__": (parts / "header.inc").read_text(encoding="utf-8"),
+        "__FOOTER__": (parts / "footer.inc").read_text(encoding="utf-8"),
+    }
+    for placeholder, source in SLOTS.items():
+        filled = (parts / source).read_text(encoding="utf-8") if dashboard else ""
+        for name, part in shared.items():
+            shared[name] = part.replace(f"{placeholder}\n", filled)
+    for name, part in shared.items():
+        if re.search(r"__[A-Z_]+__", part):
+            raise ValueError(f"{name} of templates/parts has a slot that this build does not fill")
+        text = text.replace(name, part.replace(f'href="{here}"', f'href="{here}" aria-current="page"'))
+    return text
+
+
 def render_legal(page: LegalPage, root: Path = Path(), docs: Path | None = None) -> str:
     """The page for one Markdown file. Everything but the body is the template, so the page can only say what the
     Markdown says. With `docs`, the integrity hashes of the files there are filled in (the template only, never the
     body)."""
-    template = (root / LEGAL_TEMPLATE).read_text(encoding="utf-8")
+    template = apply_assistant_switch(
+        apply_chrome((root / LEGAL_TEMPLATE).read_text(encoding="utf-8"), page.output, root)
+    )
     if docs:
         template = INTEGRITY.sub(lambda m: integrity(docs / f"{m[1]}.{m[2]}".lower()), template)
-    body = markdown_to_html((root / page.source).read_text(encoding="utf-8"))
+    body = markdown_to_html(apply_assistant_switch((root / page.source).read_text(encoding="utf-8")))
     for placeholder, value in (
         ("__TITLE__", escape(page.title)),
         ("__DESCRIPTION__", escape(page.description)),
@@ -468,6 +518,20 @@ def failing_sites(c: sqlite3.Connection, excluded: list[str]) -> list[dict[str, 
     return blocked
 
 
+def render_static(source: str, covered: int, page_data: str) -> tuple[str, str]:
+    """The file name in docs/ and the text of one source file that is copied with its placeholders filled in: the
+    shared header and footer of a page, the switches, the backend, the company count and, last, the page data."""
+    output = OUTPUT_NAMES.get(source, Path(source).name)
+    text = Path(source).read_text(encoding="utf-8")
+    if output.endswith(".html"):
+        text = apply_chrome(text, output, dashboard=output == "index.html")
+    text = apply_assistant_switch(apply_digest_switch(text))
+    text = text.replace("__SUPABASE_URL__", SUPABASE_URL).replace("__SUPABASE_ANON_KEY__", SUPABASE_ANON_KEY)
+    for placeholder, value in coverage_words(covered).items():
+        text = text.replace(placeholder, value)
+    return output, text.replace("__PAGE_DATA__", page_data)  # last: the data is never searched for placeholders
+
+
 def main() -> None:
     excluded = load_excluded()  # an excluded company is on no list and no card, whatever the data still holds
     c = open_history()
@@ -553,16 +617,11 @@ def main() -> None:
             missing_ok=True
         )  # a file of an earlier build must not outlive the switch
     for source in (*STATIC_FILES, *((DIGEST_SCRIPT,) if DIGEST_SIGNUP_ENABLED else ())):
-        text = Path(source).read_text(encoding="utf-8")
-        text = apply_assistant_switch(apply_digest_switch(text))
-        text = text.replace("__SUPABASE_URL__", SUPABASE_URL).replace("__SUPABASE_ANON_KEY__", SUPABASE_ANON_KEY)
-        for placeholder, value in coverage_words(covered).items():
-            text = text.replace(placeholder, value)
-        text = text.replace("__PAGE_DATA__", page_data)  # last: the data is never searched for placeholders
-        (out / OUTPUT_NAMES.get(source, Path(source).name)).write_text(text, encoding="utf-8")
+        output, text = render_static(source, covered, page_data)
+        (out / output).write_text(text, encoding="utf-8")
     if not ASSISTANT_PAGE_ENABLED:
         (out / ASSISTANT_PAGE.output).unlink(missing_ok=True)  # a file of an earlier build must not outlive the switch
-    for legal in (*LEGAL_PAGES, *((ASSISTANT_PAGE,) if ASSISTANT_PAGE_ENABLED else ())):
+    for legal in built_pages():
         (out / legal.output).write_text(render_legal(legal, docs=out), encoding="utf-8")
     for source in VENDORED_FILES:
         shutil.copyfile(source, out / Path(source).name)

@@ -46,7 +46,7 @@ def test_header_logo_paints_with_the_mark_tokens() -> None:
     assert rule is not None
     assert re.search(r"(^|;|\s)fill:\s*var\(--mark-disc\);", rule[1])
     assert "mark-spark" not in css
-    page = (REPO / "templates" / "dashboard.html").read_text(encoding="utf-8")
+    page = (REPO / "templates" / "parts" / "header.inc").read_text(encoding="utf-8")
     assert re.search(r'<circle class="mark-disc"', page)
     assert "mark-spark" not in page
 

@@ -237,6 +237,8 @@ async def test_a_failed_confirmation_link_keeps_its_text(page: Page, site: Path)
 
 async def test_the_button_works_from_the_keyboard(page: Page, site: Path) -> None:
     confirm, _ = await open_page(page, site, f"#token={TOKEN}")
+    await page.keyboard.press("Tab")  # the skip link, the logo link, the theme button, then the button
+    await page.keyboard.press("Tab")
     await page.keyboard.press("Tab")
     await page.keyboard.press("Tab")
     assert await page.evaluate("document.activeElement.id") == "confirm"
@@ -330,14 +332,24 @@ async def test_every_state_sits_in_one_card_with_the_dashboard_header_and_footer
     assert await card.locator("#status").inner_text() == f"{heading}. {message}"
     top = page.locator("header.top")
     await expect(top.locator("svg.top-mark")).to_have_count(1)
-    await expect(top.locator("a.wordmark")).to_have_text("misra")
-    assert await top.locator("a.wordmark").get_attribute("href") == "./"
+    await expect(top.locator("a.top-home .wordmark")).to_have_text("misra")
+    assert await top.locator("a.top-home").get_attribute("href") == "./"
     links = page.locator("footer.foot nav.foot-links a")
-    assert await links.all_inner_texts() == ["Privacy", "Terms", "Contact"]
+    assert await links.all_inner_texts() == [
+        "About",
+        "Connect your assistant",
+        "Contact",
+        "Privacy",
+        "Terms",
+        "Security",
+    ]
     assert [await link.get_attribute("href") for link in await links.all()] == [
+        "about.html",
+        "assistant.html",
+        "mailto:raanan@avidor.org",
         "privacy.html",
         "terms.html",
-        "mailto:raanan@avidor.org",
+        "security.html",
     ]
     for link in await links.all():
         box = await link.bounding_box()
