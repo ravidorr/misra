@@ -143,7 +143,6 @@ a {
   padding: var(--space-2) var(--space-3);
   border-bottom: var(--border-width) solid var(--line);
   color: var(--muted);
-  font-size: 0.875rem;
   overflow-wrap: anywhere;
 }
 
@@ -174,11 +173,12 @@ a {
   outline-offset: -3px;
 }
 
-/* The destructive item keeps the dialog's warning colour, and the dialog still asks before anything is deleted. */
-.account-danger,
-.account-danger:hover {
-  margin-top: var(--space-2); /* set apart from the safe items, not by colour alone */
-  background: var(--warn-bg);
+/* The destructive item is set apart by a rule and a gap, not by colour alone, and the dialog still asks before anything is
+   deleted. */
+.account-danger {
+  margin-top: var(--space-2);
+  border-top: var(--border-width) solid var(--line);
+  border-radius: 0 0 var(--radius-control) var(--radius-control);
 }
 
 /* The sign-in notice is the text of a dialog now. Inline links keep the line height and still get a 44px hit area: padding
@@ -188,7 +188,7 @@ a {
   padding: 14px 4px;
 }
 
-/* The agreement line beside "Turn the email on": same 44px link targets as the sign-in notice. */
+/* The agreement line beside "Start job alerts": same 44px link targets as the sign-in notice. */
 .digest-consent {
   margin: 0 0 var(--space-3);
   color: var(--muted);
@@ -276,18 +276,7 @@ a {
   gap: var(--space-3);
 }
 
-/* The daily email settings dialog (digest.js): the outcome of an action, the frequency choice and the filters it will use. */
-.digest-note {
-  padding: var(--space-3) var(--space-4);
-  border: var(--border-width) solid var(--line);
-  border-radius: var(--radius-card);
-  background: var(--accent-bg);
-  color: var(--ink);
-  font-size: var(--text-sm);
-  font-weight: 600;
-}
-
-.digest-note[hidden],
+/* The daily email settings dialog (digest.js): the frequency choice and the filters it will use. */
 .dialog-actions[hidden] {
   display: none;
 }
@@ -325,11 +314,6 @@ a {
   font-size: inherit;
 }
 
-.digest-filters {
-  margin: 0;
-  padding-inline-start: var(--space-5);
-  font-weight: 400;
-}
 
 /* The row under the search: "Filters" (a phone only) and the switch to the starred list. */
 .toolbar {

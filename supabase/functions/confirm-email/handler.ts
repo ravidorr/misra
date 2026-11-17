@@ -98,9 +98,9 @@ export async function handleConfirm(request: Request, deps: Deps): Promise<Respo
         // A read after the confirm: it changes nothing, and a failure only drops `schedule`.
         return reply(origin, 200, { ok: true, status: answer, schedule: await readSchedule(deps, config, hash) });
       case 'unsubscribed':
-        return fail(origin, 409, 'unsubscribed', 'You have unsubscribed. Turn the email on again to get a new link.');
+        return fail(origin, 409, 'unsubscribed', 'You have unsubscribed. Start job alerts again on the dashboard to get a new link.');
       case 'expired':
-        return fail(origin, 410, 'link_expired', 'This link has expired. Turn the email on again to get a new one.');
+        return fail(origin, 410, 'link_expired', 'This link has expired. Start job alerts again on the dashboard to get a new one.');
       case 'unknown':
         return fail(origin, 404, 'link_not_valid', NOT_VALID);
     }

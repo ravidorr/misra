@@ -189,7 +189,7 @@ Decisions made in planning (they change the PRD's wording, so update the PRD in 
   `supabase secrets set DIGEST_SIGNUP_ENABLED=true --project-ref dncodqeqpoqwcxdctzco`. The control carries the lawyer's wording (label "Email me new matching roles", Daily or Weekly, helper text with the
   address and links to the Terms and the Privacy Notice, and "Check ADDRESS for a confirmation link..." after turning on);
   the confirmation email is his text verbatim. To close signups again, unset the secret; never set the build constant back
-  to `False` once anyone has subscribed (it also removes "Turn the email off" from the page).
+  to `False` once anyone has subscribed (it also removes "End job alerts" from the page).
   Done live on 2026-11-15: the migration is applied and `email-settings` is deployed; the checks that create no subscription passed
   (no token 401, the publishable key as the bearer 401, the preflight 204). Still to check, signed in, when signups open: turning on is 403 `signup_closed` while the secret is unset, turning off with no row is a 200, and the maintainer's own turn-on flow below.
   (The original list of checks, for reference: apply the migration and record it, deploy `email-settings`, then run the five curl checks of

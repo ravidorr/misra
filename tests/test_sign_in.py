@@ -419,13 +419,20 @@ async def test_fr1_ac7_pressing_sign_in_shows_the_notice_and_does_not_leave_the_
     assert await dialog.get_attribute("aria-labelledby") == "signInTitle"
     assert await dialog.get_attribute("aria-describedby") == "signInText"
     assert await page.evaluate("document.activeElement.id") == "signInTitle"
+    assert await page.locator("#signInCancel").get_attribute("aria-label") == "Close"  # the corner (x) has a name
     paragraphs = [" ".join(t.split()) for t in await page.locator("#signInText p").all_text_contents()]
-    assert paragraphs == [NOTICE_FIRST, NOTICE_SECOND]  # the approved text, word for word, and nothing else
+    # the approved text, word for word, and nothing else, except the words that say a link opens in a new tab
+    assert [p.replace(" (opens in a new tab)", "") for p in paragraphs] == [NOTICE_FIRST, NOTICE_SECOND]
     text = page.locator("#signInText")
     assert await text.get_by_role("link", name="privacy notice").get_attribute("href") == "privacy.html"
     assert await text.get_by_role("link", name="Terms").get_attribute("href") == "terms.html"
-    for link in await text.locator("a").all():  # the pages are on the site: the same tab, no new-tab words
-        assert await link.get_attribute("target") is None
+    for link in await text.locator(
+        "a"
+    ).all():  # a new tab, so the dialog and the page stay: the sign and the words say so
+        assert await link.get_attribute("target") == "_blank"
+        assert await link.get_attribute("rel") == "noopener"
+        assert await link.locator("svg.icon-ext[aria-hidden=true]").count() == 1
+        assert await link.locator(".sr-only").inner_text() == "(opens in a new tab)"
     await page.wait_for_timeout(300)
     assert page.url == f"{ORIGIN}/index.html"  # nothing was started by the button
     assert len(auth.requests) == requests

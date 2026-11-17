@@ -66,13 +66,13 @@ FAILURES = [
     ),
     (400, {"code": "invalid_request", "message": "x"}, "could not be read, so nothing was changed"),
     (403, {"code": "origin_not_allowed", "message": "x"}, "only be done from the live page"),
-    (403, {"code": "signup_closed", "message": "x"}, "not open yet, so nothing was turned on"),
+    (403, {"code": "signup_closed", "message": "x"}, "not open yet. Nothing was turned on"),
     (401, {"code": "not_signed_in", "message": "x"}, "sign-in was not accepted, so nothing was changed"),
     (503, {"code": "service_unavailable", "message": "x"}, "sign-in service did not answer, so nothing was changed"),
     (429, {"code": "rate_limited", "message": "x"}, "already asked for 3 confirmation emails today"),
     (429, {"code": "address_limited", "message": "x"}, "That address has already been sent as many"),
     (503, {"code": "daily_cap_reached", "message": "x"}, "as many confirmation emails as we can today"),
-    (502, {"code": "send_failed", "message": "x"}, "could not be sent, so nothing is waiting for you"),
+    (502, {"code": "send_failed", "message": "x"}, "could not be sent, so job alerts stay paused"),
     (502, {"code": "send_unconfirmed", "message": "x"}, "could not confirm that the email was sent"),
     (500, {"code": "server_error", "message": "x"}, "Something went wrong on our side"),
     (405, {"code": "method_not_allowed", "message": "x"}, "Something went wrong on our side"),
@@ -237,8 +237,16 @@ async def state_of(page: Page) -> str:
     return await page.locator(DIALOG).get_attribute("data-state") or ""
 
 
+async def no_result(page: Page) -> None:
+    """The state line holds the state's own words, not the outcome of an action (a success, a copy, a save)."""
+    text = await page.locator("#digestState").inner_text()
+    assert not any(
+        word in text for word in ("confirmation link", "Saved.", "Copied.", "already on", "Nothing more will be sent")
+    )
+
+
 async def lines(page: Page) -> list[str]:
-    return await page.locator("#digestFilters li").all_text_contents()
+    return ((await page.locator("#digestFilters").text_content()) or "").split("; ")
 
 
 async def choose(page: Page, group: str, value: str) -> None:
@@ -282,12 +290,12 @@ async def test_fr8_ac1_a_signed_in_user_has_a_daily_email_button_that_opens_the_
     assert await page.evaluate("document.activeElement.id") == "digestTitle"
     await page.wait_for_selector("#digestDialog:not([data-state=loading])")
     assert await state_of(page) == "off"
-    assert await page.locator("#digestState").inner_text() == "The email is off. Nothing is sent to you."
+    assert await page.locator("#digestState").inner_text() == "Job alerts are off. Nothing is sent to you."
     # the address defaults to the Google email, daily is the default, and the email starts off with every role
     assert await page.locator("#digestAddress").input_value() == EMAIL
     assert await page.locator("input[name=digestFrequency]:checked").get_attribute("value") == "daily"
     assert await lines(page) == ["Every new role (no filters chosen)."]
-    assert await page.locator("#digestSend").inner_text() == "Turn the email on"
+    assert await page.locator("#digestSend").inner_text() == "Start job alerts"
     assert await page.locator("#digestOff").is_hidden()
     assert problems == []
     # the row of this user, and only that, was read, and no token hash was asked for
@@ -306,7 +314,7 @@ async def test_fr8_ac1_turning_it_on_sends_the_choices_and_waits_for_the_confirm
     await signed_in(page, digest_site, world)
     await open_dialog(page)
     await page.click("#digestSend")
-    await expect(page.locator("#digestNote")).to_contain_text(f"Check {EMAIL} for a confirmation link")
+    await expect(page.locator("#digestState")).to_contain_text(f"Check {EMAIL} for a confirmation link")
     assert world.calls == [{"action": "turn_on", "address": None, "frequency": "daily", "filters": EMPTY}]
     headers = world.headers()
     assert headers["authorization"].startswith("Bearer ey")  # the user's own access token
@@ -316,8 +324,7 @@ async def test_fr8_ac1_turning_it_on_sends_the_choices_and_waits_for_the_confirm
     assert await state_of(page) == "waiting"
     assert await page.locator("#digestOpen").get_attribute("data-digest-state") == "waiting"
     text = await page.locator("#digestState").inner_text()
-    assert text.startswith(f"Waiting for you to confirm {EMAIL}.")
-    assert "until then nothing is sent" in text
+    assert text.startswith(f"Check {EMAIL} for a confirmation link.")  # the result takes the place of the state's words
     assert await page.locator("#digestSend").inner_text() == "Send the confirmation again"
     assert await page.locator("#digestOff").is_visible()
     assert await page.locator("#digestError").is_hidden()
@@ -331,13 +338,13 @@ async def test_fr8_ac1_a_different_address_is_sent_as_typed_and_the_google_email
     await open_dialog(page)
     await page.fill("#digestAddress", f"  {OTHER}  ")
     await page.click("#digestSend")
-    await expect(page.locator("#digestNote")).to_contain_text(f"Check {OTHER} for")
+    await expect(page.locator("#digestState")).to_contain_text(f"Check {OTHER} for")
     assert world.calls[0]["address"] == OTHER
     assert await page.locator("#digestAddress").input_value() == OTHER
     # typing the Google email again, in capitals, means "my own": the function takes it from the account
     await page.fill("#digestAddress", EMAIL.upper())
     await page.click("#digestSend")
-    await expect(page.locator("#digestNote")).to_contain_text(f"Check {EMAIL} for")
+    await expect(page.locator("#digestState")).to_contain_text(f"Check {EMAIL} for")
     assert world.calls[1]["address"] is None
 
 
@@ -357,7 +364,7 @@ async def test_a_bad_address_is_refused_before_anything_is_sent(page: Page, dige
     assert world.function_requests == []
     await page.fill("#digestAddress", EMAIL)  # fixing it clears the message as soon as the value is fine
     await page.click("#digestSend")
-    await expect(page.locator("#digestNote")).to_contain_text("for a confirmation link")
+    await expect(page.locator("#digestState")).to_contain_text("for a confirmation link")
     assert await error.is_hidden()
 
 
@@ -368,15 +375,17 @@ async def test_fr8_ac1_turning_it_off_does_the_one_click_unsubscribe_and_the_sta
     await signed_in(page, digest_site, world)
     await open_dialog(page)
     assert await state_of(page) == "on"
-    assert "The email is on. New roles that match your filters go to" in await page.locator("#digestState").inner_text()
-    assert await page.locator("#digestOff").inner_text() == "Turn the email off"
+    assert "Job alerts are on. New matching roles go to" in await page.locator("#digestState").inner_text()
+    assert await page.locator("#digestOff").inner_text() == "End job alerts"
     await page.click("#digestOff")
-    await expect(page.locator("#digestNote")).to_contain_text("The email is off. Nothing more will be sent")
+    await expect(page.locator("#digestState")).to_contain_text("Job alerts are off. Nothing more will be sent")
     assert world.calls == [{"action": "turn_off"}]
     assert await state_of(page) == "unsubscribed"
     assert await page.locator("#digestOpen").get_attribute("data-digest-state") == "unsubscribed"
-    assert "You unsubscribed, so nothing is sent" in await page.locator("#digestState").inner_text()
-    assert await page.locator("#digestSend").inner_text() == "Turn the email on"
+    await page.click("#digestClose")
+    await account_action(page, "#digestOpen")
+    await expect(page.locator("#digestState")).to_contain_text("You unsubscribed, so nothing is sent")
+    assert await page.locator("#digestSend").inner_text() == "Start job alerts"
     assert await page.locator("#digestOff").is_hidden()
     assert await lines(page) == ["Every new role (no filters chosen)."]  # the saved filters were deleted
     assert await page.locator("#digestAddress").input_value() == EMAIL
@@ -390,7 +399,7 @@ async def test_turning_off_an_email_that_was_never_on_changes_nothing_and_says_s
     await open_dialog(page)
     world.row = None  # another device removed it meanwhile
     await page.click("#digestOff")
-    await expect(page.locator("#digestNote")).to_have_text("The email was not on, so nothing was changed.")
+    await expect(page.locator("#digestState")).to_have_text("Job alerts were not on, so nothing changed.")
     assert await state_of(page) == "off"
 
 
@@ -402,7 +411,7 @@ async def test_turning_it_on_again_after_an_unsubscribe_asks_for_a_new_confirmat
     await open_dialog(page)
     assert await state_of(page) == "unsubscribed"
     await page.click("#digestSend")
-    await expect(page.locator("#digestNote")).to_contain_text("for a confirmation link")
+    await expect(page.locator("#digestState")).to_contain_text("for a confirmation link")
     assert await state_of(page) == "waiting"
 
 
@@ -413,10 +422,10 @@ async def test_an_already_running_email_is_left_alone_and_the_page_says_so(page:
     await open_dialog(page)
     assert await page.locator("#digestSend").is_hidden()  # nothing to send while the address is the running one
     await page.fill("#digestAddress", OTHER)  # a new address is a new consent
-    assert await page.locator("#digestSend").inner_text() == "Change the address and confirm it"
+    assert await page.locator("#digestSend").inner_text() == "Confirm new address"
     await page.click("#digestSend")
-    await expect(page.locator("#digestNote")).to_have_text(
-        "The email was already on for this address, so nothing was changed and nothing was sent."
+    await expect(page.locator("#digestState")).to_have_text(
+        "Job alerts were already on for this address. Nothing changed and nothing was sent."
     )
     assert world.calls[0]["address"] == OTHER
     assert world.calls[0]["frequency"] == "daily"
@@ -431,11 +440,11 @@ async def test_changing_the_address_of_a_running_email_says_it_pauses_until_conf
     await open_dialog(page)
     await page.fill("#digestAddress", OTHER)
     await page.click("#digestSend")
-    await expect(page.locator("#digestNote")).to_contain_text("The email stays paused until then.")
+    await expect(page.locator("#digestState")).to_contain_text("Job alerts are paused until then.")
     assert await state_of(page) == "waiting"
 
 
-# ---- FR-8 AC 2: "Use these filters for my email" copies four filters, and only that button changes them ----
+# ---- FR-8 AC 2: "Use the page filters now" copies four filters, and only that button changes them ----
 
 
 async def test_fr8_ac2_the_button_copies_exactly_regions_levels_role_types_and_keywords(
@@ -460,10 +469,10 @@ async def test_fr8_ac2_the_button_copies_exactly_regions_levels_role_types_and_k
         "Role types: Product",
         "Keywords: growth   marketing",  # the words as typed, trimmed: the function collapses the spaces
     ]
-    await expect(page.locator("#digestNote")).to_contain_text("Copied.")
+    await expect(page.locator("#digestState")).to_contain_text("Copied.")
     assert world.table_requests[-1].method == "GET"  # a draft: nothing is written until the email is turned on
     await page.click("#digestSend")
-    await expect(page.locator("#digestNote")).to_contain_text("for a confirmation link")
+    await expect(page.locator("#digestState")).to_contain_text("for a confirmation link")
     (body,) = world.calls
     assert set(body["filters"]) == {"regions", "levels", "role_types", "keywords"}
     assert body["filters"]["regions"] == ["Tel Aviv area"]
@@ -483,7 +492,7 @@ async def test_fr8_ac2_later_changes_to_the_dashboard_filters_do_not_change_the_
     await open_dialog(page)
     await page.click("#digestUseFilters")
     await page.click("#digestSend")
-    await expect(page.locator("#digestNote")).to_contain_text("for a confirmation link")
+    await expect(page.locator("#digestState")).to_contain_text("for a confirmation link")
     saved = {**EMPTY, "levels": ["Intern"]}
     assert world.row is not None
     assert world.row["filters"] == saved
@@ -499,7 +508,7 @@ async def test_fr8_ac2_later_changes_to_the_dashboard_filters_do_not_change_the_
     assert [r.method for r in world.table_requests if r.method != "GET"] == []  # nothing was written
     # pressing it again saves the new set to the account's own row, and only the filters
     await page.click("#digestUseFilters")
-    await expect(page.locator("#digestNote")).to_have_text("Saved. The next email uses this.")
+    await expect(page.locator("#digestState")).to_have_text("Saved. Your next job alert uses this.")
     patch = [r for r in world.table_requests if r.method == "PATCH"]
     assert [json.loads(r.post_data) for r in patch] == [{"filters": world.row["filters"]}]
     assert await lines(page) == ["Regions: Tel Aviv area", "Levels: Intern, Junior", "Keywords: designer"]
@@ -541,12 +550,15 @@ async def test_fr8_ac3_daily_is_the_default_and_weekly_is_sent_when_chosen(page:
     world = World()
     await signed_in(page, digest_site, world)
     await open_dialog(page)
+    # the helper names the address that is typed, and follows it
+    await page.fill("#digestAddress", OTHER)
+    await expect(page.locator("#digestConsentTo")).to_have_text(OTHER)
     labels = await page.locator(".digest-frequency label").all_inner_texts()
     assert [t.strip() for t in labels] == ["Daily", "Weekly (Sundays)"]
     assert await page.locator("input[name=digestFrequency][value=daily]").is_checked()
     await page.check("input[name=digestFrequency][value=weekly]")
     await page.click("#digestSend")
-    await expect(page.locator("#digestNote")).to_contain_text("for a confirmation link")
+    await expect(page.locator("#digestState")).to_contain_text("for a confirmation link")
     assert world.calls[0]["frequency"] == "weekly"
     assert await page.locator("input[name=digestFrequency][value=weekly]").is_checked()
 
@@ -558,10 +570,9 @@ async def test_changing_the_frequency_of_a_running_email_is_saved_to_the_row_and
     await signed_in(page, digest_site, world)
     await open_dialog(page)
     await page.check("input[name=digestFrequency][value=weekly]")
-    await expect(page.locator("#digestNote")).to_have_text("Saved. The next email uses this.")
+    await expect(page.locator("#digestState")).to_have_text("Saved. Your next job alert uses this.")
     assert [json.loads(r.post_data) for r in world.table_requests if r.method == "PATCH"] == [{"frequency": "weekly"}]
     assert world.function_requests == []  # no email, no function: a preference, not a consent
-    assert "once a week" in await page.locator("#digestState").inner_text()
     assert await page.locator("#digestOpen").get_attribute("data-digest-frequency") == "weekly"
 
 
@@ -575,7 +586,7 @@ async def test_a_frequency_that_could_not_be_saved_is_not_called_saved(
     world.table_mode = mode
     await page.check("input[name=digestFrequency][value=weekly]")
     await expect(page.locator("#digestError")).to_contain_text("We could not save that")
-    assert await page.locator("#digestNote").is_hidden()
+    await no_result(page)
     assert await page.locator("input[name=digestFrequency][value=daily]").is_checked()  # what the account still holds
 
 
@@ -593,7 +604,7 @@ async def test_waiting_offers_to_send_the_confirmation_again_and_says_when_the_l
     assert "Waiting for you to confirm" in await page.locator("#digestState").inner_text()
     assert await page.locator("#digestOff").is_visible()
     await page.click("#digestSend")
-    await expect(page.locator("#digestNote")).to_contain_text(f"Check {OTHER} for a confirmation link")
+    await expect(page.locator("#digestState")).to_contain_text(f"Check {OTHER} for a confirmation link")
     assert world.calls[0]["address"] == OTHER  # the address of the waiting row, kept
     world.answer = (429, {"code": "rate_limited", "message": "x"})
     await page.click("#digestSend")
@@ -602,9 +613,7 @@ async def test_waiting_offers_to_send_the_confirmation_again_and_says_when_the_l
         "already asked for 3 confirmation emails today, the most allowed, so nothing was sent"
     )
     assert "tomorrow" in await problem.inner_text()
-    assert await page.locator(
-        "#digestNote"
-    ).is_hidden()  # the earlier "sent" is gone: it does not describe this attempt
+    await no_result(page)  # the earlier "sent" is gone: it does not describe this attempt
 
 
 # ---- Honest errors ----
@@ -623,15 +632,15 @@ async def test_each_failure_is_explained_and_never_called_a_success(
     await expect(problem).to_be_visible()
     assert words in await problem.inner_text()
     assert await problem.get_attribute("role") == "alert"
-    assert await page.locator("#digestNote").is_hidden()
+    await no_result(page)
     assert await state_of(page) == "off"  # read again: the account holds nothing
     assert await page.evaluate("document.activeElement.id") == "digestError"
-    assert await page.locator("#digestSend").inner_text() == "Turn the email on"
+    assert await page.locator("#digestSend").inner_text() == "Start job alerts"
     if error["code"] == "invalid_input":
         assert await page.locator("#digestAddressError").inner_text() == "Enter one email address."
     world.answer = None
     await page.click("#digestSend")  # a retry that works
-    await expect(page.locator("#digestNote")).to_contain_text("for a confirmation link")
+    await expect(page.locator("#digestState")).to_contain_text("for a confirmation link")
     assert await page.locator("#digestError").is_hidden()
 
 
@@ -645,7 +654,7 @@ async def test_an_answer_that_is_not_the_functions_is_never_called_a_success(
     await open_dialog(page)
     await page.click("#digestSend")
     await expect(page.locator("#digestError")).to_be_visible()
-    assert await page.locator("#digestNote").is_hidden()
+    await no_result(page)
     assert await state_of(page) == "off"
 
 
@@ -660,7 +669,7 @@ async def test_a_function_that_cannot_be_reached_says_it_cannot_be_sure_and_read
     await page.click("#digestSend")
     await expect(page.locator("#digestError")).to_contain_text("could not get an answer from the service")
     assert len(world.table_requests) > reads  # a reset connection can come after the work: the account is read again
-    assert await page.locator("#digestNote").is_hidden()
+    await no_result(page)
     assert await state_of(page) == "off"
 
 
@@ -676,7 +685,7 @@ async def test_a_frequency_changed_while_a_request_runs_goes_back_to_what_the_ac
     await page.click("input[name=digestFrequency][value=weekly]", force=True)
     assert await page.locator("input[name=digestFrequency][value=daily]").is_checked()
     world.gate.set()
-    await expect(page.locator("#digestNote")).to_contain_text("for a confirmation link")
+    await expect(page.locator("#digestState")).to_contain_text("for a confirmation link")
     assert world.calls[0]["frequency"] == "daily"
     assert world.table_requests[-1].method == "GET"  # nothing was saved for the weekly choice
 
@@ -701,8 +710,8 @@ async def test_a_row_that_cannot_be_read_after_an_answer_is_said_too(page: Page,
     await open_dialog(page)
     world.table_mode = "read_error"
     await page.click("#digestSend")
-    await expect(page.locator("#digestNote")).to_contain_text("for a confirmation link")
-    await expect(page.locator("#digestError")).to_contain_text("We could not read your email settings")
+    await expect(page.locator("#digestState")).to_contain_text("for a confirmation link")
+    await expect(page.locator("#digestError")).to_contain_text("We could not read your job alert settings")
 
 
 @pytest.mark.parametrize("mode", ["read_down", "read_error"])
@@ -714,10 +723,10 @@ async def test_settings_that_cannot_be_read_say_so_and_can_be_tried_again(
     await signed_in(page, digest_site, world, wait=False)
     await account_action(page, "#digestOpen")
     await expect(page.locator("#digestError")).to_contain_text(
-        "We could not read your email settings. Nothing was changed."
+        "We could not read your job alert settings. Nothing was changed."
     )
     assert await state_of(page) == "unknown"
-    assert await page.locator("#digestState").inner_text() == "We could not read your email settings."
+    assert await page.locator("#digestState").inner_text() == "We could not read your job alert settings."
     assert await page.locator("#digestForm").is_hidden()  # no controls that could act on a state the page does not know
     world.table_mode = "ok"
     await page.click("#digestRetry")
@@ -773,7 +782,7 @@ async def test_the_dialog_is_busy_while_it_waits_and_one_click_sends_one_request
     await page.keyboard.press("Escape")
     await expect(page.locator(DIALOG)).to_be_visible()
     world.gate.set()
-    await expect(page.locator("#digestNote")).to_contain_text("for a confirmation link")
+    await expect(page.locator("#digestState")).to_contain_text("for a confirmation link")
     assert len(world.function_requests) == 1
     assert await send.get_attribute("aria-busy") == "false"
 
@@ -789,7 +798,7 @@ async def test_an_answer_is_shown_even_if_the_dialog_was_closed_while_it_waited(
     await expect(page.locator(DIALOG)).to_be_hidden()
     world.gate.set()
     await expect(page.locator(DIALOG)).to_be_visible()
-    await expect(page.locator("#digestNote")).to_contain_text("for a confirmation link")
+    await expect(page.locator("#digestState")).to_contain_text("for a confirmation link")
 
 
 async def test_the_focus_goes_to_the_outcome_when_the_pressed_button_goes_away(page: Page, digest_site: Path) -> None:
@@ -798,15 +807,15 @@ async def test_the_focus_goes_to_the_outcome_when_the_pressed_button_goes_away(p
     await open_dialog(page)
     await page.fill("#digestAddress", OTHER)
     await page.click("#digestSend")
-    await expect(page.locator("#digestNote")).to_contain_text("for a confirmation link")
-    assert await page.evaluate("document.activeElement.id") in {"digestSend", "digestNote"}
+    await expect(page.locator("#digestState")).to_contain_text("for a confirmation link")
+    assert await page.evaluate("document.activeElement.id") == "digestState"
     world.row = stored("on")
     await page.click("#digestClose")
     await account_action(page, "#digestOpen")
     await page.wait_for_selector("#digestDialog[data-state=on]")
     await page.click("#digestOff")
-    await expect(page.locator("#digestNote")).to_contain_text("The email is off")
-    assert await page.evaluate("document.activeElement.id") == "digestNote"  # the Turn off button is gone
+    await expect(page.locator("#digestState")).to_contain_text("Job alerts are off")
+    assert await page.evaluate("document.activeElement.id") == "digestState"  # the End job alerts button is gone
 
 
 # ---- The account comes and goes ----
@@ -956,7 +965,7 @@ async def test_after_turning_it_on_the_status_names_the_address_and_the_schedule
     await open_dialog(page)
     await page.click(f"input[name=digestFrequency][value={word}]")
     await page.click("#digestSend")
-    await expect(page.locator("#digestNote")).to_have_text(
+    await expect(page.locator("#digestState")).to_have_text(
         f"Check {EMAIL} for a confirmation link. Your {word} job alerts start only after you open it "
         'and press "Confirm my email".'
     )
@@ -1005,7 +1014,7 @@ async def test_the_dialog_works_from_the_keyboard_and_gives_the_focus_back(page:
     await expect(page.locator(DIALOG)).to_be_visible()
     await page.wait_for_selector("#digestDialog[data-state=off]")
     seen = []
-    for _ in range(7):
+    for _ in range(6):
         await page.keyboard.press("Tab")
         seen.append(
             await page.evaluate("const e = document.activeElement; e.id || e.name || e.textContent.slice(0, 5)")
@@ -1018,15 +1027,20 @@ async def test_the_dialog_works_from_the_keyboard_and_gives_the_focus_back(page:
         "digestFrequency",
         "digestUseFilters",
         "digestSend",
-        "digestClose",
     ]
+    close = page.locator("#digestClose")  # the corner (x): first in the dialog, a named 44px button
+    assert await close.get_attribute("aria-label") == "Close"
+    box = await close.bounding_box()
+    assert box is not None
+    assert box["width"] >= TAP
+    assert box["height"] >= TAP
     await page.keyboard.press("Escape")
     await expect(page.locator(DIALOG)).to_be_hidden()
     assert await page.evaluate("document.activeElement.id") == "accountMenuButton"
     await account_action_by_keyboard(page, "#digestOpen")
     await page.fill("#digestAddress", EMAIL)
     await page.keyboard.press("Enter")  # submitting the form from a field turns it on
-    await expect(page.locator("#digestNote")).to_contain_text("for a confirmation link")
+    await expect(page.locator("#digestState")).to_contain_text("for a confirmation link")
 
 
 async def test_the_page_loads_the_digest_script_from_its_own_origin_with_an_integrity_hash(digest_site: Path) -> None:
@@ -1080,3 +1094,46 @@ async def test_choosing_job_alerts_closes_the_menu_and_closing_the_dialog_return
     await expect(page.locator(DIALOG)).to_be_hidden()
     assert await page.evaluate("document.activeElement.id") == "accountMenuButton"
     await expect(page.locator("#accountMenu")).to_be_hidden()
+
+
+@pytest.mark.parametrize(
+    ("row", "words"),
+    [
+        (stored("waiting"), ["Waiting for you to confirm", "until then nothing is sent", "7 days"]),
+        (stored("on"), ["New matching roles go to", "on days with new matches"]),
+        (stored("on", frequency="weekly"), ["on Sundays, when there are new matches"]),
+    ],
+)
+async def test_the_state_line_says_each_state_in_words(
+    page: Page, digest_site: Path, row: dict[str, Any], words: list[str]
+) -> None:
+    await signed_in(page, digest_site, World(row))
+    await open_dialog(page)
+    text = await page.locator("#digestState").inner_text()
+    for word in words:
+        assert word in text
+
+
+async def test_an_outcome_is_not_shown_to_the_next_account(page: Page, digest_site: Path) -> None:
+    world = World()
+    auth = AuthBackend()
+    await serve(page, digest_site, auth=auth)
+    await page.route(FUNCTION, world.function)
+    await page.route(TABLE, world.table)
+    await start_sign_in(page, auth)
+    await come_back(page)
+    await page.wait_for_selector("#accountUser:not([hidden])")
+    await settled(page)
+    await open_dialog(page)
+    await page.click("#digestSend")
+    await expect(page.locator("#digestState")).to_contain_text("confirmation link")
+    await page.click("#digestClose")
+    await account_action(page, "#signOut")
+    await page.wait_for_selector("#signIn:not([hidden])")
+    world.row = None
+    await start_sign_in(page, auth)
+    await come_back(page)
+    await page.wait_for_selector("#accountUser:not([hidden])")
+    await settled(page)
+    await open_dialog(page)
+    await no_result(page)
