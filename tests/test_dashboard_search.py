@@ -270,3 +270,15 @@ async def test_an_answer_one_short_of_the_cap_has_no_note_and_a_hebrew_word_is_a
             break
         await page.wait_for_timeout(50)
     assert fake.searches == ["rust", "מוצר"]
+
+
+async def test_a_late_failure_of_an_old_query_does_not_clear_the_note_of_the_one_shown(page: Page, site: Path) -> None:
+    fake = backend(search_mode="error", search_delays={"rust": 1.5})  # "rust" fails after "dog"
+    await serve(page, site, backend=fake)
+    await page.fill("#q", "rust")
+    await asked(page, fake)  # asked, not yet failed
+    await page.fill("#q", "dog")
+    await said(page, "Showing 1 of 3 open roles in Israel. 0 discarded. " + FAILED)  # "dog" fails first
+    await page.wait_for_timeout(2000)  # then "rust" fails, for a query that is no longer shown
+    await page.locator("#list article").first.locator("[data-act=toggle]").click()  # a redraw
+    await expect(page.locator("#summary")).to_contain_text(FAILED)

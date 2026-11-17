@@ -136,6 +136,7 @@ class Backend:
         self.searches: list[str] = []
         self.search_mode = "ok"
         self.search_seconds = 0.0
+        self.search_delays: dict[str, float] = {}  # a query that takes its own time
 
     async def search(self, route: Route) -> None:
         request = route.request
@@ -146,7 +147,7 @@ class Backend:
         assert "?" not in request.url  # the words are in the body, never in the address
         key = build_dashboard.SUPABASE_ANON_KEY
         assert request.headers.get("apikey") == key and request.headers.get("authorization") == f"Bearer {key}"
-        await asyncio.sleep(self.search_seconds)
+        await asyncio.sleep(self.search_delays.get(query, self.search_seconds))
         if self.search_mode == "down":
             await route.abort()
             return

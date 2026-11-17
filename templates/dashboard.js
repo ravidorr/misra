@@ -1051,7 +1051,7 @@ const SEARCH_NOTES = {
 };
 const textKeys = new Map();
 const textCapped = new Set(); /* the queries whose answer hit the cap */
-let searchFailed = ''; /* the query whose last ask failed, until it is answered or changed */
+const searchFailed = new Set(); /* the queries whose last ask failed, each until it is answered: asks overlap, so one slot would lose a failure */
 let searchTimer;
 const searchQuery = (q) => q.trim().toLowerCase().split(/\s+/).filter(Boolean).join(' ');
 
@@ -1074,7 +1074,7 @@ function searchNote() {
   const query = searchQuery(F.q);
   if (query === '') return '';
   if (!hasSearchWord(query)) return SEARCH_NOTES.short;
-  if (searchFailed === query) return SEARCH_NOTES.failed;
+  if (searchFailed.has(query)) return SEARCH_NOTES.failed;
   return textCapped.has(query) ? SEARCH_NOTES.capped : '';
 }
 
@@ -1093,9 +1093,9 @@ function searchText() {
       }
       textKeys.set(query, keys);
       if (capped) textCapped.add(query);
-      if (searchFailed === query) searchFailed = '';
+      searchFailed.delete(query);
     } catch {
-      if (!textKeys.has(query)) searchFailed = query; /* an older ask of the same words may fail after a newer one answered; the title match stays and says so; a later change asks again */
+      if (!textKeys.has(query)) searchFailed.add(query); /* an older ask of the same words may fail after a newer one answered; the title match stays and says so; a later change asks again */
     }
     if (ready && view === 'roles' && searchQuery(F.q) === query) render();
   }, SEARCH_DELAY_MS);
