@@ -235,6 +235,17 @@ Observations about live sites below come from checks made on 2026-11-14 and may 
       Robotics' list shows "No items found"; Guesty's page is a Next.js app that shows no uid even on a job page. Guessing
       the Greenhouse, Lever, Ashby and Workable slugs of the 21 companies without a careers URL found only an unrelated
       company (`air` on Greenhouse). Western Digital's board is on SmartRecruiters, which robots.txt skips.
+    - **Known limitation, checked on 2026-11-17: pinned Workday boards that fail only from GitHub's servers.** In the
+      builds of 2026-11-15 to 2026-11-17 these companies show "request failed" on the coverage gap card: Adobe,
+      Broadcom, Cadence, Criteo, CrowdStrike, DoubleVerify, Edwards Lifesciences, Integral Ad Science, Kyndryl,
+      Medtronic, Motorola Solutions, Palo Alto Networks, Philips, Proofpoint, Salesforce, Samsung, Visa and Workday
+      (KLA, Marvell and Zoom joined later, and Check Point is blocked the same way as a browser crawl). The same
+      adapter answers from a normal network: Salesforce returned 17 Israeli jobs, Broadcom 1 and Intel 21 on
+      2026-11-17, one request each at our pace and with our User-Agent, and a tenant with no Israeli job (Adobe,
+      Visa, Criteo, Zoom) answers an empty list. So the tenants refuse the runner's address range. It is not worked
+      around (no proxy, no other address, no changed User-Agent): the companies stay on the card, which says its
+      roles "may be missing or out of date", until a tenant lets the runner in or the crawl moves to a network it
+      accepts. Their old jobs stay listed until a good crawl or the failure rules close them.
     - Checked on 2026-11-16 (second batch, do not repeat): no adapter for iCIMS (AMD, Keysight: robots.txt of
       `careers-amd.icims.com` and `careers-keysight.icims.com` is `Disallow: /`) or Avature (Synopsys alone: the
       robots.txt of `generalmotors.avature.net` disallows `/careers`) or SuccessFactors (Stratasys alone) or Pinpoint
