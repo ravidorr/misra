@@ -678,7 +678,7 @@ def test_fr7_ac6_contributing_md_says_how_a_reported_site_is_accepted() -> None:
 def test_privacy_md_says_where_the_form_is() -> None:
     text = (REPO / "PRIVACY.md").read_text(encoding="utf-8")
     assert "not on the dashboard yet" not in text
-    assert "Report a site" in text
+    assert "Add a company" in text
 
 
 def test_the_daily_workflow_publishes_every_file_the_page_loads() -> None:

@@ -886,7 +886,7 @@ changes every day and no address is stored or logged:
 
 ### Why `search_job_keys` has no per-caller limit
 
-Decision of 2026-11-17: there is none, and no global daily cap either.
+Decision of 2026-11-17: there is none, and no global daily cap either. The lawyer agreed the same day: no per-visitor counter now and no change to `PRIVACY.md`; revisit only if the database or API logs show abnormal query volume.
 
 - **What it reveals.** That the text of an open job holds every word of the query (words of 3 letters or digits or more, ANDed,
   no operators), as a list of at most 3,000 `[company, job_id]` keys. Never a character of the text, a rank or a snippet. A
@@ -915,7 +915,7 @@ Decision of 2026-11-17: there is none, and no global daily cap either.
   - over the limit: `raise exception ... using errcode = 'PT429'` (PostgREST answers 429). The dashboard already shows "Could not
     search job descriptions..." for any failed answer and keeps matching titles, so it needs no change;
   - a rollback migration with the current body ready before applying, because `create or replace` changes the live function at once.
-- **When to revisit:** any sign of scraping of `rpc/search_job_keys` in the Supabase API logs, or a request from the lawyer.
+- **When to revisit:** only if the database or API logs show abnormal query volume on `rpc/search_job_keys` (agreed with the lawyer on 2026-11-17).
 
 ### How the assistant endpoint is tested
 
