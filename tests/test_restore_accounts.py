@@ -12,7 +12,7 @@ import pytest
 
 import export_accounts
 import restore_accounts
-from export_accounts import TABLES, Table, render
+from export_accounts import ALL_TABLES, JOB_TABLES, TABLES, Table, render
 from restore_accounts import RestoreError, literal, load, script
 
 U1 = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
@@ -27,6 +27,17 @@ def data() -> dict[str, list[dict[str, Any]]]:
         "user_jobs": [{"user_id": U1, "company": "Acme", "job_id": "1", "state": "star", "title": "Titre é"}],
         "subscriptions": [{"user_id": U1, "address": EMAILS[0], "unsubscribe_token_hash": "f" * 64}],
         "emailed": [{"user_id": U1, "company": "Acme", "job_id": "1", "emailed_at": "2026-11-02T04:31:00+00:00"}],
+        "jobs": [
+            {
+                "company": "Acme",
+                "job_id": "1",
+                "title": "Titre é",
+                "status": "closed",
+                "role_types": ["R&D"],
+                "regions": [],
+            }
+        ],
+        "crawl_log": [{"id": 7, "ts": "2026-11-16T04:30:00", "company": "Acme", "ats": "lever", "ok": 1, "n_jobs": 3}],
     }
 
 
@@ -38,7 +49,7 @@ def write_export(directory: Path, content: dict[str, list[dict[str, Any]]] | Non
 
 
 def loaded(directory: Path) -> dict[str, list[dict[str, Any]]]:
-    return {table.name: load(directory, table) for table in TABLES}
+    return {table.name: load(directory, table) for table in ALL_TABLES}
 
 
 def test_the_script_is_one_transaction_that_inserts_in_foreign_key_order_and_never_deletes(tmp_path: Path) -> None:
@@ -47,8 +58,8 @@ def test_the_script_is_one_transaction_that_inserts_in_foreign_key_order_and_nev
     assert text.count("begin;") == text.count("commit;") == 1
     assert text.index("begin;") < text.index("insert into") < text.rindex("insert into") < text.index("commit;")
     inserted = re.findall(r"insert into public\.(\w+) ", text)
-    assert inserted == ["profiles", "user_prefs", "user_jobs", "subscriptions", "emailed"]
-    assert text.count("on conflict do nothing;") == len(TABLES)
+    assert inserted == ["profiles", "user_prefs", "user_jobs", "subscriptions", "emailed", "jobs", "crawl_log"]
+    assert text.count("on conflict do nothing;") == len(ALL_TABLES)
     lowered = text.lower()
     for forbidden in ("delete ", "truncate", "drop ", "do update", "update public"):
         assert forbidden not in lowered, forbidden
@@ -58,10 +69,10 @@ def test_the_tables_own_triggers_are_off_for_the_inserts_and_on_again_before_the
     text = script(loaded(write_export(tmp_path / "e")))
     off = [m.start() for m in re.finditer(r"disable trigger user;", text)]
     on = [m.start() for m in re.finditer(r"enable trigger user;", text)]
-    assert len(off) == len(on) == len(TABLES)
-    assert max(off) < text.index("insert into") and min(on) > text.rindex("insert into public.emailed")
+    assert len(off) == len(on) == len(ALL_TABLES)
+    assert max(off) < text.index("insert into") and min(on) > text.rindex("insert into public.crawl_log")
     assert max(on) < text.index("commit;")
-    for table in TABLES:
+    for table in ALL_TABLES:
         assert f"alter table public.{table.name} disable trigger user;" in text
         assert f"alter table public.{table.name} enable trigger user;" in text
 
@@ -73,6 +84,9 @@ def test_every_column_is_named_and_values_go_through_the_database_types(tmp_path
         qualified = ", ".join(f"r.{column}" for column in table.columns)
         assert f"insert into public.{table.name} ({columns})\nselect {qualified} from json_populate_recordset(" in text
         assert f"null::public.{table.name}" in text
+    for table in JOB_TABLES:  # no user: every row goes in, and nothing asks auth.users
+        columns = ", ".join(table.columns)
+        assert f"select {columns} from json_populate_recordset(null::public.{table.name}," in text
 
 
 def test_a_value_that_looks_like_the_quote_tag_cannot_end_the_text(tmp_path: Path) -> None:
@@ -92,9 +106,9 @@ def test_quotes_and_non_ascii_survive_in_the_json_text(tmp_path: Path) -> None:
 
 
 def test_the_empty_export_gives_a_script_that_inserts_nothing(tmp_path: Path) -> None:
-    empty = {table.name: [] for table in TABLES}
+    empty = {table.name: [] for table in ALL_TABLES}
     text = script(loaded(write_export(tmp_path / "e", empty)))
-    assert text.count("$restore$[]$restore$") == len(TABLES)
+    assert text.count("$restore$[]$restore$") == len(ALL_TABLES)
 
 
 def test_without_the_auth_users_step_only_the_rows_of_people_who_still_have_a_sign_in_row_are_restored(
@@ -105,11 +119,11 @@ def test_without_the_auth_users_step_only_the_rows_of_people_who_still_have_a_si
     content = loaded(write_export(tmp_path / "e"))
     text = script(content)
     check = "where exists (select 1 from auth.users u where u.id = r.user_id)\non conflict do nothing;\n"
-    assert text.count(check) == len(TABLES)  # every table, no exception
+    assert text.count(check) == len(TABLES)  # every account table, no exception (the job tables have no user)
     assert "insert into auth.users" not in text  # never creates a sign-in row in this mode
     created = script(content, with_auth_users=True)
     assert "from auth.users u" not in created  # a fresh project: the rows are created first, then all are restored
-    assert created.count("on conflict do nothing;") == len(TABLES) + 1
+    assert created.count("on conflict do nothing;") == len(ALL_TABLES) + 1
 
 
 def test_the_auth_users_step_is_optional_comes_first_and_only_adds_missing_rows(tmp_path: Path) -> None:
@@ -172,7 +186,9 @@ def test_main_writes_a_private_script_and_prints_counts_only(
     assert stat.S_IMODE(target.stat().st_mode) == export_accounts.FILE_MODE
     assert "insert into auth.users" in target.read_text(encoding="utf-8")
     shown = capsys.readouterr().out
-    assert shown.strip() == "restore script: profiles 2, user_prefs 1, user_jobs 1, subscriptions 1, emailed 1"
+    assert shown.strip() == (
+        "restore script: profiles 2, user_prefs 1, user_jobs 1, subscriptions 1, emailed 1, jobs 1, crawl_log 1"
+    )
     assert not [path for path in tmp_path.iterdir() if path.name.endswith(".tmp")]
     for private in (*EMAILS, U1, "Acme"):
         assert private not in shown
@@ -211,6 +227,7 @@ def test_running_the_module_reads_the_command_line(monkeypatch: pytest.MonkeyPat
 def test_a_table_the_export_writes_is_a_table_the_restore_reads() -> None:
     assert all(isinstance(table, Table) for table in TABLES)
     assert restore_accounts.TABLES is export_accounts.TABLES
+    assert restore_accounts.ALL_TABLES is export_accounts.ALL_TABLES
 
 
 def test_people_who_left_after_the_backup_are_left_out_of_every_table(tmp_path: Path) -> None:
@@ -227,7 +244,8 @@ def test_people_who_left_after_the_backup_are_left_out_of_every_table(tmp_path: 
 def test_leave_out_filters_all_tables() -> None:
     kept = restore_accounts.leave_out(data(), {U1})
     assert [row["user_id"] for row in kept["profiles"]] == [U2]
-    assert not any(kept[name] for name in kept if name != "profiles")
+    assert not any(kept[name] for name in kept if name not in {"profiles", "jobs", "crawl_log"})
+    assert (len(kept["jobs"]), len(kept["crawl_log"])) == (1, 1)  # the job history has no user: it stays whole
 
 
 def test_an_unreadable_id_file_is_an_error(tmp_path: Path) -> None:
@@ -265,3 +283,16 @@ def test_pausing_marks_active_subscriptions_unsubscribed_without_filters(tmp_pat
     target = tmp_path / "restore.sql"
     restore_accounts.main([str(directory), str(target), "--pause-subscriptions"])
     assert '"unsubscribed_at": "20' in target.read_text(encoding="utf-8")
+
+
+def test_a_crawl_log_row_keeps_its_id_and_the_sequence_moves_past_it(tmp_path: Path) -> None:
+    text = script(loaded(write_export(tmp_path / "e")))
+    insert = text[text.index("insert into public.crawl_log") :]
+    assert insert.startswith(
+        "insert into public.crawl_log (id, ts, company, ats, ok, n_jobs, note) overriding system value\n"
+    )
+    assert insert.index("on conflict do nothing;") < insert.index(
+        "select setval(pg_get_serial_sequence('public.crawl_log'"
+    )
+    assert text.count("overriding system value") == 1  # `jobs` has no generated id
+    assert "setval(pg_get_serial_sequence('public.jobs'" not in text

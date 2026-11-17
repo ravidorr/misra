@@ -1,10 +1,21 @@
-"""Copy the open jobs of data/jobs.db into the Supabase `jobs` table (PostgREST over HTTPS), then close the jobs that
-are no longer open. Run after the crawl: `python sync_supabase.py`.
+"""The two ends of the daily crawl (PLAN.md step 9.1). Supabase holds the history; data/jobs.db is a scratch file.
 
-Env: SUPABASE_URL (https://<ref>.supabase.co) and SUPABASE_SERVICE_ROLE_KEY. If either is empty the sync is skipped
-with a message and exit code 0, so the daily workflow keeps working until the secrets are set. Any other problem exits
+`python sync_supabase.py --pull` runs before the crawl: it rebuilds data/jobs.db from Supabase (every row of `jobs`,
+open and closed, without the text of the postings, and the whole `crawl_log`, each row with its Supabase id). It
+reads through the export's `Source`, which checks every table against its exact row count, and it refuses an empty
+`jobs` table: a crawl that starts from nothing would take every job for a new one (and the digest would email them
+all). The file is written beside and renamed over, so there is never a half-built one, and the crawl and the dashboard
+build refuse a missing file.
+
+`python sync_supabase.py` runs after the crawl: it copies the open jobs of data/jobs.db into the Supabase `jobs` table
+(PostgREST over HTTPS), closes the jobs that are no longer open, writes the crawl log rows of this run (the ones with
+no Supabase id yet) and deletes the log older than CRAWL_LOG_DAYS days.
+
+Env: SUPABASE_URL (https://<ref>.supabase.co) and SUPABASE_SERVICE_ROLE_KEY. Either one empty is an error, not a skip:
+the history lives in Supabase, so a run without it must go red, not carry on. The sync also refuses a data/jobs.db that
+the pull did not write (a `touch`ed or older file): its first_seen values would overwrite Supabase's. Any problem exits
 non-zero, so the workflow's failure alert fires. The service-role key bypasses row-level security: it is sent only in
-request headers, never printed, and exposed only to the sync step of the workflow.
+request headers, never printed, and exposed only to the steps of the workflow that need it, never to the crawl.
 
 After a good sync (so not on a day the crawl failed) the spam-guard counters are cleaned: `report_site_cleanup` (the
 `report-site` function's) and `confirm_email_cleanup` (the confirmation email's), database functions only the service
@@ -12,8 +23,9 @@ role may run, delete the rows of every day before today, so a daily non-reversib
 cleanup after its day ends, not only when a later request happens to be handled. A failed cleanup exits non-zero
 like a failed sync, so the privacy notice's promise cannot silently stop being kept.
 
-A company on the exclusion list (`data/excluded_companies.csv`) is deleted before anything is sent: its rows in `jobs`,
-and the rows that keep its title and link or its job keys in `user_jobs` (a user's stars and discards) and `emailed`.
+A company on the exclusion list (`data/excluded_companies.csv`) is deleted before anything is sent: its rows in `jobs`
+and `crawl_log`, and the rows that keep its title and link or its job keys in `user_jobs` (a user's stars and
+discards) and `emailed`.
 Only by exact company name, nothing when the list is empty, nothing at all when the list is bad or names more than
 MAX_PURGE_COMPANIES companies that still have rows. Counts are logged, never the rows.
 
@@ -21,8 +33,8 @@ Every open job is sent, in Israel or not, with its `level` and `role_types` (cla
 `locations` (regions.py). The upsert is keyed on (company, job_id) and merges columns, so a second run with the same
 database writes the same values, and columns that request does not send are left alone.
 
-The descriptions (PLAN.md step 7.1) are a second pass. The full text of a posting is never in data/jobs.db, which is
-committed to a public repository: the crawl leaves it in a work file outside the checkout (descriptions.py) and this
+The descriptions (PLAN.md step 7.1) are a second pass. The full text of a posting is never in data/jobs.db, nor in the
+export (the repository is public): the crawl leaves it in a work file outside the checkout (descriptions.py) and this
 step reads that file. Only the jobs that are open, not excluded and given a text by today's crawl get `description` and
 `details`, in batches of their own (a batch needs the same columns in every row, and a job without a text must keep the
 one it has). A hash of the text, kept in `details`, tells a posting that did not change: it is not sent again. The
@@ -37,7 +49,8 @@ import sqlite3
 import sys
 from collections.abc import Iterator, Mapping, Sequence
 from dataclasses import dataclass
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
+from pathlib import Path
 from typing import Any, Protocol, cast
 
 import requests
@@ -45,7 +58,20 @@ import requests
 import classify
 import descriptions
 import regions
-from common import DB, EXCLUDED_MIN_NAME, MAX_PURGE_COMPANIES, ExclusionError, is_excluded, load_excluded
+from common import (
+    CRAWL_LOG_DAYS,
+    DB,
+    EXCLUDED_MIN_NAME,
+    MAX_PURGE_COMPANIES,
+    PULLED,
+    SCHEMA,
+    ExclusionError,
+    is_excluded,
+    load_excluded,
+    open_history,
+)
+from export_accounts import CRAWL_LOG, JOBS, ExportError, Source
+from export_accounts import HttpSession as ExportSession
 
 BATCH = 500  # rows per upsert request
 TEXT_BATCH = 25  # rows per upsert request with descriptions: up to 20,000 characters each
@@ -54,8 +80,10 @@ TIMEOUT = 60
 HTTP_OK, HTTP_REDIRECT = 200, 300
 COLUMNS = ("company", "job_id", "title", "team", "location", "url", "posted", "first_seen", "last_seen")
 OPEN_JOBS = f"SELECT {', '.join(COLUMNS)} FROM jobs WHERE status='open' ORDER BY company, job_id"
-PURGE_TABLES = ("user_jobs", "emailed", "jobs")  # where a company's rows live: stars, emailed keys, jobs
-SKIP_MESSAGE = "SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY is empty: skipping the Supabase sync"
+HISTORY_COLUMNS = (*COLUMNS, "status")  # the columns of `jobs` that the scratch history keeps
+LOG_COLUMNS = ("ts", "company", "ats", "ok", "n_jobs", "note")
+PURGE_TABLES = ("user_jobs", "emailed", "jobs", "crawl_log")  # where a company's rows live: stars, emailed keys, jobs
+EMPTY_SECRETS = "SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY is empty: the history lives in Supabase, so nothing can run"
 
 
 class SyncError(Exception):
@@ -81,6 +109,7 @@ class Result:
     texts: int = 0  # jobs whose description was written
     texts_same: int = 0  # jobs whose description was already stored as it is
     texts_failed: int = 0  # jobs whose description could not be written (a warning, not a failure)
+    logged: int = 0  # crawl log rows written
 
 
 class Client:
@@ -211,6 +240,68 @@ def purge(client: Client, excluded: Sequence[str]) -> int:
     return total
 
 
+def pull(source: Source, path: str = DB) -> tuple[int, int]:
+    """Rebuild the scratch history at `path` from Supabase and return (jobs, crawl log rows). Everything is read before
+    anything is written; an empty `jobs` table is refused (see the module's note). The file is built beside and renamed
+    over the old one."""
+    jobs = source.read(JOBS)
+    log = source.read(CRAWL_LOG)
+    if not jobs:
+        raise SyncError(
+            "Supabase holds no jobs: refusing to start a crawl from an empty history "
+            "(restore the backup first, CONTRIBUTING.md, 'Backups')"
+        )
+    part = Path(path + ".part")
+    part.unlink(missing_ok=True)
+    conn = sqlite3.connect(part)
+    try:
+        conn.executescript(SCHEMA)
+        conn.execute(f"PRAGMA user_version = {PULLED}")  # what the sync checks: this file came from Supabase
+        conn.executemany(
+            f"INSERT INTO jobs({', '.join(HISTORY_COLUMNS)}) VALUES({', '.join('?' * len(HISTORY_COLUMNS))})",
+            [tuple(row[column] for column in HISTORY_COLUMNS) for row in jobs],
+        )
+        conn.executemany(
+            f"INSERT INTO crawl_log({', '.join(LOG_COLUMNS)}, id) VALUES({', '.join('?' * (len(LOG_COLUMNS) + 1))})",
+            [(*(row[column] for column in LOG_COLUMNS), row["id"]) for row in log],
+        )
+        conn.commit()
+    finally:
+        conn.close()
+    part.replace(path)
+    return len(jobs), len(log)
+
+
+def push_crawl_log(conn: sqlite3.Connection, client: Client) -> int:
+    """Write the crawl log rows of this run: the ones with no Supabase id yet (the pull gave every older row its id).
+    Each batch is marked as written as soon as it went, so a second sync of the same file (after a failure half way)
+    writes only the rest and never a row twice. Returns how many went."""
+    rows = conn.execute(f"SELECT rowid, {', '.join(LOG_COLUMNS)} FROM crawl_log WHERE id IS NULL ORDER BY ts, rowid")
+    pending = rows.fetchall()
+    for start in range(0, len(pending), BATCH):
+        batch = pending[start : start + BATCH]
+        client.call(
+            "POST",
+            {},
+            [dict(zip(LOG_COLUMNS, values[1:], strict=True)) for values in batch],
+            table="crawl_log",
+            prefer="return=minimal",
+        )
+        conn.executemany("UPDATE crawl_log SET id=0 WHERE rowid=?", [(values[0],) for values in batch])
+        conn.commit()
+    return len(pending)
+
+
+def trim_crawl_log(client: Client, today: date) -> None:
+    """Delete the crawl log older than CRAWL_LOG_DAYS days, so the table, the pull and the backup stay a fixed size.
+    Never fails the step: a failure is a warning and the next run retries."""
+    cutoff = (today - timedelta(days=CRAWL_LOG_DAYS)).isoformat()  # ts is ISO text, so text order is time order
+    try:
+        client.call("DELETE", {"ts": f"lt.{cutoff}"}, table="crawl_log")
+    except SyncError as exc:
+        print(f"::warning::the old crawl log could not be trimmed: {exc}")
+
+
 def sync(conn: sqlite3.Connection, client: Client, excluded: Sequence[str] = ()) -> Result:
     purged = purge(client, excluded)
     rows = [row for row in open_rows(conn) if not is_excluded(row["company"], list(excluded))]
@@ -222,7 +313,13 @@ def sync(conn: sqlite3.Connection, client: Client, excluded: Sequence[str] = ())
     client.upsert([{"company": company, "job_id": job_id, "status": "closed"} for company, job_id in stale])
     written, same, failed = push_texts(client, descriptions.read_work_file(), still_open)
     return Result(
-        upserted=len(rows), closed=len(stale), purged=purged, texts=written, texts_same=same, texts_failed=failed
+        upserted=len(rows),
+        closed=len(stale),
+        purged=purged,
+        texts=written,
+        texts_same=same,
+        texts_failed=failed,
+        logged=push_crawl_log(conn, client),  # last: the jobs and the texts are stored whatever this does
     )
 
 
@@ -318,24 +415,41 @@ def quality_report(conn: sqlite3.Connection) -> str:
     )
 
 
-def main() -> None:
+def credentials() -> tuple[str, str]:
     url, key = os.environ.get("SUPABASE_URL", "").strip(), os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "").strip()
     if not url or not key:  # an unset repository secret reaches the step as an empty string
-        try:
-            owed = load_excluded()
-        except ExclusionError as exc:
-            sys.exit(f"Supabase sync failed: {exc}")
-        if owed:  # a removal that cannot reach Supabase must not look done
-            sys.exit(f"Supabase sync failed: {len(owed)} companies are on the exclusion list but the secrets are empty")
-        print(SKIP_MESSAGE)
+        sys.exit(f"Supabase failed: {EMPTY_SECRETS}")
+    return url, key
+
+
+def pull_main(url: str, key: str) -> None:
+    try:
+        jobs, log = pull(Source(cast("ExportSession", requests.Session()), url, key))
+    except (SyncError, ExportError) as exc:
+        sys.exit(f"Supabase pull failed: {exc}")
+    print(f"Supabase: pulled {jobs} jobs and {log} crawl log rows into {DB}")
+
+
+def main(argv: Sequence[str] | None = None) -> None:
+    url, key = credentials()
+    if "--pull" in (sys.argv[1:] if argv is None else argv):
+        pull_main(url, key)
         return
-    conn = sqlite3.connect(DB)
+    conn = open_history()
+    if conn.execute("PRAGMA user_version").fetchone()[0] != PULLED:
+        conn.close()
+        sys.exit(
+            f"Supabase sync failed: {DB} was not written by --pull (it did not come from Supabase, so its first_seen "
+            "values would overwrite the real ones)"
+        )
     try:
         client = Client(cast("HttpSession", requests.Session()), url, key)
         result = sync(conn, client, load_excluded())
         print(f"Supabase: {result.upserted} open jobs upserted, {result.closed} closed, {result.purged} rows purged")
         done = f"{result.texts} written, {result.texts_same} unchanged, {result.texts_failed} failed"
         print(f"Supabase: descriptions {done}")
+        print(f"Supabase: {result.logged} crawl log rows written")
+        trim_crawl_log(client, datetime.now(UTC).date())
         trimmed = trim_texts(client, datetime.now(UTC).date())
         if trimmed is None:
             print("Supabase: the text of closed jobs was not trimmed today (see the warning above)")

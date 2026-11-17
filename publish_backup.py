@@ -1,4 +1,4 @@
-"""Put the account export into the private backup repository and keep its history short (PLAN.md step 9.1).
+"""Put the export (account tables and job history) into the private backup repository, history kept short (PLAN.md 9.1).
 
 `python publish_backup.py <export directory> <remote> <work directory>` clones the remote into the work directory,
 replaces the table files with the export, commits when something changed and pushes to `main`. The remote is the
@@ -24,7 +24,7 @@ from collections.abc import Sequence
 from datetime import UTC, datetime
 from pathlib import Path
 
-from export_accounts import TABLES, ExportError, outside_repository
+from export_accounts import ALL_TABLES, ExportError, outside_repository
 
 MAX_AGE_DAYS = 28  # the first commit is replaced at this age; PRIVACY.md promises 30 days
 SECONDS_PER_DAY = 86400
@@ -63,7 +63,7 @@ def git(directory: Path, *args: str) -> str:
 def counts(source: Path) -> dict[str, int]:
     """Rows per table of the export (the only thing the commit message and the log say about the data)."""
     out: dict[str, int] = {}
-    for table in TABLES:
+    for table in ALL_TABLES:
         try:
             rows = json.loads((source / f"{table.name}.json").read_text(encoding="utf-8"))
         except (OSError, ValueError):
@@ -102,7 +102,7 @@ def history_is_old(work: Path, now: datetime) -> bool:
 
 def place_files(work: Path, source: Path) -> None:
     """Make the clone's table files exactly the export's."""
-    for table in TABLES:
+    for table in ALL_TABLES:
         (work / f"{table.name}.json").write_bytes((source / f"{table.name}.json").read_bytes())
 
 

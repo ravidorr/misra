@@ -6,8 +6,11 @@
 
 ```bash
 python3 discover.py        # data/seed_companies.csv -> data/companies.json (careers URL + ATS)
+python3 sync_supabase.py --pull   # rebuild data/jobs.db (a scratch file) from Supabase; needs SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY
 python3 run.py             # crawl, diff into data/jobs.db
 ```
+
+The history (jobs, open and closed, and the crawl log) lives in Supabase; `data/jobs.db` is rebuilt from it at the start of every run and is not committed. To try the crawl without Supabase, `touch data/jobs.db` gives it an empty history (the sync refuses such a file: only a pulled one may be written back).
 
 Adapters: Greenhouse, Lever, Ashby, Workable, SmartRecruiters, Comeet (public hosted pages), Comeet plugin pages (a WordPress career page whose job links `/co/<place>/<uid>/<title>` are drawn on the server; the slug is the page address), Workday (the public job search, Israel only; slug `tenant/wdN/site`), JazzHR (the board page of `<slug>.applytojob.com`), BambooHR (the `/careers/list` JSON of `<slug>.bamboohr.com`), Oracle Fusion HCM (the public requisition search, Israel only; slug `host/site`), Amazon (the search JSON of amazon.jobs for one country; slug `ISR`), Phenom career sites (the search widget filtered to Israel; slug `host/country/lang`), and a generic
 Playwright crawler (`browser_crawl.py`, JSON-LD or job-looking links) for custom career pages. It also reads HiBob boards and
@@ -21,7 +24,7 @@ The dashboard lists roles from every company whose career page the daily crawl r
 
 ## Daily run (GitHub Actions)
 
-`.github/workflows/daily.yml` runs at 04:23 UTC, with a second try at 09:53 UTC and a third start from cron-job.org at about 10:30 UTC, each of which does nothing when an earlier start already finished green that day (CONTRIBUTING.md, "The daily digest"): crawl, log the coverage gaps, sync the jobs to Supabase, send the job alerts (`send_digests.py`), build the dashboard, commit `data/jobs.db` and `docs/` straight to `main`, then back up the account tables.
+`.github/workflows/daily.yml` runs at 04:23 UTC, with a second try at 09:53 UTC and a third start from cron-job.org at about 10:30 UTC, each of which does nothing when an earlier start already finished green that day (CONTRIBUTING.md, "The daily digest"): pull the history from Supabase, crawl, log the coverage gaps, sync the jobs and the crawl log back to Supabase, send the job alerts (`send_digests.py`), build the dashboard, commit `docs/` straight to `main`, then back up the account tables and the job history.
 Repo secrets: `GMAIL_USER`, `GMAIL_APP_PASSWORD` (Gmail app password) and `DIGEST_TO` (optional recipient), used by the failure alert only; `DEPLOY_KEY` (private half of a write deploy key; it must be the deploy-key bypass actor of the `protect-main` ruleset, see AGENTS.md). The service and backup secrets are in CONTRIBUTING.md ("The daily digest" and "Backups of the account tables").
 A job alert holds the new jobs only and is not sent on a day with none. Crawl problems (a company failing, held after a sharp drop, or closed after a believed sharp drop) are not in it: they are on the dashboard's coverage gap card, and the "Log the coverage gaps" step (`python run.py --gaps`) prints one line of counts and company names to the job log ("coverage gaps: ..."), as a `::warning::` annotation when a gap is new.
 If a step fails or the run is cancelled, a last step emails a short alert listing the step outcomes with a link to the run (`send_alert.py`, standard library only). It uses the maintainer's Gmail account, so a Gmail outage is not reported that way; GitHub's failed-run notice is then the only signal.

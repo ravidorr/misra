@@ -4,6 +4,22 @@ All notable changes are documented here. Format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
+## [0.53.0] - 2026-11-17
+
+### Changed
+
+- The history of the crawl lives in Supabase, not in the repository (PLAN.md step 9.1). `data/jobs.db` is a per-run scratch file, rebuilt from Supabase by the new first step of the daily run, `python sync_supabase.py --pull` (every row of `jobs`, open and closed, without the text of the postings, and the whole `crawl_log` with the ids Supabase gave it), and it is no longer committed (`.gitignore`; the daily commit holds `docs/` only, so the `protect-main` ruleset and the deploy key are unchanged). The pull fails closed: no secret, no answer, a table that changes under the read or an empty `jobs` table (a crawl from nothing would take every job for new and the digest would email them all) is a red run with `pull=failure` in the alert, and the crawl, the coverage-gap step and the dashboard build refuse a missing `data/jobs.db` (`common.open_history`). The pull marks its file (`PRAGMA user_version`) and the sync refuses an unmarked one, so a `touch`ed history can never overwrite Supabase's `first_seen` values. The crawl itself is unchanged.
+- The sync writes this run's `crawl_log` rows to Supabase (the rows with no id yet; a second sync of the same file writes none) and deletes the log older than 90 days (`CRAWL_LOG_DAYS`), so the table, the pull and the backup stay a fixed size. A failed log write fails the step; a failed trim is a warning. An empty `SUPABASE_URL` or `SUPABASE_SERVICE_ROLE_KEY` is now an error for the sync too, not a skip: the history lives there.
+- The exclusion list also deletes a company's `crawl_log` rows in Supabase (`PURGE_TABLES`), and the scratch file's purge no longer vacuums it (the file is not published any more).
+- The backup now also holds the job history: `export_accounts.py` exports `jobs` (open and closed, every column except `description`, `details` and `snippet`, which are never read) and `crawl_log` beside the five account tables; `publish_backup.py` publishes the seven files and its shrink guard covers them; `restore_accounts.py` restores them (no `auth.users` check, since they hold no user; a log row keeps its `id`, the sequence moves past it, a second run changes nothing). The `Table` rows of the export carry `account`; `orphans` and the "profiles is empty" check look at the account tables only; the key of a table sorts as the database gives it (`crawl_log.id` as a number).
+- `publish-docs` pulls the history before it builds (its pull step is the only one in it with the Supabase key), so a rebuild is never made from an empty history. The dashboard lists the open jobs by company and job id, so a rebuild over the same data is byte-identical to the daily build.
+- The coverage gaps log (`python run.py --gaps`) and the robots.txt closing no longer need tables of their own: a gap is "new" when it began on the newest crawl day or up to two days before (so a lost daily run does not hide it; nothing remembers what was logged), and the streak of a robots.txt skip is read from `crawl_log` (the latest crawls with that note, from the first of them).
+- `AGENTS.md`, `README.md`, `CONTRIBUTING.md` ("The history lives in Supabase", with the one-time copy of the old history and the rehearsal of 2026-11-17; "Backups of the account tables and the job history"), `PLAN.md` (step 9.1 done), `TODO.md` ("Step 9.1 live checks"), `PRD.md` and `SECURITY.md` describe it. `PRIVACY.md` is not changed: the old commits of `data/jobs.db` stay in the public repository, so what it says about the job history there is still true.
+
+### Removed
+
+- `data/jobs.db` from the repository (it stays in git history), the daily commit of it, its integrity check and the `jobs-db` artifact that kept it when the push failed (the data is in Supabase), and the tables `robots_skips` and `gap_alerts` with `mark_alerted`, the `ALTER TABLE` that added `note` to old databases, the `VACUUM` of a purge and the support for a database without a `note` column.
+
 ## [0.52.0] - 2026-11-17
 
 ### Added

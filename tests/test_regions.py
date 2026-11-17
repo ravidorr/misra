@@ -1,7 +1,7 @@
-"""Regions of Israel (FR-3), checked on location strings taken from the open jobs in data/jobs.db."""
+"""Regions of Israel (FR-3), checked on location strings taken from the open jobs in docs/jobs.json."""
 
+import json
 import re
-import sqlite3
 from pathlib import Path
 
 import pytest
@@ -11,7 +11,7 @@ from regions import CENTER, CITY_NOT_GIVEN, JERUSALEM, NORTH, REMOTE, SHARON, SO
 
 MIN_SHARE_IN_REGION = 95.0
 
-# (location, regions): real strings from data/jobs.db, spellings as written.
+# (location, regions): real strings from the open jobs of docs/jobs.json, spellings as written.
 REAL_LOCATIONS: list[tuple[str, tuple[str, ...]]] = [
     ("Tel Aviv-Yafo, IL", (TEL_AVIV,)),
     ("Tel-Aviv, IL", (TEL_AVIV,)),
@@ -188,9 +188,9 @@ def test_report_caps_the_unmapped_sample() -> None:
 
 
 def _open_locations() -> list[str | None]:
-    db = Path(__file__).resolve().parent.parent / "data" / "jobs.db"
-    with sqlite3.connect(f"file:{db}?mode=ro", uri=True) as c:
-        return [row[0] for row in c.execute("SELECT location FROM jobs WHERE status='open'")]
+    """The locations of the open jobs of the last committed build (docs/jobs.json); the history is in Supabase."""
+    page = Path(__file__).resolve().parent.parent / "docs" / "jobs.json"
+    return [job["l"] for job in json.loads(page.read_text(encoding="utf-8"))["jobs"]]
 
 
 def test_no_job_in_israel_is_dropped_on_real_data() -> None:
@@ -201,7 +201,7 @@ def test_no_job_in_israel_is_dropped_on_real_data() -> None:
 
 
 def test_report_shows_at_least_95_percent_of_israeli_jobs_in_a_region() -> None:
-    """FR-3 AC 11 on the open jobs of data/jobs.db (read-only), read from the report itself."""
+    """FR-3 AC 11 on the open jobs of docs/jobs.json, read from the report itself."""
     first_line = regions.report(_open_locations()).splitlines()[0]
     match = re.match(r"Regions: ([\d.]+)% of (\d+) jobs in Israel", first_line)
     assert match

@@ -302,3 +302,22 @@ Observations about live sites below come from checks made on 2026-11-14 and may 
     next to `survey.py` and `survey2.py` would make a re-run easy (a new module must be registered as `AGENTS.md`
     describes).
   - Done when: `data/unresolved_candidates.csv` is empty, or every remaining row has a `reason` that says why it cannot be done.
+
+## Step 9.1 live checks
+
+Added when the history moved to Supabase (v0.53.0; `CONTRIBUTING.md`, "The history lives in Supabase"). What the rehearsal
+could not prove: a real PostgREST, a real Supabase project and a real Actions run.
+
+- [ ] **Check the first daily runs after the move.** Trigger: the PR of step 9.1 is merged and the one-time copy of the
+  old history is done. How: in the log of the first run, `pull` says `pulled <jobs> jobs and <log> crawl log rows`, the
+  sync says `<n> crawl log rows written` and a second run the next day does not repeat them; `docs/` is committed and
+  `data/` is not; the `backup` step commits to `ravidorr/misra-backups` with `jobs` and `crawl_log` in its counts. Done
+  when two runs in a row are green and the coverage card and the robots.txt closing still work (the five SmartRecruiters
+  companies close on their seventh skipped day).
+- [ ] **Measure the size of `crawl_log` and `jobs` after a month.** Trigger: 30 days after the move. How: Supabase
+  dashboard, Reports, Database. `crawl_log` keeps 90 days (`CRAWL_LOG_DAYS`, about 250 rows a day), the pull reads all of
+  it every run, and the backup exports it; if the pull gets slow or the table is large, shorten it. Done when: the
+  numbers are in `CONTRIBUTING.md`, "Real data against the limits".
+- [ ] **Rehearse a restore into a scratch Supabase project.** Trigger: the first `backup` commit with `jobs` and
+  `crawl_log` exists. How: `CONTRIBUTING.md`, "Restore", into a new free project, with `--create-auth-users`; then the
+  pull and a daily run against it. Done when: counts match the backup commit and the run is green.

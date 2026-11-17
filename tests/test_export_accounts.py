@@ -14,7 +14,7 @@ import pytest
 import requests
 
 import export_accounts
-from export_accounts import TABLES, ExportError, Source, export, render
+from export_accounts import ALL_TABLES, CRAWL_LOG, JOB_TABLES, JOBS, TABLES, ExportError, Source, export, render
 
 URL = "https://abc.supabase.co"
 KEY = "service-role-key-xyz"
@@ -67,10 +67,18 @@ def fixture() -> dict[str, list[dict[str, Any]]]:
         ],
         "subscriptions": [{"user_id": U1, "address": "ann@test.example", "unsubscribe_token_hash": "f" * 64}],
         "emailed": [],
+        "jobs": [
+            {"company": "Beta", "job_id": "2", "title": "t", "status": "closed", "role_types": ["R&D"]},
+            {"company": "Acme", "job_id": "1", "title": "é", "status": "open", "regions": ["Haifa and the north"]},
+        ],
+        "crawl_log": [
+            {"id": 2, "ts": "2026-11-16T04:30:00", "company": "Acme", "ats": "greenhouse", "ok": 1, "n_jobs": 3},
+            {"id": 1, "ts": "2026-11-15T04:30:00", "company": "Acme", "ats": "greenhouse", "ok": 0, "note": "boom"},
+        ],
     }
     return {
         name: [{column: row.get(column) for column in table.columns} for row in partial[name]]
-        for table in TABLES
+        for table in ALL_TABLES
         for name in [table.name]
     }
 
@@ -81,14 +89,24 @@ def source(fake: FakeAccounts) -> Source:
 
 def test_every_table_is_written_sorted_by_primary_key_with_stable_keys(tmp_path: Path) -> None:
     counts = export(source(FakeAccounts(fixture())), tmp_path / "out")
-    assert counts == {"profiles": 2, "user_prefs": 1, "user_jobs": 3, "subscriptions": 1, "emailed": 0}
+    assert counts == {
+        "profiles": 2,
+        "user_prefs": 1,
+        "user_jobs": 3,
+        "subscriptions": 1,
+        "emailed": 0,
+        "jobs": 2,
+        "crawl_log": 2,
+    }
     out = tmp_path / "out"
-    assert sorted(path.name for path in out.iterdir()) == sorted(f"{table.name}.json" for table in TABLES)
+    assert sorted(path.name for path in out.iterdir()) == sorted(f"{table.name}.json" for table in ALL_TABLES)
     profiles = json.loads((out / "profiles.json").read_text(encoding="utf-8"))
     assert [row["user_id"] for row in profiles] == [U1, U2]
     jobs = json.loads((out / "user_jobs.json").read_text(encoding="utf-8"))
     assert [(row["company"], row["job_id"]) for row in jobs] == [("Acme", "10"), ("Acme", "9"), ("Beta", "2")]
     assert (out / "emailed.json").read_text(encoding="utf-8") == "[]\n"
+    assert [row["company"] for row in json.loads((out / "jobs.json").read_text(encoding="utf-8"))] == ["Acme", "Beta"]
+    assert [row["id"] for row in json.loads((out / "crawl_log.json").read_text(encoding="utf-8"))] == [1, 2]
     prefs = (out / "user_prefs.json").read_text(encoding="utf-8")
     assert '"filters": {"a": [1], "b": 1}' in prefs  # keys sorted at every depth
     assert "é" in (out / "user_jobs.json").read_text(encoding="utf-8")  # not \u-escaped: readable diffs
@@ -97,7 +115,7 @@ def test_every_table_is_written_sorted_by_primary_key_with_stable_keys(tmp_path:
 def test_the_same_data_gives_byte_identical_files_and_a_change_touches_one_line(tmp_path: Path) -> None:
     export(source(FakeAccounts(fixture())), tmp_path / "a")
     export(source(FakeAccounts({name: list(reversed(rows)) for name, rows in fixture().items()})), tmp_path / "b")
-    for table in TABLES:
+    for table in ALL_TABLES:
         assert (tmp_path / "a" / f"{table.name}.json").read_bytes() == (
             tmp_path / "b" / f"{table.name}.json"
         ).read_bytes()
@@ -109,6 +127,14 @@ def test_the_same_data_gives_byte_identical_files_and_a_change_touches_one_line(
     assert [i for i, (x, y) in enumerate(zip(before, after, strict=True)) if x != y] == [2]
 
 
+def test_a_numeric_key_sorts_as_a_number(tmp_path: Path) -> None:
+    tables = fixture()
+    tables["crawl_log"] = [{**tables["crawl_log"][0], "id": n} for n in (10, 9, 100, 1)]
+    export(source(FakeAccounts(tables)), tmp_path / "out")
+    ids = [row["id"] for row in json.loads((tmp_path / "out" / "crawl_log.json").read_text(encoding="utf-8"))]
+    assert ids == [1, 9, 10, 100]  # the pull gives the scratch history this order, which is the insert order
+
+
 def test_one_row_per_line() -> None:
     text = render([{"b": 1, "a": 2}, {"a": 3}])
     assert text == '[\n  {"a": 2, "b": 1},\n  {"a": 3}\n]\n'
@@ -118,7 +144,7 @@ def test_one_row_per_line() -> None:
 def test_the_files_and_the_directory_are_private_to_the_owner(tmp_path: Path) -> None:
     export(source(FakeAccounts(fixture())), tmp_path / "out")
     assert stat.S_IMODE((tmp_path / "out").stat().st_mode) == export_accounts.DIR_MODE
-    for table in TABLES:
+    for table in ALL_TABLES:
         assert stat.S_IMODE((tmp_path / "out" / f"{table.name}.json").stat().st_mode) == export_accounts.FILE_MODE
     assert not [path for path in (tmp_path / "out").iterdir() if path.name.endswith(".tmp")]
 
@@ -254,6 +280,41 @@ def test_the_columns_match_the_migrations() -> None:
         assert not later, f"{table.name} gained a column in a later migration: update TABLES"
 
 
+def test_the_job_history_is_exported_without_the_text_of_the_postings() -> None:
+    """`jobs` and `crawl_log` columns match the migrations, except the text, which never leaves Supabase."""
+    sql = "\n".join(path.read_text(encoding="utf-8") for path in sorted(MIGRATIONS.glob("*.sql")))
+    text = {"description", "details", "snippet"}
+    for table, hidden in ((JOBS, text), (CRAWL_LOG, set())):
+        block = re.search(rf"create table public\.{table.name} \(\n(.*?)\n\);", sql, flags=re.DOTALL)
+        assert block, table.name
+        declared = re.findall(r"(?m)^  ([a-z_]+)\s+\S", block[1])
+        declared = [name for name in declared if name not in {"primary", "check", "unique", "constraint", "foreign"}]
+        added = re.findall(
+            rf"alter table public\.{table.name}\s+add column (?:if not exists )?(\w+)", sql, re.IGNORECASE
+        )
+        assert set(declared) | set(added) == set(table.columns) | hidden, table.name
+        assert not hidden & set(table.columns)
+    assert not [table.name for table in JOB_TABLES if table.account]
+
+
+def test_the_job_tables_are_read_by_named_columns_never_by_star() -> None:
+    fake = FakeAccounts(fixture())
+    source(fake).read(JOBS)
+    select = fake.calls[0]["params"]["select"]
+    assert select == ",".join(JOBS.columns)
+    assert not {"description", "details", "snippet"} & set(select.split(","))
+    source(fake).read(TABLES[0])
+    assert fake.calls[-1]["params"]["select"] == "*"
+
+
+def test_jobs_without_a_profile_do_not_make_the_export_fail_and_profiles_may_be_empty_beside_them(
+    tmp_path: Path,
+) -> None:
+    tables = {name: rows for name, rows in fixture().items() if name in {"jobs", "crawl_log"}}
+    counts = export(source(FakeAccounts(tables)), tmp_path / "out")
+    assert (counts["profiles"], counts["jobs"], counts["crawl_log"]) == (0, 2, 2)
+
+
 def test_the_tables_are_the_account_tables_and_not_the_public_or_counter_tables() -> None:
     assert [table.name for table in TABLES] == ["profiles", "user_prefs", "user_jobs", "subscriptions", "emailed"]
     sql = "\n".join(path.read_text(encoding="utf-8") for path in sorted(MIGRATIONS.glob("*.sql")))
@@ -270,7 +331,9 @@ def test_main_prints_counts_only(
     monkeypatch.setattr(export_accounts.requests, "Session", lambda: fake)
     export_accounts.main([str(tmp_path / "out")])
     shown = capsys.readouterr()
-    assert shown.out.strip() == "export: profiles 2, user_prefs 1, user_jobs 3, subscriptions 1, emailed 0 (7 rows)"
+    assert shown.out.strip() == (
+        "export: profiles 2, user_prefs 1, user_jobs 3, subscriptions 1, emailed 0, jobs 2, crawl_log 2 (11 rows)"
+    )
     for secret in (KEY, "ann@test.example", U1, "Acme"):
         assert secret not in shown.out + shown.err
 

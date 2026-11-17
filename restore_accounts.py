@@ -1,13 +1,16 @@
 """Turn the account export (`export_accounts.py`) back into SQL for Supabase (PLAN.md step 9.1, the restore path).
 
-`python restore_accounts.py <export directory> <output .sql file> [--create-auth-users]` reads the five `<table>.json`
-files and writes ONE SQL script. Nothing is sent anywhere: the maintainer reads the script and runs it in the Supabase
-SQL editor (or with `psql`) of the project to restore into. `CONTRIBUTING.md`, "Backups of the account tables", has the
+`python restore_accounts.py <export directory> <output .sql file> [--create-auth-users]` reads the seven `<table>.json`
+files (the five account tables, then `jobs` and `crawl_log`, the job history) and writes ONE SQL script. Nothing is
+sent anywhere: the maintainer reads the script and runs it in the Supabase SQL editor (or with `psql`) of the project
+to restore into. `CONTRIBUTING.md`, "Backups of the account tables", has the
 steps and the rehearsal.
 
 The script
 - runs in one transaction, so a failure leaves nothing half restored;
-- inserts the tables in foreign-key order (profiles, user_prefs, user_jobs, subscriptions, emailed);
+- inserts the tables in foreign-key order (profiles, user_prefs, user_jobs, subscriptions, emailed), then `jobs` and
+  `crawl_log` (which point at no user, so every row goes in; a crawl log row keeps its `id` and the id sequence is moved
+  past the largest one). The job text is not in the export: the next crawl writes it again for the open jobs;
 - uses `insert ... on conflict do nothing`: running it twice, or into a project that already holds some rows, changes
   nothing that is already there, and it never deletes anything;
 - switches the tables' own triggers off for its length and back on at the end, so that the restored rows keep their
@@ -35,7 +38,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from export_accounts import FILE_MODE, TABLES, ExportError, Table, outside_repository
+from export_accounts import ALL_TABLES, CRAWL_LOG, FILE_MODE, JOB_TABLES, TABLES, ExportError, Table, outside_repository
 
 CREATE_AUTH_USERS = "--create-auth-users"
 PAUSE = "--pause-subscriptions"
@@ -76,8 +79,9 @@ def read_ids(path: Path) -> set[str]:
 
 
 def leave_out(data: Mapping[str, Sequence[Mapping[str, Any]]], ids: set[str]) -> dict[str, list[dict[str, Any]]]:
-    """The tables without the rows of the people who deleted their account after the backup was made."""
-    return {name: [dict(row) for row in rows if str(row["user_id"]) not in ids] for name, rows in data.items()}
+    """The tables without the rows of the people who deleted their account after the backup was made (the job tables
+    have no user and stay whole)."""
+    return {name: [dict(row) for row in rows if str(row.get("user_id")) not in ids] for name, rows in data.items()}
 
 
 def pause(data: dict[str, list[dict[str, Any]]], when: str) -> None:
@@ -111,6 +115,24 @@ def insert(table: Table, rows: Sequence[Mapping[str, Any]], only_existing_users:
     )
 
 
+def insert_all(table: Table, rows: Sequence[Mapping[str, Any]]) -> str:
+    """One job table's insert: every row, none overwritten. A crawl log id is `generated always`, so it is given
+    explicitly (that is what makes a second run a no-op), and the sequence moves past it afterwards."""
+    columns = ", ".join(table.columns)
+    override = " overriding system value" if table.name == CRAWL_LOG.name else ""
+    text = (
+        f"insert into public.{table.name} ({columns}){override}\n"
+        f"select {columns} from json_populate_recordset(null::public.{table.name}, {literal(rows)}::json) r\n"
+        "on conflict do nothing;\n"
+    )
+    if override:  # setval is strict: an empty table gives null and changes nothing
+        text += (
+            f"select setval(pg_get_serial_sequence('public.{table.name}', 'id'), "
+            f"(select max(id) from public.{table.name}));\n"
+        )
+    return text
+
+
 def auth_users(profiles: Sequence[Mapping[str, Any]]) -> str:
     """Create the bare sign-in rows the tables point at, for a project that lost them. Skips the ones that exist."""
     table = TABLES[0]
@@ -126,7 +148,7 @@ def auth_users(profiles: Sequence[Mapping[str, Any]]) -> str:
 
 def script(data: Mapping[str, Sequence[Mapping[str, Any]]], with_auth_users: bool = False) -> str:
     """The whole restore script for the loaded tables."""
-    names = [f"public.{table.name}" for table in TABLES]
+    names = [f"public.{table.name}" for table in ALL_TABLES]
     parts = [
         "-- Restore of the Misra account tables from the daily export. Idempotent and never deletes.\nbegin;\n",
         *(f"alter table {name} disable trigger user;\n" for name in names),
@@ -134,6 +156,7 @@ def script(data: Mapping[str, Sequence[Mapping[str, Any]]], with_auth_users: boo
     if with_auth_users:
         parts.append(auth_users(data[TABLES[0].name]))
     parts.extend(insert(table, data[table.name], not with_auth_users) for table in TABLES)
+    parts.extend(insert_all(table, data[table.name]) for table in JOB_TABLES)
     parts.extend(f"alter table {name} enable trigger user;\n" for name in names)
     parts.append("commit;\n")
     return "".join(parts)
@@ -165,7 +188,7 @@ def main(argv: Sequence[str] | None = None) -> None:
         sys.exit(f"restore failed: {CREATE_AUTH_USERS} needs {EXCLUDE}<file> (empty: nobody left since the backup)")
     try:
         target = outside_repository(Path(output))
-        data = {table.name: load(Path(source), table) for table in TABLES}
+        data = {table.name: load(Path(source), table) for table in ALL_TABLES}
         if excluded:
             data = leave_out(data, read_ids(Path(excluded[0])))
         if pausing:

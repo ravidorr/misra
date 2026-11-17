@@ -254,7 +254,7 @@ class FakeSupabase:
         self.fail_on = fail_on  # "GET", "POST" or "DELETE": answer that method with HTTP 500
         self.error = error  # raised by every request
         # rows of the tables a user's choices and emails keep (user_jobs, emailed), each a dict with a `company`
-        self.others: dict[str, list[dict[str, Any]]] = {"user_jobs": [], "emailed": []}
+        self.others: dict[str, list[dict[str, Any]]] = {"user_jobs": [], "emailed": [], "crawl_log": []}
 
     def request(self, method: str, url: str, **kw: Any) -> FakeHttpResponse:
         self.calls.append({"method": method, "url": url, **kw})
@@ -265,8 +265,8 @@ class FakeSupabase:
         table = url.rsplit("/", 1)[1]
         if "/rpc/" in url:
             return FakeHttpResponse(data=self.rpc_answer)
-        if "company" in kw["params"]:  # a read or removal of one company's rows, by exact name, in any table
-            return self.by_company(method, table, kw["params"]["company"].removeprefix("eq."))
+        if "company" in kw["params"] or table == "crawl_log":
+            return self.other_tables(method, table, kw)
         if method == "POST":
             for row in kw["json"]:
                 self.table.setdefault((row["company"], row["job_id"]), {}).update(row)
@@ -292,6 +292,21 @@ class FakeSupabase:
                 ]
             )
         return FakeHttpResponse(data=[{"company": c, "job_id": j} for c, j in window])
+
+    def other_tables(self, method: str, table: str, kw: dict[str, Any]) -> FakeHttpResponse:
+        """A read or removal of one company's rows, by exact name, in any table; or the crawl log as a whole."""
+        if "company" in kw["params"]:
+            return self.by_company(method, table, kw["params"]["company"].removeprefix("eq."))
+        return self.crawl_log(method, kw)
+
+    def crawl_log(self, method: str, kw: dict[str, Any]) -> FakeHttpResponse:
+        """The crawl log: a POST appends rows, a DELETE with `ts=lt.<day>` removes the rows before that text."""
+        if method == "POST":
+            self.others["crawl_log"].extend(kw["json"])
+            return FakeHttpResponse(status_code=201)
+        before = kw["params"]["ts"].removeprefix("lt.")
+        self.others["crawl_log"] = [row for row in self.others["crawl_log"] if row["ts"] >= before]
+        return FakeHttpResponse(status_code=204)
 
     def by_company(self, method: str, table: str, company: str) -> FakeHttpResponse:
         """GET answers one matching row at most (the code asks for limit 1); DELETE removes and returns them all."""

@@ -1,6 +1,6 @@
-"""Crawl all companies with a working ATS, diff against SQLite, mark new/closed. `--gaps` logs the coverage gaps."""
+"""Crawl all companies with a working ATS, diff against the history (data/jobs.db, a scratch file pulled from
+Supabase), mark new/closed. `--gaps` logs the coverage gaps."""
 
-import contextlib
 import datetime
 import json
 import sqlite3
@@ -22,26 +22,20 @@ from common import (
     MAX_PURGE_COMPANIES,
     ROBOTS_CLOSE_DAYS,
     ROBOTS_NOTE,
+    SCHEMA,
     ExclusionError,
     is_excluded,
     load_excluded,
+    open_history,
 )
 
 DROP_MIN_OPEN = 10  # fewer open jobs swing too much to judge a drop; this many returning nothing is a broken page
 
 
 def init() -> sqlite3.Connection:
+    """An empty history for tests (or `touch data/jobs.db` for a local trial); a daily run starts from the pull."""
     c = sqlite3.connect(DB)
-    c.executescript("""
-    CREATE TABLE IF NOT EXISTS jobs(
-      company TEXT, job_id TEXT, title TEXT, team TEXT, location TEXT, url TEXT, posted TEXT,
-      first_seen TEXT, last_seen TEXT, status TEXT DEFAULT 'open', reported INTEGER DEFAULT 0,
-      PRIMARY KEY(company, job_id));
-    CREATE TABLE IF NOT EXISTS crawl_log(ts TEXT, company TEXT, ats TEXT, ok INTEGER, n_jobs INTEGER);
-    CREATE TABLE IF NOT EXISTS robots_skips(company TEXT PRIMARY KEY, since TEXT);
-    """)
-    with contextlib.suppress(sqlite3.OperationalError):  # column may already be there
-        c.execute("ALTER TABLE crawl_log ADD COLUMN note TEXT")
+    c.executescript(SCHEMA)
     return c
 
 
@@ -87,29 +81,23 @@ def track_robots_skips(c: sqlite3.Connection, skipped: set[str], attempted: set[
     Returns (companies that had open jobs closed, jobs closed).
 
     `skipped` is the companies skipped by robots.txt in this run and `attempted` the ones with any other result in this
-    run (crawled, held or failed). Two boards can share a company name: such a name is never closed by this rule and
-    never counts as skipped. The table robots_skips holds the first day of the current streak per company.
-    A company that is not skipped in this run (it crawled, it failed another way, it left the list or the exclusion
-    list took it) loses its row, so the count starts again: one run that is not a skip means the block is not
-    steady.
+    run (crawled, held or failed). Two boards can share a company name: such a name is never closed by this rule.
+    The streak is read from the crawl log, which already holds this run: it is the company's latest crawls that carry
+    the robots.txt note, and it starts on the day of the first of them. Any other result in between ends it, so one
+    run that is not a skip means the block is not steady.
     A closing uses the same close_unseen as every other close, so the Supabase sync marks the jobs closed and a later
     crawl reopens them."""
-    skipped = skipped - attempted
-    since = dict(c.execute("SELECT company, since FROM robots_skips").fetchall())
-    for name in since.keys() - skipped:
-        c.execute("DELETE FROM robots_skips WHERE company=?", (name,))
-    for name in skipped - since.keys():
-        c.execute("INSERT INTO robots_skips(company, since) VALUES(?,?)", (name, today))
-    due = [
-        name
-        for name in sorted(skipped)
-        if c.execute(
-            "SELECT julianday(?) - julianday(since) >= ? FROM robots_skips WHERE company=?",
-            (today, ROBOTS_CLOSE_DAYS, name),
-        ).fetchone()[0]
-    ]
     companies = jobs = 0
-    for name in due:
+    for name in sorted(skipped - attempted):
+        since = today
+        for day, note in c.execute(
+            "SELECT substr(ts,1,10), note FROM crawl_log WHERE company=? ORDER BY ts DESC, rowid DESC", (name,)
+        ):
+            if not (note or "").startswith(ROBOTS_NOTE):
+                break
+            since = day
+        if (datetime.date.fromisoformat(today) - datetime.date.fromisoformat(since)).days < ROBOTS_CLOSE_DAYS:
+            continue
         n = c.execute("SELECT COUNT(*) FROM jobs WHERE company=? AND status='open'", (name,)).fetchone()[0]
         companies += bool(n)  # a company closed on an earlier run has nothing left to close
         jobs += n
@@ -163,7 +151,7 @@ def crawl(co: dict[str, Any]) -> tuple[dict[str, Any], list[dict[str, Any]] | No
 
 
 def purge_excluded(c: sqlite3.Connection, excluded: list[str]) -> dict[str, int]:
-    """Delete everything stored about the companies on the exclusion list: their jobs, crawl log and gap alerts. The
+    """Delete everything the history holds about the companies on the exclusion list: their jobs and crawl log. The
     match is the exact company name. Returns the number of jobs deleted per company that had any. A list that would
     clear more than MAX_PURGE_COMPANIES companies at once is refused before anything is deleted: add companies to
     the list in separate runs."""
@@ -177,24 +165,17 @@ def purge_excluded(c: sqlite3.Connection, excluded: list[str]) -> dict[str, int]
             f"refusing to delete the jobs of {len(held)} companies at once (limit {MAX_PURGE_COMPANIES}): "
             "add them to the exclusion list in separate runs"
         )
-    tables = {r[0] for r in c.execute("SELECT name FROM sqlite_master WHERE type='table'")}
     for name in excluded:
-        for table in ("jobs", "crawl_log", "gap_alerts", "robots_skips"):
-            if table in tables:
-                c.execute(f"DELETE FROM {table} WHERE company=?", (name,))
+        for table in ("jobs", "crawl_log"):
+            c.execute(f"DELETE FROM {table} WHERE company=?", (name,))
     c.commit()
-    if held:
-        c.execute("VACUUM")  # the deleted titles and links must not stay in the free pages of the committed file
     return held
 
 
 def check_spelling(c: sqlite3.Connection, known: list[str], excluded: list[str]) -> None:
     """Deleting needs the exact name, skipping does not care about case: a list that says `acme` while the data says
     `Acme` would hide the company but leave its rows. That must stop the run, so the list gets the stored spelling."""
-    tables = {r[0] for r in c.execute("SELECT name FROM sqlite_master WHERE type='table'")}
-    stored = {
-        r[0] for t in ("jobs", "crawl_log", "gap_alerts") if t in tables for r in c.execute(f"SELECT company FROM {t}")
-    }
+    stored = {r[0] for t in ("jobs", "crawl_log") for r in c.execute(f"SELECT company FROM {t}")}
     for name in sorted(n for n in {*known, *stored} if n and is_excluded(n, excluded) and n not in excluded):
         raise ExclusionError(
             f"the exclusion list spells a company differently from the data ({name!r}): use that exact spelling"
@@ -204,6 +185,7 @@ def check_spelling(c: sqlite3.Connection, known: list[str], excluded: list[str])
 GAP_KINDS = ("failing", "held", "closed")  # the order gap_summary lists them in
 FAILING_RUNS = 2  # a company is failing when its last two crawls failed, as in the dashboard (one-offs do not count)
 GAP_STALE_DAYS = 7  # a company not crawled for this long before the newest crawl is no longer one of ours
+GAP_NEW_DAYS = 2  # a gap is new when it began on the newest crawl day or this many days before it (a lost run fits)
 
 
 def _outage_start(seq: list[tuple[int, str, str]]) -> str:
@@ -221,31 +203,26 @@ def coverage_gaps(c: sqlite3.Connection) -> list[dict[str, Any]]:
 
     kind is "failing" (the last two crawls failed, as in the dashboard's coverage gaps), "held" (the last crawl was
     held back as a sharp drop: nothing closed) or "closed" (a crawl believed a sharp drop and closed the jobs it no
-    longer saw; this is an event, listed until the daily run has logged it). `since` identifies the gap: the start of
-    the outage, or the believed crawl. A company whose last crawl was skipped because of robots.txt is none of these:
-    it is on the dashboard's coverage card, and nobody has to act. `new` is True until the daily run logged the gap
-    (see mark_alerted), so one outage is new once however its kind changes. Companies not
-    crawled in the last GAP_STALE_DAYS days are skipped. A database without a crawl log, a note column or an alert
-    table has nothing to report or nothing alerted yet."""
-    tables = {r[0] for r in c.execute("SELECT name FROM sqlite_master WHERE type='table'")}
-    if "crawl_log" not in tables:
-        return []
-    note_col = "COALESCE(note, '')" if "note" in [r[1] for r in c.execute("PRAGMA table_info(crawl_log)")] else "''"
-    alerted = set(c.execute("SELECT company, since FROM gap_alerts")) if "gap_alerts" in tables else set()
+    longer saw; this is an event, listed only while it is new). `since` identifies the gap: the start of the outage,
+    or the believed crawl. A company whose last crawl was skipped because of robots.txt is none of these: it is on the
+    dashboard's coverage card, and nobody has to act. `new` is True when `since` is on the newest crawl day or up to
+    GAP_NEW_DAYS days before it (a company is failing from its second failed crawl, so an outage is new on the crawl
+    that finds it and for two days after, and one lost daily run does not hide it). The history is rebuilt from
+    Supabase on every run, so nothing remembers which gaps were logged. Companies not crawled in the last
+    GAP_STALE_DAYS days are skipped."""
     history: dict[str, list[tuple[int, str, str]]] = {}
-    query = f"SELECT company, ts, ok, {note_col} FROM crawl_log WHERE company IS NOT NULL ORDER BY ts, rowid"
+    query = "SELECT company, ts, ok, COALESCE(note, '') FROM crawl_log WHERE company IS NOT NULL ORDER BY ts, rowid"
     for company, ts, ok, note in c.execute(query):
         history.setdefault(company, []).append((ok, note, ts))
     if not history:
         return []
     newest = max(seq[-1][2][:10] for seq in history.values())
     cutoff = (datetime.date.fromisoformat(newest) - datetime.timedelta(days=GAP_STALE_DAYS)).isoformat()
+    fresh = (datetime.date.fromisoformat(newest) - datetime.timedelta(days=GAP_NEW_DAYS)).isoformat()
     gaps: list[dict[str, Any]] = []
 
     def add(company: str, kind: str, note: str, since: str) -> None:
-        gaps.append(
-            {"company": company, "kind": kind, "note": note, "since": since, "new": (company, since) not in alerted}
-        )
+        gaps.append({"company": company, "kind": kind, "note": note, "since": since, "new": since[:10] >= fresh})
 
     for company, seq in sorted(history.items()):
         if seq[-1][2][:10] < cutoff:
@@ -253,7 +230,7 @@ def coverage_gaps(c: sqlite3.Connection) -> list[dict[str, Any]]:
         if seq[-1][1].startswith(ROBOTS_NOTE):
             continue  # skipped on purpose because robots.txt does not allow it: a decision, not a failure to report
         believed = next(((n, ts) for _ok, n, ts in reversed(seq) if n.startswith(DROP_BELIEVED)), None)
-        if believed and (company, believed[1]) not in alerted:
+        if believed and believed[1][:10] >= fresh:
             add(company, "closed", believed[0], believed[1])
         ok, note, _ts = seq[-1]
         if not ok and note.startswith(DROP_NOTE):
@@ -284,35 +261,24 @@ def gap_summary(gaps: list[dict[str, Any]]) -> str:
     return f"coverage gaps: {len(gaps)} ({sum(1 for g in gaps if g['new'])} new): " + "; ".join(parts)
 
 
-def mark_alerted(c: sqlite3.Connection, gaps: list[dict[str, Any]]) -> None:
-    """Remember that the daily run logged these gaps, so they stop being new. The caller commits."""
-    c.execute("CREATE TABLE IF NOT EXISTS gap_alerts(company TEXT, since TEXT, kind TEXT, PRIMARY KEY(company, since))")
-    c.executemany(
-        "INSERT OR IGNORE INTO gap_alerts(company, since, kind) VALUES(?,?,?)",
-        [(g["company"], g["since"], g["kind"]) for g in gaps],
-    )
-
-
 def log_coverage_gaps(c: sqlite3.Connection) -> bool:
     """Put the coverage gaps in the job log, so a crawl problem is never silent (nothing is emailed for them).
 
-    One line of counts and company names (the log is public, the names are public companies). A gap that is new, one
-    the log has not carried before, makes the line a ::warning:: annotation on the run. Logged gaps are recorded in
-    gap_alerts, so they stop being new. Returns False when the check itself failed, so the step can go red."""
+    One line of counts and company names (the log is public, the names are public companies). A gap that is new (see
+    coverage_gaps) makes the line a ::warning:: annotation on the run. Returns False when the check itself failed, so
+    the step can go red."""
     gaps, error = safe_coverage_gaps(c)
     if error:
         print(f"::warning::coverage check failed, {error}")
         return False
     if gaps:
         print(("::warning::" if any(g["new"] for g in gaps) else "") + gap_summary(gaps))
-        mark_alerted(c, gaps)
-        c.commit()
     return True
 
 
 def gaps_step() -> int:
     """`python run.py --gaps`: its own workflow step after the crawl, red when the coverage check is broken."""
-    c = sqlite3.connect(DB)
+    c = open_history()
     try:
         return 0 if log_coverage_gaps(c) else 1
     finally:
@@ -335,7 +301,8 @@ def main() -> None:  # noqa: PLR0912, PLR0915
     with open("data/companies.json") as fh:
         every = json.load(fh)
     companies = [c for c in every if c["status"] == "ok" and not is_excluded(c["name"], excluded)]
-    c = init()
+    c = open_history()
+    c.executescript(SCHEMA)  # a pulled file has the tables; `touch data/jobs.db` for a local trial does not
     check_spelling(c, [co["name"] for co in every], excluded)
     for name, n in purge_excluded(c, excluded).items():
         print(f"exclusion list: deleted {n} jobs of {name}")
@@ -407,7 +374,7 @@ def main() -> None:  # noqa: PLR0912, PLR0915
                 )
             else:
                 # a company seen for the first time gets a silent baseline (reported=1). Nothing reads the column
-                # any more (send_digests.py goes by first_seen and the emailed table); it is kept for old databases
+                # any more (send_digests.py goes by first_seen and the emailed table)
                 c.execute(
                     "INSERT INTO jobs(company,job_id,title,team,location,url,posted,first_seen,last_seen,reported) "
                     "VALUES(?,?,?,?,?,?,?,?,?,?)",

@@ -1,5 +1,7 @@
 __pycache__/
 *.pyc
+data/jobs.db
+data/jobs.db.part
 data/survey.json
 data/catchup.html
 data/survey2.json

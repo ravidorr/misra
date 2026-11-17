@@ -2,7 +2,9 @@ name: publish-docs
 
 # Rebuilds docs/ (the dashboard and the privacy, terms, security and assistant pages) when a source of those pages changes on
 # main, so a merged edit to PRIVACY.md is on the site in minutes and not at the next daily run. It runs only
-# build_dashboard.py: no crawl, no email, no Supabase, and no secret other than the deploy key.
+# `sync_supabase.py --pull` and build_dashboard.py: no crawl, no email, nothing written to Supabase. The build needs the
+# history (PLAN.md step 9.1: it lives in Supabase, data/jobs.db is a scratch file), so the pull step holds the
+# Supabase URL and service-role key; no other step does, and the deploy key is still written only in the push step.
 on:
   push:
     branches: [main]
@@ -59,6 +61,12 @@ jobs:
           python-version: "3.12"
       # The same pin as pyproject.toml and daily.yml (a test keeps the three equal).
       - run: pip install requests markdown-it-py==4.0.0
+      - name: Pull the history from Supabase
+        # Reads only. A failure stops the run before the build, so the site is never rebuilt from an empty history.
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: python sync_supabase.py --pull
       - name: Build the dashboard and the legal pages
         run: python build_dashboard.py
       - name: Commit and push docs

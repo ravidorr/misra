@@ -144,23 +144,21 @@ def test_main_builds_dashboard(db: sqlite3.Connection, workdir: Path, capsys: py
     assert "failing" in capsys.readouterr().out
 
 
-def test_old_schema_without_note_column_runs_as_script(workdir: Path) -> None:
+def test_running_the_module_builds_from_the_history_file(workdir: Path) -> None:
     prepare(workdir)
-    conn = sqlite3.connect(build_dashboard.DB)
-    conn.executescript(
-        """
-        CREATE TABLE jobs(company, job_id, title, team, location, url, first_seen, status);
-        CREATE TABLE crawl_log(ts, company, ats, ok, n_jobs);
-        INSERT INTO crawl_log VALUES('2024-01-01','Old','x',0,0);
-        INSERT INTO crawl_log VALUES('2024-01-02','Old','x',0,0);
-        """
-    )
-    conn.commit()
-    conn.close()
+    write_css(workdir)
     runpy.run_module("build_dashboard", run_name="__main__")
-    payload = read_payload(workdir)
-    assert payload["gaps"]["blocked"] == [{"c": "Old", "why": "the last crawl failed", "last": "never"}]
-    assert payload["jobs"] == []
+    assert (workdir / "docs" / "jobs.json").is_file()
+
+
+def test_the_build_refuses_a_missing_history_and_writes_nothing(workdir: Path) -> None:
+    prepare(workdir)
+    write_css(workdir)
+    (workdir / "data" / "jobs.db").unlink()
+    with pytest.raises(SystemExit, match="is missing"):
+        build_dashboard.main()
+    assert not (workdir / "docs" / "jobs.json").exists()
+    assert not (workdir / "data" / "jobs.db").exists()  # looking never creates an empty history
 
 
 def test_read_css_bundles_sources_in_order(workdir: Path) -> None:
@@ -475,10 +473,9 @@ def test_every_file_the_build_writes_to_docs_is_staged_by_the_daily_workflow(
     built = {f"docs/{p.name}" for p in (workdir / "docs").iterdir()}
     assert {"docs/digest.js", "docs/assistant.html"} <= built
     workflow = (Path(__file__).resolve().parents[1] / ".github" / "workflows" / "daily.yml").read_text(encoding="utf-8")
-    found = re.search(r"for f in (data/jobs\.db [^;]+); do", workflow)
+    found = re.search(r"for f in (docs/[^;]+); do", workflow)
     assert found, "the staging loop of daily.yml was not found"
-    staged = set(found[1].split()) - {"data/jobs.db"}
-    assert built == staged
+    assert built == set(found[1].split())
 
 
 def test_the_daily_email_signup_is_on_in_the_repository() -> None:
@@ -667,12 +664,11 @@ def test_a_no_careers_page_row_links_to_the_own_site_even_when_it_has_an_address
 
 def test_every_site_on_the_real_coverage_gap_card_has_an_https_address(monkeypatch: pytest.MonkeyPatch) -> None:
     """The card as the daily build draws it, from the real data: a site with no address fails here, so a new row of the
-    CSV, a new failing company or a company that left companies.json cannot reach the page without a link."""
+    CSV, a new failing company or a company that left companies.json cannot reach the page without a link. The failing
+    companies are the ones of the last committed build (docs/jobs.json): the history itself is not in the repository."""
     monkeypatch.chdir(REPO)
     excluded = build_dashboard.load_excluded()
-    conn = sqlite3.connect(REPO / "data" / "jobs.db")
-    blocked = build_dashboard.failing_sites(conn, excluded)
-    conn.close()
+    blocked = json.loads((REPO / "docs" / "jobs.json").read_text(encoding="utf-8"))["gaps"]["blocked"]
     everyone = json.loads((REPO / "data" / "companies.json").read_text(encoding="utf-8"))
     companies = [c for c in everyone if not build_dashboard.is_excluded(c["name"], excluded)]
     unfed = [c for c in companies if c["status"] != "ok"]

@@ -1,4 +1,4 @@
-"""Level and role type, checked on titles taken from the open jobs in data/jobs.db."""
+"""Level and role type, checked on titles taken from the open jobs in docs/jobs.json."""
 
 import pytest
 
@@ -7,7 +7,7 @@ from classify import NOT_SPECIFIED, OTHER
 
 DEVOPS = "DevOps & SRE"
 
-# (title, level, role types): titles of open jobs in data/jobs.db, except the ones marked "synthetic".
+# (title, level, role types): titles of open jobs in docs/jobs.json, except the ones marked "synthetic".
 REAL_TITLES: list[tuple[str, str, list[str]]] = [
     ("Product Manager Intern", "Intern", ["Product"]),
     ("Senior Product Manager - Mobile App", NOT_SPECIFIED, ["Product", "R&D"]),

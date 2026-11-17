@@ -66,8 +66,7 @@ def test_the_backup_step_prints_nothing_of_the_data_and_uploads_nothing() -> Non
     for risky in ("cat ", "tee ", "set -x", "ls ", "cp ", "upload-artifact", "echo $", 'echo "$BACKUP'):
         assert risky not in code, risky
     uploads = [name for name, text in steps().items() if "upload-artifact" in text]
-    assert uploads == ["Keep the database if the push failed"]
-    assert "path: data/jobs.db" in steps()[uploads[0]]
+    assert uploads == []  # no artifact at all: the history is in Supabase, the account data must not be uploaded
 
 
 def test_no_checkout_gets_a_key_and_the_two_keys_stay_apart() -> None:

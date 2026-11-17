@@ -255,7 +255,7 @@ Decisions made in planning (they change the PRD's wording, so update the PRD in 
   check (enforced: `ROBOTS_ENFORCED` in `common.py`; the published ATS APIs are not treated as pages, but SmartRecruiters'
   `api.smartrecruiters.com` disallows everyone, so its five companies are skipped until SmartRecruiters gives permission;
   a company skipped for 7 days in a row has its open jobs closed, from v0.26.0), and the company exclusion list `data/excluded_companies.csv` (a company
-  on it is never crawled, is deleted from `data/jobs.db` and from Supabase `jobs`, `user_jobs` and `emailed`, and is
+  on it is never crawled, is deleted from the scratch history and from Supabase `jobs`, `crawl_log`, `user_jobs` and `emailed`, and is
   off the exports and the coverage card; the process is in `CONTRIBUTING.md`). ~~Still to do before the gate closes: the
   digest email itself (step 6.3, with its footer and headers), the flag, and the present-tense `PRIVACY.md` edits below.~~ Done in v0.31.0 except the function secret (see "Opening day" below). The secret is set, so the gate is closed.
   Small wording and checks done in v0.29.0: the weekly choice reads "Weekly (Sundays)" (the lawyer's suggestion), the coverage card says what happens to the roles of a
@@ -336,10 +336,22 @@ Decisions made in planning (they change the PRD's wording, so update the PRD in 
 
 ## Retire SQLite (last, only when the Supabase path has run clean for a while)
 
-- [ ] 9.1 Move the crawl's writes into Supabase, with a regular export of all tables into the repository (history and a
+- [x] 9.1 Move the crawl's writes into Supabase, with a regular export of all tables into the repository (history and a
   restore path) before `data/jobs.db` stops being committed. Update `AGENTS.md`, the workflow, the deploy flow and the
   `protect-main` ruleset note together. Done when: a daily run works without `data/jobs.db`, a restore from the export
   is rehearsed, and the Notes for the plan in `PRD.md` are all met.
+  Done in v0.53.0 (the design is in `CONTRIBUTING.md`, "The history lives in Supabase", with the rehearsal of 2026-11-17):
+  `data/jobs.db` is a per-run scratch file, rebuilt from Supabase by the new first step `sync_supabase.py --pull` (every
+  row of `jobs`, open and closed, without the text, and the whole `crawl_log`; it fails closed, and refuses an empty
+  `jobs` table), and no longer committed (git-ignored). `run.py` is unchanged in what it does; its two small tables,
+  `robots_skips` and `gap_alerts`, are gone: the robots.txt streak and a "new" gap are read from `crawl_log`. The sync
+  step writes the jobs as before and, new, this run's `crawl_log` rows (and deletes the log older than 90 days); the
+  exclusion list now deletes a company's log rows in Supabase too. The daily workflow commits `docs/` only, so the
+  `protect-main` ruleset is unchanged (same deploy key, same push); `publish-docs` gets the pull step. The backup step
+  now also exports `jobs` (without `description`, `details`, `snippet`) and `crawl_log`; `restore_accounts.py` restores
+  them (a log row keeps its `id`; the sequence moves past it). No migration. Merge-time steps: copy the closed jobs and
+  the crawl log of the last committed `data/jobs.db` into Supabase once (`CONTRIBUTING.md`, "The move, once"), merge,
+  run the workflow by hand with `digest_dry_run`.
   Backups/export before the first subscriber (part of the restore path), built in v0.30.0: the account tables (`profiles`, `user_prefs`, `user_jobs`,
   `subscriptions`, `emailed`; not `jobs`, which the crawl rebuilds) go every day to the PRIVATE repository `ravidorr/misra-backups`, not into this public one.
   `export_accounts.py` (JSON per table, sorted, counts only in the log), `publish_backup.py` (commit if changed; replaces the history with one commit when it
@@ -349,9 +361,8 @@ Decisions made in planning (they change the PRD's wording, so update the PRD in 
   Send to lawyer: `PRIVACY.md` now says that a daily backup copy of the account data is kept in a private GitHub repository (United States, access only
   the maintainer) for up to 30 days, that a deleted account leaves the backups within that time, and that GitHub may keep replaced copies briefly;
   `SECURITY.md` changed with it. The lawyer should see the wording ("What we store", "Providers", "How long we keep it", "How to delete your data") before the first real subscriber.
-  Still to do: live checks (set up is done; confirm the first daily run commits to `ravidorr/misra-backups`, and rehearse a restore into a scratch Supabase project, which also
-  tests `--create-auth-users` against the real `auth.users`); the other half of 9.1 (move the crawl's writes into Supabase and stop committing `data/jobs.db`, with the
-  `AGENTS.md`, deploy-flow and `protect-main` updates) is not started; the export of `jobs` and `crawl_log` into the repository is only needed then.
+  Still to do: live checks (see `TODO.md`, "Step 9.1 live checks": the first daily runs after the move, and a restore
+  into a scratch Supabase project, which also tests `--create-auth-users` against the real `auth.users`).
 
 ## Checks that close the plan
 

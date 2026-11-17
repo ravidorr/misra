@@ -22,7 +22,7 @@ from markdown_it.token import Token
 
 import classify
 import regions
-from common import DB, ROBOTS_CLOSE_DAYS, ROBOTS_NOTE, is_excluded, load_excluded
+from common import ROBOTS_CLOSE_DAYS, ROBOTS_NOTE, is_excluded, load_excluded, open_history
 
 # Stylesheets bundled into docs/dashboard.css, in order. Raw colors live only in tokens.css.
 CSS_SOURCES = ("design-system/tokens.css", "design-system/components/*.css", "templates/dashboard.css")
@@ -446,9 +446,7 @@ def failing_sites(c: sqlite3.Connection, excluded: list[str]) -> list[dict[str, 
     crawl, and the days skipped for the ones skipped for robots.txt."""
     # latest crawl per company, and the last time it worked
     latest: dict[str, tuple[Any, Any, str]] = {}
-    has_note = any(r[1] == "note" for r in c.execute("PRAGMA table_info(crawl_log)"))
-    note_col = "COALESCE(note, '')" if has_note else "''"
-    q = "SELECT company, ts, ok, " + note_col + " FROM crawl_log ORDER BY ts"
+    q = "SELECT company, ts, ok, COALESCE(note, '') FROM crawl_log ORDER BY ts"
     recent: dict[str, list[Any]] = {}
     skipped_since: dict[str, str] = {}  # the first day of a company's current run of robots.txt skips
     for company, ts, ok, note in c.execute(q):
@@ -473,7 +471,7 @@ def failing_sites(c: sqlite3.Connection, excluded: list[str]) -> list[dict[str, 
 
 def main() -> None:
     excluded = load_excluded()  # an excluded company is on no list and no card, whatever the data still holds
-    c = sqlite3.connect(DB)
+    c = open_history()
     blocked = failing_sites(c, excluded)
     failing = {gap["c"] for gap in blocked}
     with open("data/companies.json") as fh:
@@ -491,7 +489,8 @@ def main() -> None:
     first = dict(c.execute("SELECT company, MIN(substr(first_seen,1,10)) FROM jobs GROUP BY company"))
     jobs: list[dict[str, Any]] = []
     for company, job_id, title, team, loc, url, fs in c.execute(
-        "SELECT company, job_id, title, team, location, url, first_seen FROM jobs WHERE status='open'"
+        "SELECT company, job_id, title, team, location, url, first_seen FROM jobs "
+        "WHERE status='open' ORDER BY company, job_id"
     ):
         if is_excluded(company, excluded):
             continue
