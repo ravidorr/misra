@@ -48,15 +48,27 @@ Observations about live sites below come from checks made on 2026-11-14 and may 
     looked at both in Gmail and one other client, the tests above pass, `npm run lint` and `npm run test:coverage` pass,
     and the PR shows screenshots. A change to `send_digests.py` needs a version bump and a changelog entry.
 
+## Snippet ellipsis
+
+- [ ] **Make the ellipsis on a snippet exact.** Trigger: `cutMark()` in `templates/dashboard.js` guesses that a snippet
+  of 200 or more characters that does not end in `.`, `!` or `?` was cut, because the page cannot tell a whole text of up
+  to 255 characters from a cut one. Where: a `jobs.snippet_cut` boolean (true when `descriptions.snippet` cut the text),
+  set by `sync_supabase.py`, read with the other `JOB_COLUMNS`, and `cutMark` shows the mark when it is true. Done when:
+  the heuristic and its comment are gone and a test covers a cut under 200 and a whole text over 200 ending in `)`.
+
 ## Assistant endpoint
 
-- [ ] **Turn on the assistant endpoint after the lawyer has reviewed it.** Trigger: his confirmation (he asked on 2026-11-17 to
-  review it before it goes live; the note for him is `~/Desktop/misra-lawyer-note-assistant.md`). Where: `supabase/README.md`,
-  "Assistant endpoint", "Turn it on". How: apply `supabase/migrations/20261125100000_assistant_endpoint.sql`, deploy `mcp`, set the
-  secret `ASSISTANT_ENDPOINT_ENABLED=true`, run the live check; then set `ASSISTANT_PAGE_ENABLED = True` in `build_dashboard.py`
-  (PLAN.md step 8.2, the "Connect your assistant" page, from `ASSISTANT.md` with the lawyer's wording), add the page to `llms.txt`
-  (`tests/test_assistant_page.py` requires both together) and test a real assistant with someone who is not technical. Done when: a real assistant lists the
+- [ ] **Turn on the assistant endpoint.** Trigger: the lawyer answered and approved `ASSISTANT.md` on 2026-11-17 (limits, one job per
+  call, wording, two small edits; recorded in `PRD.md`; a clean copy is at `~/Desktop/misra-assistant-for-lawyer.md`). Where:
+  `supabase/README.md`, "Assistant endpoint", "Turn it on". How: apply `supabase/migrations/20261125100000_assistant_endpoint.sql`,
+  deploy `mcp`, set the secret `ASSISTANT_ENDPOINT_ENABLED=true`, run the live check; then set `ASSISTANT_PAGE_ENABLED = True` in
+  `build_dashboard.py` (PLAN.md step 8.2), add the page to `llms.txt` (`tests/test_assistant_page.py` requires both together),
+  and hand-test a real assistant (Claude and ChatGPT) with someone who is not technical. Done when: a real assistant lists the
   tools, searches and reads one job, and PLAN.md steps 8.1 and 8.2 are ticked.
+- [ ] **A per-caller limit on `search_job_keys`.** Trigger: the full-text function the dashboard uses is open to the public key and
+  has no limit per caller, so the assistant's `search_jobs` limit of 100 a day can be bypassed by calling it directly (it returns
+  keys only, never text). How: only if it matters; it needs the dashboard to call it through a function that counts. Done when:
+  a caller has a daily limit on it or the decision to leave it is written in `supabase/README.md`.
 
 ## Yearly security review
 

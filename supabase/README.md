@@ -864,11 +864,21 @@ Counted in the table `assistant_ip_limits` by `assistant_reserve`, against a key
 `report-site` uses) of the tool, the caller's network (`cf-connecting-ip`, an IPv6 address as its /64) and the day, so the key
 changes every day and no address is stored or logged:
 
-- `search_jobs`: 200 calls per caller per day. `get_job`: 30 calls per caller per day, and 1,000 per day for everyone together
+- `search_jobs`: 100 calls per caller per day. `get_job`: 15 calls per caller per day, and 500 per day for everyone together
   (a row whose key is the fixed word `get_job:all`), so many callers cannot read the texts in bulk. The numbers are
-  `SEARCH_DAILY_LIMIT`, `JOB_DAILY_LIMIT` and `JOB_DAILY_CAP` in `handler.ts` and are one of the lawyer's questions.
-- A refused call is not counted, a call with a bad argument is not counted, and if the database cannot be reached nothing is
-  answered (fail closed).
+  `SEARCH_DAILY_LIMIT`, `JOB_DAILY_LIMIT` and `JOB_DAILY_CAP` in `handler.ts` (the lawyer's answer of 2026-11-17). The text of a
+  job is cut at 20,000 characters when it is stored (`descriptions.MAX_CHARS`).
+- A refused call, a call with a bad argument, a database error and a call over the cap of
+  everyone give their places back; a job that does not exist counts, so guessing keys is limited like reading (`assistant_release`; it never goes below zero).
+- `get_job` returns `details` through an allowlist (`DETAIL_KEYS` in `handler.ts`: employment type, department, workplace
+  type, experience, country, offices and the like). The sync's own fingerprint and any key not listed never leave.
+- A job is read live from the `jobs` table by its exact `company` and `job_id` on every call, with no cache, so a company that
+  asks to be removed (`data/excluded_companies.csv`, deleted by the sync) is gone from the assistant the same day.
+- The `job_id` is the employer's own posting id (the id in its public career-page link), not an internal counter. A caller needs
+  both `company` and `job_id`, can only reach jobs that are in the table (open, or closed for less than 30 days), and is
+  limited to 15 reads a day, so guessing ids gives nothing that `search_jobs` does not already show.
+- `search_job_keys` (the dashboard's full-text function, open to the public key) has no per-caller limit; see `TODO.md`.
+- If the database cannot be reached nothing is answered (fail closed).
 - Rows of earlier days are deleted by the next call and by `report_site_cleanup`, which the daily run already calls (the migration
   replaces it so it also clears this table; nothing else changes in the daily run).
 - Nothing else is stored: no query, no job key, no address. A log line holds a function name and a status.
@@ -886,7 +896,7 @@ connect, list the tools, call both.
 
 ### Turn it on (the maintainer, after the lawyer has confirmed; nothing here is done by the pull request)
 
-1. Apply the migration `supabase/migrations/20261125100000_assistant_endpoint.sql` (it is harmless while the function is off).
+1. Apply the migration `supabase/migrations/20261125100000_assistant_endpoint.sql` (it is harmless while the function is off). It also replaces `report_site_cleanup`.
 2. Deploy: `supabase functions deploy mcp --project-ref dncodqeqpoqwcxdctzco` (`config.toml` sets `verify_jwt = false`). `IP_HASH_SECRET`,
    `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` are already there (a missing one makes it answer 500 and the log names it).
 3. Set the secret: `supabase secrets set --project-ref dncodqeqpoqwcxdctzco ASSISTANT_ENDPOINT_ENABLED=true`. To turn it off again,
