@@ -30,6 +30,98 @@ Observations about live sites below come from checks made on 2026-11-14 and may 
   "Why `search_job_keys` has no per-caller limit"). Trigger: abnormal query volume on `rpc/search_job_keys` in the database
   or API logs. Then build the limit as that section describes.
 
+## Dashboard and site review (added 2026-11-17, from a hand review of the live site)
+
+Screenshots are in `todo-images/`. Rules for all items here: KISS and DRY (prefer removing text and controls over adding
+them). Where an item says "ask", get the opinion of Claude Design (a design pass on the screen), the UI/UX expert and,
+for wording, the technical-writer agent, before building; the maintainer may be wrong, so say so if the experts
+disagree. The wording of `PRIVACY.md`, `TERMS.md` and `ASSISTANT.md` is the lawyer's (`AGENTS.md`): a change to them
+waits for him. Do not write the maintainer's email address in this repository (it is public).
+
+### Job alerts modal (![alerts modal](todo-images/alerts-modal.webp))
+
+- [ ] **Duplicate banners.** The yellow "Waiting for you to confirm `<email>`. Open the link ... The link works for 7 days."
+  and the purple "Check `<email>` for a confirmation link. Your daily job alerts start only after you open it ..." say the
+  same thing (![alerts pending banners](todo-images/alerts-pending-banners.png)). Keep one. Ask: Claude Design, UI/UX expert, technical writer.
+- [ ] **"Send it to" help text.** Is "Your Google email, unless you type another one. Either way, the address gets a
+  confirmation email first, and nothing else until its owner confirms." needed (![alerts send it to](todo-images/alerts-send-it-to.png))? Ask: same three.
+- [ ] **"Email me new matching roles" text is half redundant** (![alerts email me text](todo-images/alerts-email-me-text.png)). "Nothing is sent until you
+  confirm" repeats "We first send a confirmation link"; "you get an email only when there are new matches" repeats the
+  section title. Cut to what is not said elsewhere (the one-click unsubscribe, the Terms and privacy links). The digest
+  wording in `PRIVACY.md` is tested by `tests/test_legal_wording.py`: check it still holds. Ask: same three.
+- [ ] **"Filters for the email" confuses users** (![alerts filters](todo-images/alerts-filters.png)). Replace the list, the button and its long help
+  text with two radio buttons: "No filters" and "Same filters as on the page" (with a short note that changing the page
+  filters later does not change the email filters). Ask: same three.
+- [ ] **Button labels and behaviour.** "Turn the email off" becomes "End job alerts", "Turn the email on" becomes "Start
+  job alerts", "Send the confirmation again" becomes "Resend confirmation". Clicking any of these buttons closes the
+  modal. The "Close" button becomes an (x) in the top-right corner of the modal.
+
+### Other modals and the profile menu
+
+- [ ] **Profile menu** (![profile menu](todo-images/profile-menu.png)). (a) The email address is smaller and lighter than the other entries: make
+  it the same size and weight, or say why not. (b) Why is "Delete my account" highlighted (a filled yellow row)? Ask:
+  Claude Design and the UI/UX expert whether the maintainer is wrong on either.
+- [ ] **"Delete your Misra account?" modal** (![delete account modal](todo-images/delete-account-modal.webp)). What is "Choices saved locally in this browser
+  while you were signed out are not affected. This action cannot be undone."? Decide whether to keep, shorten or move
+  it (technical writer). Replace the "Cancel" button with an (x) in the top-right corner.
+- [ ] **"Sign in" modal** (![sign in modal](todo-images/sign-in-modal.webp)). Replace "Cancel" with an (x) in the top-right corner. The "Terms" and
+  "privacy notice" links open in a new tab, with a visual sign that they do (an icon, and the accessible name says
+  "opens in a new tab").
+- [ ] **Google's account chooser says "to continue to `<project>.supabase.co`"** (![google account chooser](todo-images/google-account-chooser.webp)). Find how
+  to show "Misra" or our own domain instead: the usual ways are the OAuth consent screen branding in Google Cloud and
+  a Supabase custom domain (check whether it needs a paid plan and what it costs before doing anything).
+
+### Filters card
+
+- [ ] **"Places" is not clearly clickable and duplicates "Region"** (![filters places](todo-images/filters-places.webp)). Users do not see the
+  difference between "Region" and "Places". Remove "Places"; if users ask for finer places later, consider a more specific
+  option then.
+- [ ] **"Location" duplicates "Region".** Remove the "Location" dropdown and add "Abroad" to "Region".
+- [ ] **Smaller questions** (answer each, then build or drop): should the "Company" dropdown sit under an `<h3>`? Should it
+  be a multiple select? Can "Hide possibly old" show a count like "Show discarded (x)"? Rename "Reset filters" to
+  "Reset".
+
+### Cards and the "New this week" strip
+
+- [ ] **Truncated company names in "New this week"** (![new this week truncated](todo-images/new-this-week-truncated.png)). An ellipsis name needs a tooltip
+  on hover with the full name (and keyboard focus and touch: a hover tooltip alone fails WCAG). Ask Claude Design and the
+  UI/UX expert how it should look.
+- [ ] **"Details" button** (![card details button](todo-images/card-details-button.png)). Why do some cards have it? What does the modal show that the card does
+  not? If nothing, remove it.
+- [ ] **"Not for me" is a link, not a button.** Ask Claude Design and the UI/UX expert whether it should be a button and how.
+- [ ] **Dark mode: the purple "Apply" button with a purple border and shadow looks muddy** (![card dark mode](todo-images/card-dark-mode.png)). Ask
+  Claude Design and the UI/UX expert.
+
+### Coverage gaps card (![coverage gaps](todo-images/coverage-gaps.png))
+
+- [ ] **The caret is too small to show that the card is collapsed.** Ask Claude Design and the UI/UX expert for a better sign.
+- [ ] **Copy.** "We choose not to read these" becomes "We choose not to include these companies"; "Our crawl misses these"
+  becomes "We missed these companies"; the long paragraph under it becomes "We cannot find or read the open roles in
+  these companies." (the card's copy is also in `build_dashboard.REASONS`, and tests may quote it).
+- [ ] **Company links land in different places** (homepage, general careers page, Israel careers page). Give the user a
+  hint of where a link goes. Ask Claude Design and the UI/UX expert.
+
+### Footer and pages (![footer](todo-images/footer.png))
+
+- [ ] **One header and one footer for every page.** `index.html` has no link to `security.html`, the other pages do.
+  Build one shared header and one shared footer component (DRY) and use it on `index.html`, `privacy.html`, `terms.html`,
+  `security.html` and `assistant.html` (the last four come from `templates/legal.html`). The logo and "misra" in the header link
+  to `index.html`. The four legal pages must look much more like `index.html`. Ask Claude Design and the UI/UX expert.
+- [ ] **Order of the footer links.** Ask Claude Design, the UI/UX expert and the technical writer.
+- [ ] **An "About" page, linked from the footer.** Content like `README.md` but for the end user. Ask Claude Design, the
+  UI/UX expert and the technical writer.
+- [ ] **A "Contact" page instead of an email link.** All contact information plus a form that sends an email (needs a
+  design for spam and for where the mail goes; the endpoint must not log addresses, see `PRIVACY.md`). Ask the same three.
+- [ ] **The "Contact" section of `PRIVACY.md` is wrong for users without a GitHub account** (it points to a GitHub issue
+  and the security note). It should point to the new Contact page. `PRIVACY.md` is the lawyer's: ask him.
+
+### Tooling
+
+- [ ] **Linters.** The project already runs ruff, ESLint, Stylelint, html-validate and markdownlint (`npm run lint`).
+  Check the siblings' configs for what ours lacks, and add `eslint-plugin-no-emoji` and `eslint-plugin-no-em-dash` (check
+  that both exist, are maintained and work with our ESLint version first). Done when `npm run lint` fails on an emoji
+  or an em dash in the checked files.
+
 ## Yearly security review
 
 - [ ] **Do the yearly security review by 2027-11-15, then every year.** Trigger: the date. Where: the
