@@ -163,7 +163,10 @@ def test_the_limit_is_under_the_thirty_days_the_privacy_notice_promises() -> Non
 
 def test_the_clone_is_a_separate_directory_and_the_checkout_is_not_touched(tmp_path: Path, remote: Path) -> None:
     def listing() -> list[str]:
-        return sorted(path.name for path in export_accounts.REPO_ROOT.iterdir())
+        # not the data files of pytest-cov: the other workers write theirs here while this test runs
+        return sorted(
+            path.name for path in export_accounts.REPO_ROOT.iterdir() if not path.name.startswith(".coverage")
+        )
 
     before = listing()
     publish(make_export(tmp_path / "x"), str(remote), tmp_path / "w", NOW)

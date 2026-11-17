@@ -209,7 +209,7 @@ if (open && dialog) {
     if (sending) event.preventDefault(); /* Esc does not abandon a request in flight */
   });
   dialog.addEventListener('close', () => {
-    if (!sending) reset(); /* a closed form keeps nothing: not a draft, not a report that was sent */
+    if (!sending && !dialog.open) reset(); /* a closed form keeps nothing: not a draft, not a report that was sent; a late event of a dialog that is open again must not wipe its answer */
   });
 
   for (const name of FIELDS) {
