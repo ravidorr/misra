@@ -4,9 +4,23 @@ All notable changes are documented here. Format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
+### Removed
+
+- The "Filters reset." line with an "Undo" button that showed for 6 seconds after "Reset" (`#resetNote`, its timer and the code that restored the filters), and its `.reset-note` styles. "Reset" is unchanged and still acts at once; the `sr-only` status region now says "Filters reset." so screen readers still hear it.
+
 ### Added
 
 - A Copy button under every code block of the legal pages (the address on "Connect your assistant", the command for Claude Code), in `templates/theme.js`.
+
+## [0.66.1] - 2026-11-18
+
+### Changed
+
+- The browser tests share one Chromium and one Playwright driver per worker (a new context for each test) instead of starting both for every test; the pytest event loop is shared for the session so the browser can be.
+
+### Fixed
+
+- The report form no longer loses its "Report sent" answer when the dialog's `close` event arrives late, after the answer has reopened the dialog (`templates/report.js`). It showed up as a flaky test on a busy machine.
 
 ## [0.66.0] - 2026-11-18
 

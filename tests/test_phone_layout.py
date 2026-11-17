@@ -49,6 +49,67 @@ def crowd(db: sqlite3.Connection, workdir: Path, monkeypatch: pytest.MonkeyPatch
     return build_site(db, workdir, add_companies)
 
 
+LONGEST_REAL_NAME = "Enlight Renewable Energy"  # the longest name with new roles in the live data: three lines
+# The 15 names "New this week" showed on the day this was written (names only), most new roles first: one, two and three
+# lines, and "monday.com", which must never break inside the word.
+REAL_NAMES = {
+    name: 15 - n
+    for n, name in enumerate(
+        [
+            "Nvidia",
+            "Mobileye",
+            "monday.com",
+            "NICE",
+            "Verint",
+            "Amazon",
+            "Claroty",
+            "Palo Alto Networks",
+            "Wolt",
+            "eToro",
+            "Cisco",
+            "Priority Software",
+            LONGEST_REAL_NAME,
+            "Jeeves",
+            "Navan",
+        ]
+    )
+}
+# Extremes: names that sat above and below their row, a name of four lines and an unbroken word wider than a circle.
+EXTREME_NAMES = {
+    "ForSight Robotics": 9,
+    "Aidoc": 8,
+    LONGEST_REAL_NAME: 7,
+    "Global Advanced Technologies Research Holdings International": 6,
+    "Nvidia": 5,
+    "Supercalifragilisticexpialidocious": 4,
+    "monday.com": 3,
+    "Palo Alto Networks": 2,
+}
+NAME_SETS = {"real": REAL_NAMES, "extremes": EXTREME_NAMES}
+SAME_TOP = 0.5  # px
+TOGGLE_STILL = 1  # px the button may move between "Show all" and "Show fewer"
+NARROWEST = 320
+
+
+@pytest.fixture(params=sorted(NAME_SETS))
+def mixed(
+    request: pytest.FixtureRequest, db: sqlite3.Connection, workdir: Path, monkeypatch: pytest.MonkeyPatch
+) -> Path:
+    """The page built over companies with new roles whose names take one to four lines in "New this week"."""
+    names: dict[str, int] = NAME_SETS[request.param]
+
+    def fill(conn: sqlite3.Connection) -> None:
+        old = (datetime.now(UTC) - timedelta(days=30)).strftime("%Y-%m-%dT00:00:00")
+        today = datetime.now(UTC).strftime("%Y-%m-%dT00:00:00")
+        for company, new_roles in names.items():
+            add_job(conn, company, "old", "Accountant", first_seen=old)
+            for n in range(new_roles):
+                add_job(conn, company, f"new{n}", f"Software Engineering Intern {n}", first_seen=today)
+
+    monkeypatch.setattr(build_dashboard, "DIGEST_SIGNUP_ENABLED", False)
+    return build_site(db, workdir, fill)
+
+
 MANY_COMPANIES = 1234  # the widest the count can be for a long time: four digits and a plural
 
 
@@ -186,7 +247,9 @@ async def test_hiring_now_is_one_line_with_the_rest_behind_a_button(page: Page, 
     toggle_box = await toggle.bounding_box()
     assert toggle_box is not None
     assert toggle_box["height"] >= TAP_MIN
-    assert toggle_box["x"] >= one_line[-1]["x"] + one_line[-1]["width"]  # at the end of the line
+    heading = await page.locator("#hiring-h").bounding_box()
+    assert heading is not None
+    assert toggle_box["y"] + toggle_box["height"] <= one_line[0]["y"]  # in the heading row, above the circles
     assert toggle_box["x"] + toggle_box["width"] <= width
     assert await page.locator("#stories .story[hidden], #stories > li[hidden]").count() == HIRING_COMPANIES - len(
         one_line
@@ -211,20 +274,25 @@ async def test_hiring_now_is_one_line_with_the_rest_behind_a_button(page: Page, 
 
 
 async def test_hiring_now_is_reached_and_operated_by_keyboard(page: Page, crowd: Path) -> None:
+    """The Tab order follows the picture: the heading's button first, then the circles it shows."""
     await open_page(page, crowd, 375)
     shown = len(await visible_stories(page))
-    await page.locator("#stories .story").first.focus()
-    for _ in range(shown - 1):  # only the circles on the line are in the Tab order
-        await page.keyboard.press("Tab")
-        assert await page.evaluate("document.activeElement.classList.contains('story')")
-    await page.keyboard.press("Tab")
-    assert await page.evaluate("document.activeElement.id") == "hiringToggle"  # then the button, at the end of the line
+    await page.locator("#filtersOpen").focus()
+    await page.locator("#hiringToggle").focus()
     await page.keyboard.press("Enter")
     assert await page.locator("#hiringToggle").get_attribute("aria-expanded") == "true"
     assert len(await visible_stories(page)) == HIRING_COMPANIES
+    assert shown < HIRING_COMPANIES
+    for n in range(HIRING_COMPANIES):  # the next Tab goes into the circles that just appeared, all of them
+        await page.keyboard.press("Tab")
+        assert await page.evaluate("document.activeElement.classList.contains('story')"), n
+    await page.locator("#hiringToggle").focus()
     await page.keyboard.press("Space")
     assert await page.locator("#hiringToggle").get_attribute("aria-expanded") == "false"
     assert await page.evaluate("document.activeElement.id") == "hiringToggle"
+    for _ in range(shown):  # only the circles on the line are in the Tab order
+        await page.keyboard.press("Tab")
+        assert await page.evaluate("document.activeElement.classList.contains('story')")
 
 
 async def test_hiring_now_keeps_its_choice_for_the_page_and_follows_the_width(page: Page, crowd: Path) -> None:
@@ -917,19 +985,116 @@ async def test_the_first_job_and_the_search_are_still_on_the_first_screen_with_s
     assert snippet["y"] + snippet["height"] <= FIRST_SCREEN["height"]  # the title and its description, both in view
 
 
-async def test_a_cut_company_name_shows_whole_when_the_circle_is_focused_or_chosen(page: Page, crowd: Path) -> None:
-    await open_page(page, crowd, 375)
-    name = page.locator("#stories .story").first.locator(".story-name")
-    cut = await name.evaluate("e => e.scrollHeight > e.clientHeight + 1")
-    assert cut  # the 40-character name is cut after two lines
-    await page.locator("#stories .story").first.focus()
-    await page.keyboard.press("Shift+Tab")
-    await page.keyboard.press("Tab")  # keyboard focus (focus-visible)
-    assert await name.evaluate("e => e.scrollHeight <= e.clientHeight + 1")  # whole while focused
-    await page.keyboard.press("Enter")  # chosen: the name stays whole
-    await page.locator("#filtersOpen").focus()
-    assert (
-        await page.locator("#stories .story")
-        .first.locator(".story-name")
-        .evaluate("e => e.scrollHeight <= e.clientHeight + 1")
+BROKEN_WORDS = """() => {
+  const broken = [];
+  for (const name of document.querySelectorAll('#stories > li:not([hidden]) .story-name')) {
+    for (const match of name.textContent.matchAll(/\\S+/g)) {
+      const range = document.createRange();
+      range.setStart(name.firstChild, match.index);
+      range.setEnd(name.firstChild, match.index + match[0].length);
+      if (new Set([...range.getClientRects()].map((r) => Math.round(r.top))).size > 1) broken.push(match[0]);
+    }
+  }
+  return broken;
+}"""
+LONG_WORD = "Supercalifragilisticexpialidocious"  # wider than a circle: the one word that may break
+
+
+async def story_rows(page: Page) -> list[dict[str, list[float]]]:
+    """The circles that show, grouped by the row they sit in: each row has the tops of its circles (the round badge, the
+    thing the eye lines up) and the number of lines of each label."""
+    return await page.evaluate(
+        """() => {
+          const rows = new Map();
+          for (const li of document.querySelectorAll('#stories > li:not([hidden])')) {
+            const key = Math.round(li.getBoundingClientRect().top);
+            const row = rows.get(key) ?? { tops: [], lines: [] };
+            const name = li.querySelector('.story-name');
+            row.tops.push(li.querySelector('.story-badge').getBoundingClientRect().top);
+            const line = parseFloat(getComputedStyle(name).lineHeight);
+            row.lines.push(Math.round(name.getBoundingClientRect().height / line));
+            rows.set(key, row);
+          }
+          return [...rows.values()];
+        }"""
     )
+
+
+@pytest.mark.parametrize("scheme", ["light", "dark"])
+@pytest.mark.parametrize("state", ["collapsed", "expanded"])
+@pytest.mark.parametrize("width", [320, 375, 559, 768, 1280])
+async def test_the_strip_is_lined_up_and_no_name_is_cut(
+    page: Page, mixed: Path, width: int, state: str, scheme: str
+) -> None:
+    """The bugs: a label of two or three lines lifted its circle above the one-line labels (the buttons stretched to the
+    tallest of their row and a button centres its content), a long name ended in an ellipsis, "monday.com" broke in the
+    middle of the word, in both states of the strip."""
+    await open_page(page, mixed, width, scheme=scheme)
+    toggle = page.locator("#hiringToggle")
+    if state == "expanded":
+        await open_hiring(page)
+        assert not await toggle.is_visible() or await toggle.get_attribute("aria-expanded") == "true"
+    rows = await story_rows(page)
+    assert rows
+    if state == "collapsed":
+        assert len(rows) == 1  # one line, so one top for all of them
+    elif width > NARROWEST:  # at 320 px a row may hold one circle, so there is nothing to line up
+        assert any(len(set(row["lines"])) > 1 for row in rows)  # a row that mixes one-line and longer labels: the case
+    for row in rows:
+        assert max(row["tops"]) - min(row["tops"]) <= SAME_TOP
+    names = page.locator("#stories > li:not([hidden]) .story-name")
+    assert await names.count() == sum(len(row["tops"]) for row in rows)
+    for n in range(await names.count()):
+        measure = await names.nth(n).evaluate(
+            "e => ({cut: e.scrollHeight - e.clientHeight, wide: e.scrollWidth - e.clientWidth, "
+            "ellipsis: getComputedStyle(e).textOverflow, clamp: getComputedStyle(e).webkitLineClamp})"
+        )
+        assert measure == {"cut": 0, "wide": 0, "ellipsis": "clip", "clamp": "none"}, await names.nth(n).inner_text()
+    broken = await page.evaluate(BROKEN_WORDS)
+    assert [word for word in broken if word != LONG_WORD] == []
+    if LONG_WORD in await page.locator("#stories").inner_text():
+        assert broken == [LONG_WORD]  # the detector sees a break when there is one
+    assert await page.evaluate(NO_SIDEWAYS)
+    assert await page.locator("#stories").evaluate("e => e.scrollWidth <= e.clientWidth")
+    for story in await page.locator("#stories > li:not([hidden]) .story").all():
+        box = await story.bounding_box()
+        assert box is not None
+        assert box["height"] >= TAP_MIN
+    await page.evaluate(AXE.read_text(encoding="utf-8"))
+    assert await page.evaluate("axe.run('#hiring').then(r => r.violations.map(v => v.id))") == []
+
+
+@pytest.mark.parametrize("width", [320, 375, 559])
+async def test_show_all_and_show_fewer_stay_in_one_place_above_the_circles(page: Page, mixed: Path, width: int) -> None:
+    """The button sits at the right of the heading, level with it, and does not move when it is pressed."""
+    await open_page(page, mixed, width)
+    toggle = page.locator("#hiringToggle")
+    assert await toggle.is_visible()  # more circles than fit on the line at these widths
+    await toggle.scroll_into_view_if_needed()  # the click would scroll it: measure where the page stays still
+    before = await toggle.bounding_box()
+    heading = await page.locator("#hiring-h").bounding_box()
+    badge = await page.locator("#stories .story-badge").first.bounding_box()
+    assert before is not None
+    assert heading is not None
+    assert badge is not None
+    assert before["height"] >= TAP_MIN
+    assert before["y"] + before["height"] <= badge["y"]  # above the circles, never beside or among them
+    assert abs((before["y"] + before["height"] / 2) - (heading["y"] + heading["height"] / 2)) <= 1  # level with it
+    assert before["x"] + before["width"] <= width
+    scrolled = await page.evaluate("window.scrollY")
+    await toggle.click()
+    assert await toggle.inner_text() == "Show fewer"
+    after = await toggle.bounding_box()
+    assert after is not None
+    assert await page.evaluate("window.scrollY") == scrolled  # pressing it moved nothing under the finger
+    assert abs(after["y"] - before["y"]) <= TOGGLE_STILL
+    assert abs(after["height"] - before["height"]) <= TOGGLE_STILL
+    assert abs((after["x"] + after["width"]) - (before["x"] + before["width"])) <= TOGGLE_STILL  # the right edge holds
+
+
+async def test_a_chosen_company_name_is_not_cut_either(page: Page, crowd: Path) -> None:
+    await open_page(page, crowd, 375)
+    await page.locator("#stories .story").first.click()
+    assert await page.locator("#stories .story").first.get_attribute("aria-pressed") == "true"
+    name = page.locator("#stories .story-name").first
+    assert await name.evaluate("e => e.scrollHeight <= e.clientHeight && e.scrollWidth <= e.clientWidth")
