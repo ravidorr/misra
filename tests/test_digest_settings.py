@@ -26,7 +26,7 @@ from tests.test_dashboard_page import (
     EMAIL,
     ORIGIN,
     PHONE,
-    TAP,
+    TAP_MIN,
     USER_ID,
     WEBMCP,
     AuthBackend,
@@ -750,8 +750,8 @@ async def test_when_the_settings_cannot_be_read_the_dialog_can_still_be_closed_a
     await expect(close).to_be_visible()
     size = await close.bounding_box()
     assert size is not None
-    assert size["height"] >= TAP
-    assert size["width"] >= TAP
+    assert size["height"] >= TAP_MIN
+    assert size["width"] >= TAP_MIN
     await close.click()
     await expect(page.locator(DIALOG)).to_be_hidden()
     assert await page.evaluate("document.activeElement.id") == "accountMenuButton"  # the focus goes back
@@ -918,7 +918,7 @@ async def test_the_dialog_reads_well_on_a_phone_and_every_control_is_big_enough(
         for item in await page.locator(selector).all():
             size = await item.bounding_box()
             assert size is not None
-            assert round(size["height"]) >= TAP, selector
+            assert size["height"] >= TAP_MIN, selector
     await page.click("#digestClose")
     await page.click("#accountMenuButton")
     assert await page.evaluate("document.getElementById('digestOpen').getBoundingClientRect().width") > 0
@@ -947,8 +947,8 @@ async def test_the_lawyers_wording_is_on_the_control_with_big_links(page: Page, 
         assert await link.get_attribute("rel") is None
         size = await link.bounding_box()
         assert size is not None
-        assert size["height"] >= TAP
-        assert size["width"] >= TAP
+        assert size["height"] >= TAP_MIN
+        assert size["width"] >= TAP_MIN
     # the helper names the address that is typed, and follows it
     await page.fill("#digestAddress", OTHER)
     await expect(page.locator("#digestConsentTo")).to_have_text(OTHER)
@@ -1032,8 +1032,8 @@ async def test_the_dialog_works_from_the_keyboard_and_gives_the_focus_back(page:
     assert await close.get_attribute("aria-label") == "Close"
     box = await close.bounding_box()
     assert box is not None
-    assert box["width"] >= TAP
-    assert box["height"] >= TAP
+    assert box["width"] >= TAP_MIN
+    assert box["height"] >= TAP_MIN
     await page.keyboard.press("Escape")
     await expect(page.locator(DIALOG)).to_be_hidden()
     assert await page.evaluate("document.activeElement.id") == "accountMenuButton"
@@ -1077,7 +1077,7 @@ async def test_the_menu_with_job_alerts_fits_the_screen_and_every_item_is_big_en
     for item in await page.locator("#accountMenu .account-item").all():
         box = await item.bounding_box()
         assert box is not None
-        assert box["height"] >= TAP
+        assert box["height"] >= TAP_MIN
     await page.evaluate(AXE.read_text(encoding="utf-8"))
     assert await page.evaluate(AXE_RUN) == []
 

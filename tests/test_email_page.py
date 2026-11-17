@@ -14,7 +14,7 @@ import pytest
 from playwright.async_api import Page, Route, expect
 
 import build_dashboard
-from tests.test_dashboard_page import AXE, ORIGIN, PHONE, TAP, site  # noqa: F401  (site is a fixture)
+from tests.test_dashboard_page import AXE, ORIGIN, PHONE, TAP_MIN, site  # noqa: F401  (site is a fixture)
 from tests.test_sign_in import AXE_RUN
 
 FUNCTION = f"{build_dashboard.SUPABASE_URL}/functions/v1/confirm-email"
@@ -200,7 +200,7 @@ async def test_the_page_is_accessible_in_light_and_dark_on_a_phone(
     for selector in ("#confirm", "#back"):
         box = await page.locator(selector).bounding_box()
         if box:
-            assert box["height"] >= TAP
+            assert box["height"] >= TAP_MIN
     assert await page.evaluate("document.documentElement.lang") == "en"
 
 
@@ -342,7 +342,7 @@ async def test_every_state_sits_in_one_card_with_the_dashboard_header_and_footer
     for link in await links.all():
         box = await link.bounding_box()
         assert box
-        assert box["height"] >= TAP
+        assert box["height"] >= TAP_MIN
 
 
 async def test_the_confirmed_state_is_in_the_same_card(page: Page, site: Path) -> None:
