@@ -194,7 +194,7 @@ const UNAVAILABLE = 'The job data could not be reached right now. Try again late
 
 async function callTool(deps: Deps, config: Config, id: Id, name: string, args: unknown, network: string): Promise<Response> {
   const day = deps.now().toISOString().slice(0, 10);
-  // The places taken from the counters by this call. A call that fails or serves nothing gives them back.
+  // The places taken from the counters by this call. A call that fails, or is refused by the cap of everyone, gives them back.
   const held: string[] = [];
   const take = async (key: string, limit: number): Promise<boolean> => {
     const taken = await reserve(deps, config, day, key, limit);
@@ -238,7 +238,8 @@ async function callTool(deps: Deps, config: Config, id: Id, name: string, args: 
     if (!(await caller('get_job', JOB_DAILY_LIMIT))) return toolError(id, LIMITED);
     if (!(await take('get_job:all', JOB_DAILY_CAP))) return await refund(toolError(id, LIMITED_ALL));
     const job = await readJob(deps, config, parsed.value.company, parsed.value.jobId);
-    if (!job) return await refund(toolError(id, 'No open job, or job closed in the last 30 days, has this company and job_id. Search again with search_jobs.'));
+    // A miss counts as a call: guessing keys is limited like reading.
+    if (!job) return toolError(id, 'No open job, or job closed in the last 30 days, has this company and job_id. Search again with search_jobs.');
     return toolResult(id, { ...job, details: candidateDetails(job.details) });
   } catch (error) {
     console.error(`mcp: ${name} failed`, describe(error));

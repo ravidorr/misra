@@ -868,8 +868,8 @@ changes every day and no address is stored or logged:
   (a row whose key is the fixed word `get_job:all`), so many callers cannot read the texts in bulk. The numbers are
   `SEARCH_DAILY_LIMIT`, `JOB_DAILY_LIMIT` and `JOB_DAILY_CAP` in `handler.ts` (the lawyer's answer of 2026-11-17). The text of a
   job is cut at 20,000 characters when it is stored (`descriptions.MAX_CHARS`).
-- Only a call that is served counts. A refused call, a call with a bad argument, a database error, a job that does not exist
-  and a call over the cap of everyone all give their places back (`assistant_release`; it never goes below zero).
+- A refused call, a call with a bad argument, a database error and a call over the cap of
+  everyone give their places back; a job that does not exist counts, so guessing keys is limited like reading (`assistant_release`; it never goes below zero).
 - `get_job` returns `details` through an allowlist (`DETAIL_KEYS` in `handler.ts`: employment type, department, workplace
   type, experience, country, offices and the like). The sync's own fingerprint and any key not listed never leave.
 - A job is read live from the `jobs` table by its exact `company` and `job_id` on every call, with no cache, so a company that

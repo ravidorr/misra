@@ -2,11 +2,13 @@ import { describe, expect, it, vi } from 'vitest';
 import type { Mock } from 'vitest';
 
 import {
+  DETAIL_KEYS,
   JOB_DAILY_CAP,
   JOB_DAILY_LIMIT,
   MAX_BODY_BYTES,
   PROTOCOL_VERSIONS,
   SEARCH_DAILY_LIMIT,
+  candidateDetails,
   handleMcp,
   loadConfig,
 } from '../supabase/functions/mcp/handler.ts';
@@ -397,7 +399,7 @@ describe('get_job', () => {
     const left = (world: World): number[] => [...world.counters.values()];
     const none = fakeWorld({ jobs: [] });
     await tool(none, 'get_job', { company: 'Acme', job_id: 'nope' });
-    expect(left(none).every((n) => n === 0)).toBe(true);
+    expect(left(none).sort()).toEqual([1, 1]); // a miss counts: guessing keys is limited like reading
     const failing = fakeWorld({ database: 'jobs-error' });
     expect((await tool(failing, 'get_job', { company: 'Acme', job_id: 'j1' })).isError).toBe(true);
     expect(left(failing).every((n) => n === 0)).toBe(true);
@@ -416,9 +418,11 @@ describe('get_job', () => {
 
   it('does not fail the answer when giving a place back fails', async () => {
     silence();
-    const world = fakeWorld({ database: 'release-down', jobs: [] });
-    const answer = await tool(world, 'get_job', { company: 'Acme', job_id: 'nope' });
-    expect(answer.text).toContain('No open job');
+    const world = fakeWorld({ database: 'release-down', jobs: [JOB] });
+    world.counters.set('2026-11-17|get_job:all', JOB_DAILY_CAP);
+    const answer = await tool(world, 'get_job', { company: 'Acme', job_id: 'j1' });
+    expect(answer.isError).toBe(true);
+    expect(answer.text).toContain('by everyone together');
   });
 
   it('does not read anything when the counter cannot be reached (fail closed)', async () => {
@@ -442,6 +446,16 @@ describe('get_job', () => {
       expect(answer.isError).toBe(true);
       expect(answer.text).toContain('could not be reached');
     }
+  });
+});
+
+describe('the details allowlist', () => {
+  it('passes every listed key as text, a flag or a list of text, and nothing else', () => {
+    const all = Object.fromEntries(DETAIL_KEYS.map((key, i) => [key, i % 3 === 0 ? 'text' : i % 3 === 1 ? true : ['a', 'b']]));
+    expect(candidateDetails({ ...all, text_sha256: 'x', other: 'y', employment_type: 5, offices: [1, 'a'], function: { a: 1 } })).toEqual(
+      Object.fromEntries(Object.entries(all).filter(([key]) => !['employment_type', 'offices', 'function'].includes(key))),
+    );
+    for (const bad of [null, undefined, 'text', ['a'], 7]) expect(candidateDetails(bad)).toEqual({});
   });
 });
 
