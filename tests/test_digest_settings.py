@@ -1112,3 +1112,28 @@ async def test_the_state_line_says_each_state_in_words(
     text = await page.locator("#digestState").inner_text()
     for word in words:
         assert word in text
+
+
+async def test_an_outcome_is_not_shown_to_the_next_account(page: Page, digest_site: Path) -> None:
+    world = World()
+    auth = AuthBackend()
+    await serve(page, digest_site, auth=auth)
+    await page.route(FUNCTION, world.function)
+    await page.route(TABLE, world.table)
+    await start_sign_in(page, auth)
+    await come_back(page)
+    await page.wait_for_selector("#accountUser:not([hidden])")
+    await settled(page)
+    await open_dialog(page)
+    await page.click("#digestSend")
+    await expect(page.locator("#digestState")).to_contain_text("confirmation link")
+    await page.click("#digestClose")
+    await account_action(page, "#signOut")
+    await page.wait_for_selector("#signIn:not([hidden])")
+    world.row = None
+    await start_sign_in(page, auth)
+    await come_back(page)
+    await page.wait_for_selector("#accountUser:not([hidden])")
+    await settled(page)
+    await open_dialog(page)
+    await no_result(page)

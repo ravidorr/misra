@@ -7,7 +7,7 @@
  *     <p class="dialog-actions"><button type="button" class="btn btn-pill">Cancel</button>
  *     <button type="button" class="btn btn-pill btn-danger">Delete</button></p>
  *   </dialog>
- * A dialog that only informs has no Cancel button: its first child is the corner (x), `.dialog-close`
+ * A dialog that needs no Cancel button has the corner (x) as its first child, `.dialog-close`
  * (a 44px round button; the dialog needs no other change):
  *   <button type="button" class="dialog-close" aria-label="Close"><svg aria-hidden="true" ...>x</svg></button>
  * A link that opens in a new tab carries the `.icon-ext` arrow and the words "(opens in a new tab)":
