@@ -506,6 +506,8 @@ async def test_paging_moves_focus_to_the_list_heading(page: Page, site: Path) ->
     await serve(page, site)
     await page.click("#next")
     assert await page.evaluate("document.activeElement.id") == "list-h"
+    box = await page.locator("#list-h").bounding_box()
+    assert box and box["width"] <= 1 and box["height"] <= 1  # a click is not the keyboard: the heading stays hidden
     assert await page.locator("#pageInfo").inner_text() == "Page 2 of 2"
     assert await page.locator("#list > li").count() == ISRAEL_JOBS - PAGE_SIZE
 

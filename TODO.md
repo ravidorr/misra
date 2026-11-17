@@ -6,14 +6,6 @@ one row from one segment), its "(28)" if the company had no careers URL, else it
 An item with a screenshot in `todo-images/` goes with it: delete the image file in the same PR.
 Observations about live sites below come from checks made on 2026-11-14 and may have changed.
 
-## Focus after a late search answer
-
-- [ ] **Give the focus a visible place when the role under it leaves the page.** Trigger: a late description-search
-  answer redraws the list (`drawList()` in `templates/dashboard.js`) while a reader is on a control of a role that is no
-  longer on the page (it moved to the next page). The focus then goes to the `sr-only` heading `#list-h`, so a sighted
-  keyboard user sees no focus ring (WCAG 2.4.7). Not tested yet. Done when: the case is covered by a test and the focus
-  lands on something visible, or the heading shows a focus ring.
-
 ## Assistant endpoint
 
 - [ ] **Hand-test the assistant connection with someone who is not technical.** Trigger: the endpoint and the page "Connect your
