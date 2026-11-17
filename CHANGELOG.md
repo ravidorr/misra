@@ -4,6 +4,17 @@ All notable changes are documented here. Format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
+## [0.63.0] - 2026-11-17
+
+### Added
+
+- A Contact page (`contact.html`, from `templates/contact.html`): the GitHub issues link, the security note and the privacy notice, with no address of the maintainer. The footer's Contact link now goes to it (the `mailto:` link is gone from every page).
+- A contact form on that page and the Edge Function `contact` behind it, both OFF until the lawyer agrees: the build constant `CONTACT_FORM_ENABLED` (`False`) cuts the form, `contact.js` and the page's `connect-src`, and the function answers 404 unless its secret `CONTACT_FORM_ENABLED` is `true`. The function emails one plain-text message to the secret `CONTACT_TO` through Resend (fixed subject and From, the visitor's address only as `Reply-To`, never an email to the visitor), stores nothing, logs counts only, and refuses bots (hidden field, minimum fill time), a fourth message from one visitor in a day and the eleventh in all, using the existing `assistant_reserve` counters (no migration). `TODO.md` lists what the lawyer must decide.
+
+### Changed
+
+- The Resend call shared by `report-site` and `contact` is one module (`supabase/functions/_shared/resend.ts`). `report-site` no longer logs the first 200 characters of Resend's answer, only its status.
+
 ## [0.62.0] - 2026-11-17
 
 ### Added

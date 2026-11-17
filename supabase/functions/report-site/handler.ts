@@ -15,6 +15,7 @@
 // The email is plain text with no field in a header except the company name (or, without one, the link) as one line of
 // the subject, so a visitor cannot inject markup or a header.
 
+import { SendRefused, sendMail } from '../_shared/resend.ts';
 import { hashVisitor, visitorNetwork } from '../_shared/visitor.ts';
 import { validateReport } from './validate.ts';
 import type { Report } from './validate.ts';
@@ -24,7 +25,6 @@ export const IP_DAILY_LIMIT = 3;
 export const DAILY_CAP = 20;
 export const MAX_BODY_BYTES = 8192;
 export const DEFAULT_FROM = 'Misra reports <reports@send.avidor.org>';
-const RESEND_URL = 'https://api.resend.com/emails';
 const REQUEST_TIMEOUT_MS = 10_000;
 const ADDRESS = /^[^\s<>@,;"]+@[^\s<>@,;"]+\.[^\s<>@,;"]+$/u;
 const FROM = /^[^\r\n<>]*<[^\s<>@,;"]+@[^\s<>@,;"]+\.[^\s<>@,;"]+>$|^[^\s<>@,;"]+@[^\s<>@,;"]+\.[^\s<>@,;"]+$/u;
@@ -199,23 +199,9 @@ export function renderEmail(report: Report, now: Date): { subject: string; text:
   };
 }
 
-/** Resend answered with a refusal (4xx): the email was definitely not sent, so the place can be given back. */
-class SendRefused extends Error {}
-
 async function sendEmail(deps: Deps, config: Config, report: Report): Promise<void> {
   const { subject, text } = renderEmail(report, deps.now());
-  const response = await deps.fetch(RESEND_URL, {
-    method: 'POST',
-    headers: { authorization: `Bearer ${config.resendApiKey}`, 'content-type': 'application/json' },
-    body: JSON.stringify({ from: config.from, to: [config.reportTo], subject, text }),
-    signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
-  });
-  if (!response.ok) {
-    const detail = (await response.text().catch(() => '')).slice(0, 200);
-    const message = `Resend answered ${String(response.status)} ${detail}`;
-    // A 5xx or a timeout may have queued the email, so only a 4xx counts as "not sent".
-    throw response.status < 500 ? new SendRefused(message) : new Error(message);
-  }
+  await sendMail(deps.fetch, config.resendApiKey, { from: config.from, to: config.reportTo, subject, text });
 }
 
 // ---- The request ---------------------------------------------------------------------------------------------------

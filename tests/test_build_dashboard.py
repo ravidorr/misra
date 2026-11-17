@@ -67,6 +67,8 @@ def write_static(workdir: Path) -> None:
     (workdir / "templates" / "auth.js").write_text("const auth = '__SUPABASE_URL__';\n", encoding="utf-8")
     (workdir / "templates" / "email.html").write_text("<!doctype html><title>e</title>", encoding="utf-8")
     (workdir / "templates" / "email.js").write_text("const email = '__SUPABASE_URL__';\n", encoding="utf-8")
+    (workdir / "templates" / "contact.html").write_text("<!doctype html><title>c</title>", encoding="utf-8")
+    (workdir / "templates" / "contact.js").write_text("const contact = '__SUPABASE_URL__/contact';\n", encoding="utf-8")
     (workdir / "templates" / "legal.html").write_text(
         "<title>__TITLE__</title>__HEADER__<main>__BODY__</main>__FOOTER__", encoding="utf-8"
     )
@@ -271,6 +273,7 @@ def test_site_files_are_written_next_to_the_page(db: sqlite3.Connection, workdir
         "apple-touch-icon.png",
         "assistant.html",
         "auth.js",
+        "contact.html",
         "dashboard.css",
         "dashboard.js",
         "digest.js",
@@ -504,9 +507,10 @@ def test_every_file_the_build_writes_to_docs_is_staged_by_the_daily_workflow(
         build_dashboard, "DIGEST_SIGNUP_ENABLED", True
     )  # the one file that only a build with the signup switch on writes
     monkeypatch.setattr(build_dashboard, "ASSISTANT_PAGE_ENABLED", True)  # and the one of the assistant switch
+    monkeypatch.setattr(build_dashboard, "CONTACT_FORM_ENABLED", True)  # and the one of the contact form switch
     build_dashboard.main()
     built = {f"docs/{p.name}" for p in (workdir / "docs").iterdir()}
-    assert {"docs/digest.js", "docs/assistant.html"} <= built
+    assert {"docs/digest.js", "docs/assistant.html", "docs/contact.js", "docs/contact.html"} <= built
     workflow = (Path(__file__).resolve().parents[1] / ".github" / "workflows" / "daily.yml").read_text(encoding="utf-8")
     found = re.search(r"for f in (docs/[^;]+); do", workflow)
     assert found, "the staging loop of daily.yml was not found"
@@ -522,6 +526,7 @@ def test_the_daily_email_signup_is_on_in_the_repository() -> None:
 
 
 DIGEST_PARTS = 3
+CONTACT_PARTS = 3
 DIGEST_PAGE = (
     '<head><script integrity="__SRI_AUTH_JS__"></script>'
     '<!--digest--><script integrity="__SRI_DIGEST_JS__" src="digest.js"></script><!--/digest--></head>'
@@ -849,3 +854,73 @@ def test_the_google_verification_file_is_the_one_google_gave_and_is_built_unchan
     assert (workdir / "docs" / "google0e1aa15dbd543e2f.html").read_bytes() == b"google-site-verification: stand-in"
     source = Path(__file__).resolve().parents[1] / "templates" / "google0e1aa15dbd543e2f.html"
     assert source.read_bytes() == b"google-site-verification: google0e1aa15dbd543e2f.html"
+
+
+def test_the_contact_form_is_off_in_the_repository() -> None:
+    """The form goes live only when the lawyer agrees (the TODO.md item about the Contact page), together with the
+    function secret CONTACT_FORM_ENABLED. Whoever flips this constant also updates this test and PRIVACY.md."""
+    assert build_dashboard.CONTACT_FORM_ENABLED is False
+
+
+CONTACT_PAGE = (
+    '<head><meta content="a;<!--contactform--> connect-src __SUPABASE_URL__/functions/v1/contact;'
+    '<!--/contactform--> b">\n'
+    '<!--contactform--><script integrity="__SRI_CONTACT_JS__" src="contact.js"></script><!--/contactform--></head>\n'
+    '<body>a\n<!--contactform-->\n<form id="contactForm"></form>\n<!--/contactform-->\nb</body>'
+)
+
+
+def build_with_contact_page(db: sqlite3.Connection, workdir: Path) -> Path:
+    write_css(workdir)
+    write_static(workdir)
+    write_json(workdir / "data" / "companies.json", [])
+    write_unresolved(workdir)
+    (workdir / "templates" / "contact.html").write_text(CONTACT_PAGE, encoding="utf-8")
+    db.close()
+    build_dashboard.main()
+    return workdir / "docs"
+
+
+def test_with_the_contact_switch_off_the_page_has_no_form_script_connect_source_or_file(
+    db: sqlite3.Connection, workdir: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(build_dashboard, "CONTACT_FORM_ENABLED", False)
+    (workdir / "docs").mkdir(exist_ok=True)
+    (workdir / "docs" / "contact.js").write_text("a file of an earlier build", encoding="utf-8")
+    docs = build_with_contact_page(db, workdir)
+    html = (docs / "contact.html").read_text(encoding="utf-8")
+    assert "contact.js" not in html
+    assert "connect-src" not in html
+    assert "contactForm" not in html
+    assert "<!--" not in html
+    assert not (docs / "contact.js").exists()
+
+
+def test_with_the_contact_switch_on_the_page_has_the_form_the_script_its_hash_and_the_function_url(
+    db: sqlite3.Connection, workdir: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(build_dashboard, "CONTACT_FORM_ENABLED", True)
+    docs = build_with_contact_page(db, workdir)
+    html = (docs / "contact.html").read_text(encoding="utf-8")
+    script = (docs / "contact.js").read_bytes()
+    integrity = "sha384-" + base64.b64encode(hashlib.sha384(script).digest()).decode()
+    assert f'<script integrity="{integrity}" src="contact.js"></script>' in html
+    assert f"connect-src {build_dashboard.SUPABASE_URL}/functions/v1/contact;" in html
+    assert '<form id="contactForm"></form>' in html
+    assert "<!--" not in html
+    assert "__SRI" not in html
+    assert script.decode() == f"const contact = '{build_dashboard.SUPABASE_URL}/contact';\n"
+
+
+def test_the_real_contact_page_marks_every_form_part_so_the_switch_cuts_all_of_it() -> None:
+    template = (Path(__file__).resolve().parents[1] / "templates" / "contact.html").read_text(encoding="utf-8")
+    parts = build_dashboard.CONTACT_REGION.findall(template)
+    assert len(parts) == CONTACT_PARTS  # the connect source, the script tag and the form section
+    assert template.count("<!--contactform-->") == template.count("<!--/contactform-->") == len(parts)
+    cut = build_dashboard.CONTACT_REGION.sub("", template)
+    assert not re.search(r"contact\.js|connect-src|<form|<noscript|contactForm|__SRI_CONTACT", cut)
+    # what stays with the form off: the three routes that need no form, and no address of the maintainer
+    for needed in ("github.com/ravidorr/misra/issues", 'href="security.html"', 'href="privacy.html#contact"'):
+        assert needed in cut
+    assert "@" not in cut
+    assert "form-action 'none'" in cut  # a no-JavaScript submit can never go anywhere

@@ -67,10 +67,40 @@ waits for him. Do not write the maintainer's email address in this repository (i
 
 ### Footer and pages (![footer](todo-images/footer.png))
 
-- [ ] **A "Contact" page instead of an email link.** All contact information plus a form that sends an email (needs a
-  design for spam and for where the mail goes; the endpoint must not log addresses, see `PRIVACY.md`). Ask the same three.
-- [ ] **The "Contact" section of `PRIVACY.md` is wrong for users without a GitHub account** (it points to a GitHub issue
-  and the security note). It should point to the new Contact page. `PRIVACY.md` is the lawyer's: ask him.
+- [ ] **Ask the lawyer about the Contact page and its form (turn-on gate).** The page is built and live without the form
+  (GitHub issues, the security note, the privacy notice; the footer link replaced the email link). The form, the
+  `contact` Edge Function and its switches are built but off: `CONTACT_FORM_ENABLED` in `build_dashboard.py` is `False`
+  and the function answers 404 until its secret `CONTACT_FORM_ENABLED` is `true`. Nobody turns either on before he
+  agrees (`tests/test_legal_wording.py` pins both). Write him a note from this list; `PRIVACY.md` is his, do not edit it.
+  - What the form collects: a message (required, up to 2,000 characters), a name (optional) and an email address
+    (optional). Without an email address we cannot reply.
+  - Purpose: to answer the visitor, and nothing else.
+  - Where it goes: by email to the maintainer's own mailbox (a function secret, never in the repository), sent through
+    Resend. Resend is already approved for the digest and the site-report email; this is a new purpose with new personal
+    data (free text, a name, an email address). The visitor is never emailed automatically. The mailbox provider may also
+    need naming: his Gmail approval covers failure alerts with no account data only.
+  - Retention: Misra stores none of it. The email stays in the maintainer's mailbox and in Resend's logs (their
+    retention is not stated in the repository). He gives the retention wording and says how a deletion request covers
+    the mailbox and Resend.
+  - Logs: the function never logs the message, the name, the email address or the network address, counts only.
+  - Spam limits: a daily keyed hash of the network address (per-visitor limit and a site-wide daily cap, the same counter
+    table as the assistant), deleted in the next daily cleanup. The form says it with his round-5 wording.
+  - His wording for `PRIVACY.md`: the "Contact" section should point to the Contact page for everyone (today it points to a
+    GitHub issue and the security note, which fails for people without a GitHub account). Proposed text, keeping the
+    heading "Contact" so `privacy.html#contact` still works: "Raanan Avidor, [address, unchanged], for any question, a
+    request to see, correct or delete your data, or a complaint. The Contact page
+    <https://ravidorr.github.io/misra/contact.html> lists every way to reach us. Its form emails your message, and your
+    name and email address if you give them, to the maintainer's mailbox through Resend. We do not store them. To prevent
+    spam, we store a daily non-reversible hash of your network address that is deleted in the next daily cleanup. General
+    questions can also go in a GitHub issue; do not put personal details in it. To report a security problem, use the
+    private route in the security note." Also: "What we store" (add "or use the contact form" to the first paragraph and a
+    bullet for the form), the Resend entry in the provider list ("the site-report and contact-form emails") and a line in
+    "How long we keep it" for the mail in the mailbox and in Resend's logs.
+  - The maintainer's address is also written in `PRIVACY.md`, `SECURITY.md`, `ASSISTANT.md`, `TERMS.md` (removal
+    requests), `templates/email.js` and the code (`common.CONTACT`, `send_digests.py`, `email-settings`): the new page and
+    function add none, and these stay as they are unless he says otherwise.
+  - Then the maintainer sets the secrets, applies nothing (no migration is needed), deploys the function and flips the
+    constant (steps in `supabase/README.md`, "Contact form").
 
 - [ ] **Ask the lawyer about two lines found while writing the About page** (his files were not touched). `PRIVACY.md`
   ("The jobs data is public") still says the job history `data/jobs.db` is in the public repository; since step 9.1 the
