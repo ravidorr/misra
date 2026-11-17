@@ -976,13 +976,13 @@ function ago(first) {
 
 const companies = [...new Set(JOBS.map((j) => j.c))].sort((a, b) => a.localeCompare(b));
 for (const company of companies) $('company').append(h('option', { value: company, text: company }));
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 /* "2026-11-15 20:28 UTC" as "15 Nov, 20:28 UTC" (the year too when it is not this year); anything else is shown as it is. */
 function friendlyTime(stamp) {
   const m = /^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2}) UTC$/.exec(stamp);
   if (!m) return stamp;
-  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
   const year = Number(m[1]) === new Date().getUTCFullYear() ? '' : ` ${m[1]}`;
-  return `${Number(m[3])} ${months[Number(m[2]) - 1]}${year}, ${m[4]}:${m[5]} UTC`;
+  return `${Number(m[3])} ${MONTHS[Number(m[2]) - 1]}${year}, ${m[4]}:${m[5]} UTC`;
 }
 $('upd').textContent = friendlyTime(DATA.generated);
 $('upd').setAttribute('datetime', DATA.generated.replace(' UTC', 'Z').replace(' ', 'T'));
@@ -1317,7 +1317,7 @@ function closedCardEl(e) {
   return h('li', {}, [art]);
 }
 
-/* The place, level, role types and team of a role, and when it was first seen: on the card. */
+/* The place, level, role types and team of a role: on the card. */
 const tagsEl = (j) =>
   h('p', { class: 'card-tags' }, [
     j.l && h('span', { class: 'pill', text: j.l.slice(0, MAX_LOCATION) }),
@@ -1327,8 +1327,37 @@ const tagsEl = (j) =>
     tag('Level', j.lv, 'pill pill-soft'),
     ...j.rt.map((type) => tag('Role type', type, 'pill pill-soft')),
     j.m && h('span', { class: 'pill', text: j.m }),
-    j.f && h('time', { class: 'card-seen', datetime: j.f, text: ago(j.f) }),
   ]);
+
+/* A small clock, drawn in the text colour. An SVG needs its own namespace, so h() cannot make it. */
+function clockIcon() {
+  const ns = 'http://www.w3.org/2000/svg';
+  const svg = document.createElementNS(ns, 'svg');
+  for (const [name, value] of Object.entries({ viewBox: '0 0 16 16', width: '12', height: '12', 'aria-hidden': 'true', focusable: 'false', class: 'card-seen-icon' })) {
+    svg.setAttribute(name, value);
+  }
+  const face = document.createElementNS(ns, 'circle');
+  for (const [name, value] of Object.entries({ cx: '8', cy: '8', r: '6.5' })) face.setAttribute(name, value);
+  const hands = document.createElementNS(ns, 'path');
+  hands.setAttribute('d', 'M8 4.5V8l2.5 1.5');
+  svg.append(face, hands);
+  return svg;
+}
+
+/* When Misra first saw the role: the day of the first daily crawl that found it on the company's page, counted back
+   from the latest crawl ("today", "yesterday", "5 days ago"). It is not the employer's posting date, which the page
+   never has, and a company added recently has all its roles first seen on its first day: the tooltip says so. */
+const seenEl = (j) =>
+  j.f &&
+  h(
+    'time',
+    {
+      class: 'card-seen',
+      datetime: j.f,
+      title: `Misra first saw this role on ${Number(j.f.slice(8))} ${MONTHS[Number(j.f.slice(5, 7)) - 1]} ${j.f.slice(0, 4)}. The employer may have posted it earlier.`,
+    },
+    [clockIcon(), h('span', { text: `First seen ${ago(j.f)}` })],
+  );
 
 /* The ellipsis after a snippet that is shorter than the full text: exactly when the stored flag `snippet_cut` is true (the
    sync sets it, see descriptions.snippet_cut). A row without the flag (null) shows nothing. Hidden from screen readers. */
@@ -1368,7 +1397,8 @@ function cardEl(j) {
     art.append(h('span', { class: 'sticker card-flag', text: 'New' }));
   }
   art.append(
-    h('p', { class: 'card-company', text: j.c }),
+    /* The company and, when it is known, when Misra first saw the role: one row, in the same place on every card. */
+    h('div', { class: 'card-meta' }, [h('p', { class: 'card-company', text: j.c }), seenEl(j)]),
     h('h3', { class: 'card-title' }, [
       h('a', { href: url, target: '_blank', rel: 'noopener noreferrer' }, [
         j.t,
