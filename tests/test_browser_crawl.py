@@ -63,7 +63,16 @@ async def test_hibob_json_response_short_circuits() -> None:
     api = "https://acme.hibob.com/api/job-ad"
     ads = {
         "jobAdDetails": [
-            {"id": "1", "title": "PM", "site": "Tel Aviv", "country": "IL", "department": "P"},
+            {
+                "id": "1",
+                "title": "PM",
+                "site": "Tel Aviv",
+                "country": "IL",
+                "department": "P",
+                "description": "<p>Run the roadmap</p>",
+                "employmentType": "Full-time",
+                "workspaceType": "Hybrid",
+            },
             {"id": "2"},
         ]
     }
@@ -85,6 +94,8 @@ async def test_hibob_json_response_short_circuits() -> None:
             "url": "https://acme.hibob.com/jobs/1",
             "team": "P",
             "posted": "",
+            "description": "Run the roadmap",  # the list gives the text: no request more
+            "details": {"employment_type": "Full-time", "workplace_type": "Hybrid"},
         },
         {"job_id": "2", "title": "", "location": "", "url": "https://acme.hibob.com/jobs/2", "team": "", "posted": ""},
     ]
@@ -101,7 +112,13 @@ async def test_json_ld_variants() -> None:
     addr = {"address": {"addressLocality": "Haifa", "addressCountry": "IL"}}
     raws = ld(
         "{not json",
-        [posting("u1", jobLocation=[addr]), posting("u1"), "str", {"@type": "Other", "url": "x"}, posting("")],
+        [
+            posting("u1", jobLocation=[addr], description="<b>Hello</b>", employmentType="FULL_TIME"),
+            posting("u1"),
+            "str",
+            {"@type": "Other", "url": "x"},
+            posting(""),
+        ],
         {"@graph": [posting("u2", jobLocation=addr), posting("u3", jobLocation=[]), posting("u4", jobLocation="x")]},
         posting("u5", jobLocation={"address": {"addressLocality": 3, "addressCountry": "IL"}}),
     )
@@ -386,6 +403,10 @@ async def test_pagination_gives_up_waiting_for_new_links() -> None:
 SEARCH = "https://jobs.acme.test/api/pcsx/search?domain=acme.test&location=Israel&start=0"
 
 
+def detail(n: int) -> str:
+    return f"https://jobs.acme.test/api/pcsx/position_details?position_id={n}&domain=acme.test&hl=en"
+
+
 def position(n: int, locations: list[str] | None = None) -> dict[str, Any]:
     where = ["Israel, Tel Aviv"] if locations is None else locations
     return {"id": n, "name": f"Role {n}", "locations": where, "positionUrl": f"/careers/job/{n}", "department": "Eng"}
@@ -429,6 +450,7 @@ async def test_eightfold_single_page() -> None:
             "url": "https://jobs.acme.test/careers/job/1",
             "team": "Eng",
             "posted": "",
+            "detail_url": detail(1),
         },
         {
             "job_id": "2",
@@ -437,6 +459,7 @@ async def test_eightfold_single_page() -> None:
             "url": "https://jobs.acme.test/careers/job/2",
             "team": "Eng",
             "posted": "",
+            "detail_url": detail(2),
         },
         {
             "job_id": "3",
@@ -445,6 +468,7 @@ async def test_eightfold_single_page() -> None:
             "url": "https://jobs.acme.test/careers/job/3",
             "team": "",
             "posted": "",
+            "detail_url": detail(3),
         },
     ]
 
@@ -705,3 +729,12 @@ def test_crawl_many(monkeypatch: pytest.MonkeyPatch, exe: str | None) -> None:
     monkeypatch.setattr(browser_crawl, "EXE", exe)
     assert browser_crawl.crawl_many(iter(["a", "b"])) == {"a": [], "b": None}
     assert ("executable_path" in calls[0]) == bool(exe)
+
+
+async def test_an_eightfold_search_without_a_domain_gives_no_job_page_to_read() -> None:
+    resp = FakeResp(
+        "https://jobs.acme.test/api/pcsx/search?location=Israel", data={"data": {"positions": [position(1)]}}
+    )
+    jobs = await run(FakePage(responses=[resp]))
+    assert jobs is not None
+    assert "detail_url" not in jobs[0]

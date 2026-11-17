@@ -10,6 +10,7 @@ import pytest
 
 import adapters
 import browser_crawl
+import descriptions
 import run
 from tests.conftest import COMEET_FEEDS, add_crawls, add_job, write_json
 from tests.fakes import FakeHttpResponse
@@ -633,3 +634,16 @@ def test_a_crash_while_recording_a_company_keeps_the_ones_before_it_and_rolls_ba
     assert check.execute("SELECT company FROM jobs").fetchall() == [("Aaa",)]  # Bbb's rows were not committed
     assert check.execute("SELECT company FROM crawl_log").fetchall() == [("Aaa",)]
     check.close()
+
+
+def test_the_job_pages_of_browser_companies_are_read_after_the_lists(
+    workdir: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    write_json(workdir / "data" / "companies.json", [co("Br", ats="browser", slug="https://br.test/careers")])
+    monkeypatch.setattr(run, "crawl_many", lambda urls: {u: [{**job("1"), "detail_url": "d"}, job("2")] for u in urls})
+    monkeypatch.setitem(adapters.DETAILS, "browser", lambda _slug, j: ("text of " + j["job_id"], {}))
+    run.main()
+    out = capsys.readouterr().out
+    assert "job pages: browser 1 requests, 1 with a text, 0 left for later runs" in out
+    assert "descriptions: browser 1/2 (50%)" in out
+    assert list(descriptions.read_work_file()) == [("Br", "1")]

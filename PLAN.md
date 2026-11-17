@@ -300,8 +300,13 @@ Decisions made in planning (they change the PRD's wording, so update the PRD in 
   per tenant host), for the jobs Supabase holds no text for (the pull leaves their keys in `$RUNNER_TEMP`), at most 40 per
   company and run (first fill about three days, then the new jobs only). The crawl log has a `job pages:` line with the
   counts, and a stored text counts in the share. The live share after Workday is not known until the first daily run with
-  this version. Left: the browser crawl (1,589 jobs, 23 percent: no standard field), Phenom (89, a teaser only), Oracle HCM, `comeet_page`, JazzHR and BambooHR
-  (a request per job), SmartRecruiters (skipped by `robots.txt`). Not ticked: those adapters are left, and the size of the
+  this version. Third slice (v0.59.0): the browser crawl (1,589 jobs). HiBob career pages (Sapiens, Hibob, Fundbox, 211 jobs) give the
+  text in the list the crawl already captures (no request); Eightfold boards (Nvidia, Applied Materials, Qualcomm, Microsoft,
+  HP, PayPal, Citi, about 555 jobs) are read through the board's own `position_details` JSON under the `/api/pcsx` path its
+  search uses; four career pages (Weka, eToro, Perion, Digital Turbine, 61 jobs) are read from the JSON-LD `JobPosting` of the
+  job page, same budget as Workday. Every other browser company gives nothing from a plain request (listed in CONTRIBUTING.md,
+  "Job descriptions"; Check Point is bot protected, never worked around). Left: Phenom (89, a teaser only), Oracle HCM,
+  `comeet_page`, JazzHR and BambooHR (a request per job) and the browser companies that give no text, SmartRecruiters (skipped by `robots.txt`). Not ticked: those adapters are left, and the size of the
   `jobs` table (dashboard, Reports, Database) is not yet written in CONTRIBUTING.md, "Real data against the limits".
 - [x] 7.2 Short description: a public `snippet` column holding the first 255 characters of the description as written, cut
   at a word boundary, none when no description; sync stores it; the card and the detail view show it, with the link

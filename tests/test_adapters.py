@@ -1824,3 +1824,83 @@ def test_jobs_behind_five_failing_pages_are_reached_on_later_days(monkeypatch: p
     for day in range(3):  # ten pending jobs, a short list, and the first five never answer
         adapters.add_descriptions("workday", WD_SLUG, "Acme", jobs_n(10), set(), day=day)
     assert asked == {f"/job/x/J{i}" for i in range(10)}
+
+
+EF = "https://jobs.acme.test/api/pcsx/position_details?position_id=1&domain=acme.test&hl=en"
+LD_PAGE = "https://www.weka.io/careers"
+
+
+def ld_html(*blocks: Any) -> str:
+    return (
+        "<html>" + "".join(f'<script type="application/ld+json">{json.dumps(b)}</script>' for b in blocks) + "</html>"
+    )
+
+
+def test_an_eightfold_job_reads_its_position_details_json(monkeypatch: pytest.MonkeyPatch) -> None:
+    urls = fake_get(monkeypatch, FakeHttpResponse(data={"data": {"jobDescription": "<p>Do it</p>", "x": 1}}))
+    assert adapters.browser_description("slug", {"detail_url": EF, "url": "u"}) == ("Do it", {})
+    assert urls == [EF]
+
+
+@pytest.mark.parametrize(
+    "answer",
+    [None, FakeHttpResponse(status_code=403), FakeHttpResponse(json_error=True), FakeHttpResponse(data={"data": []})],
+)
+def test_an_eightfold_job_page_that_gives_nothing_is_no_text(
+    monkeypatch: pytest.MonkeyPatch, answer: FakeHttpResponse | None
+) -> None:
+    fake_get(monkeypatch, answer)
+    assert adapters.browser_description("slug", {"detail_url": EF, "url": "u"}) is None
+
+
+def test_a_job_page_gives_only_its_json_ld_job_posting(monkeypatch: pytest.MonkeyPatch) -> None:
+    page = ld_html(
+        {"@type": "Organization", "description": "not a job"},
+        {
+            "@graph": [
+                {"@type": "JobPosting", "description": "&lt;p&gt;Real&lt;/p&gt;", "employmentType": ["FULL_TIME"]}
+            ]
+        },
+    ).replace("<html>", "<html><script type='application/ld+json'>{broken</script><p>Page text that is never read</p>")
+    urls = fake_get(monkeypatch, FakeHttpResponse(text=page))
+    assert adapters.browser_description(LD_PAGE, {"url": "https://www.weka.io/careers/1"}) == (
+        "Real",
+        {"employment_type": ["FULL_TIME"]},
+    )
+    assert urls == ["https://www.weka.io/careers/1"]
+
+
+@pytest.mark.parametrize(
+    "answer",
+    [
+        None,
+        FakeHttpResponse(status_code=403),  # bot protection is never worked around
+        FakeHttpResponse(text="<p>no markup of a posting</p>"),
+        FakeHttpResponse(text=ld_html({"@type": "Organization"}, ["x"], "y")),
+    ],
+)
+def test_a_job_page_without_a_job_posting_is_no_text(
+    monkeypatch: pytest.MonkeyPatch, answer: FakeHttpResponse | None
+) -> None:
+    fake_get(monkeypatch, answer)
+    assert adapters.browser_description(LD_PAGE, {"url": "u"}) is None
+
+
+def test_a_json_ld_that_is_not_a_job_posting_gives_no_text() -> None:
+    assert descriptions.jsonld_description("x") == ("", {})
+
+
+def test_a_browser_company_is_asked_only_for_jobs_with_a_page_worth_a_request(monkeypatch: pytest.MonkeyPatch) -> None:
+    urls = fake_get(monkeypatch, FakeHttpResponse(data={"data": {"jobDescription": "Text"}}))
+    jobs = [{"job_id": "a", "url": "u1"}, {"job_id": "b", "url": "u2", "detail_url": EF}]
+    assert adapters.add_descriptions("browser", "https://x.test/careers", "X", jobs, set()) == (1, 1, 0)
+    assert urls == [EF]  # a page not in the list of known ones gives no request
+    other = [{"job_id": "c", "url": "https://www.weka.io/careers/c"}]
+    fake_get(monkeypatch, FakeHttpResponse(text=ld_html({"@type": "JobPosting", "description": "Text"})))
+    assert adapters.add_descriptions("browser", LD_PAGE, "Weka", other, set()) == (1, 1, 0)
+
+
+def test_the_pages_known_to_carry_a_job_posting_are_career_pages_of_the_list() -> None:
+    companies = json.loads((Path(__file__).parent.parent / "data" / "companies.json").read_text(encoding="utf-8"))
+    browser = {c["slug"] for c in companies if c["ats"] == "browser"}
+    assert browser >= adapters.JSONLD_PAGES

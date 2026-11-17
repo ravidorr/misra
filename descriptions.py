@@ -169,6 +169,13 @@ def clean_details(details: dict[str, Any]) -> dict[str, Any]:
     return out
 
 
+def jsonld_description(posting: Any) -> tuple[str, dict[str, Any]]:
+    """The description and the employment type of a schema.org JobPosting (anything else is no text)."""
+    if not isinstance(posting, dict):
+        return "", {}
+    return html_to_text(posting.get("description")), {"employment_type": posting.get("employmentType")}
+
+
 def attach(job: dict[str, Any], description: str, details: dict[str, Any]) -> dict[str, Any]:
     """Adds `description` and `details` to a job dict when there is something to add, and returns the job. A job with
     neither stays exactly as the adapter built it."""

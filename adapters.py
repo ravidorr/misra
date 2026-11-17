@@ -10,7 +10,7 @@ from typing import Any
 from urllib.parse import parse_qsl, urljoin, urlparse
 
 from common import ISRAEL, get, post, reset_robots_block
-from descriptions import DETAIL_CAP, HELD, attach, html_to_text, plain_text, sections
+from descriptions import DETAIL_CAP, HELD, attach, html_to_text, jsonld_description, plain_text, sections
 
 HTTP_OK = 200
 DETAIL_FAIL_STREAK = 5  # job pages in a row without a text after which a company's job pages stop for this run
@@ -576,8 +576,61 @@ def workday_description(slug: str, job: Job) -> tuple[str, dict[str, Any]] | Non
     return html_to_text(info.get("jobDescription")), {"employment_type": info.get("timeType")}
 
 
-# Adapters whose list has no text: one request per job page, `fetch(slug, job) -> (text, details) | None`.
-DETAILS: dict[str, Callable[[str, Job], tuple[str, dict[str, Any]] | None]] = {"workday": workday_description}
+# Career pages of the browser crawl whose job pages carry a schema.org JobPosting with the description in static HTML,
+# found by hand on 2026-11-17. Every other page of the crawl gives no text from a plain request (JavaScript only, no
+# markup of a posting, or bot protection as at Check Point, never worked around), see CONTRIBUTING.md.
+JSONLD_PAGES = frozenset(
+    {
+        "https://www.weka.io/careers",
+        "https://www.etoro.com/about/careers/",
+        "https://perion.com/careers/",
+        "https://digitalturbine.wd501.myworkdayjobs.com/Digital_Turbine_External_Careers",
+    }
+)
+_JSONLD = re.compile(r'<script[^>]*type=["\']application/ld\+json["\'][^>]*>(.*?)</script>', re.S | re.I)
+
+
+def _job_posting(page: str) -> dict[str, Any] | None:
+    """The first schema.org JobPosting in the JSON-LD blocks of a page, or None."""
+    for block in _JSONLD.findall(page):
+        try:
+            data = json.loads(block)
+        except ValueError:
+            continue
+        for item in data if isinstance(data, list) else data.get("@graph", [data]) if isinstance(data, dict) else []:
+            if isinstance(item, dict) and item.get("@type") == "JobPosting":
+                return item
+    return None
+
+
+def browser_description(slug: str, job: Job) -> tuple[str, dict[str, Any]] | None:
+    """The text of a job found by the browser crawl: an Eightfold job asks its own `position_details` JSON (the call the
+    career page makes, under the `/api/pcsx` path its search already uses); a job of a page in JSONLD_PAGES asks its
+    page and reads only the JobPosting JSON-LD. Never page text. None on any failure."""
+    detail = job.get("detail_url")
+    r = get(detail, headers={"Accept": "application/json"}) if detail else get(job["url"])
+    if r is None or r.status_code != HTTP_OK:
+        return None
+    if detail:
+        try:
+            return html_to_text(r.json()["data"]["jobDescription"]), {}
+        except (ValueError, KeyError, TypeError):
+            return None
+    posting = _job_posting(r.text)
+    return jsonld_description(posting) if posting else None
+
+
+def _browser_wants_page(slug: str, job: Job) -> bool:
+    return bool(job.get("detail_url")) or slug in JSONLD_PAGES
+
+
+# Adapters whose list has no text: one request per job page, `fetch(slug, job) -> (text, details) | None`. `WANTS`
+# limits an ATS to the jobs worth a request.
+DETAILS: dict[str, Callable[[str, Job], tuple[str, dict[str, Any]] | None]] = {
+    "workday": workday_description,
+    "browser": browser_description,
+}
+WANTS: dict[str, Callable[[str, Job], bool]] = {"browser": _browser_wants_page}
 
 
 def add_descriptions(  # noqa: PLR0913, PLR0917
@@ -593,9 +646,10 @@ def add_descriptions(  # noqa: PLR0913, PLR0917
     fetch_one = DETAILS.get(ats)
     if fetch_one is None:
         return 0, 0, 0
+    wants = WANTS.get(ats)
     todo: list[Job] = []
     for job in jobs:
-        if job.get("description"):
+        if job.get("description") or (wants and not wants(slug, job)):
             continue
         if (company, str(job.get("job_id"))) in held:
             job[HELD] = True
