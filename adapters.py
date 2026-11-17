@@ -9,8 +9,8 @@ from collections.abc import Callable, Iterable, Iterator
 from typing import Any
 from urllib.parse import parse_qsl, urljoin, urlparse
 
-from common import ISRAEL, get, post
-from descriptions import attach, html_to_text, plain_text, sections
+from common import ISRAEL, get, post, reset_robots_block
+from descriptions import DETAIL_CAP, HELD, attach, html_to_text, plain_text, sections
 
 HTTP_OK = 200
 Job = dict[str, Any]
@@ -550,6 +550,66 @@ def workday(slug: str) -> list[Job] | None:
         if not _workday_has_more(d, page, total):
             return out
     return None  # more pages than the limit: the list is not complete
+
+
+def workday_description(slug: str, job: Job) -> tuple[str, dict[str, Any]] | None:
+    """The text of one Workday posting: the JSON of the job page the site itself loads (the same `/wday/cxs/` path as
+    the list, so the same robots.txt rule), `jobPostingInfo.jobDescription` as HTML. Of what else it gives only the
+    employment type is kept (the ids and the questionnaire are the tenant's own). None on any failure."""
+    tenant, dc, site = slug.split("/")
+    path = job["job_id"]
+    if not path.startswith("/job/"):
+        return None
+    r = get(
+        f"https://{tenant}.{dc}.myworkdayjobs.com/wday/cxs/{tenant}/{site}{path}",
+        headers={"Accept": "application/json"},
+    )
+    if r is None or r.status_code != HTTP_OK:
+        return None
+    try:
+        info = r.json()["jobPostingInfo"]
+    except (ValueError, KeyError, TypeError):
+        return None
+    if not isinstance(info, dict):
+        return None
+    return html_to_text(info.get("jobDescription")), {"employment_type": info.get("timeType")}
+
+
+# Adapters whose list has no text: one request per job page, `fetch(slug, job) -> (text, details) | None`.
+DETAILS: dict[str, Callable[[str, Job], tuple[str, dict[str, Any]] | None]] = {"workday": workday_description}
+
+
+def add_descriptions(
+    ats: str, slug: str, company: str, jobs: list[Job], held: set[tuple[str, str]]
+) -> tuple[int, int, int]:
+    """Gives the jobs of a company whose list carries no text their description, one request per job page, and
+    returns (requested, got a text, deferred). Only jobs without a text are asked: one Supabase already holds (`held`,
+    left by the pull) is marked and not fetched again, and at most DETAIL_CAP are asked per company and run, the rest
+    wait for the next run (a first fill takes a few days, a steady day asks only for the new jobs). A page that fails,
+    is refused by robots.txt or has no text gives no description and changes nothing else: this never fails the list,
+    and a refusal does not make the company a robots skip (the list was crawled)."""
+    fetch_one = DETAILS.get(ats)
+    if fetch_one is None:
+        return 0, 0, 0
+    todo: list[Job] = []
+    for job in jobs:
+        if job.get("description"):
+            continue
+        if (company, job["job_id"]) in held:
+            job[HELD] = True
+        else:
+            todo.append(job)
+    got = 0
+    for job in todo[:DETAIL_CAP]:
+        try:
+            found = fetch_one(slug, job)
+        except Exception:  # a posting must never stop its company's crawl, whatever its page is
+            found = None
+        if found:
+            attach(job, *found)
+            got += bool(job.get("description"))
+    reset_robots_block()  # a refused job page is not a refused company
+    return min(len(todo), DETAIL_CAP), got, max(0, len(todo) - DETAIL_CAP)
 
 
 def _oraclehcm_place(req: dict[str, Any]) -> str | None:

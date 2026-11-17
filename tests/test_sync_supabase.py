@@ -11,6 +11,7 @@ import requests
 
 import classify
 import common
+import descriptions
 import export_accounts
 import sync_supabase
 from sync_supabase import Client, Result, SyncError, sync
@@ -624,7 +625,10 @@ def test_main_pull_writes_the_file_and_prints_counts_only(
     monkeypatch.setattr(sync_supabase.requests, "Session", lambda: pages)
     sync_supabase.main(["--pull"])
     out = capsys.readouterr().out
-    assert out.strip() == "Supabase: pulled 1 jobs and 1 crawl log rows into data/jobs.db"
+    assert out.splitlines() == [
+        "Supabase: pulled 1 jobs and 1 crawl log rows into data/jobs.db",
+        "Supabase: 0 open jobs already hold a description",
+    ]
     assert (workdir / "data" / "jobs.db").exists()
     assert pages.calls[0]["headers"]["apikey"] == KEY
     assert KEY not in out
@@ -756,5 +760,38 @@ def test_main_pull_warns_when_the_crawl_log_is_empty_and_passes_the_override(
     sync_supabase.main(["--pull", "--allow-shrink"])  # an empty log is a warning with no row counts, never a failure
     assert capsys.readouterr().out.splitlines() == [
         "Supabase: pulled 1 jobs and 0 crawl log rows into data/jobs.db",
+        "Supabase: 0 open jobs already hold a description",
         "::warning::the crawl log is empty: robots.txt streaks and held drops start again",
     ]
+
+
+def test_the_pull_leaves_the_keys_of_the_jobs_that_hold_a_text_and_never_the_text(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], workdir: Any
+) -> None:
+    (workdir / "data" / "jobs.db").unlink()
+    fake = FakeSupabase()
+    fake.table = {
+        ("Acme", "1"): {"status": "open", "details": {descriptions.HASH_KEY: "abc"}, "description": "SECRET-TEXT"},
+        ("Acme", "2"): {"status": "open"},
+        ("Beta", "9"): {"status": "closed", "details": {descriptions.HASH_KEY: "def"}},
+    }
+    descriptions.write_held([("Old", "1")])  # an earlier run's file is replaced, never kept
+    assert sync_supabase.leave_held(client(fake)) == 1
+    assert descriptions.read_held() == {("Acme", "1")}
+    assert "SECRET-TEXT" not in descriptions.work_path(descriptions.HELD_FILE).read_text(encoding="utf-8")
+    assert capsys.readouterr().out == ""
+
+
+def test_the_pull_goes_on_without_the_keys_when_they_cannot_be_listed(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    descriptions.write_held([("Old", "1")])
+    assert sync_supabase.leave_held(client(FakeSupabase(fail_on="GET"))) is None
+    assert descriptions.read_held() == set()  # a stale file is gone: nothing is held that is not known
+    assert (
+        "::warning::the stored descriptions could not be listed for the crawl: GET jobs failed: HTTP 500"
+        in capsys.readouterr().out
+    )
+    descriptions.work_path(descriptions.HELD_FILE).mkdir()  # a file that cannot be written
+    assert sync_supabase.leave_held(client(FakeSupabase())) is None
+    assert "::warning::the stored descriptions could not be listed for the crawl: " in capsys.readouterr().out

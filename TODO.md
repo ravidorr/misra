@@ -56,6 +56,14 @@ Observations about live sites below come from checks made on 2026-11-14 and may 
   keyboard user sees no focus ring (WCAG 2.4.7). Not tested yet. Done when: the case is covered by a test and the focus
   lands on something visible, or the heading shows a focus ring.
 
+## Descriptions
+
+- [ ] **Refresh a stored description that changed.** Trigger: the job-page adapters (Workday) fetch a text only for a job
+  Supabase holds none for, so a posting edited in place keeps its first text until it closes and reopens. Where:
+  `adapters.add_descriptions`: also ask the pages of the jobs whose key hashes into today's slice (for example a job a day in
+  fourteen), within the same per-company cap. Done when: a changed Workday posting has its new text within two weeks, and the
+  request count in the `job pages:` line stays a handful on a steady day.
+
 ## Snippet ellipsis
 
 - [ ] **Make the ellipsis on a snippet exact.** Trigger: `cutMark()` in `templates/dashboard.js` guesses that a snippet

@@ -295,9 +295,13 @@ Decisions made in planning (they change the PRD's wording, so update the PRD in 
   the texts in a work file in `$RUNNER_TEMP`; the sync step writes them to the `description` and `details` columns that
   migration 2.1 already created (no migration), with a hash in `details` to skip an unchanged text; the log line per ATS
   is in the crawl step. CONTRIBUTING.md, "Job descriptions", has the design, the size cap (20,000 characters) and the
-  storage estimate. The text is not readable through the public API (migration `20261121100000_jobs_text_not_public.sql`, column-level `select`): step 7.3 searches it through a function that returns keys only and step 8.1 (`get_job`) returns it to the assistant, as the lawyer approved on 2026-11-16 (PRD decisions log). Left: the browser crawl (1,589 jobs, 23 percent: no standard field), Workday (318, one request per job
-  and a new path to check against `robots.txt`), Phenom (89, a teaser only), Oracle HCM, `comeet_page`, JazzHR and BambooHR
-  (a request per job), SmartRecruiters (skipped by `robots.txt`). After the first daily run with descriptions: check the
+  storage estimate. The text is not readable through the public API (migration `20261121100000_jobs_text_not_public.sql`, column-level `select`): step 7.3 searches it through a function that returns keys only and step 8.1 (`get_job`) returns it to the assistant, as the lawyer approved on 2026-11-16 (PRD decisions log). Second slice (v0.55.0): Workday (24 companies, 318 jobs), one request per job to
+  `/wday/cxs/<tenant>/<site>/job/...`, the same `/wday/cxs/` path as the list (same `robots.txt` rule, one request a second
+  per tenant host), for the jobs Supabase holds no text for (the pull leaves their keys in `$RUNNER_TEMP`), at most 40 per
+  company and run (first fill about three days, then the new jobs only). The crawl log has a `job pages:` line with the
+  counts, and a stored text counts in the share. Left: the browser crawl (1,589 jobs, 23 percent: no standard field),
+  Phenom (89, a teaser only), Oracle HCM, `comeet_page`, JazzHR and BambooHR (a request per job), SmartRecruiters (skipped by
+  `robots.txt`). The live share after Workday is not known until the first daily run with this version. After the first daily run with descriptions: check the
   log line and the size of the `jobs` table in the dashboard (Reports, Database), and write both in CONTRIBUTING.md.
 - [ ] 7.2 Short description: a public `snippet` column holding the first 255 characters of the description as written, cut
   at a word boundary, none when no description; sync stores it; the card and the detail view show it, with the link

@@ -1701,3 +1701,89 @@ def test_a_description_over_the_cap_is_cut_and_recorded(monkeypatch: pytest.Monk
     assert jobs is not None
     assert len(jobs[0]["description"]) <= descriptions.MAX_CHARS
     assert jobs[0]["details"] == {"description_truncated": True}
+
+
+WD_SLUG = "acme/wd3/Site"
+WD_JOB = {"job_id": "/job/Haifa/Engineer_R1", "title": "T"}
+WD_URL = "https://acme.wd3.myworkdayjobs.com/wday/cxs/acme/Site/job/Haifa/Engineer_R1"
+
+
+def wd_detail(html_text: str = "<p>Build things</p><ul><li>Python</li></ul>", **info: Any) -> FakeHttpResponse:
+    return FakeHttpResponse(data={"jobPostingInfo": {"jobDescription": html_text, "timeType": "Full time", **info}})
+
+
+def test_a_workday_job_page_gives_the_text_and_the_employment_type_only(monkeypatch: pytest.MonkeyPatch) -> None:
+    urls = fake_get(monkeypatch, wd_detail(questionnaireId="q", externalUrl="https://x", id="abc"))
+    assert adapters.workday_description(WD_SLUG, WD_JOB) == (
+        "Build things\n\n- Python",
+        {"employment_type": "Full time"},
+    )
+    assert urls == [WD_URL]  # the same /wday/cxs/ path as the list, on the tenant's own host
+
+
+@pytest.mark.parametrize(
+    "answer",
+    [
+        None,
+        FakeHttpResponse(status_code=403),
+        FakeHttpResponse(json_error=True),
+        FakeHttpResponse(data={}),
+        FakeHttpResponse(data=[]),
+        FakeHttpResponse(data={"jobPostingInfo": "x"}),
+    ],
+)
+def test_a_workday_job_page_that_does_not_answer_with_a_posting_gives_nothing(
+    monkeypatch: pytest.MonkeyPatch, answer: FakeHttpResponse | None
+) -> None:
+    fake_get(monkeypatch, answer)
+    assert adapters.workday_description(WD_SLUG, WD_JOB) is None
+
+
+def test_a_workday_job_without_a_path_of_its_own_is_never_requested(monkeypatch: pytest.MonkeyPatch) -> None:
+    urls = fake_get(monkeypatch, wd_detail())
+    assert adapters.workday_description(WD_SLUG, {"job_id": "@evil.test/x"}) is None
+    assert urls == []
+
+
+def test_a_workday_job_page_without_text_keeps_the_job_as_it_was(monkeypatch: pytest.MonkeyPatch) -> None:
+    fake_get(monkeypatch, wd_detail(None))
+    job = {**WD_JOB}
+    adapters.add_descriptions("workday", WD_SLUG, "Acme", [job], set())
+    assert "description" not in job
+
+
+def jobs_n(n: int) -> list[dict[str, Any]]:
+    return [{"job_id": f"/job/x/J{i}", "title": "T"} for i in range(n)]
+
+
+def test_job_pages_are_asked_only_for_jobs_without_a_stored_text_and_at_most_the_cap(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    urls = fake_get(monkeypatch, wd_detail())
+    monkeypatch.setattr(adapters, "DETAIL_CAP", 3)
+    jobs = jobs_n(6)
+    jobs[0]["description"] = "already given by the list"
+    held = {("Acme", "/job/x/J1")}
+    assert adapters.add_descriptions("workday", WD_SLUG, "Acme", jobs, held) == (3, 3, 1)  # 4 to do: 3 now, 1 later
+    assert [u.rsplit("/", 1)[1] for u in urls] == ["J2", "J3", "J4"]
+    assert jobs[1].get("text_held") is True and "description" not in jobs[1]
+    assert jobs[2]["description"] == "Build things\n\n- Python"
+    assert "description" not in jobs[5] and "text_held" not in jobs[5]  # waits for the next run
+
+
+def test_a_job_page_that_fails_or_raises_costs_only_its_own_text(monkeypatch: pytest.MonkeyPatch) -> None:
+    def boom(slug: str, job: dict[str, Any]) -> tuple[str, dict[str, Any]]:
+        if job["job_id"].endswith("J1"):
+            raise ValueError("odd page")
+        return "text", {}
+
+    monkeypatch.setitem(adapters.DETAILS, "workday", boom)
+    jobs = jobs_n(3)
+    assert adapters.add_descriptions("workday", WD_SLUG, "Acme", jobs, set()) == (3, 2, 0)
+    assert [bool(j.get("description")) for j in jobs] == [True, False, True]
+
+
+def test_an_adapter_with_the_text_in_its_list_asks_for_no_job_page(monkeypatch: pytest.MonkeyPatch) -> None:
+    urls = fake_get(monkeypatch, wd_detail())
+    assert adapters.add_descriptions("lever", "acme", "Acme", jobs_n(2), set()) == (0, 0, 0)
+    assert urls == []

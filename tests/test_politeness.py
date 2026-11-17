@@ -1314,3 +1314,24 @@ def test_a_local_trial_runs_on_a_touched_empty_file(workdir: Path, monkeypatch: 
     write_json(workdir / "data" / "companies.json", [co("Acme")])
     run.main()
     assert rows("SELECT company, job_id FROM jobs") == [("Acme", "1")]
+
+
+def test_a_job_page_robots_txt_forbids_gives_no_text_and_the_company_is_still_crawled(
+    workdir: Path, robots: dict[str, Any], monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    robots["https://acme.wd3.myworkdayjobs.com"] = FakeHttpResponse(
+        text="User-agent: *\nDisallow: /wday/cxs/acme/Site/job/\n"
+    )
+    monkeypatch.setitem(run.ADAPTERS, "workday", lambda _slug: [job("/job/Haifa/Engineer_R1")])
+    write_json(workdir / "data" / "companies.json", [co("Acme", ats="workday", slug="acme/wd3/Site")])
+    run.main()
+    out = capsys.readouterr().out
+    assert "failed 0 []" in out
+    assert "skipped by robots.txt 0 []" in out  # a refused job page is not a refused company
+    assert "job pages: workday 1 requests, 0 with a text, 0 left for later runs" in out
+    assert robots["session"].urls == [
+        "https://acme.wd3.myworkdayjobs.com/robots.txt"
+    ]  # the page itself was not fetched
+    check = sqlite3.connect(run.DB)
+    assert check.execute("SELECT company, status FROM jobs").fetchall() == [("Acme", "open")]
+    check.close()
