@@ -11,7 +11,7 @@ from typing import Any
 
 import common
 import descriptions
-from adapters import ADAPTERS
+from adapters import ADAPTERS, add_descriptions
 from browser_crawl import WHY, crawl_many
 from common import (
     DB,
@@ -123,11 +123,25 @@ def fetch(co: dict[str, Any]) -> list[dict[str, Any]] | None:
     return jobs
 
 
+HELD_TEXTS: set[tuple[str, str]] = set()  # the jobs whose text Supabase holds, read from the pull's file by main()
+DETAIL_STATS: dict[str, tuple[str, int, int, int]] = {}  # company -> (ats, requested, got a text, deferred)
+
+
 def crawl(co: dict[str, Any]) -> tuple[dict[str, Any], list[dict[str, Any]] | None]:
     jobs = fetch(co)
     if jobs is None and not robots_skipped(co):  # one retry: most failures are transient rate limits
         time.sleep(4)
         jobs = fetch(co)
+    if jobs:  # after the list is final: nothing the job pages do can change it, and one that fails costs only its text
+        try:
+            stats = add_descriptions(
+                co["ats"], co["slug"], co["name"], jobs, HELD_TEXTS, datetime.date.today().toordinal()
+            )
+        except Exception as exc:  # the list is what matters: a failure here costs texts, never the company
+            print(f"::warning::job pages of {co['name']} failed: {type(exc).__name__}")
+        else:
+            if stats[0] or stats[2]:
+                DETAIL_STATS[co["name"]] = (co["ats"], *stats)
     return co, jobs
 
 
@@ -271,6 +285,16 @@ def save_descriptions(texts: list[dict[str, Any]], crawled: list[tuple[str, list
     a work file outside the checkout (descriptions.work_path), never into data/jobs.db or any committed file. A file
     that cannot be written is a warning: the jobs are stored as always, only their descriptions are missing."""
     print(descriptions.share_report(crawled))
+    if DETAIL_STATS:  # the job pages asked for: counts only, per ATS
+        per_ats: dict[str, list[int]] = {}
+        for ats, *counts in DETAIL_STATS.values():
+            total = per_ats.setdefault(ats, [0, 0, 0])
+            for i, n in enumerate(counts):
+                total[i] += n
+        parts = [
+            f"{a} {n[0]} requests, {n[1]} with a text, {n[2]} left for later runs" for a, n in sorted(per_ats.items())
+        ]
+        print(f"job pages: {'; '.join(parts)}")
     try:
         descriptions.write_work_file(texts)
     except OSError as exc:
@@ -295,6 +319,10 @@ def main() -> None:  # noqa: PLR0915
     skipped: list[str] = []
     attempted: set[str] = set()  # companies with any result that is not a robots skip: crawled, held or failed
     crawled: list[tuple[str, list[dict[str, Any]]]] = []  # (ats, jobs) of every crawl that gave a list
+    HELD_TEXTS.clear()
+    HELD_TEXTS.update(descriptions.read_held())
+    print(f"stored texts known to the crawl: {len(HELD_TEXTS)}")
+    DETAIL_STATS.clear()
     texts: list[dict[str, Any]] = []  # the descriptions for the sync step: never stored in the database
 
     def record(batch: list[tuple[dict[str, Any], list[dict[str, Any]] | None]]) -> None:  # noqa: PLR0912

@@ -508,12 +508,36 @@ def credentials() -> tuple[str, str]:
     return url, key
 
 
-def pull_main(url: str, key: str, allow_shrink: bool = False) -> None:
+def leave_held(client: Client) -> int | None:
+    """After a pull: leaves the keys of the open jobs whose text Supabase holds in a work file outside the checkout, so
+    the crawl asks a job page for a description only where there is none (descriptions.write_held, no text in it). Any
+    failure is a warning and no file: the crawl then asks for every job without a text, at most DETAIL_CAP per company.
+    Returns the count, or None when it could not be left."""
+    held = descriptions.work_path(descriptions.HELD_FILE)
     try:
-        jobs, log = pull(Source(cast("ExportSession", requests.Session()), url, key), allow_shrink=allow_shrink)
+        held.unlink(missing_ok=True)  # never an older run's keys
+    except OSError as exc:
+        print(f"::warning::an older list of stored descriptions could not be removed: {type(exc).__name__}")
+        return None
+    try:
+        stored = client.stored_texts()
+        return descriptions.write_held([key for key, (digest, *_rest) in stored.items() if digest])
+    except (SyncError, ValueError, KeyError, TypeError, OSError) as exc:
+        reason = str(exc) if isinstance(exc, SyncError) else type(exc).__name__  # a SyncError is safe to print
+        print(f"::warning::the stored descriptions could not be listed for the crawl: {reason}")
+        return None
+
+
+def pull_main(url: str, key: str, allow_shrink: bool = False) -> None:
+    session = requests.Session()
+    try:
+        jobs, log = pull(Source(cast("ExportSession", session), url, key), allow_shrink=allow_shrink)
     except (SyncError, ExportError) as exc:
         sys.exit(f"Supabase pull failed: {exc}")
     print(f"Supabase: pulled {jobs} jobs and {log} crawl log rows into {DB}")
+    held = leave_held(Client(cast("HttpSession", session), url, key))
+    if held is not None:
+        print(f"Supabase: {held} open jobs already hold a description")
     if not log:  # not a failure (a new project has none), but every sharp-drop hold starts again
         print("::warning::the crawl log is empty: held drops start again")
 

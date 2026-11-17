@@ -304,15 +304,29 @@ PLAN.md step 7.1. Where the text of a posting lives, and how it gets there:
   in this pass is a `::warning::` with the HTTP status and nothing else (an answer can quote the row, and the log is
   public); it never fails the step, so the digests and the deploy still run.
 - **What is read.** Only what a site publishes for applicants, and only from the request the adapter already makes
-  (no new host, no new path, no request per job): Greenhouse (`?content=true` on the board list), Lever (the posting
+  (no new host, no new path, no request per job; Workday below is the exception): Greenhouse (`?content=true` on the board list), Lever (the posting
   list: description, the named lists, the closing text), Ashby (the posting list), Workable (`?details=true` on the widget
   list), Comeet (`custom_fields.details` of each position in the page's embedded data) and Amazon (the search JSON: description
   and qualifications). `greenhouse_url` takes the content when the company's proxy gives it. Every request stays inside
   the one-request-a-second rule and the `robots.txt` gate. `details` holds a short list of fields a site gives
   (employment type, department, experience, workplace type, offices) and nothing else: Greenhouse `metadata` and the
   compliance fields are left out on purpose.
-- **Not read yet.** The browser crawl (a page of text, no standard field), Workday (a request per job: about 320 jobs, one
-  second each on one host, and a new path to check against `robots.txt`), Phenom and Oracle HCM (the lists carry a teaser,
+- **Job pages (Workday).** The Workday list carries no text, so after the list is final the crawl (`run.crawl`, then
+  `adapters.add_descriptions`) opens one page per job: `https://<tenant>.<dc>.myworkdayjobs.com/wday/cxs/<tenant>/<site>/job/...`
+  (the JSON the site loads itself; the text is `jobPostingInfo.jobDescription`, of the rest only `timeType` is kept). It is
+  the same `/wday/cxs/` path as the list, so the `robots.txt` gate, the one-request-a-second-per-host delay and the User-Agent
+  are the same (the tenants' own `robots.txt` files, read on 2026-11-17, do not disallow `/wday/`). The budget: a page is
+  asked for only for a job Supabase holds no text for (the pull, `sync_supabase.py --pull`, leaves the keys of those that do in
+  `$RUNNER_TEMP/misra-held-texts.jsonl`, keys only; no file means none known; the crawl prints how many it knows) and at most 40 per
+  company and run (`DETAIL_CAP`, the rest next run, in a window that moves each day so a page that never answers cannot starve the
+  others; five pages in a row without a text end that company's job pages for the run, so a host that refuses is left alone). The first fill of the 318 Israeli jobs is therefore about 200 requests on the first day
+  (Palo Alto Networks 115 and KLA 82 are capped at 40 each, so they take three days), over 24 tenant hosts, and a steady day
+  asks only for the new jobs, a handful. A text edited in place is not fetched again until the job closes and reopens (a rolling
+  refresh is in `TODO.md`). A page that fails, is refused by `robots.txt` or has no text costs only its own text: the list is
+  already final, so the company is never skipped and nothing closes. The log line is `job pages: workday N requests, N with a
+  text, N left for later runs`, and a job whose text is stored counts in the share of the `descriptions:` line. A site that answers
+  a job page with a block or challenge page is never worked around: no text.
+- **Not read yet.** The browser crawl (a page of text, no standard field), Phenom and Oracle HCM (the lists carry a teaser,
   not the text), `comeet_page`, JazzHR and BambooHR (a request per job), and SmartRecruiters (skipped by `robots.txt`).
 - **The text.** Plain text made from the site's HTML with the standard library: scripts, styles and embedded frames are
   dropped with their content, no tag survives (an angle bracket a posting wrote, such as `List<T>`, is kept as text, to be shown as text), paragraphs and list items keep their line breaks, control characters
@@ -326,8 +340,11 @@ PLAN.md step 7.1. Where the text of a posting lives, and how it gets there:
   days after closing)`: counts only, never a text. A trim that fails is `::warning::the text of closed jobs could not be
   trimmed: ...` followed by `Supabase: the text of closed jobs was not trimmed today`, and the next run tries again.
 - **Adding an adapter.** Return the description with `attach(job, text, details)` from `descriptions.py` (`html_to_text`
-  for HTML, `plain_text` for text), from the request the adapter already makes. Do not add a request per job without
-  measuring: one host takes one request a second.
+  for HTML, `plain_text` for text), from the request the adapter already makes. A site whose list has no text gets a function in `adapters.DETAILS`
+  (`fetch(slug, job) -> (text, details) | None`, like `workday_description`): it makes one request per job through
+  `common.get`, so `robots.txt` and the delay apply, and `add_descriptions` budgets it (held text, cap per company). Check the
+  per-job path against the host's `robots.txt` and count the requests before adding one; skip and record a site that
+  blocks or challenges the request.
 
 ## The daily digest
 

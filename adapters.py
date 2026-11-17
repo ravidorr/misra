@@ -9,10 +9,11 @@ from collections.abc import Callable, Iterable, Iterator
 from typing import Any
 from urllib.parse import parse_qsl, urljoin, urlparse
 
-from common import ISRAEL, get, post
-from descriptions import attach, html_to_text, plain_text, sections
+from common import ISRAEL, get, post, reset_robots_block
+from descriptions import DETAIL_CAP, HELD, attach, html_to_text, plain_text, sections
 
 HTTP_OK = 200
+DETAIL_FAIL_STREAK = 5  # job pages in a row without a text after which a company's job pages stop for this run
 Job = dict[str, Any]
 WORKDAY_ISRAEL = (
     "084562884af243748dad7c84c304d89a"  # Workday's id for Israel in a country facet, the same on every tenant
@@ -550,6 +551,77 @@ def workday(slug: str) -> list[Job] | None:
         if not _workday_has_more(d, page, total):
             return out
     return None  # more pages than the limit: the list is not complete
+
+
+def workday_description(slug: str, job: Job) -> tuple[str, dict[str, Any]] | None:
+    """The text of one Workday posting: the JSON of the job page the site itself loads (the same `/wday/cxs/` path as
+    the list, so the same robots.txt rule), `jobPostingInfo.jobDescription` as HTML. Of what else it gives only the
+    employment type is kept (the ids and the questionnaire are the tenant's own). None on any failure."""
+    tenant, dc, site = slug.split("/")
+    path = job["job_id"]
+    if not path.startswith("/job/"):
+        return None
+    r = get(
+        f"https://{tenant}.{dc}.myworkdayjobs.com/wday/cxs/{tenant}/{site}{path}",
+        headers={"Accept": "application/json"},
+    )
+    if r is None or r.status_code != HTTP_OK:
+        return None
+    try:
+        info = r.json()["jobPostingInfo"]
+    except (ValueError, KeyError, TypeError):
+        return None
+    if not isinstance(info, dict):
+        return None
+    return html_to_text(info.get("jobDescription")), {"employment_type": info.get("timeType")}
+
+
+# Adapters whose list has no text: one request per job page, `fetch(slug, job) -> (text, details) | None`.
+DETAILS: dict[str, Callable[[str, Job], tuple[str, dict[str, Any]] | None]] = {"workday": workday_description}
+
+
+def add_descriptions(  # noqa: PLR0913, PLR0917
+    ats: str, slug: str, company: str, jobs: list[Job], held: set[tuple[str, str]], day: int = 0
+) -> tuple[int, int, int]:
+    """Gives the jobs of a company whose list carries no text their description, one request per job page, and
+    returns (requested, got a text, deferred). Only jobs without a text are asked: one Supabase already holds (`held`,
+    left by the pull) is marked and not fetched again. At most DETAIL_CAP are asked per company and run, in a window
+    that moves with `day` so a page that never answers cannot starve the others, and five misses in a row end the
+    company's run (a host that refuses is left alone). The rest wait for the next run. A page that fails, is refused
+    by robots.txt or has no text gives no description and changes nothing else: this never fails the list, and a
+    refusal does not make the company a robots skip (the list was crawled)."""
+    fetch_one = DETAILS.get(ats)
+    if fetch_one is None:
+        return 0, 0, 0
+    todo: list[Job] = []
+    for job in jobs:
+        if job.get("description"):
+            continue
+        if (company, str(job.get("job_id"))) in held:
+            job[HELD] = True
+        else:
+            todo.append(job)
+    if todo:  # a different window each day, by the fewest pages a run can end after, so no job is starved
+        start = day * DETAIL_FAIL_STREAK % len(todo)
+        todo = todo[start:] + todo[:start]
+    asked = got = streak = 0
+    for job in todo[:DETAIL_CAP]:
+        asked += 1
+        try:
+            found = fetch_one(slug, job)
+            if found:
+                attach(job, *found)
+        except Exception:  # a posting must never stop its company's crawl, whatever its page is
+            found = None
+        if job.get("description"):
+            got += 1
+            streak = 0
+        else:
+            streak += 1
+            if streak >= DETAIL_FAIL_STREAK:  # a host that keeps refusing or failing is left alone until the next run
+                break
+    reset_robots_block()  # a refused job page is not a refused company
+    return asked, got, len(todo) - asked
 
 
 def _oraclehcm_place(req: dict[str, Any]) -> str | None:

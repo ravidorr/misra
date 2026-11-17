@@ -206,3 +206,22 @@ def test_the_share_report_has_counts_and_percentages_only() -> None:
         "cut at 20000 characters 1; 6 characters kept"
     )
     assert share_report([]) == "descriptions: ; all 0/0 (0%); cut at 20000 characters 0; 0 characters kept"
+
+
+def test_the_held_keys_travel_by_file_and_a_bad_file_is_no_keys(tmp_path: Path) -> None:
+    path = tmp_path / "held.jsonl"
+    assert descriptions.write_held([("B", "2"), ("A", "1")], path) == 2  # noqa: PLR2004
+    assert path.read_text(encoding="utf-8") == '["A", "1"]\n["B", "2"]\n'
+    assert descriptions.read_held(path) == {("A", "1"), ("B", "2")}
+    path.write_text('["A", "1"]\nnot json\n["A"]\n[1, "2"]\n{"a": 1}\n', encoding="utf-8")
+    assert descriptions.read_held(path) == {("A", "1")}
+    path.write_bytes(b"\xff\xfe")
+    assert descriptions.read_held(path) == set()
+    assert descriptions.read_held(tmp_path / "missing") == set()
+
+
+def test_a_job_whose_text_is_stored_counts_in_the_share_without_adding_characters() -> None:
+    jobs = [("workday", [{"description": "abc"}, {descriptions.HELD: True}, {}])]
+    assert share_report(jobs) == (
+        "descriptions: workday 2/3 (67%); all 2/3 (67%); cut at 20000 characters 0; 3 characters kept"
+    )

@@ -9,6 +9,7 @@ from typing import Any
 
 import pytest
 
+import adapters
 import descriptions
 import run
 import send_digests
@@ -124,6 +125,44 @@ def test_a_company_that_failed_or_is_on_the_exclusion_list_leaves_no_text(workdi
         {"asked": [posting("1")], "down": None, "acme": [posting("2")]},
     )
     assert list(read_work_file()) == [("Acme", "2")]
+
+
+class FixedDay:
+    """A day whose ordinal is 0, so the window of job pages starts at the first job."""
+
+    @staticmethod
+    def today() -> "FixedDay":
+        return FixedDay()
+
+    def toordinal(self) -> int:
+        return 0
+
+
+def test_job_pages_are_asked_only_for_jobs_without_a_stored_text_and_the_log_has_counts_only(
+    workdir: Path, crawl: Any, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    asked: list[str] = []
+
+    def page(slug: str, j: dict[str, Any]) -> tuple[str, dict[str, Any]] | None:
+        asked.append(j["job_id"])
+        return (SENTINEL, {}) if j["job_id"] != "bad" else None
+
+    monkeypatch.setitem(adapters.DETAILS, "fake", page)
+    monkeypatch.setattr(adapters, "DETAIL_CAP", 2)
+    monkeypatch.setattr(run.datetime, "date", FixedDay)
+    descriptions.write_held([("Acme", "held")])
+    crawl(
+        [co("Acme", "acme")],
+        {"acme": [posting("held", None), posting("bad", None), posting("1", None), posting("2", None)]},
+    )
+    assert asked == ["bad", "1"]  # the stored one is not asked, and two is the cap: "2" waits
+    assert read_work_file() == {("Acme", "1"): (SENTINEL, {})}  # nothing is written for the held job, it keeps its text
+    out = capsys.readouterr().out
+    assert "descriptions: fake 2/4 (50%)" in out  # the held job counts: its text is stored
+    assert "job pages: fake 2 requests, 1 with a text, 1 left for later runs" in out
+    assert SENTINEL not in out
+    crawl([co("Acme", "acme")], {"acme": [posting("held", None)]})  # a run with nothing to ask prints no such line
+    assert "job pages" not in capsys.readouterr().out
 
 
 # ---- the sync ----
@@ -615,3 +654,17 @@ def test_a_crawl_that_died_in_the_browser_leaves_a_history_the_sync_stores_witho
     conn.close()
     assert (result.upserted, result.texts, result.logged) == (1, 0, 1)
     assert list(fake.table) == [("Acme", "1")]
+
+
+def test_a_crash_in_the_job_pages_costs_the_texts_and_not_the_company(
+    workdir: Path, crawl: Any, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    def boom(*_a: Any) -> None:
+        raise RuntimeError("secret detail")
+
+    monkeypatch.setattr(run, "add_descriptions", boom)
+    crawl([co("Acme", "acme")], {"acme": [posting("1", None)]})
+    out = capsys.readouterr().out
+    assert "::warning::job pages of Acme failed: RuntimeError" in out
+    assert "secret detail" not in out
+    assert "failed 0 []" in out

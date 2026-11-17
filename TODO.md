@@ -6,6 +6,14 @@ one row from one segment), its "(28)" if the company had no careers URL, else it
 An item with a screenshot in `todo-images/` goes with it: delete the image file in the same PR.
 Observations about live sites below come from checks made on 2026-11-14 and may have changed.
 
+## Descriptions
+
+- [ ] **Refresh a stored description that changed.** Trigger: the job-page adapters (Workday) fetch a text only for a job
+  Supabase holds none for, so a posting edited in place keeps its first text until it closes and reopens. Where:
+  `adapters.add_descriptions`: also ask the pages of the jobs whose key hashes into today's slice (for example a job a day in
+  fourteen), within the same per-company cap. Done when: a changed Workday posting has its new text within two weeks, and the
+  request count in the `job pages:` line stays a handful on a steady day.
+
 ## Assistant endpoint
 
 - [ ] **Hand-test the assistant connection with someone who is not technical.** Trigger: the endpoint and the page "Connect your

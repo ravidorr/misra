@@ -27,9 +27,12 @@ CUT_WINDOW = 200  # a cut moves back to a space when there is one this close to 
 SNIPPET_CHARS = 255  # the public snippet: the first characters of a description (PLAN.md step 7.2)
 MAX_DETAIL_CHARS = 200
 MAX_DETAIL_ITEMS = 20
+HELD = "text_held"  # a transient flag on a job dict (never stored): Supabase already holds this job's text
 TRUNCATED = "description_truncated"  # the details key that records a text cut at the cap
 HASH_KEY = "text_sha256"  # the details key the sync keeps the fingerprint of the stored text in
 WORK_FILE = "misra-descriptions.jsonl"
+HELD_FILE = "misra-held-texts.jsonl"  # the keys of the jobs whose text Supabase already holds (never a text)
+DETAIL_CAP = 40  # the most job pages one company's description requests may open in one run (one host, one a second)
 # Elements whose content is never text for a reader: dropped with their content.
 _DROPPED = frozenset({"script", "style", "noscript", "template", "svg", "iframe", "object", "head", "title"})
 _BLOCKS = frozenset(
@@ -188,10 +191,10 @@ def fingerprint(description: str, details: dict[str, Any]) -> str:
     return hashlib.sha256(blob.encode()).hexdigest()
 
 
-def work_path() -> Path:
+def work_path(name: str = WORK_FILE) -> Path:
     """Where the crawl leaves the texts for the sync: the runner's temporary directory on GitHub Actions
     (`RUNNER_TEMP`), the system's temporary directory elsewhere. Never a path in the checkout."""
-    return Path(os.environ.get("RUNNER_TEMP") or tempfile.gettempdir()) / WORK_FILE
+    return Path(os.environ.get("RUNNER_TEMP") or tempfile.gettempdir()) / name
 
 
 def write_work_file(rows: Iterable[dict[str, Any]], path: Path | None = None) -> int:
@@ -229,21 +232,50 @@ def read_work_file(path: Path | None = None) -> dict[tuple[str, str], tuple[str,
     return found
 
 
+def write_held(keys: Iterable[tuple[str, str]], path: Path | None = None) -> int:
+    """Leaves the (company, job_id) of every open job whose text Supabase already holds, for the crawl: a description
+    that costs a request per job is fetched only for the jobs not in it. Keys only, no text. Returns the count."""
+    target = path or work_path(HELD_FILE)
+    rows = sorted(keys)
+    target.write_text("".join(json.dumps(list(key)) + "\n" for key in rows), encoding="utf-8")
+    return len(rows)
+
+
+def read_held(path: Path | None = None) -> set[tuple[str, str]]:
+    """The keys `write_held` left. A missing or unreadable file, or a line that is not a pair of text, is no key: the
+    crawl then treats every job as not held, and the per-company cap (DETAIL_CAP) bounds the requests."""
+    try:
+        lines = (path or work_path(HELD_FILE)).read_text(encoding="utf-8").splitlines()
+    except (OSError, UnicodeDecodeError):
+        return set()
+    found: set[tuple[str, str]] = set()
+    for line in lines:
+        try:
+            company, job_id = json.loads(line)
+        except (ValueError, TypeError):
+            continue
+        if isinstance(company, str) and isinstance(job_id, str):
+            found.add((company, job_id))
+    return found
+
+
 def _pct(part: int, whole: int) -> str:
     return f"{round(100 * part / whole)}%" if whole else "0%"
 
 
 def share_report(jobs_by_ats: Iterable[tuple[str, list[dict[str, Any]]]]) -> str:
-    """The FR-4 AC 3 log line: per ATS the jobs with a full description out of the jobs the crawl returned, then all of
-    them, the jobs cut at the cap and the characters kept. Counts and percentages only, no text."""
+    """The FR-4 AC 3 log line: per ATS the jobs with a full description (given today, or already stored in Supabase
+    and so not fetched again) out of the jobs the crawl returned, then all of them, the jobs cut at the cap and the
+    characters kept. Counts and percentages only, no text."""
     total: Counter[str] = Counter()
     with_text: Counter[str] = Counter()
     cut = chars = 0
     for ats, jobs in jobs_by_ats:
         for job in jobs:
             total[ats] += 1
-            if job.get("description"):
+            if job.get(HELD) or job.get("description"):
                 with_text[ats] += 1
+            if job.get("description"):
                 chars += len(job["description"])
                 cut += bool((job.get("details") or {}).get(TRUNCATED))
     by_size = sorted(total.items(), key=lambda kv: (-kv[1], kv[0]))
