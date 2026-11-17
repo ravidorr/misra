@@ -116,6 +116,10 @@ def test_the_spam_guard_sentence_is_the_lawyers_in_the_notice_and_the_form_and_a
         "With it we keep how many reports came from that hash that day, and how many reports were emailed that "
         "day in all."
     ) in text
+    assert ('The form is the "Add a company" button on the dashboard\'s coverage card.') in text.split(
+        "**Reporting a missing career site**"
+    )[1].split("\n")[0]  # the lawyer's answer of 2026-11-17
+    assert 'The form is the "Report a site" button' not in text
     assert "whenever the next report is handled" not in text  # the old promise, replaced by the daily cleanup
     assert (
         "24 hours" not in text.split("**Reporting a missing career site**")[1].split("\n")[0]
