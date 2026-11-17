@@ -4,6 +4,12 @@ All notable changes are documented here. Format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
+## [0.54.0] - 2026-11-17
+
+### Changed
+
+- The coverage gap card links each company to the career page the maintainer found, kept in the new `data/career_links.json` (`israel` and `global` pages per company): the Israeli page, else the global one, else the data's own address or the company's own site, as before. A test checks the file (https only, a real host, no wildcard or tracking parameter, a known company name, sorted). The page, `jobs.json` and the `list_coverage_gaps` tool keep their shape.
+
 ## [0.53.0] - 2026-11-17
 
 ### Changed

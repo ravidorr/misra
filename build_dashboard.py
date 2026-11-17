@@ -126,6 +126,9 @@ SUPABASE_ANON_KEY = "sb_publishable_9gvh4YdsfErlFsgJfmNexQ_yHF-XwnA"
 
 # The researched companies with no usable job feed; each row says why in `reason` (a key of REASONS) and `note`.
 UNRESOLVED = "data/unresolved_candidates.csv"
+# The career pages of the companies on the card, as the maintainer found them: {name: {"israel": url, "global": url}},
+# either key may be missing. The card links the Israeli page, else the global one, else the company's own site.
+CAREER_LINKS = "data/career_links.json"
 BLOCKED_WHY = "its site blocks automated access from GitHub's servers"
 # Why a site is on the coverage gap card, in the order the card lists them. The keys are the only values the `reason`
 # column of the CSV may hold; the labels are what the visitor reads.
@@ -224,16 +227,27 @@ def read_unresolved(excluded: list[str] | None = None) -> list[dict[str, str]]:
     return rows
 
 
+def read_career_links() -> dict[str, str]:
+    """The address of each company in CAREER_LINKS: its Israeli career page, else its global one (https only; a company
+    with neither has no entry)."""
+    with open(CAREER_LINKS, encoding="utf-8") as fh:
+        pages = json.load(fh)
+    links = {name: https_only(page.get("israel") or page.get("global")) for name, page in pages.items()}
+    return {name: url for name, url in links.items() if url}
+
+
 def gap_groups(
     blocked: list[dict[str, Any]],
     untracked: list[dict[str, Any]],
     unresolved: list[dict[str, str]],
     companies: list[dict[str, Any]] | None = None,
+    links: dict[str, str] | None = None,
 ) -> list[dict[str, Any]]:
     """Every site that is not crawled, grouped by why, in REASONS order. A site named twice is counted once. Each site
-    has the `url` its name links to (https only): the careers page, or the company's own site when it has no careers
-    page (`no_careers_url`) or when no careers address is known. `companies` is every company of companies.json; it
-    gives the address of the failing and robots.txt sites."""
+    has the `url` its name links to (https only): the career page from `links` (Israeli, else global), else the one
+    the data gives, or the company's own site when it has no careers page (`no_careers_url`) or when no careers
+    address is known. `companies` is every company of companies.json; it gives the address of the failing and
+    robots.txt sites."""
     known = {c["name"]: c for c in [*untracked, *(companies or [])]}
     # a company that left companies.json for the CSV can still be in the crawl log: its row gives the address
     rows = {r["name"]: https_only(r.get("careers_url")) or own_site(r.get("domain")) for r in unresolved}
@@ -257,7 +271,7 @@ def gap_groups(
     groups = []
     for code, label in REASONS.items():
         members = [
-            {"c": name, "why": why, "url": url}
+            {"c": name, "why": why, "url": (links or {}).get(name) or url}
             for name, (c, why, url) in sorted(sites.items(), key=lambda site: site[0].lower())
             if c == code
         ]
@@ -478,7 +492,7 @@ def main() -> None:
         companies = [x for x in json.load(fh) if not is_excluded(x["name"], excluded)]
     unfed = [x for x in companies if x["status"] != "ok"]
     untracked = sorted(x["name"] for x in unfed)
-    groups = gap_groups(blocked, unfed, read_unresolved(excluded), companies)
+    groups = gap_groups(blocked, unfed, read_unresolved(excluded), companies, read_career_links())
     gaps = {
         "blocked": blocked,
         "untracked": untracked,

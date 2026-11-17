@@ -7,6 +7,7 @@ import runpy
 import sqlite3
 from pathlib import Path
 from typing import Any
+from urllib.parse import parse_qs, urlsplit
 
 import pytest
 
@@ -672,9 +673,11 @@ def test_every_site_on_the_real_coverage_gap_card_has_an_https_address(monkeypat
     everyone = json.loads((REPO / "data" / "companies.json").read_text(encoding="utf-8"))
     companies = [c for c in everyone if not build_dashboard.is_excluded(c["name"], excluded)]
     unfed = [c for c in companies if c["status"] != "ok"]
-    groups = build_dashboard.gap_groups(blocked, unfed, build_dashboard.read_unresolved(excluded), companies)
+    links = build_dashboard.read_career_links()
+    groups = build_dashboard.gap_groups(blocked, unfed, build_dashboard.read_unresolved(excluded), companies, links)
     sites = [site for group in groups for site in group["sites"]]
     assert sites
+    assert all(site["url"] == links[site["c"]] for site in sites if site["c"] in links)
     assert [s["c"] for s in sites if not build_dashboard.https_only(s["url"])] == []
 
 
@@ -715,3 +718,63 @@ def test_main_warns_when_a_site_has_no_link(
     db.close()
     build_dashboard.main()
     assert "WARNING: no link for ['Alpha']" in capsys.readouterr().out
+
+
+def test_a_career_link_wins_over_the_address_the_data_gives() -> None:
+    blocked = [{"c": "Walled", "why": build_dashboard.BLOCKED_WHY, "last": "never"}]
+    rows = [
+        {"name": "Beta", "reason": "needs_reader", "note": "", "domain": "beta.test", "careers_url": "https://b.test"}
+    ]
+    everyone = [{"name": "Walled", "status": "ok", "domain": "walled.test", "careers_url": "https://walled.test/jobs"}]
+    links = {"Walled": "https://walled.test/israel", "Beta": "https://beta.test/careers", "Other": "https://o.test"}
+    groups = build_dashboard.gap_groups(blocked, [], rows, everyone, links)
+    assert {s["c"]: s["url"] for g in groups for s in g["sites"]} == {
+        "Walled": "https://walled.test/israel",
+        "Beta": "https://beta.test/careers",
+    }
+
+
+def test_read_career_links_takes_the_israeli_page_then_the_global_one(workdir: Path) -> None:
+    write_json(
+        workdir / "data" / "career_links.json",
+        {
+            "Both": {"israel": "https://a.test/il", "global": "https://a.test/world"},
+            "OnlyGlobal": {"global": "https://b.test/jobs"},
+            "OnlyIsrael": {"israel": "https://c.test/il"},
+            "Unsafe": {"israel": "javascript:alert(1)", "global": "https://d.test"},
+            "Plain": {"global": "http://e.test"},
+            "Empty": {},
+        },
+    )
+    assert build_dashboard.read_career_links() == {
+        "Both": "https://a.test/il",
+        "OnlyGlobal": "https://b.test/jobs",
+        "OnlyIsrael": "https://c.test/il",
+    }
+
+
+TRACKING = re.compile(r"^(utm_.*|source|ref|ref_src|fbclid|gclid|mc_cid|mc_eid|cid|campaign|trk|sid)$", re.I)
+HOST = re.compile(r"[a-z0-9-]+(\.[a-z0-9-]+)+")
+
+
+def test_the_real_career_links_are_safe_and_belong_to_known_companies() -> None:
+    """data/career_links.json is public data a person reviews by hand; the card links it from every visitor's page."""
+    raw = (REPO / "data" / "career_links.json").read_text(encoding="utf-8")
+    links = json.loads(raw)
+    assert raw.endswith("}\n")
+    assert list(links) == sorted(links, key=str.lower)  # one place per company, easy to review
+    companies = json.loads((REPO / "data" / "companies.json").read_text(encoding="utf-8"))
+    with open(REPO / "data" / "unresolved_candidates.csv", newline="", encoding="utf-8") as fh:
+        known = {c["name"] for c in companies} | {row["name"] for row in csv.DictReader(fh)}
+    assert sorted(set(links) - known) == []  # a typo in a name would silently drop the link
+    for name, page in links.items():
+        assert set(page) <= {"israel", "global"}, name
+        assert page, name
+        assert page.get("israel") != page.get("global"), name  # the same page is listed once, under "global"
+        for url in page.values():
+            parts = urlsplit(url)
+            assert build_dashboard.https_only(url) == url, (name, url)  # https, with a host, nothing else
+            assert HOST.fullmatch(parts.hostname or ""), (name, url)
+            assert not parts.username and not parts.fragment, (name, url)
+            assert not re.search(r"[\s*<>\"']", url), (name, url)  # no wildcard, no markup
+            assert not [k for k in parse_qs(parts.query) if TRACKING.match(k)], (name, url)
