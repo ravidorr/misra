@@ -1,6 +1,6 @@
 name: publish-docs
 
-# Rebuilds docs/ (the dashboard and the privacy, terms and security pages) when a source of those pages changes on
+# Rebuilds docs/ (the dashboard and the privacy, terms, security and assistant pages) when a source of those pages changes on
 # main, so a merged edit to PRIVACY.md is on the site in minutes and not at the next daily run. It runs only
 # build_dashboard.py: no crawl, no email, no Supabase, and no secret other than the deploy key.
 on:
@@ -11,6 +11,7 @@ on:
       - PRIVACY.md
       - TERMS.md
       - SECURITY.md
+      - ASSISTANT.md
       - templates/**
       - design-system/**
       - vendor/**

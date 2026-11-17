@@ -4,6 +4,23 @@ All notable changes are documented here. Format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
+## [0.52.0] - 2026-11-17
+
+### Added
+
+- The "Connect your assistant" page (PLAN.md step 8.2, FR-6 AC 5 to 7), built and **switched off**: `ASSISTANT.md`, plain step-by-step instructions
+  for Claude, ChatGPT and other assistants with the address of the assistant endpoint, converted to `docs/assistant.html` in the
+  template of the privacy page (`build_dashboard.py`, one new `LegalPage`), a "Connect your assistant" link in the dashboard footer
+  (the region between `<!--assistant-->` and `<!--/assistant-->`), a `.legal pre` style so an address wraps on a phone, `ASSISTANT.md` in
+  the paths of the `publish-docs` workflow and `docs/assistant.html` in the files the daily workflow stages. The constant
+  `ASSISTANT_PAGE_ENABLED` is `False`, so nothing changes in `docs/` and the page is not published: it stays off until the lawyer has
+  reviewed the assistant endpoint and the function secret `ASSISTANT_ENDPOINT_ENABLED` is set (see `TODO.md`). A test keeps `llms.txt`
+  naming the page exactly when the constant is on.
+
+### Changed
+
+- The README keeps a short developer note on the assistant connection instead of describing it in full.
+
 ## [0.51.0] - 2026-11-17
 
 ### Added

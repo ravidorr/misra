@@ -67,7 +67,7 @@ def write_static(workdir: Path) -> None:
     (workdir / "templates" / "email.html").write_text("<!doctype html><title>e</title>", encoding="utf-8")
     (workdir / "templates" / "email.js").write_text("const email = '__SUPABASE_URL__';\n", encoding="utf-8")
     (workdir / "templates" / "legal.html").write_text("<title>__TITLE__</title><main>__BODY__</main>", encoding="utf-8")
-    for legal in build_dashboard.LEGAL_PAGES:
+    for legal in (*build_dashboard.LEGAL_PAGES, build_dashboard.ASSISTANT_PAGE):
         (workdir / legal.source).write_text(f"# {legal.source}\n", encoding="utf-8")
     (workdir / "templates" / "report.js").write_text("const report = '__SUPABASE_URL__/report';\n", encoding="utf-8")
     (workdir / "templates" / "digest.js").write_text("const digest = '__SUPABASE_URL__/digest';\n", encoding="utf-8")
@@ -470,9 +470,10 @@ def test_every_file_the_build_writes_to_docs_is_staged_by_the_daily_workflow(
     monkeypatch.setattr(
         build_dashboard, "DIGEST_SIGNUP_ENABLED", True
     )  # the one file that only a build with the signup switch on writes
+    monkeypatch.setattr(build_dashboard, "ASSISTANT_PAGE_ENABLED", True)  # and the one of the assistant switch
     build_dashboard.main()
     built = {f"docs/{p.name}" for p in (workdir / "docs").iterdir()}
-    assert "docs/digest.js" in built
+    assert {"docs/digest.js", "docs/assistant.html"} <= built
     workflow = (Path(__file__).resolve().parents[1] / ".github" / "workflows" / "daily.yml").read_text(encoding="utf-8")
     found = re.search(r"for f in (data/jobs\.db [^;]+); do", workflow)
     assert found, "the staging loop of daily.yml was not found"

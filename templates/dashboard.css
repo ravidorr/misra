@@ -861,7 +861,7 @@ html:has(.sheet:modal) {
   font-size: var(--text-lg);
 }
 
-/* The legal pages (privacy.html, terms.html, security.html): the Markdown of the repository, converted by
+/* The legal pages (privacy.html, terms.html, security.html) and the assistant page (assistant.html): the Markdown of the repository, converted by
    build_dashboard.py. A readable measure, and links, table cells and long words that never push the page sideways. */
 .legal {
   max-width: 68ch;
@@ -926,7 +926,22 @@ html:has(.sheet:modal) {
   background: var(--accent-bg);
   font-family: var(--font-mono);
   font-size: 0.9em;
+  font-variant-ligatures: none; /* two hyphens stay two hyphens in a command */
   overflow-wrap: anywhere;
+}
+
+.legal pre {
+  margin: 0 0 var(--space-4);
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-control);
+  background: var(--accent-bg);
+  white-space: pre-wrap; /* an address or a command wraps on a phone and is still one piece when copied */
+  overflow-wrap: anywhere;
+}
+
+.legal pre code {
+  padding: 0;
+  background: none;
 }
 
 .legal table {

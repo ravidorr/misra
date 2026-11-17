@@ -35,6 +35,14 @@ Live page: <https://ravidorr.github.io/misra/>
 The page is a mobile-first daily feed of open roles (light and dark). It has filters, a Star and a "Not for me" button on each role (a role is one or the other) and a "Starred" list, all saved in the browser. An optional "Sign in" with Google (`auth.js`; the dashboard works the same without it) saves stars, discards and filters to the account instead, so they follow the user to other devices; the first sign-in offers to bring this browser's choices over. It is readable by agents too: the roles as schema.org JobPosting JSON-LD in `jobs.jsonld`, `data-*` hooks, and WebMCP tools (`search_jobs`, `list_filters`, `list_new_jobs`, `get_job`, `star_job`, `unstar_job`, `list_starred_jobs`, `discard_job`, `restore_job`, `get_sync_status`, `import_browser_choices`, `list_coverage_gaps`). The count of covered companies is computed at build time from `data/companies.json` (the companies with status `ok`) and read from `data-companies-covered` on the search field, or `covered` in `jobs.json`.
 The daily workflow rebuilds and commits it. Serve it with GitHub Pages: Settings, Pages, Deploy from a branch, `main`, `/docs`.
 
+## Assistant connection (developer note)
+
+An MCP endpoint (Streamable HTTP, public, read-only) lets a person connect their own AI assistant: the Supabase Edge Function
+`mcp` with the tools `search_jobs` and `get_job`, documented in [`supabase/README.md`](./supabase/README.md) (Assistant
+endpoint). The step-by-step page for people is [`ASSISTANT.md`](./ASSISTANT.md), published as `assistant.html`. Both are built
+and switched off until the lawyer has reviewed them (`ASSISTANT_ENDPOINT_ENABLED` on the function, `ASSISTANT_PAGE_ENABLED` in
+`build_dashboard.py`).
+
 ## Development
 
 Requires Python 3.12+ and Node 26 (see `.nvmrc`). Python runs the pipeline; Node is dev tooling only (linters, git hooks, release gate).
