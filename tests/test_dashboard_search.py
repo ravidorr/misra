@@ -256,7 +256,7 @@ async def test_an_answer_just_after_the_dialog_closed_does_not_lose_the_focus(pa
 def crowded() -> Backend:
     """Eleven roles whose title has "rust" (two pages of ten) and one that only its posting has, which by title sorts
     first: when the answer comes, the last role of the first page moves to the second."""
-    fake = backend(search_seconds=1.0)
+    fake = backend(search_seconds=2.0)  # time to focus and press a key before the answer
     fake.rows = [job(f"r{n:02d}", f"Rust Engineer {n:02d}", "Haifa, Israel") for n in range(1, 12)]
     fake.rows.append(job("aard", "Aardvark Developer", "Haifa, Israel"))
     fake.text_hits = {"rust": [["Acme", "aard"]]}
