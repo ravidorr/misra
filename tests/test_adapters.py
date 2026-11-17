@@ -1796,11 +1796,11 @@ def test_five_misses_in_a_row_end_a_companys_job_pages_for_the_run(monkeypatch: 
     assert len(urls) == adapters.DETAIL_FAIL_STREAK  # a host that refuses is left alone
 
 
-def test_the_window_of_job_pages_moves_each_day_so_none_starves(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_the_window_of_job_pages_moves_each_day_and_wraps(monkeypatch: pytest.MonkeyPatch) -> None:
     urls = fake_get(monkeypatch, wd_detail())
     monkeypatch.setattr(adapters, "DETAIL_CAP", 2)
-    adapters.add_descriptions("workday", WD_SLUG, "Acme", jobs_n(5), set(), day=1)
-    assert [u.rsplit("/", 1)[1] for u in urls] == ["J2", "J3"]
+    adapters.add_descriptions("workday", WD_SLUG, "Acme", jobs_n(6), set(), day=1)
+    assert [u.rsplit("/", 1)[1] for u in urls] == ["J5", "J0"]  # the window starts five jobs on and wraps
 
 
 def test_a_hit_resets_the_miss_streak_so_only_misses_in_a_row_stop_the_company(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -1813,11 +1813,14 @@ def test_a_hit_resets_the_miss_streak_so_only_misses_in_a_row_stop_the_company(m
     assert adapters.add_descriptions("workday", WD_SLUG, "Acme", jobs_n(10), set()) == (10, 2, 0)
 
 
-def test_the_window_wraps_and_a_short_list_keeps_its_order(monkeypatch: pytest.MonkeyPatch) -> None:
-    urls = fake_get(monkeypatch, wd_detail())
-    monkeypatch.setattr(adapters, "DETAIL_CAP", 2)
-    adapters.add_descriptions("workday", WD_SLUG, "Acme", jobs_n(5), set(), day=2)
-    assert [u.rsplit("/", 1)[1] for u in urls] == ["J4", "J0"]
-    urls.clear()
-    adapters.add_descriptions("workday", WD_SLUG, "Acme", jobs_n(2), set(), day=7)
-    assert [u.rsplit("/", 1)[1] for u in urls] == ["J0", "J1"]  # nothing is left over, so nothing rotates
+def test_jobs_behind_five_failing_pages_are_reached_on_later_days(monkeypatch: pytest.MonkeyPatch) -> None:
+    asked: set[str] = set()
+
+    def first_five_fail(slug: str, job: dict[str, Any]) -> tuple[str, dict[str, Any]] | None:
+        asked.add(job["job_id"])
+        return None if int(job["job_id"].rsplit("J", 1)[1]) < adapters.DETAIL_FAIL_STREAK else ("text", {})
+
+    monkeypatch.setitem(adapters.DETAILS, "workday", first_five_fail)
+    for day in range(3):  # ten pending jobs, a short list, and the first five never answer
+        adapters.add_descriptions("workday", WD_SLUG, "Acme", jobs_n(10), set(), day=day)
+    assert asked == {f"/job/x/J{i}" for i in range(10)}

@@ -601,8 +601,8 @@ def add_descriptions(  # noqa: PLR0913, PLR0917
             job[HELD] = True
         else:
             todo.append(job)
-    if len(todo) > DETAIL_CAP:  # a different window each day, so a job whose page never answers cannot starve the rest
-        start = day * DETAIL_CAP % len(todo)
+    if todo:  # a different window each day, by the fewest pages a run can end after, so no job is starved
+        start = day * DETAIL_FAIL_STREAK % len(todo)
         todo = todo[start:] + todo[:start]
     asked = got = streak = 0
     for job in todo[:DETAIL_CAP]:
