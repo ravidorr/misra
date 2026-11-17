@@ -795,3 +795,19 @@ def test_the_pull_goes_on_without_the_keys_when_they_cannot_be_listed(
     descriptions.work_path(descriptions.HELD_FILE).mkdir()  # a file that cannot be written
     assert sync_supabase.leave_held(client(FakeSupabase())) is None
     assert "::warning::the stored descriptions could not be listed for the crawl: " in capsys.readouterr().out
+
+
+def test_main_pull_stays_quiet_about_the_held_count_when_the_keys_could_not_be_listed(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], workdir: Any
+) -> None:
+    (workdir / "data" / "jobs.db").unlink()
+    monkeypatch.setenv("SUPABASE_URL", URL)
+    monkeypatch.setenv("SUPABASE_SERVICE_ROLE_KEY", KEY)
+    monkeypatch.setattr(
+        sync_supabase.requests,
+        "Session",
+        lambda: Pages({"jobs": [job_row("A", "1")], "crawl_log": [log_json(1, "2026-11-16T04:00:00")]}),
+    )
+    monkeypatch.setattr(sync_supabase, "leave_held", lambda _client: None)
+    sync_supabase.main(["--pull"])
+    assert capsys.readouterr().out.splitlines() == ["Supabase: pulled 1 jobs and 1 crawl log rows into data/jobs.db"]
