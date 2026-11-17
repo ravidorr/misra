@@ -695,8 +695,10 @@ async def test_the_open_menu_does_not_overflow_the_screen(page: Page, site: Path
     assert profile is not None
     assert theme is not None
     assert 0 <= menu["x"] <= menu["x"] + menu["width"] <= width
-    for size in (profile["width"], theme["width"], profile["height"], theme["height"]):
-        assert size == pytest.approx(TAP, abs=0.01)  # sub-pixel rounding, as in TAP_MIN
+    assert profile["width"] == pytest.approx(TAP, abs=0.01)
+    assert theme["width"] == pytest.approx(TAP, abs=0.01)
+    assert profile["height"] == pytest.approx(TAP, abs=0.01)
+    assert theme["height"] == pytest.approx(TAP, abs=0.01)
     assert theme["x"] - (profile["x"] + profile["width"]) >= HEADER_GAP  # a gap between the two header buttons
     for item in await page.locator("#accountMenu .account-item").all():
         box = await item.bounding_box()
