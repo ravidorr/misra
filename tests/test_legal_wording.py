@@ -156,11 +156,8 @@ def test_the_privacy_notice_covers_the_contact_form_with_the_lawyers_words_of_20
         "we store nothing about you. The one exception is the short-lived spam counter described below, "
         "if you report a site or use the contact form."
     ) in parts["What we store"]
-    bullet = next(line for line in parts["What we store"].splitlines() if line.startswith("- **Contact form**"))
-    assert bullet == (  # assembled from his approved sentences, not worded by him (the TODO item says so)
-        "- **Contact form** needs no sign-in. Your message, and your name and email address if you give them, are "
-        "emailed to the maintainer's mailbox through Resend and not stored by us anywhere else. " + SPAM_GUARD
-    )
+    # No bullet for the form until he words or confirms one (the TODO item): a bullet we assembled is not his text.
+    assert "**Contact form**" not in text
     assert (  # A2
         "Emails sent through the contact form (and the site-report form) are not stored in our database. They remain "
         "in the maintainer's mailbox until the conversation is resolved or you ask us to delete them, and in "
@@ -515,4 +512,5 @@ def test_the_contact_form_is_approved_but_stays_off_until_the_maintainer_deploys
     assert page.index('id="contactPrivacy"') < page.index('id="contactSend"')
     todo = (REPO / "TODO.md").read_text(encoding="utf-8")
     assert "Turn the contact form on" in todo
+    assert "Ask the lawyer to confirm one bullet" in todo  # the form stays off until he confirms it
     assert "Ask the lawyer about the Contact page and its form" not in todo

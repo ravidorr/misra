@@ -44,19 +44,24 @@ waits for him. Do not write the maintainer's email address in this repository (i
   The report dialog and the filters sheet keep their "Close" buttons: move them to the corner (x)
   (`.dialog-close`, `design-system/components/dialog.css`) so all dialogs match.
 
-### Turn the contact form on
+### Contact form
 
-- [ ] **Turn the contact form on.** The lawyer agreed on 2026-11-17 (round 11) and his wording is in `PRIVACY.md` and on
-  the page. The form, the `contact` Edge Function and its switches are still off: `CONTACT_FORM_ENABLED` in
-  `build_dashboard.py` is `False` and the function answers 404 until its secret `CONTACT_FORM_ENABLED` is `true`
-  (`tests/test_legal_wording.py` pins both). The maintainer does the steps in `supabase/README.md`, "Contact form" ("Turn it
-  on"): set the secret `CONTACT_TO` (his own mailbox) and deploy the function, set the function secret
-  `CONTACT_FORM_ENABLED=true` and check with the `curl` there (one real email arrives). Then a later PR sets
-  `CONTACT_FORM_ENABLED = True` in `build_dashboard.py` and updates `tests/test_build_dashboard.py` and
-  `tests/test_legal_wording.py`. Done when the live Contact page shows the form and a test message reaches the mailbox.
-  - For his next round (not asked yet, his words are not changed here): the "What we store" bullet for the form is
-    assembled from his approved sentences, so he should confirm it; "The short version" still says the spam counter
+- [ ] **Ask the lawyer to confirm one bullet for "What we store" in `PRIVACY.md`.** He approved "a bullet for the form" on
+  2026-11-17 but gave no words, so none is in `PRIVACY.md` (a bullet we assembled is not his text; a test pins its
+  absence). Send him this proposal, built only from his sentences, for the list "Technical records" under "What we
+  store": "**Contact form** needs no sign-in. Your message, and your name and email address if you give them, are emailed to the maintainer's mailbox through Resend and not stored by us anywhere else. To prevent spam, we store a daily non-reversible hash of your network address that is deleted in the next daily cleanup." When he confirms or rewords it, add it and drop the test's absence pin.
+  - The contact form must NOT be switched on (neither the `CONTACT_FORM_ENABLED` constant in `build_dashboard.py` nor the
+    function secret of the same name) until he confirms this bullet.
+  - Also for that round (not asked yet, his words are not changed here): "The short version" still says the spam counter
     exists only "if you report a site"; the "Provider logs" bullet lists the Edge Functions without the contact form.
+- [ ] **Turn the contact form on** (after the item above). The lawyer agreed on 2026-11-17 (round 11) and his wording is in
+  `PRIVACY.md` and on the page. The form, the `contact` Edge Function and its switches are still off: the constant is
+  `False` and the function answers 404 until its secret is `true` (`tests/test_legal_wording.py` pins both). The
+  maintainer does the steps in `supabase/README.md`, "Contact form" ("Turn it on"): set the secret `CONTACT_TO` (his own
+  mailbox) and deploy the function, set the function secret `CONTACT_FORM_ENABLED=true` and check with the `curl` there
+  (one real email arrives). Then a later PR sets `CONTACT_FORM_ENABLED = True` in `build_dashboard.py` and updates
+  `tests/test_build_dashboard.py` and `tests/test_legal_wording.py`. Done when the live Contact page shows the form and a
+  test message reaches the mailbox.
 
 ## Yearly security review
 
