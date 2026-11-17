@@ -124,6 +124,8 @@
       <span class="sticker card-flag">New</span>
       <p class="card-company">Acme Robotics</p>
       <h3 class="card-title"><a href="#card-h">Associate Product Manager</a></h3>
+      <p class="card-snippet" dir="auto">Start of the posting, up to 255 characters, as written</p>
+      <p class="card-more"><a href="#card-h">Read full description &amp; apply on Acme Robotics ↗</a></p>
       <p class="card-tags"><span class="pill">Tel Aviv</span><span class="pill pill-soft">Product</span><span class="card-seen">today</span></p>
       <p class="card-actions"><a class="btn btn-primary" href="#card-h">Apply ↗</a><button type="button" class="btn btn-pill btn-star" aria-pressed="false" aria-label="Star: Associate Product Manager at Acme Robotics"><span aria-hidden="true">☆</span>Star</button><button type="button" class="btn btn-pill">Not for me</button></p>
     </article>
@@ -143,7 +145,7 @@
     <h2 id="agents">Built for agents too</h2>
     <p>The page a person scans is one an agent can read and drive. Cards are <code>article</code> elements with <code>data-job-id</code>, <code>data-company</code>, <code>data-level</code>, <code>data-role-types</code>, <code>data-regions</code>, <code>data-new</code>, <code>data-stale</code>, <code>data-discarded</code> and <code>data-starred</code>. Every open role is in a schema.org JobPosting JSON-LD block. The dashboard registers these WebMCP tools on <code>navigator.modelContext</code> when the browser offers it:</p>
     <ul class="tool-list">
-      <li>search_jobs(query, levels, roleTypes, regions, locations, includeRemoteNotSaid, company, newOnly, includeDiscarded, allLocations, sort, limit)</li>
+      <li>search_jobs(query, levels, roleTypes, regions, includeRemoteNotSaid, company, newOnly, includeDiscarded, sort, limit)</li>
       <li>list_filters()</li>
       <li>list_new_jobs(limit)</li>
       <li>get_job(id)</li>

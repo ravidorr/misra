@@ -62,3 +62,11 @@
   -webkit-line-clamp: 2;
   line-clamp: 2;
 }
+
+/* A name that is still cut after two lines shows whole while the circle is hovered, focused (keyboard) or chosen (a tap
+   chooses it): no tooltip, so it needs no pointer. The row of circles lets the name grow downward. */
+.story:hover .story-name,
+.story:focus-visible .story-name,
+.story[aria-pressed="true"] .story-name {
+  display: block;
+}

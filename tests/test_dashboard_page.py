@@ -844,6 +844,7 @@ NO_CITY = "Israel, city not given"
 MULTI = "Israel, Yokneam; Israel, Tel Aviv"
 PRODUCT = {"pm", "pmi", "pmj", "pd", "multi"}
 ABROAD = {"bare", "us", "lon"}  # not in Israel: the bare remote role does not say where, "Remote, US" does
+PLACED_ABROAD = {"us", "lon"}  # the "Abroad" region: roles outside Israel that name a place (not the bare "Remote")
 FEW = {"width": 375, "height": 700}
 # The tools the page registers on navigator.modelContext are kept here, so a test can call them as an assistant would.
 WEBMCP = """
@@ -1037,8 +1038,8 @@ async def test_fr3_ac8_jobs_outside_israel_are_the_abroad_region(page: Page, sit
     assert await page.locator("#summary").inner_text() == expected
     await page.click(ABROAD_CHIP)
     summary = await page.locator("#summary").inner_text()
-    assert summary == f"Showing {len(ABROAD)} of {len(filter_rows())} open roles. 0 discarded."  # Israel is not named
-    assert await shown(page) == ABROAD
+    assert summary == f"Showing {len(PLACED_ABROAD)} of {len(filter_rows())} open roles. 0 discarded."  # no "Israel"
+    assert await shown(page) == PLACED_ABROAD  # "Remote" with no country is not "abroad": it has its own switch
     await choose(page, "types", "Product")  # the other filters keep working on jobs abroad
     assert await shown(page) == {"lon"}
     await choose(page, "regions", SHARON)  # any of the chosen regions: Abroad and the Sharon
@@ -1054,8 +1055,8 @@ async def test_fr3_ac8_jobs_outside_israel_are_the_abroad_region(page: Page, sit
 async def test_fr3_ac8_the_assistant_asks_for_abroad_as_a_region(page: Page, site: Path) -> None:
     await serve_filters(page, site, tools=True)
     assert await found(page, {}) == ISRAEL_IDS
-    assert await found(page, {"regions": ["Abroad"]}) == ABROAD
-    assert await found(page, {"regions": ["Abroad", SHARON]}) == ABROAD | {"pmj"}
+    assert await found(page, {"regions": ["Abroad"]}) == PLACED_ABROAD
+    assert await found(page, {"regions": ["Abroad", SHARON]}) == PLACED_ABROAD | {"pmj"}
     old = await ask(page, "search_jobs", {"allLocations": True, "locations": ["London, UK"]})  # the removed arguments
     assert {j["id"].split("|")[1] for j in old["jobs"]} == ISRAEL_IDS
     assert len(old["warnings"]) == len(["allLocations", "locations"])
@@ -1187,7 +1188,10 @@ async def test_fr3_ac10_the_assistant_can_read_the_region_level_and_role_type(pa
     assert await found(page, {"regions": [REMOTE], "includeRemoteNotSaid": True}) == {"rem", "bare"}
     assert await found(page, {"regions": [REMOTE]}) == {"rem"}
     both = {"regions": ["Abroad", REMOTE], "includeRemoteNotSaid": True}
-    assert await found(page, both) == ABROAD | {"rem"}  # Remote is a region, and so is Abroad: any of them
+    assert await found(page, both) == PLACED_ABROAD | {
+        "rem",
+        "bare",
+    }  # Remote is a region, and so is Abroad: any of them
 
 
 async def test_the_assistant_can_list_the_values_of_every_filter(page: Page, site: Path) -> None:
@@ -1198,7 +1202,7 @@ async def test_the_assistant_can_list_the_values_of_every_filter(page: Page, sit
     assert {f["name"]: f["roles"] for f in filters["roleTypes"]}["Product"] == len(PRODUCT)
     assert {f["name"]: f["roles"] for f in filters["regions"]}[NORTH] == len({"dev", "multi"})
     assert "locations" not in filters
-    assert {f["name"]: f["roles"] for f in filters["regions"]}["Abroad"] == len(ABROAD)
+    assert {f["name"]: f["roles"] for f in filters["regions"]}["Abroad"] == len(PLACED_ABROAD)
 
 
 async def test_a_role_type_added_later_needs_no_change_to_the_filters(page: Page, site: Path) -> None:
@@ -1337,7 +1341,22 @@ async def test_the_company_has_a_heading_and_the_old_roles_have_a_count(page: Pa
     assert await page.locator("#company").get_attribute("aria-labelledby") == "company-h"
     assert await page.locator("#reset").inner_text() == "Reset"
     assert await page.locator("label:has(#hideStale)").inner_text() == "Hide roles marked Old? (0)"
-    assert await page.locator("#hideStale").is_disabled()  # nothing is marked: nothing to hide
+    assert await page.locator("#hideStale").is_enabled()  # a plain checkbox, whatever the count
+
+
+async def test_the_old_roles_count_is_what_ticking_hide_would_remove(page: Page, site: Path) -> None:
+    html = (site / "index.html").read_text(encoding="utf-8")
+    (site / "index.html").write_text(
+        html.replace('"blocked":[]', '"blocked":[{"c":"Acme","why":"x","last":"never"}]'), encoding="utf-8"
+    )
+    await serve_filters(page, site)
+    label = page.locator("label:has(#hideStale)")
+    assert await label.inner_text() == f"Hide roles marked Old? ({len(ISRAEL_IDS)})"  # Acme's roles in Israel
+    await choose(page, "levels", "Intern")  # the count follows the other filters
+    assert await label.inner_text() == "Hide roles marked Old? (2)"
+    await page.check("#hideStale")
+    assert await label.inner_text() == "Hide roles marked Old? (2)"  # ticking it does not zero the count
+    assert await shown(page) == set()
 
 
 async def test_the_abroad_roles_are_not_copied_into_the_job_alert_filters(page: Page, site: Path) -> None:

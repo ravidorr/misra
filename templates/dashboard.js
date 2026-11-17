@@ -213,7 +213,8 @@ const defaults = () => ({
 function cleanFilters(saved) {
   const base = defaults();
   /* Only the keys of today's filters are kept: the removed "Location" and "Places" (an older save) are dropped here, so
-     they are never written back. A saved "All locations" shows the Israel default; a saved place shows every place. */
+     they are never written back. A saved "All locations" shows the Israel default, and a saved place no longer narrows the
+     list (the chosen regions, if any, still do): no saved value can hide every role. */
   const given = saved && typeof saved === 'object' ? saved : {};
   const f = { ...base, ...Object.fromEntries(Object.keys(base).filter((name) => name in given).map((name) => [name, given[name]])) };
   for (const [name, known] of Object.entries(CHOICES)) {
@@ -1019,9 +1020,10 @@ $('upd').setAttribute('datetime', DATA.generated.replace(' UTC', 'Z').replace(' 
    where and the user chose to include those. */
 const inScope = (j, f) => j.il || f.regions.includes(ABROAD) || (f.remote && j.ru);
 
-/* The regions a job counts under: its own (Abroad for a job outside Israel), plus Remote for a remote role that does not
+/* The regions a job counts under: its own (Abroad for a job outside Israel that names a place; a remote role that does not
+   say where is not "abroad"), plus Remote for a remote role that does not
    say when the user chose to include those. */
-const regionsOf = (j, f) => [...(j.il ? j.rg : [ABROAD]), ...(f.remote && j.ru ? [REMOTE_REGION] : [])];
+const regionsOf = (j, f) => [...(j.il ? j.rg : j.ru ? [] : [ABROAD]), ...(f.remote && j.ru ? [REMOTE_REGION] : [])];
 
 /* The Region chips: a job matches when it is in any chosen one. Nothing chosen means every role in scope (Israel). */
 function placeMatches(j, f) {
@@ -1498,9 +1500,7 @@ function render(focusIdx) {
   const scope = JOBS.filter((j) => inScope(j, F)).length;
   $('goneN').textContent = goneN;
   $('showGone').disabled = goneN === 0;
-  const staleN = JOBS.filter((j) => j.s && inScope(j, F)).length;
-  $('staleN').textContent = staleN;
-  $('hideStale').disabled = staleN === 0 && !F.hideStale; /* a ticked box can always be unticked */
+  $('staleN').textContent = select({ ...F, hideStale: false }).filter((j) => j.s).length; /* what ticking the box would hide */
   const { counts, total } = newRoles();
   renderHero(total, select({ ...F, company: '', showGone: false, onlyNew: false }).length);
   if (!starredView) {
@@ -1882,7 +1882,7 @@ const TOOLS = [
     annotations: { readOnlyHint: true },
     execute: () => {
       const counts = (names, of) =>
-        names.map((name) => ({ name, roles: JOBS.filter((j) => (name === ABROAD ? !j.il : j.il && of(j).includes(name))).length }));
+        names.map((name) => ({ name, roles: JOBS.filter((j) => (name === ABROAD ? !j.il && !j.ru : j.il && of(j).includes(name))).length }));
       return Promise.resolve(
         reply({
           levels: counts(LEVELS, (j) => [j.lv]),

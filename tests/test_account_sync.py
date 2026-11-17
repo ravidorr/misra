@@ -745,3 +745,10 @@ async def test_bringing_filters_over_keeps_a_change_made_while_the_offer_waited(
     await until(lambda: prefs.writes)
     assert saved_filters(prefs)["q"] == "Analyst"
     assert await page.input_value("#q") == "Analyst"
+
+
+async def test_a_browser_that_only_saved_the_removed_location_and_places_offers_nothing(page: Page, site: Path) -> None:
+    old = {"loc": "all", "places": ["Tel Aviv, Israel"]}  # an older save: both filters are gone, so nothing is left
+    await page.add_init_script(f"localStorage.setItem({FILTERS!r}, {json.dumps(json.dumps(old))})")
+    await sign_in(page, site, ChoicesBackend(), PrefsBackend(None))
+    assert await page.locator(BOX).is_hidden()
