@@ -123,7 +123,7 @@ async def test_a_failing_search_leaves_the_title_match_and_asks_again_on_the_nex
 
 
 BASE = "Showing 1 of 3 open roles in Israel. 0 discarded."
-FAILED = "Description search failed. These results match titles, companies and places only."
+FAILED = "Could not search job descriptions. Showing matches in titles, companies, teams and locations only."
 
 
 async def said(page: Page, text: str) -> None:
@@ -171,7 +171,7 @@ async def test_an_answer_at_the_cap_says_some_matches_may_be_missing_and_shows_w
     fake.text_hits = {"rust": [["Acme", "text"], *([["Acme", f"x{n}"] for n in range(2999)])]}
     await serve(page, site, backend=fake)
     await page.fill("#q", "rust")
-    capped = "Too many description matches, so some may be missing. Add a word to narrow it."
+    capped = "Too many description matches, so some roles may be missing. Add a word to narrow the search."
     await said(page, f"Showing 2 of 3 open roles in Israel. 0 discarded. {capped}")
     assert await shown(page) == {"title", "text"}
 
@@ -182,7 +182,10 @@ async def test_a_search_of_one_or_two_characters_says_three_are_needed_and_the_n
     fake = backend()
     await serve(page, site, backend=fake)
     await page.fill("#q", "ru")
-    hint = "Searching inside job descriptions needs a word of 3 or more letters or digits."
+    assert (
+        await page.locator("#summary").inner_text() == "Showing 1 of 3 open roles in Israel. 0 discarded."
+    )  # not while typing
+    hint = "Type a word of 3 or more letters or digits to search job descriptions too."
     await said(page, f"Showing 1 of 3 open roles in Israel. 0 discarded. {hint}")
     assert fake.searches == []
     await page.fill("#q", "ui ux")  # five characters, but no word of three: the function would answer nothing
@@ -282,3 +285,45 @@ async def test_a_late_failure_of_an_old_query_does_not_clear_the_note_of_the_one
     await page.wait_for_timeout(2000)  # then "rust" fails, for a query that is no longer shown
     await page.locator("#list article").first.locator("[data-act=toggle]").click()  # a redraw
     await expect(page.locator("#summary")).to_contain_text(FAILED)
+
+
+WATCH_STATUS = """() => {
+  window.__said = [];
+  new MutationObserver(() => window.__said.push(document.getElementById('status').textContent)).observe(
+    document.getElementById('status'), { childList: true, characterData: true, subtree: true });
+}"""
+
+
+async def test_a_search_is_announced_once_when_its_answer_comes_after_the_pause_and_never_twice_the_same(
+    page: Page, site: Path
+) -> None:
+    fake = backend(
+        search_seconds=1.0
+    )  # the answer comes after the live region's pause: the count before it is not said
+    await serve(page, site, backend=fake)
+    await page.evaluate(WATCH_STATUS)
+    await page.fill("#q", "rust")
+    await expect(page.locator("#status")).to_have_text(
+        "Showing 2 of 3 open roles in Israel. 0 discarded.", timeout=SEARCH_WAIT
+    )
+    await page.wait_for_timeout(1500)
+    assert await page.evaluate("window.__said") == ["Showing 2 of 3 open roles in Israel. 0 discarded."]
+    await page.fill("#q", "engineer")  # another search with the same count: it is said again
+    await expect(page.locator("#list article")).to_have_count(2, timeout=SEARCH_WAIT)
+    await page.wait_for_function("() => window.__said.length === 2", timeout=SEARCH_WAIT)
+    await page.fill("#q", "engineer ")  # the same words: the same text is not written again
+    await page.locator("#q").press("Backspace")
+    await page.wait_for_timeout(1500)
+    assert await page.input_value("#q") == "engineer"
+    assert await page.evaluate("window.__said.length") == len(["rust", "engineer"])  # one write for each search
+
+
+async def test_a_pointed_hebrew_word_is_sent_and_the_search_box_follows_the_text_direction(
+    page: Page, site: Path
+) -> None:
+    fake = backend()
+    await serve(page, site, backend=fake)
+    assert await page.get_attribute("#q", "dir") == "auto"
+    await page.fill("#q", "\u05e9\u05b8\u05c1\u05dc\u05d5\u05b9\u05dd")  # the points sit between the letters
+    await asked(page, fake)
+    assert fake.searches == ["\u05e9\u05b8\u05c1\u05dc\u05d5\u05b9\u05dd"]

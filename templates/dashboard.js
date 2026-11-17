@@ -169,6 +169,7 @@ const JOBS = DATA.jobs;
 let page = 0;
 let ready = false;
 let announceTimer;
+let announcedQuery = ''; /* the search the live region last spoke for */
 let undoTimer; /* "Reset filters" can be undone for a few seconds (see hideUndo) */
 let undoFilters = null;
 let view = 'roles';
@@ -1040,19 +1041,24 @@ const typeMatches = (j, f) => f.types.length === 0 || f.types.some((t) => j.rt.i
    its title, company, team or location has every word, or when its key is in that answer. The answers are kept by query
    (the words, one space apart), so only the answer for the query being shown counts; a search that fails or is slow
    leaves the match on title, company, team and location alone. */
-const hasSearchWord = (query) => /[\p{L}\p{N}]{3}/u.test(query); /* the function answers nothing without a run of 3 letters or digits */
+/* The function answers nothing without a run of 3 letters or digits (Postgres [[:alnum:]]). Marks (\p{M}) count too: glibc
+   counts the points of pointed Hebrew and Arabic as letters, so a pointed word must still be sent. This may be wider than
+   the function (it also takes Latin accents and signs like ½), and a query it lets through that the function refuses
+   gets an empty answer and no note; the other way round the search would be held back wrongly. */
+const hasSearchWord = (query) => /[\p{L}\p{M}\p{N}]{3}/u.test(query);
 const SEARCH_DELAY_MS = 400; /* the box changes with every key: ask once typing pauses */
 const SEARCH_KEPT = 30; /* answers kept */
 const SEARCH_CAP = 3000; /* the most keys the function returns: a full answer may be missing some */
 const SEARCH_NOTES = {
-  failed: 'Description search failed. These results match titles, companies and places only.',
-  capped: 'Too many description matches, so some may be missing. Add a word to narrow it.',
-  short: 'Searching inside job descriptions needs a word of 3 or more letters or digits.',
+  failed: "Could not search job descriptions. Showing matches in titles, companies, teams and locations only.",
+  capped: 'Too many description matches, so some roles may be missing. Add a word to narrow the search.',
+  short: 'Type a word of 3 or more letters or digits to search job descriptions too.',
 };
 const textKeys = new Map();
 const textCapped = new Set(); /* the queries whose answer hit the cap */
 const searchFailed = new Set(); /* the queries whose last ask failed, each until it is answered: asks overlap, so one slot would lose a failure */
 let searchTimer;
+let shortFor = ''; /* the too-short query whose pause has passed: its note shows then, so the line under the heading does not jump while a word is typed */
 const searchQuery = (q) => q.trim().toLowerCase().split(/\s+/).filter(Boolean).join(' ');
 
 async function fetchTextKeys(query) {
@@ -1073,7 +1079,7 @@ async function fetchTextKeys(query) {
 function searchNote() {
   const query = searchQuery(F.q);
   if (query === '') return '';
-  if (!hasSearchWord(query)) return SEARCH_NOTES.short;
+  if (!hasSearchWord(query)) return shortFor === query ? SEARCH_NOTES.short : '';
   if (searchFailed.has(query)) return SEARCH_NOTES.failed;
   return textCapped.has(query) ? SEARCH_NOTES.capped : '';
 }
@@ -1083,6 +1089,14 @@ function searchNote() {
 function searchText() {
   clearTimeout(searchTimer);
   const query = searchQuery(F.q);
+  if (shortFor !== query) shortFor = '';
+  if (query !== '' && !hasSearchWord(query)) {
+    searchTimer = setTimeout(() => {
+      shortFor = query;
+      if (ready && view === 'roles' && searchQuery(F.q) === query) render();
+    }, SEARCH_DELAY_MS);
+    return;
+  }
   if (!hasSearchWord(query) || textKeys.has(query)) return;
   searchTimer = setTimeout(async () => {
     try {
@@ -1435,14 +1449,24 @@ function cardEl(j) {
   return h('li', {}, [art]);
 }
 
-/* The visible summary changes on every keystroke; screen readers hear it once typing pauses. */
+/* The visible summary changes on every keystroke; screen readers hear it once typing pauses, and only when the words
+   have changed or the search has (a rewrite of the same text for the same search is read again). */
 function announce(text) {
   clearTimeout(announceTimer);
   if (!ready) return;
   announceTimer = setTimeout(() => {
-    $('status').textContent = text;
+    const query = searchQuery(F.q);
+    if ($('status').textContent !== text || query !== announcedQuery) $('status').textContent = text;
+    announcedQuery = query;
   }, ANNOUNCE_DELAY_MS);
 }
+
+/* A search for words that the description search has not answered yet: the count shown is the title match only, and the
+   answer draws the list and the line again, so the line is announced then and not before. */
+const searchPending = () => {
+  const query = searchQuery(F.q);
+  return hasSearchWord(query) && !textKeys.has(query) && !searchFailed.has(query);
+};
 
 /* The starred list is a view of its own: the filters do not apply to it (a closed role has no level, region or role
    type), so they are put away while it shows. */
@@ -1493,7 +1517,8 @@ function render(focusIdx) {
     const note = searchNote();
     const summary = `Showing ${res.length} of ${scope} open roles ${F.loc === 'il' ? 'in Israel' : 'in all locations'}. ${goneN} discarded.${note && ` ${note}`}`;
     $('summary').textContent = summary;
-    announce(summary);
+    if (searchPending()) clearTimeout(announceTimer);
+    else announce(summary);
     $('filtersDone').textContent = `Show ${res.length} ${res.length === 1 ? 'role' : 'roles'}`;
     renderStories(counts);
   }
