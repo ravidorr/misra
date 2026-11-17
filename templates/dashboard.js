@@ -1221,9 +1221,10 @@ function renderHero(newN, filteredCount) {
   $('heroBottom').textContent = bottom;
 }
 
-/* "New this week" is one line of circles and a button ("Show all 15" / "Show fewer") at its end; the others wait in a
-   wrapping area below until the button opens it. The choice lasts for the page session only. Hidden circles carry the
-   `hidden` attribute, so they are out of the Tab order and away from screen readers, and nothing scrolls sideways. */
+/* "New this week" is one line of circles, with a button ("Show all 15" / "Show fewer") at the right of the heading above
+   them; the others wait in a wrapping area until the button opens it. The choice lasts for the page session only.
+   Hidden circles carry the `hidden` attribute, so they are out of the Tab order and away from screen readers, and
+   nothing scrolls sideways. */
 let hiringOpen = false;
 let hiringWidth = 0;
 function layoutStories() {
@@ -1240,7 +1241,7 @@ function layoutStories() {
     $('stories').dataset.expanded = 'false';
     return; /* everything fits on one line: no button */
   }
-  toggle.hidden = false; /* the button takes room from the line */
+  toggle.hidden = false;
   const rest = overflowing();
   toggle.textContent = hiringOpen ? 'Show fewer' : `Show all ${items.length}`;
   toggle.setAttribute('aria-expanded', String(hiringOpen));
