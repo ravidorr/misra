@@ -297,17 +297,24 @@ Decisions made in planning (they change the PRD's wording, so update the PRD in 
   is in the crawl step. CONTRIBUTING.md, "Job descriptions", has the design, the size cap (20,000 characters) and the
   storage estimate. The text is not readable through the public API (migration `20261121100000_jobs_text_not_public.sql`, column-level `select`): step 7.3 searches it through a function that returns keys only and step 8.1 (`get_job`) returns it to the assistant, as the lawyer approved on 2026-11-16 (PRD decisions log). Left: the browser crawl (1,589 jobs, 23 percent: no standard field), Workday (318, one request per job
   and a new path to check against `robots.txt`), Phenom (89, a teaser only), Oracle HCM, `comeet_page`, JazzHR and BambooHR
-  (a request per job), SmartRecruiters (skipped by `robots.txt`). After the first daily run with descriptions: check the
-  log line and the size of the `jobs` table in the dashboard (Reports, Database), and write both in CONTRIBUTING.md.
-- [ ] 7.2 Short description: a public `snippet` column holding the first 255 characters of the description as written, cut
+  (a request per job), SmartRecruiters (skipped by `robots.txt`). Not ticked: those adapters are left, and the size of the
+  `jobs` table (dashboard, Reports, Database) is not yet written in CONTRIBUTING.md, "Real data against the limits".
+- [x] 7.2 Short description: a public `snippet` column holding the first 255 characters of the description as written, cut
   at a word boundary, none when no description; sync stores it; the card and the detail view show it, with the link
   "Read full description & apply on `<Company>`" to the employer's page. Done when: FR-4 AC 4 and 8 hold.
+  Done: the column and the sync in #137 (migration `20261122100000_jobs_snippet.sql`), the card in #143, the detail view
+  with the link in #145 (step 7.3). The card adds its ellipsis by a heuristic; the exact rule (a stored `snippet_cut`
+  flag) is in `TODO.md`, "Snippet ellipsis".
 - [x] 7.3 Detail view from the card (it shows the snippet and the "Read full description & apply" button; the full text is
   not shown) and search over the full text (Postgres full-text index, also used by the digest keyword filter) through
   a database function that returns matching job keys only. Done when: FR-4 AC 5 and 6 hold. FR-4 AC 11 (AI summary only if users ask) is a standing policy, not a step.
+  Done in #145 (migration `20261124100000_jobs_text_search.sql`, applied). The digest keyword filter uses the same function.
 - [ ] 7.4 Storage check after one month of descriptions against the free database size, and the trim of closed jobs'
   text: set the full text to NULL 30 days after the job closes (the lawyer's retention rule; the snippet and the other
   columns stay). Done when: FR-4 AC 10 and 12 hold, written in the note.
+  Half done: the trim is built and runs in every sync (#137, migration `20261123100000_jobs_text_trim.sql`; AC 12). Left:
+  the storage check one month after the first descriptions (2026-11-16, so from 2026-12-16), written in `CONTRIBUTING.md`,
+  "Real data against the limits" (AC 10); `TODO.md`, "Measure the size of `crawl_log` and `jobs` after a month", covers it.
 
 ## FR-6 (assistant connection)
 
@@ -315,21 +322,35 @@ Decisions made in planning (they change the PRD's wording, so update the PRD in 
   text; it returns keys, titles and snippets), `get_job` (everything collected, including the full text, for the
   assistant), no user data, rate limited. Same query code path as the dashboard (shared SQL function) so the results
   match. The text is exposed to assistants and search only by this step and 7.3, as the lawyer approved on 2026-11-16. Done when: FR-6 AC 1 to 4 and 8 hold against a real MCP client.
-  **Built, off; the lawyer approved the wording and `ASSISTANT.md` on 2026-11-17 (with two small edits, now in), going live is the next step, so not ticked.** The Edge Function `mcp` (MCP over HTTP, JSON answers,
-  no sessions) with `search_jobs` (the SQL function `search_jobs`, the dashboard's rules, `search_job_keys` for the text) and
-  `get_job` (one job by company and job_id, the full text, open or closed for less than 30 days), rate limited per caller (100 searches and 15 job reads a day, 500 job reads for everyone, his answer of 2026-11-17)
-  and for everyone through hashed addresses (`assistant_ip_limits`, cleaned by the daily cleanup). It answers 404 unless
-  the function secret `ASSISTANT_ENDPOINT_ENABLED` is `true`; it is not deployed and nobody sets the secret before the lawyer
-  confirms (his request of 2026-11-17). The migration `20261125100000_assistant_endpoint.sql` is harmless while it is off and
-  is applied by the maintainer. Tested with the protocol over HTTP in vitest and once with the official TypeScript client.
-  His answers are in (limits, one job per call, `details` allowlist, no cache, wording in `TERMS.md`, `PRIVACY.md`, `ASSISTANT.md`). Applied, deployed and switched on on 2026-11-17, with the live check (tools, a search, one job, the limits, a bad request, the text closed to the public key). To finish: a real assistant, then tick this step.
+  **Live since 2026-11-17, not ticked until the hand test (8.2).** The Edge Function `mcp` (MCP over HTTP, JSON answers, no
+  sessions) has `search_jobs` (the SQL function `search_jobs`, the dashboard's rules, `search_job_keys` for the text) and
+  `get_job` (one job by company and job_id, the `details` allowlist and the full text, open or closed for less than 30
+  days). Rate limits: per caller 100 searches and 15 job reads a day, 500 job reads a day for everyone, through hashed
+  addresses (`assistant_ip_limits`, cleaned by the daily cleanup). Built in #147, the lawyer's limits and wording in #149,
+  switched on in #154: migration `20261125100000_assistant_endpoint.sql` applied, function deployed,
+  `ASSISTANT_ENDPOINT_ENABLED=true`, after the lawyer approved `TERMS.md`, `PRIVACY.md`, `ASSISTANT.md` and `SECURITY.md` on
+  2026-11-17. Tested with the protocol over HTTP in vitest and once with the official TypeScript client; the maintainer
+  did a live check on 2026-11-17 (tools, a search, one job, the limits, a bad request, the text closed to the public key;
+  not repeated here, only `tools/list` was seen to answer). Left: a real assistant, which is the hand test in 8.2.
 - [ ] 8.2 "Connect your assistant" page on the dashboard with plain step-by-step instructions for the common assistants
   tested by hand, README cut to a short developer note, `llms.txt` updated. Done when: FR-6 AC 5 to 7 hold; a person with
   no technical skills connects in a couple of minutes (hand test).
-  **On since 2026-11-17 (the lawyer approved the wording and `ASSISTANT.md` with two small edits), not ticked until the hand test.** `ASSISTANT.md` (the words, by the technical writer, steps for
-  Claude and ChatGPT checked against their current help pages on 2026-11-17, and any other assistant) becomes `docs/assistant.html`
-  in the template of the privacy page, with a footer link, both behind `ASSISTANT_PAGE_ENABLED` in `build_dashboard.py`
-  (`True`, with the page in `llms.txt`); the README has a short developer note. To finish: the hand test with a person who is not technical (Claude and ChatGPT), then tick 8.1 and 8.2.
+  **Live since 2026-11-17 (#148, on in #154), not ticked until the hand test.** `ASSISTANT.md` (the words, by the technical
+  writer, steps for Claude and ChatGPT checked against their current help pages on 2026-11-17, and any other assistant)
+  becomes `docs/assistant.html` in the template of the privacy page, with a footer link and a line in `llms.txt`, behind
+  `ASSISTANT_PAGE_ENABLED` in `build_dashboard.py` (`True`); the README has a short developer note.
+  Hand test plan:
+  - Who: one person who is not technical (never the maintainer), once with Claude and once with ChatGPT. They start from
+    `https://ravidorr.github.io/misra/assistant.html` only, with no help and no other instructions.
+  - Tasks: connect the assistant; ask it for entry-level product roles in Tel Aviv; ask it to read one posting and draft a
+    short cover-letter outline; ask a question the data cannot answer and check that it says so.
+  - Observe: time to connect (under a couple of minutes), each step where they hesitate, any confusing wording, any error,
+    and whether the assistant names the employer's page for applying.
+  - Pass: both assistants connect without help, a job is found and read, and no personal data is asked for or shown.
+  - Result: a dated note under this plan, with the observations.
+  - On failure: fix the wording of the page through the technical writer, never the lawyer-approved legal text; a change to
+    the wording of `ASSISTANT.md` that the lawyer approved needs the lawyer. Then repeat.
+  Then tick 8.1 and 8.2. Not run yet.
 
 ## Retire SQLite (last, only when the Supabase path has run clean for a while)
 
@@ -358,8 +379,11 @@ Decisions made in planning (they change the PRD's wording, so update the PRD in 
   Send to lawyer: `PRIVACY.md` now says that a daily backup copy of the account data is kept in a private GitHub repository (United States, access only
   the maintainer) for up to 30 days, that a deleted account leaves the backups within that time, and that GitHub may keep replaced copies briefly;
   `SECURITY.md` changed with it. The lawyer should see the wording ("What we store", "Providers", "How long we keep it", "How to delete your data") before the first real subscriber.
-  Still to do: live checks (see `TODO.md`, "Step 9.1 live checks": the first daily runs after the move, and a restore
-  into a scratch Supabase project, which also tests `--create-auth-users` against the real `auth.users`).
+  Merged in #146, with the leftovers (a stale checkout, a partial pull, a late crash, the first backup guard) in #152. The
+  first runs on 2026-11-17: the 04:30 UTC cron-job.org run was green; the two other runs of that morning (04:25 by hand,
+  04:31 cron-job.org) failed at the "Commit the dashboard" step on a stale checkout, which #152 fixes (`ref: main`). No run
+  since is recorded. Still to do: live checks (see `TODO.md`, "Step 9.1 live checks": two green runs in a row after #152,
+  and a restore into a scratch Supabase project, which also tests `--create-auth-users` against the real `auth.users`).
 
 ## Checks that close the plan
 
@@ -367,7 +391,8 @@ Decisions made in planning (they change the PRD's wording, so update the PRD in 
   AC 4-6: 4.3. FR-3 AC 1-7, 11: 3.2; AC 8-10: 3.4. FR-4 AC 1-3, 9: 7.1; AC 4, 8: 7.2; AC 5, 6: 7.3; AC 7: 8.1;
   AC 10, 12: 7.4; AC 11: policy. FR-5: 1.1. FR-6 AC 1-4, 8: 8.1; AC 5-7: 8.2. FR-7: 5.1 (spam AC), 5.2. FR-8 AC 1-3: 6.2;
   AC 4-6, 8, 9: 6.3; AC 7: 6.1; AC 10: 6.4; AC 11 (consent log): 6.1; AC 12 (footer): 6.3. FR-1 AC 7 (sign-in notice) and the `TERMS.md` disclaimer: 6.6. FR-4 AC 12: also applied in 7.1. FR-9 AC 3-6, 10: 3.1; AC 1, 2, 7, 8: 3.4; AC 9: 6.3. Re-check this when a
-  step is split.
+  step is split. Mapping re-checked 2026-11-17 against the merged steps: every AC is named. Not ticked: the steps 7.1, 7.4, 8.1
+  and 8.2 are open (above), so the FR-4 and FR-6 ACs are not all proven yet.
 - [x] ~~Success metrics are read from Supabase tables and Resend reports monthly; add the queries to `CONTRIBUTING.md`
   with step 6.4 (sign-ins, 30-day returns, subscribers, share starring, region and description shares, accepted sites).~~
   Done in v0.28.0 ("Monthly success metrics" in `CONTRIBUTING.md`). Accepted sites are not in a table (a report is an email), so that one is a `git log` count of additions to `data/seed_companies.csv`.
