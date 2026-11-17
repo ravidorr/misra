@@ -7,16 +7,10 @@ import { execFileSync } from 'node:child_process';
 import { readFileSync, realpathSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
-// The lawyer approved the wording of these files word for word and asked for no changes (AGENTS.md), so the
-// em dash rule skips them (the emoji rule does not). Only ASSISTANT.md has em dashes today; TODO.md asks him.
-export const LAWYER_FILES = [
-  'PRIVACY.md',
-  'TERMS.md',
-  'SECURITY.md',
-  'ASSISTANT.md',
-  'supabase/email-texts.md',
-  'templates/email.js',
-];
+// Files whose wording is the lawyer's and may keep an em dash (the emoji rule still applies to them). The list is
+// empty: on 2026-11-17 he agreed to commas, colons and parentheses in ASSISTANT.md, and no other file of his has one.
+// Add a file here only when he asks for a word to stay as it is.
+export const LAWYER_FILES = [];
 
 const TEXT_FILES = ['*.md', '*.py', '*.html', '*.css', '*.yml', '*.sql', '*.js', '*.mjs', '*.ts'];
 
