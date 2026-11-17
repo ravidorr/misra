@@ -32,6 +32,11 @@ KEEP = (
     "It may have expired (confirmation links work for 7 days), been replaced by a newer link, "
     "or belong to job alerts that were turned off."
 )
+NOT_VALID_TEXT = (
+    f"{KEEP} If you got more than one confirmation email, use the link in the newest one. "
+    "To manage your job alerts or delete your account, sign in on the Misra dashboard. "
+    'If your job alerts are waiting for confirmation, press "Send the confirmation again" there to get a new link.'
+)
 ANSWERS = {
     "ok": (200, {"ok": True, "status": "confirmed", "schedule": "weekly"}),
     "daily": (200, {"ok": True, "status": "confirmed", "schedule": "daily"}),
@@ -136,7 +141,7 @@ async def test_every_link_that_cannot_confirm_gets_the_same_plain_words(page: Pa
     await open_page(page, site, f"#token={TOKEN}", mode)
     await page.click("#confirm")
     await expect(page.locator("#heading")).to_have_text(NOT_VALID)
-    await expect(page.locator("#message")).to_contain_text(KEEP)
+    await expect(page.locator("#message")).to_have_text(NOT_VALID_TEXT)
     await expect(page.locator("#message")).to_contain_text("sign in on the Misra dashboard")
     await expect(page.locator("#confirm")).to_be_hidden()
     await expect(page.locator("#back")).to_be_visible()
@@ -227,9 +232,7 @@ async def test_a_failed_unsubscribe_link_says_what_is_true_for_it(page: Page, si
 async def test_a_failed_confirmation_link_keeps_its_text(page: Page, site: Path) -> None:
     await open_page(page, site, "#link-not-valid")
     await expect(page.locator("#heading")).to_have_text(NOT_VALID)
-    assert await page.locator("#message").inner_text() == (
-        f"{KEEP} To manage your job alerts or delete your account, sign in on the Misra dashboard."
-    )
+    assert await page.locator("#message").inner_text() == NOT_VALID_TEXT
 
 
 async def test_the_button_works_from_the_keyboard(page: Page, site: Path) -> None:
@@ -287,7 +290,7 @@ STATES = {
     ),
     "#link-not-valid": (
         NOT_VALID,
-        f"{KEEP} To manage your job alerts or delete your account, sign in on the Misra dashboard.",
+        NOT_VALID_TEXT,
         "Open Misra dashboard",
     ),
     "#unsubscribe-link-not-valid": (UNSUBSCRIBE_NOT_VALID, UNSUBSCRIBE_NOT_VALID_TEXT, "Open Misra dashboard"),

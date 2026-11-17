@@ -255,6 +255,10 @@ def test_the_email_texts_are_kept_exactly_in_one_file_for_the_steps_that_build_t
     assert DIGEST_FOOTER in flat
     assert "To change your filters, or to delete your account and all stored data, sign in at https://" in flat
     assert CONFIRM_FOOTER in flat
+    assert (
+        "The link works for 7 days. If you get more than one of these emails, use the newest one: each new email "
+        "stops the link in the older ones from working."
+    ) in flat
     assert "Subject: `Confirm your Misra job alerts`" in texts
     assert "Someone (hopefully you) turned on {{schedule}} job alerts for {{user_email}} on Misra." in texts
     assert "Unsubscribe in one click (no sign-in needed):\n{{unsubscribe_url}}" in texts
@@ -392,6 +396,11 @@ def test_the_screens_carry_the_lawyers_round_of_2026_11_16_editorial_wording() -
         "It may have expired (confirmation links work for 7 days), been replaced by a newer link, or belong to job"
         in email
     )
+    assert (
+        "If you got more than one confirmation email, use the link in the newest one. To manage your job alerts or "
+        "delete your account, sign in on the Misra dashboard. If your job alerts are waiting for confirmation, press "
+        '"Send the confirmation again" there to get a new link.'
+    ) in email
     assert "This unsubscribe link no longer works" in email
     assert (
         "Your account may have been deleted, or we may have replaced the key that signs these links. To stop job "
