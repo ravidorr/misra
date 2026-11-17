@@ -37,7 +37,36 @@ def test_the_markdown_says_where_to_connect_and_makes_no_promise_the_endpoint_do
     assert "](PRIVACY.md)" in text
     assert "](TERMS.md)" in text
     assert "<script" not in text
-    assert not re.search(r"https?://(?!dncodqeqpoqwcxdctzco\.supabase\.co/functions/v1/mcp|chatgpt\.com/plugins)", text)
+    allowed = r"dncodqeqpoqwcxdctzco\.supabase\.co/functions/v1/mcp|chatgpt\.com/plugins|ravidorr\.github\.io/misra/"
+    assert not re.search(rf"https?://(?!{allowed})", text)
+
+
+def test_the_markdown_carries_the_lawyers_block_of_2026_11_17_word_for_word_and_the_limits() -> None:
+    text = (REPO / "ASSISTANT.md").read_text(encoding="utf-8")
+    heading = "### What your assistant can see\u2014and the rules for using it\n"
+    assert heading in text
+    for sentence in (
+        "Your assistant can search open listings and read the full description of one job at a time (up to 20,000 "
+        "characters, for open roles or roles closed less than 30 days). It cannot see your Misra account, email "
+        'address, stars, "Not for me" choices, or saved filters.',
+        "Connecting Misra requires no sign-in and sends nothing personal to us\u2014your resume and prompts stay "
+        "inside your own AI assistant. To enforce daily limits (100 searches and 15 full-job reads per day), we "
+        "store only a daily, non-reversible hash of your network address, which is deleted during the next daily "
+        "cleanup.",
+        'All job postings and descriptions belong to the respective employers and are provided "as is". You may '
+        "use this connection only for your own personal job search\u2014bulk copying, republishing, or training "
+        "models on the postings is not allowed.",
+        "Misra is a free, unofficial project and is not affiliated with any employer. Your AI assistant\u2014not "
+        "Misra\u2014is responsible for anything it writes (such as cover letters or summaries). Always verify "
+        "details on the employer's own career page before applying.",
+        "By connecting your assistant, you agree to the [Terms](https://ravidorr.github.io/misra/terms.html) and "
+        "[Privacy Notice](https://ravidorr.github.io/misra/privacy.html).",
+    ):
+        assert sentence in text, sentence
+    assert "(only a daily, non-reversible hash is used to count rate limits; see the privacy notice)" in text
+    assert "Do not copy the postings in bulk, republish them, or use them to train models." in text
+    assert "It resets the next day (UTC)." in text
+    assert text.index("](TERMS.md)") < text.index("## Claude")  # the links sit next to the address
 
 
 def test_the_page_renders_in_the_template_with_the_address_in_a_code_block() -> None:
