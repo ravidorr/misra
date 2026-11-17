@@ -308,11 +308,14 @@ async def test_a_search_is_announced_once_when_its_answer_comes_after_the_pause_
     )
     await page.wait_for_timeout(1500)
     assert await page.evaluate("window.__said") == ["Showing 2 of 3 open roles in Israel. 0 discarded."]
-    await page.fill("#q", "rust ")  # the same words: the same text is not written again
+    await page.fill("#q", "engineer")  # another search with the same count: it is said again
+    await expect(page.locator("#list article")).to_have_count(2, timeout=SEARCH_WAIT)
+    await page.wait_for_function("() => window.__said.length === 2", timeout=SEARCH_WAIT)
+    await page.fill("#q", "engineer ")  # the same words: the same text is not written again
     await page.locator("#q").press("Backspace")
     await page.wait_for_timeout(1500)
-    assert await page.input_value("#q") == "rust"
-    assert len(await page.evaluate("window.__said")) == 1
+    assert await page.input_value("#q") == "engineer"
+    assert await page.evaluate("window.__said.length") == len(["rust", "engineer"])  # one write for each search
 
 
 async def test_a_pointed_hebrew_word_is_sent_and_the_search_box_follows_the_text_direction(
