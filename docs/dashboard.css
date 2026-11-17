@@ -176,7 +176,10 @@
  * Card: one role. Machine-readable by design, so keep the data-* attributes.
  *   <article class="card" data-job-id="..." data-company="..." data-new="true">
  *     <span class="sticker card-flag">New</span>
- *     <p class="card-company">Acme</p>
+ *     <div class="card-meta">
+ *       <p class="card-company">Acme</p>
+ *       <time class="card-seen" datetime="2026-11-16" title="..."><svg class="card-seen-icon" aria-hidden="true">...</svg><span>First seen yesterday</span></time>
+ *     </div>
  *     <h3 class="card-title"><a href="...">Role</a></h3>
  *     <p class="card-snippet" dir="auto">Start of the posting, up to 255 characters, as written</p>
  *     <p class="card-more"><a href="...">Read full description &amp; apply on Acme ↗</a></p>
@@ -201,6 +204,13 @@
   position: absolute;
   top: -12px;
   right: var(--space-4);
+}
+
+.card-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-1) var(--space-3);
 }
 
 .card-company {
@@ -260,9 +270,25 @@
   margin: 0 0 var(--space-4);
 }
 
+/* When Misra first saw the role: a muted clock and "First seen yesterday" in the meta row, after the company, so it is in
+   the same place on every card whatever the tags do. Not a control (no 44px target), and `--muted` is AA on the panel
+   in both themes. */
 .card-seen {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
   color: var(--muted);
-  font-size: 0.8125rem;
+  font-size: var(--text-sm);
+  white-space: nowrap;
+}
+
+.card-seen-icon {
+  flex: none;
+  fill: none;
+  stroke: currentcolor;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 .card-actions {
@@ -1236,7 +1262,7 @@ dialog.sheet[hidden],
   opacity: 0.5;
 }
 
-/* The filters sheet (design-system/components/sheet.css): its body is one column of groups, then the selects and switches. */
+/* The filters sheet (design-system/components/sheet.css): its body is one column of groups (the chips, the company, the sort, the two switches). */
 .sheet-body {
   display: grid;
   gap: var(--space-4);

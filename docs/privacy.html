@@ -12,7 +12,7 @@
 <title>Privacy notice - Misra</title>
 <link rel="canonical" href="https://ravidorr.github.io/misra/privacy.html">
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="dashboard.css" integrity="sha384-HDzEqvenMCr2ziqAdkLjcVRJ+6Lv5FsXhE6rFO34ndqojPVvxnEpZt7jOUOe5KoY">
+<link rel="stylesheet" href="dashboard.css" integrity="sha384-TyDCfTiRyPM3BKNmrAk350QAYKUTE1IIG4qMnveojY/rWGXcQkXc6BzfaZWhGsVz">
 <script src="theme.js" integrity="sha384-7z2KN8CtvARlTfXl2TowUS4HxyeN0rAe6Q516+zOt4eo/dTIOcQvyW4xeRr+6GqC"></script>
 </head>
 <body>
@@ -33,7 +33,7 @@
 <p>This is a plain statement of what the Misra dashboard does with data. It describes what the code and the setup do today. It is not legal advice. The <a href="terms.html">terms</a> are short and go with it.</p>
 <h2 id="the-short-version">The short version</h2>
 <ul>
-<li>Signing in is optional and voluntary. Without it the dashboard works the same, and nothing about you is kept by us, apart from the short-lived spam counter described below if you report a site.</li>
+<li>Signing in is optional and voluntary. Without it the dashboard works the same, and nothing about you is kept by us, apart from the short-lived spam counter described below if you report a site or use the contact form.</li>
 <li>If you sign in with Google, we keep your email address, the jobs you star or mark &quot;Not for me&quot; (the dashboard also calls them discards), and your saved filters. If you also turn on job alerts, we keep their settings (see &quot;What we store&quot;). Nothing else.</li>
 <li>We never store a CV. The dashboard has no place to upload one.</li>
 <li>Only you, and the maintainer who runs the database, can see what your account holds.</li>
@@ -59,9 +59,10 @@
 <p>Technical records, none of them personal to an account:</p>
 <ul>
 <li><strong>Reporting a missing career site</strong> needs no sign-in. The company, careers link and reason you type are emailed to the maintainer and not stored by us anywhere else. To prevent spam, we store a daily non-reversible hash of your network address that is deleted in the next daily cleanup. With it we keep how many reports came from that hash that day, and how many reports were emailed that day in all. The form is the &quot;Add a company&quot; button on the dashboard's coverage card.</li>
+<li><strong>Contact form</strong> needs no sign-in. Your message, and your name and email address if you give them, are emailed to the maintainer's mailbox through Resend and not stored by us anywhere else. To prevent spam, we store a daily non-reversible hash of your network address that is deleted in the next daily cleanup.</li>
 <li><strong>AI assistant connection</strong> needs no sign-in. We do not log your search words, the jobs your assistant reads, or your network address. To enforce daily rate limits, our database keeps a short-lived counter per day: a keyed, non-reversible hash of your network address (or /64 IPv6 prefix, made with a secret key that changes every day) and the number of calls made that day. Counters from earlier days are deleted in the next daily cleanup.</li>
 <li><strong>Limits on confirmation emails.</strong> So that nobody can use the dashboard to flood an inbox, the database keeps short-lived daily counters: one-way codes (keyed hashes, made with a secret that changes every day; never your account ID or the address itself) of how many confirmation emails you and an address were sent, plus the number sent in all that day. The same daily cleanup deletes the rows of every earlier day.</li>
-<li><strong>Provider logs.</strong> Supabase's own platform logs record each request to its services, including the small programs (Edge Functions) behind the report form, account deletion, job alerts, the confirmation and unsubscribe links, and the AI assistant connection: the caller's IP address, approximate location, user agent, and the request path. They are kept for a short period set by Supabase. Our tables never store your address, but these logs are Supabase's and we do not control them. The same kind of access log exists at GitHub, which serves the dashboard.</li>
+<li><strong>Provider logs.</strong> Supabase's own platform logs record each request to its services, including the small programs (Edge Functions) behind the report form, the contact form, account deletion, job alerts, the confirmation and unsubscribe links, and the AI assistant connection: the caller's IP address, approximate location, user agent, and the request path. They are kept for a short period set by Supabase. Our tables never store your address, but these logs are Supabase's and we do not control them. The same kind of access log exists at GitHub, which serves the dashboard.</li>
 <li><strong>The jobs data is public.</strong> Every visitor's browser loads the open roles from Supabase (so Supabase and GitHub see the request, as above). The job listings, job history, and full job descriptions (which may include business contact details published by the employer, such as a recruiter's name or work email) are stored in our Supabase database in the EU and contain only public job postings.</li>
 </ul>
 <h2 id="what-we-never-store">What we never store</h2>

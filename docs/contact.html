@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; connect-src https://dncodqeqpoqwcxdctzco.supabase.co/functions/v1/contact; base-uri 'none'; form-action 'none'">
 <meta name="referrer" content="no-referrer">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="color-scheme" content="light dark">
@@ -12,8 +12,9 @@
 <title>Contact - Misra</title>
 <link rel="canonical" href="https://ravidorr.github.io/misra/contact.html">
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="dashboard.css" integrity="sha384-HDzEqvenMCr2ziqAdkLjcVRJ+6Lv5FsXhE6rFO34ndqojPVvxnEpZt7jOUOe5KoY">
+<link rel="stylesheet" href="dashboard.css" integrity="sha384-TyDCfTiRyPM3BKNmrAk350QAYKUTE1IIG4qMnveojY/rWGXcQkXc6BzfaZWhGsVz">
 <script src="theme.js" integrity="sha384-7z2KN8CtvARlTfXl2TowUS4HxyeN0rAe6Q516+zOt4eo/dTIOcQvyW4xeRr+6GqC"></script>
+<script type="module" src="contact.js" integrity="sha384-ULAVwufivU6A2vR7WipQPdK2IBPqDbZdfkBWxH0Yuz4Jw2p/ZObMJrC+qMsR7Hgh"></script>
 </head>
 <body>
 <a class="skip" href="#main">Skip to main content</a>
@@ -30,6 +31,44 @@
 <main class="legal card" id="main" data-contact="page">
 <h1>Contact</h1>
 <p>Misra is run by one person, the maintainer. Choose the route below that fits what you need.</p>
+
+<section data-contact="form-section" aria-labelledby="contactTitle">
+<h2 id="contactTitle">Write to us</h2>
+<p id="contactFallback">The form needs JavaScript. For a question, <a href="https://github.com/ravidorr/misra/issues">open an issue on GitHub</a>.</p>
+<form class="contact-form" id="contactForm" novalidate hidden data-contact="form">
+  <p>Send a message to the maintainer. You need no account.</p>
+  <p class="notice" id="contactError" role="alert" tabindex="-1" hidden></p>
+  <div class="field-group">
+    <label for="contactName">Name</label>
+    <input class="field" id="contactName" type="text" autocomplete="name" aria-describedby="contactNameHint contactNameError" data-field="name">
+    <p class="field-hint" id="contactNameHint">Optional. Up to 100 characters.</p>
+    <p class="field-error" id="contactNameError" hidden></p>
+  </div>
+  <div class="field-group">
+    <label for="contactEmail">Email</label>
+    <input class="field" id="contactEmail" type="text" inputmode="email" autocapitalize="none" autocomplete="email" spellcheck="false" aria-describedby="contactEmailHint contactEmailError" data-field="email">
+    <p class="field-hint" id="contactEmailHint">Optional. Without it, we cannot reply.</p>
+    <p class="field-error" id="contactEmailError" hidden></p>
+  </div>
+  <div class="field-group">
+    <label for="contactMessage">Message</label>
+    <textarea class="field" id="contactMessage" rows="6" aria-required="true" aria-describedby="contactMessageHint contactMessageError" data-field="message"></textarea>
+    <p class="field-hint" id="contactMessageHint">Up to 2,000 characters.</p>
+    <p class="field-error" id="contactMessageError" hidden></p>
+  </div>
+  <div class="field-trap" aria-hidden="true">
+    <label for="contactWebsite">Leave this field empty</label>
+    <input id="contactWebsite" name="contactWebsite" type="text" tabindex="-1" autocomplete="off" data-field="website">
+  </div>
+  <p class="field-hint" id="contactPrivacy">Your message (and your name and email address, if given) is emailed to the maintainer. To prevent spam, we store a daily non-reversible hash of your network address that is deleted in the next daily cleanup. <a href="privacy.html" target="_blank" rel="noopener noreferrer">Privacy notice<svg class="icon-ext" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></svg><span class="sr-only"> (opens in a new tab)</span></a></p>
+  <p><button type="submit" class="btn btn-pill btn-primary" id="contactSend" aria-describedby="contactPrivacy">Send message</button></p>
+</form>
+<div id="contactDone" data-contact="done" hidden>
+  <h3 id="contactDoneTitle" tabindex="-1">Message sent</h3>
+  <p role="status">Your message was emailed to the maintainer. You get no automatic reply.</p>
+</div>
+</section>
+
 <h2>Questions, bugs and suggestions</h2>
 <p><a href="https://github.com/ravidorr/misra/issues">Open an issue on GitHub</a>. You need a GitHub account. Issues are public, so leave personal details out.</p>
 <h2>Security problems</h2>
