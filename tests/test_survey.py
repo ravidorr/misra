@@ -76,10 +76,12 @@ async def test_survey_outer_error() -> None:
 
 async def test_main_filters_and_writes(workdir: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     companies = [
-        {"name": "A", "status": "careers_page_only"},
-        {"name": "B", "status": "not_found"},
-        {"name": "Source", "status": "not_found"},
-        {"name": "C", "status": "ok"},
+        {"name": "A", "crawl": True, "status": "careers_page_only"},
+        {"name": "B", "crawl": True, "status": "not_found"},
+        {"name": "Source", "crawl": True, "status": "not_found"},
+        {"name": "C", "crawl": True, "status": "ok"},
+        {"name": "Parked", "crawl": False, "status": "not_found", "gap": {"reason": "needs_reader"}},  # never visited
+        {"name": "NoFlag", "status": "not_found"},  # a record that does not say `crawl` is not crawled
     ]
     write_json(workdir / "data" / "companies.json", companies)
     launches: list[dict[str, Any]] = []

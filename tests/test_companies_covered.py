@@ -17,10 +17,10 @@ REPO = Path(__file__).resolve().parents[1]
 
 def test_companies_covered_counts_the_working_feeds() -> None:
     companies = [
-        {"name": "A", "status": "ok"},
-        {"name": "B", "status": "ok"},
-        {"name": "C", "status": "careers_page_only"},
-        {"name": "D", "status": "not_found"},
+        {"name": "A", "crawl": True, "status": "ok"},
+        {"name": "B", "crawl": True, "status": "ok"},
+        {"name": "C", "crawl": True, "status": "careers_page_only"},
+        {"name": "D", "crawl": True, "status": "not_found"},
     ]
     assert build_dashboard.companies_covered(companies) == len(["A", "B"])
     assert build_dashboard.companies_covered([]) == 0
@@ -39,10 +39,10 @@ def test_the_count_of_companies_reaches_the_page_and_the_data(db: sqlite3.Connec
     write_json(
         workdir / "data" / "companies.json",
         [
-            {"name": "Zed", "status": "ok"},
-            {"name": "Down", "status": "ok"},
-            {"name": "Alpha", "status": "x"},
-            {"name": "Gone", "status": "ok"},  # excluded below: on no list, so not counted either
+            {"name": "Zed", "crawl": True, "status": "ok"},
+            {"name": "Down", "crawl": True, "status": "ok"},
+            {"name": "Alpha", "crawl": True, "status": "x"},
+            {"name": "Gone", "crawl": True, "status": "ok"},  # excluded below: on no list, so not counted either
         ],
     )
     (workdir / "data" / "excluded_companies.csv").write_text(
@@ -64,11 +64,37 @@ def test_the_count_of_companies_reaches_the_page_and_the_data(db: sqlite3.Connec
     assert json.loads(page.split("|")[1].removesuffix("</main>"))["covered"] == payload["covered"]
 
 
+def test_a_researched_company_is_not_covered_and_not_untracked_but_is_on_the_card_with_its_link(
+    db: sqlite3.Connection, workdir: Path
+) -> None:
+    """Only a crawled company counts. The researched ones (a `gap`) are on the card, linked to their own `links`."""
+    prepare(workdir)
+    gap = {"reason": "no_openings", "note": "n"}
+    write_json(
+        workdir / "data" / "companies.json",
+        [
+            {"name": "Zed", "crawl": True, "status": "ok"},
+            {"name": "Seen", "crawl": False, "status": "ok", "domain": "seen.test", "gap": gap},
+            {"name": "Linked", "crawl": False, "status": "careers_page_only", "domain": "l.test", "gap": gap}
+            | {"links": {"israel": "https://l.test/il"}},
+        ],
+    )
+    db.close()
+    build_dashboard.main()
+    payload = read_payload(workdir)
+    assert payload["covered"] == 1
+    assert payload["gaps"]["untracked"] == []
+    sites = {s["c"]: s for g in payload["gaps"]["groups"] for s in g["sites"]}
+    assert set(sites) == {"Seen", "Linked"}
+    assert (sites["Linked"]["url"], sites["Linked"]["to"]) == ("https://l.test/il", "israel")  # from `links`
+    assert sites["Seen"]["to"] == "site"
+
+
 def test_the_count_on_the_real_data_is_the_ok_status_of_companies_json(monkeypatch: pytest.MonkeyPatch) -> None:
     """Counted here from the file alone (plain json and the exclusion list), not through the build's own count."""
     monkeypatch.chdir(REPO)
     excluded = build_dashboard.load_excluded()
-    everyone = json.loads((REPO / "data" / "companies.json").read_text(encoding="utf-8"))
+    everyone = [c for c in json.loads((REPO / "data" / "companies.json").read_text(encoding="utf-8")) if c["crawl"]]
     ok = [c["name"] for c in everyone if c["status"] == "ok" and not build_dashboard.is_excluded(c["name"], excluded)]
     kept = [c for c in everyone if not build_dashboard.is_excluded(c["name"], excluded)]
     assert build_dashboard.companies_covered(kept) == len(ok)

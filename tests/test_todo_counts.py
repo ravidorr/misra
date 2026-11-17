@@ -1,12 +1,13 @@
-"""The research item in TODO.md quotes counts about data/unresolved_candidates.csv. The coverage gap card is built from
-that file, so these tests fail when the quoted counts and the file disagree, and the card and TODO.md cannot drift."""
+"""The research item in TODO.md quotes counts about the researched companies of data/companies.json (the records with
+a `gap`). The coverage gap card is built from them, so these tests fail when the quoted counts and the file disagree,
+and the card and TODO.md cannot drift."""
 
-import csv
-import glob
 import json
 import re
 from collections import Counter
 from pathlib import Path
+
+from build_dashboard import read_unresolved
 
 REPO = Path(__file__).resolve().parents[1]
 TODO = " ".join((REPO / "TODO.md").read_text(encoding="utf-8").split())  # one line: wrapping is not a change
@@ -14,8 +15,8 @@ SEGMENTS = ("multinational", "deeptech", "cyber_infra", "biz_software")
 
 
 def rows() -> list[dict[str, str]]:
-    with open(REPO / "data" / "unresolved_candidates.csv", newline="", encoding="utf-8") as fh:
-        return list(csv.DictReader(fh))
+    """The researched companies as `read_unresolved` returns them: name, segment, reason, note, careers_url."""
+    return read_unresolved(json.loads((REPO / "data" / "companies.json").read_text(encoding="utf-8")))
 
 
 def quoted(pattern: str, text: str = TODO) -> int:
@@ -26,7 +27,7 @@ def quoted(pattern: str, text: str = TODO) -> int:
 
 
 def test_the_total_is_the_number_of_rows() -> None:
-    assert quoted(r"unresolved_candidates\.csv` lists (\d+) researched companies") == len(rows())
+    assert quoted(r"holds (\d+) researched companies") == len(rows())
 
 
 def test_no_company_is_listed_twice() -> None:
@@ -35,7 +36,7 @@ def test_no_company_is_listed_twice() -> None:
 
 
 def test_the_segment_counts_are_the_rows_of_each_segment() -> None:
-    sentence = re.search(r"lists \d+ researched companies.*?\)", TODO)
+    sentence = re.search(r"holds \d+ researched companies.*?\)", TODO)
     assert sentence is not None
     by_segment = Counter(r["segment"] for r in rows())
     assert set(by_segment) == set(SEGMENTS)
@@ -45,12 +46,7 @@ def test_the_segment_counts_are_the_rows_of_each_segment() -> None:
 
 def test_the_no_careers_url_count_is_the_companies_without_a_careers_page() -> None:
     names = {r["name"] for r in rows() if r["reason"] == "no_careers_url"}
-    not_found = set()
-    for path in glob.glob(str(REPO / "data" / "new" / "*_companies.json")):
-        not_found |= {
-            c["name"] for c in json.loads(Path(path).read_text(encoding="utf-8")) if c["status"] == "not_found"
-        }
-    assert names == not_found & {r["name"] for r in rows()}
+    assert names == {r["name"] for r in rows() if not r["careers_url"]}
     assert quoted(r"\*\*No careers URL \((\d+)\)\.\*\*") == len(names)
 
 

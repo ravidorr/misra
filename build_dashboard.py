@@ -1,7 +1,6 @@
 """Build the dashboard in docs/: a static page plus cacheable stylesheet, scripts and job data files."""
 
 import base64
-import csv
 import hashlib
 import json
 import posixpath
@@ -21,7 +20,7 @@ from markdown_it.token import Token
 
 import classify
 import regions
-from common import ROBOTS_NOTE, is_excluded, load_excluded, open_history
+from common import ROBOTS_NOTE, crawled_companies, is_excluded, load_companies, load_excluded, open_history
 
 # Stylesheets bundled into docs/dashboard.css, in order. Raw colors live only in tokens.css.
 CSS_SOURCES = ("design-system/tokens.css", "design-system/components/*.css", "templates/dashboard.css")
@@ -163,14 +162,9 @@ SUPABASE_URL = "https://dncodqeqpoqwcxdctzco.supabase.co"
 SUPABASE_ANON_KEY = "sb_publishable_9gvh4YdsfErlFsgJfmNexQ_yHF-XwnA"
 
 
-# The researched companies with no usable job feed; each row says why in `reason` (a key of REASONS) and `note`.
-UNRESOLVED = "data/unresolved_candidates.csv"
-# The career pages of the companies on the card, as the maintainer found them: {name: {"israel": url, "global": url}},
-# either key may be missing. The card links the Israeli page, else the global one, else the company's own site.
-CAREER_LINKS = "data/career_links.json"
 BLOCKED_WHY = "its site blocks automated access from GitHub's servers"
 # Why a site is on the coverage gap card, in the order the card lists them. The keys are the only values the `reason`
-# column of the CSV may hold; the labels are what the visitor reads.
+# of a `gap` in data/companies.json may hold; the labels are what the visitor reads.
 REASONS = {
     "crawl_failing": "Failing in the latest crawl",
     "bot_protection": "Blocks automated access",
@@ -229,35 +223,37 @@ def careers_address(company: dict[str, Any]) -> str:
     )
 
 
-def read_unresolved(excluded: list[str] | None = None) -> list[dict[str, str]]:
-    """The rows of the unresolved-candidates CSV, without the companies on the exclusion list; a reason that is not in
-    REASONS stops the build."""
-    with open(UNRESOLVED, newline="", encoding="utf-8") as fh:
-        reader = csv.DictReader(fh)
-        missing = {"name", "reason", "note"} - set(reader.fieldnames or ())
-        if missing:
-            raise ValueError(f"{UNRESOLVED}: no {', '.join(sorted(missing))} column")
-        rows = [row for row in reader if not is_excluded(row["name"], excluded or [])]
-    for row in rows:
-        row["note"] = row["note"] or ""
-        row["domain"] = row.get("domain") or ""
-        row["careers_url"] = row.get("careers_url") or ""
-        if row["reason"] not in REASONS:
-            raise ValueError(f"{UNRESOLVED}: {row['name']} has the unknown reason {row['reason']!r}")
+def read_unresolved(companies: list[dict[str, Any]]) -> list[dict[str, str]]:
+    """The researched companies with no usable job feed: the records of companies.json that have a `gap` (its `reason`,
+    a key of REASONS, and its `note`). A reason that is not in REASONS stops the build."""
+    rows = []
+    for company in companies:
+        if "gap" in company:
+            gap = company["gap"]
+            row = {
+                "name": company["name"],
+                "domain": company.get("domain") or "",
+                "careers_url": company.get("careers_url") or "",
+                "segment": company.get("segment") or "",
+                "reason": gap.get("reason"),
+                "note": gap.get("note") or "",
+            }
+            if row["reason"] not in REASONS:
+                raise ValueError(f"{company['name']} has the unknown reason {row['reason']!r}")
+            rows.append(row)
     return rows
 
 
-def read_career_links() -> dict[str, tuple[str, str]]:
-    """The address of each company in CAREER_LINKS and where it goes: its Israeli career page ("israel"), else its
-    global one ("careers"); https only, and a company with neither has no entry."""
-    with open(CAREER_LINKS, encoding="utf-8") as fh:
-        pages = json.load(fh)
+def read_career_links(companies: list[dict[str, Any]]) -> dict[str, tuple[str, str]]:
+    """The address of each company with `links` in companies.json and where it goes: its Israeli career page
+    ("israel"), else its global one ("careers"); https only, and a company with neither has no entry."""
     links = {}
-    for name, page in pages.items():
+    for company in companies:
+        page = company.get("links") or {}
         if url := https_only(page.get("israel")):
-            links[name] = (url, "israel")
+            links[company["name"]] = (url, "israel")
         elif url := https_only(page.get("global")):
-            links[name] = (url, "careers")
+            links[company["name"]] = (url, "careers")
     return links
 
 
@@ -272,10 +268,10 @@ def gap_groups(
     has the `url` its name links to (https only) and `to`, what the link opens: "israel" (the Israeli career page),
     "careers" (any other career page or job board) or "site" (the company's own site). The page is the one from
     `links` (Israeli, else global), else the one the data gives, or the company's own site when it has no careers page
-    (`no_careers_url`) or when no careers address is known. `companies` is every company of companies.json; it gives
-    the address of the failing and robots.txt sites."""
+    (`no_careers_url`) or when no careers address is known. `companies` is every crawled company of companies.json; it
+    gives the address of the failing and robots.txt sites."""
     known = {c["name"]: c for c in [*untracked, *(companies or [])]}
-    # a company that left companies.json for the CSV can still be in the crawl log: its row gives the address
+    # a researched company (a `gap` record, not crawled) can still be in the crawl log: its record gives the address
     rows = {r["name"]: https_only(r.get("careers_url")) or own_site(r.get("domain")) for r in unresolved}
     sites: dict[str, tuple[str, str, str]] = {}
     for gap in blocked:
@@ -553,11 +549,11 @@ def main() -> None:
     c = open_history()
     blocked = failing_sites(c, excluded)
     failing = {gap["c"] for gap in blocked}
-    with open("data/companies.json") as fh:
-        companies = [x for x in json.load(fh) if not is_excluded(x["name"], excluded)]
+    everyone = [x for x in load_companies() if not is_excluded(x["name"], excluded)]
+    companies = crawled_companies(everyone)
     unfed = [x for x in companies if x["status"] != "ok"]
     untracked = sorted(x["name"] for x in unfed)
-    groups = gap_groups(blocked, unfed, read_unresolved(excluded), companies, read_career_links())
+    groups = gap_groups(blocked, unfed, read_unresolved(everyone), companies, read_career_links(everyone))
     gaps = {
         "blocked": blocked,
         "untracked": untracked,

@@ -74,7 +74,7 @@ To add one, see [Adding a company](./CONTRIBUTING.md#adding-a-company).
 ## Quickstart
 
 ```bash
-python3 discover.py               # data/seed_companies.csv -> data/companies.json (careers URL + ATS)
+python3 discover.py               # fills in data/companies.json (careers URL + ATS of each crawled company)
 python3 sync_supabase.py --pull   # rebuild data/jobs.db from Supabase; needs SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY
 python3 run.py                    # crawl, diff into data/jobs.db
 ```

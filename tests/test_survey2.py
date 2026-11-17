@@ -120,7 +120,12 @@ async def test_survey_page_never_loads() -> None:
 def test_main_selects_names_and_prints(
     workdir: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    companies = [{"name": "A", "status": "ok"}, {"name": "B", "status": "x"}, {"name": "C", "status": "y"}]
+    companies = [
+        {"name": "A", "crawl": True, "status": "ok"},
+        {"name": "B", "crawl": True, "status": "x"},
+        {"name": "C", "crawl": True, "status": "y"},
+        {"name": "Parked", "crawl": False, "status": "x", "gap": {"reason": "needs_reader"}},  # never visited
+    ]
     write_json(workdir / "data" / "companies.json", companies)
     seen: list[str] = []
 

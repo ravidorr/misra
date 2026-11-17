@@ -9,7 +9,7 @@ from typing import Any
 
 from playwright.async_api import async_playwright
 
-from common import USER_AGENT
+from common import USER_AGENT, crawled_companies, load_companies
 
 ATS = re.compile(
     r"(myworkdayjobs\.com|comeet\.(?:com|co)|greenhouse\.io|lever\.co|ashbyhq\.com|smartrecruiters\.com|"
@@ -156,8 +156,7 @@ async def survey(  # noqa: PLR0912, PLR0915
 
 async def main() -> None:
     names = set(sys.argv[1:])
-    with open("data/companies.json") as fh:
-        cos = [c for c in json.load(fh) if (c["name"] in names if names else c["status"] != "ok")]
+    cos = [c for c in crawled_companies(load_companies()) if (c["name"] in names if names else c["status"] != "ok")]
     sem = asyncio.Semaphore(4)
     async with async_playwright() as p:
         b = await p.chromium.launch(executable_path="/opt/pw-browsers/chromium", args=["--no-sandbox"])
