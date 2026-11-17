@@ -94,6 +94,9 @@ async def test_the_card_has_no_axe_violations_44px_targets_and_no_sideways_scrol
     for control in await page.locator(".card-actions .btn").all():
         box = await control.bounding_box()
         assert box is not None and box["height"] >= TAP and box["width"] >= TAP
+    for link in await page.locator(".card-more a").all():  # the lawyer's link: a 44px target too
+        box = await link.bounding_box()
+        assert box is not None and box["height"] >= TAP
     await page.evaluate(AXE.read_text(encoding="utf-8"))
     assert await page.evaluate(AXE_RUN) == []
     assert await page.evaluate("document.documentElement.scrollWidth <= document.documentElement.clientWidth")

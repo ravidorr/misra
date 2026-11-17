@@ -66,11 +66,14 @@
 
 /* The link to the employer's page that follows the snippet; its words include the company, so they wrap. */
 .card-more {
-  margin: 0 0 var(--space-3);
+  margin: 0 0 var(--space-2);
   font-size: var(--text-sm);
 }
 
 .card-more a {
+  display: inline-flex;
+  min-height: var(--tap);
+  align-items: center;
   color: var(--accent);
   overflow-wrap: anywhere;
 }
