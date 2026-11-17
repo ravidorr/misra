@@ -3013,5 +3013,29 @@
   "n_jobs": 2,
   "n_israel": 2,
   "israel_only": true
+ },
+ {
+  "name": "Ormat",
+  "domain": "ormat.com",
+  "careers_url": "https://careers.ormat.com/search/?q=&locationsearch=Israel",
+  "ats": "browser",
+  "slug": "https://careers.ormat.com/search/?q=&locationsearch=Israel",
+  "source": "override",
+  "status": "ok",
+  "n_jobs": null,
+  "n_israel": null,
+  "israel_only": true
+ },
+ {
+  "name": "Stratasys",
+  "domain": "stratasys.com",
+  "careers_url": "https://careers.stratasys.com/search/?q=&locationsearch=Israel",
+  "ats": "browser",
+  "slug": "https://careers.stratasys.com/search/?q=&locationsearch=Israel",
+  "source": "override",
+  "status": "ok",
+  "n_jobs": null,
+  "n_israel": null,
+  "israel_only": true
  }
 ]
