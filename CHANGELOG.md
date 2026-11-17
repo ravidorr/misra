@@ -4,6 +4,12 @@ All notable changes are documented here. Format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
+## [0.59.0] - 2026-11-17
+
+### Added
+
+- Descriptions for the browser crawl (PLAN.md step 7.1): HiBob career pages (Sapiens, Hibob, Fundbox) and any list-page JSON-LD `JobPosting` give the text from what the crawl already captures; Eightfold boards (Nvidia, Applied Materials, Qualcomm, Microsoft, HP, PayPal, Citi) are read through their own `/api/pcsx/position_details` JSON; four career pages (Weka, eToro, Perion, Digital Turbine) from the JSON-LD `JobPosting` of the job page. Same budget, `robots.txt` gate and politeness as Workday (held keys, 40 a company and run, five misses in a row end a company's run, after the lists). Check Point (HTTP 403) and the other browser companies without JobPosting markup stay without a text: nothing is worked around. The `job pages:` log line now counts the browser companies too.
+
 ## [0.58.0] - 2026-11-17
 
 ### Added

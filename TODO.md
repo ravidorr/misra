@@ -8,6 +8,12 @@ Observations about live sites below come from checks made on 2026-11-14 and may 
 
 ## Descriptions
 
+- [ ] **Text for the browser companies that give none.** Trigger: Check Point (231 jobs, bot protection), monday.com (128),
+  Tower (75), Priority and a dozen small career pages draw the posting with JavaScript, so a plain request has no text and
+  the browser crawl has no standard field (CONTRIBUTING.md, "Job descriptions", has the list). Where: per company, a JSON
+  endpoint the page itself calls (as HiBob and Eightfold), or the company's ATS if it has a public one. Done when: a company on
+  that list gives a text without scraping page text and without working around bot protection. Do not retry a plain request.
+
 - [ ] **Refresh a stored description that changed.** Trigger: the job-page adapters (Workday) fetch a text only for a job
   Supabase holds none for, so a posting edited in place keeps its first text until it closes and reopens. Where:
   `adapters.add_descriptions`: also ask the pages of the jobs whose key hashes into today's slice (for example a job a day in

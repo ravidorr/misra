@@ -326,8 +326,25 @@ PLAN.md step 7.1. Where the text of a posting lives, and how it gets there:
   already final, so the company is never skipped and nothing closes. The log line is `job pages: workday N requests, N with a
   text, N left for later runs`, and a job whose text is stored counts in the share of the `descriptions:` line. A site that answers
   a job page with a block or challenge page is never worked around: no text.
-- **Not read yet.** The browser crawl (a page of text, no standard field), Phenom and Oracle HCM (the lists carry a teaser,
-  not the text), `comeet_page`, JazzHR and BambooHR (a request per job), and SmartRecruiters (skipped by `robots.txt`).
+- **The browser crawl.** Three ways, none of them page text: (1) HiBob career pages (Sapiens, Hibob, Fundbox) return the
+  description in the list JSON the crawl already captures: no request. A `JobPosting` JSON-LD on a list page also gives its
+  description, no request. (2) Eightfold boards (Nvidia, Applied Materials, Qualcomm, Microsoft, HP, PayPal, Citi; Amdocs has no
+  jobs today) give the job's own JSON at `/api/pcsx/position_details?position_id=...&domain=...&hl=en`, the call the board
+  makes, on the path its search uses (every host's `robots.txt` was checked on 2026-11-17 and allows it). (3) The job pages of
+  Weka, eToro, Perion and Digital Turbine, whose static HTML has a schema.org `JobPosting` JSON-LD with the description
+  (`adapters.JSONLD_PAGES`, found by hand on 2026-11-17); only that JSON is read. (2) and (3) go through `common.get`, so
+  `robots.txt`, the delay and the budget (held keys, 40 a company and run, five misses in a row end the run) are the Workday
+  ones; they run after the lists, so a refusal never skips a company. The first fill: about 160 requests on the first day
+  (Nvidia's 400 jobs take ten days at 40 a day), then the new jobs. Estimated, not yet seen live: about 830 of the 1,589 browser
+  jobs. **Not read, and not to be tried again without a reason:** Check Point (231 jobs; a plain request answers HTTP 403, bot
+  protection, never worked around) and every other browser company (monday.com, Tower, Priority,
+  Xtend, Komodor, Intezer, Oligo, Mesh, Weebit, Pecan, Freightos, Panorays, Lightbits, ForSight, Valens, Lasso): a sample of one
+  job page each shows no JobPosting markup in the static HTML (the text is drawn by JavaScript). Digital Turbine is a Workday site
+  read through its JSON-LD; its Workday JSON would be an alternative.
+- **Not read yet.** Phenom (89 jobs, the list carries a teaser, not the text), Oracle HCM (9 jobs), `comeet_page` (11), JazzHR
+  (1) and BambooHR (none open today): each would need its own per-job path and adapter for a handful of jobs, so they wait until
+  one has enough jobs to matter (judged on 2026-11-17 by job count only; their `robots.txt` and detail endpoints are not
+  checked yet). SmartRecruiters stays skipped by `robots.txt`.
 - **The text.** Plain text made from the site's HTML with the standard library: scripts, styles and embedded frames are
   dropped with their content, no tag survives (an angle bracket a posting wrote, such as `List<T>`, is kept as text, to be shown as text), paragraphs and list items keep their line breaks, control characters
   (NUL breaks a Postgres insert) are removed. At most 20,000 characters a job (`MAX_CHARS` in `descriptions.py`, cut at a

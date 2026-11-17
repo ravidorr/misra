@@ -10,6 +10,7 @@ import pytest
 
 import adapters
 import browser_crawl
+import descriptions
 import run
 from tests.conftest import COMEET_FEEDS, add_crawls, add_job, write_json
 from tests.fakes import FakeHttpResponse
@@ -633,3 +634,69 @@ def test_a_crash_while_recording_a_company_keeps_the_ones_before_it_and_rolls_ba
     assert check.execute("SELECT company FROM jobs").fetchall() == [("Aaa",)]  # Bbb's rows were not committed
     assert check.execute("SELECT company FROM crawl_log").fetchall() == [("Aaa",)]
     check.close()
+
+
+def test_the_job_pages_of_browser_companies_are_read_after_the_lists(
+    workdir: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    write_json(workdir / "data" / "companies.json", [co("Br", ats="browser", slug="https://br.test/careers")])
+    monkeypatch.setattr(run, "crawl_many", lambda urls: {u: [{**job("1"), "detail_url": "d"}, job("2")] for u in urls})
+    monkeypatch.setitem(adapters.DETAILS, "browser", lambda _slug, j: ("text of " + j["job_id"], {}))
+    run.main()
+    out = capsys.readouterr().out
+    assert "job pages: browser 1 requests, 1 with a text, 0 left for later runs" in out
+    assert "descriptions: browser 1/2 (50%)" in out
+    assert list(descriptions.read_work_file()) == [("Br", "1")]
+
+
+def test_no_job_page_is_read_for_a_job_an_israel_only_company_does_not_keep(
+    workdir: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    asked: list[str] = []
+
+    def page(_slug: str, j: dict[str, str]) -> tuple[str, dict[str, Any]]:
+        asked.append(j["job_id"])
+        return "text", {}
+
+    monkeypatch.setitem(adapters.DETAILS, "browser", page)
+    inside, outside = {**job("1"), "location": "Haifa, Israel", "detail_url": "d"}, {**job("2"), "detail_url": "d"}
+    run.read_job_pages({**co("Br", ats="browser"), "israel_only": True}, [inside, outside])
+    assert asked == ["1"]
+
+
+def test_a_company_that_is_not_israel_only_has_every_job_read_and_a_crash_costs_only_the_texts(
+    workdir: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    asked: list[str] = []
+
+    def page(_slug: str, j: dict[str, str]) -> tuple[str, dict[str, Any]]:
+        asked.append(j["job_id"])
+        return "text", {}
+
+    monkeypatch.setitem(adapters.DETAILS, "browser", page)
+    jobs = [{**job("1"), "location": None, "detail_url": "d"}, {**job("2"), "detail_url": "d"}]
+    run.read_job_pages(co("Br", ats="browser"), jobs)
+    assert sorted(asked) == ["1", "2"]  # the window moves with the day
+    assert all(j["description"] == "text" for j in jobs)
+
+    def boom(*_a: Any) -> None:
+        raise RuntimeError("secret detail")
+
+    monkeypatch.setattr(run, "add_descriptions", boom)
+    run.DETAIL_STATS.clear()
+    run.read_job_pages(co("Br", ats="browser"), jobs)
+    assert "::warning::job pages of Br failed: RuntimeError" in capsys.readouterr().out
+    assert run.DETAIL_STATS == {}
+
+
+def test_a_browser_company_whose_crawl_failed_gets_no_job_pages_and_the_others_do(
+    workdir: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    write_json(
+        workdir / "data" / "companies.json",
+        [co("Down", ats="browser", slug="https://down.test/c"), co("Up", ats="browser", slug="https://up.test/c")],
+    )
+    monkeypatch.setattr(run, "crawl_many", lambda urls: {"https://up.test/c": [{**job("1"), "detail_url": "d"}]})
+    monkeypatch.setitem(adapters.DETAILS, "browser", lambda _slug, j: ("text", {}))
+    run.main()
+    assert list(descriptions.read_work_file()) == [("Up", "1")]

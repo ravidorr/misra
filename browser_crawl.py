@@ -7,10 +7,12 @@ import json
 import os
 import re
 from typing import Any, cast
+from urllib.parse import parse_qs, urlencode, urlsplit
 
 from playwright.async_api import async_playwright
 
 from common import ISRAEL, ROBOTS_NOTE, USER_AGENT, host_of, reserve_slot, robots_gate
+from descriptions import attach, html_to_text, jsonld_description
 
 JOBLINK = re.compile(
     r"/(jobs?|positions?|careers?|openings?|vacanc\w+|job-?post\w*)/[^/?#]{4,}|[?&]job_id=[^&#]+", re.I
@@ -237,7 +239,8 @@ def _job(job_id: Any, title: Any, location: Any, url: Any, team: Any = "") -> di
 
 def _eightfold_jobs(resp_url: str, body: dict[str, Any]) -> list[dict[str, Any]]:
     origin = cast("re.Match[str]", re.match(r"https?://[^/]+", resp_url))[0]
-    return [
+    domain = parse_qs(urlsplit(resp_url).query).get("domain", [""])[0]
+    jobs = [
         _job(
             str(p["id"]),
             p.get("name", ""),
@@ -247,6 +250,12 @@ def _eightfold_jobs(resp_url: str, body: dict[str, Any]) -> list[dict[str, Any]]
         )
         for p in body["data"]["positions"]
     ]
+    if domain:  # the page's own call for one position, read for its description (adapters.browser_description)
+        for job, p in zip(jobs, body["data"]["positions"], strict=True):
+            job["detail_url"] = f"{origin}/api/pcsx/position_details?" + urlencode(
+                {"position_id": p["id"], "domain": domain, "hl": "en"}
+            )
+    return jobs
 
 
 async def _eightfold_pages(page: Any, ef_jobs: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -316,15 +325,19 @@ async def crawl_one(ctx: Any, url: str, sem: asyncio.Semaphore) -> list[dict[str
                         origin = cast("re.Match[str]", re.match(r"https?://[^/]+", resp.url))[0]
                         for j in d["jobAdDetails"]:
                             loc = ", ".join(x for x in (j.get("site"), j.get("country")) if x)
-                            captured.append(
-                                _job(
-                                    j["id"],
-                                    j.get("title", ""),
-                                    loc,
-                                    f"{origin}/jobs/{j['id']}",
-                                    team=j.get("department") or "",
-                                )
+                            job = _job(
+                                j["id"],
+                                j.get("title", ""),
+                                loc,
+                                f"{origin}/jobs/{j['id']}",
+                                team=j.get("department") or "",
                             )
+                            # the list gives the text of each posting: no request more
+                            details = {
+                                "employment_type": j.get("employmentType"),
+                                "workplace_type": j.get("workspaceType"),
+                            }
+                            captured.append(attach(job, html_to_text(j.get("description")), details))
 
         async def on_search(resp: Any) -> None:  # Eightfold: every search page, first load and each "Next jobs"
             with contextlib.suppress(Exception):
@@ -386,7 +399,8 @@ async def crawl_one(ctx: Any, url: str, sem: asyncio.Semaphore) -> list[dict[str
                         )
                         if d["url"] not in seen:
                             seen.add(d["url"])
-                            out.append(_job(d["url"], d.get("title", ""), L, d["url"]))
+                            text, details = jsonld_description(d)
+                            out.append(attach(_job(d["url"], d.get("title", ""), L, d["url"]), text, details))
 
             # 2. job-looking links, across paginated result pages
             async def collect() -> int:

@@ -127,21 +127,26 @@ HELD_TEXTS: set[tuple[str, str]] = set()  # the jobs whose text Supabase holds, 
 DETAIL_STATS: dict[str, tuple[str, int, int, int]] = {}  # company -> (ats, requested, got a text, deferred)
 
 
+def read_job_pages(co: dict[str, Any], jobs: list[dict[str, Any]]) -> None:
+    """Gives a company's jobs the descriptions its list lacks (adapters.add_descriptions) and records the counts."""
+    if co.get("israel_only"):  # the jobs the history keeps, so no page is read for one that is dropped
+        jobs = [j for j in jobs if ISRAEL.search(j["location"] or "")]
+    try:
+        stats = add_descriptions(co["ats"], co["slug"], co["name"], jobs, HELD_TEXTS, datetime.date.today().toordinal())
+    except Exception as exc:  # the list is what matters: a failure here costs texts, never the company
+        print(f"::warning::job pages of {co['name']} failed: {type(exc).__name__}")
+    else:
+        if stats[0] or stats[2]:
+            DETAIL_STATS[co["name"]] = (co["ats"], *stats)
+
+
 def crawl(co: dict[str, Any]) -> tuple[dict[str, Any], list[dict[str, Any]] | None]:
     jobs = fetch(co)
     if jobs is None and not robots_skipped(co):  # one retry: most failures are transient rate limits
         time.sleep(4)
         jobs = fetch(co)
     if jobs:  # after the list is final: nothing the job pages do can change it, and one that fails costs only its text
-        try:
-            stats = add_descriptions(
-                co["ats"], co["slug"], co["name"], jobs, HELD_TEXTS, datetime.date.today().toordinal()
-            )
-        except Exception as exc:  # the list is what matters: a failure here costs texts, never the company
-            print(f"::warning::job pages of {co['name']} failed: {type(exc).__name__}")
-        else:
-            if stats[0] or stats[2]:
-                DETAIL_STATS[co["name"]] = (co["ats"], *stats)
+        read_job_pages(co, jobs)
     return co, jobs
 
 
@@ -417,6 +422,8 @@ def main() -> None:  # noqa: PLR0915
     if br:
         got = crawl_many([co["slug"] for co in br])
         later = [(co, got.get(co["slug"])) for co in br]
+        with ThreadPoolExecutor(8) as ex:  # the job pages of the browser companies, one host each, after the lists
+            list(ex.map(lambda r: read_job_pages(*r) if r[1] else None, later))
         record(later)
         results.extend(later)
     dropped = delete_robots_skips(c, set(skipped) - attempted)
