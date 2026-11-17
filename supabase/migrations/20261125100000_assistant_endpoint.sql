@@ -10,7 +10,8 @@
 --    and by report_site_cleanup (below), which the daily run already calls, so a hash does not outlive its day by more
 --    than the hours until that run.
 -- 2. assistant_reserve: takes a place for one call, atomically (the row lock of the upsert serialises concurrent calls),
---    and answers 'ok' or 'limit'. A refused call does not count. The function also uses it for the cap on `get_job` for
+--    and answers 'ok' or 'limit'. A refused call does not count, and assistant_release gives a place back when a call
+--    failed or served nothing. The function also uses it for the cap on `get_job` for
 --    everyone together (a row whose key is not a hash of anyone).
 -- 3. search_jobs: the search the tool runs. It applies the rules of the dashboard's own search (templates/dashboard.js,
 --    `select`) so the assistant sees the same roles: open jobs in Israel (a region or a place), the level, the role
@@ -53,6 +54,19 @@ begin
   if used is null then
     return 'limit';
   end if;
+  return 'ok';
+end;
+$$;
+
+-- assistant_release: gives one place back, for a call that failed or served nothing (a database error, an unknown job, the
+-- cap of everyone reached). The count never goes below zero.
+create function public.assistant_release(p_day date, p_ip_hash text)
+returns text
+language plpgsql
+set search_path = ''
+as $$
+begin
+  update public.assistant_ip_limits set calls = greatest(calls - 1, 0) where day = p_day and ip_hash = p_ip_hash;
   return 'ok';
 end;
 $$;
@@ -132,6 +146,8 @@ as $$
 $$;
 
 revoke all on function public.assistant_reserve(date, text, integer) from public, anon, authenticated;
+revoke all on function public.assistant_release(date, text) from public, anon, authenticated;
 revoke all on function public.search_jobs(text, text[], text[], text[], integer, integer) from public, anon, authenticated;
 grant execute on function public.assistant_reserve(date, text, integer) to service_role;
+grant execute on function public.assistant_release(date, text) to service_role;
 grant execute on function public.search_jobs(text, text[], text[], text[], integer, integer) to service_role;

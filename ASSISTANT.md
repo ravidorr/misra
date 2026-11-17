@@ -2,9 +2,9 @@
 
 Connect your own AI assistant, such as Claude or ChatGPT, and it can search the roles on Misra and read one posting in full, for example to compare roles or draft a cover letter.
 
-This is optional: the dashboard and the job alerts work without it. It is free and read-only, with no account and no sign-in. Your assistant sends Misra only the search words and the posting it asks for. Misra does not keep them and does not log your address. Your CV stays in your assistant.
+This is optional: the dashboard and the job alerts work without it. It is free and read-only, with no account and no sign-in. Your assistant sends Misra only the search words and the posting it asks for. Misra does not keep them and does not log your address (only a daily, non-reversible hash is used to count rate limits; see the privacy notice). Your CV stays in your assistant.
 
-Select this address and copy it. You paste it in the steps below.
+Select this address and copy it. You paste it in the steps below. Before you connect, read the [terms](TERMS.md) and the [privacy notice](PRIVACY.md).
 
 ```text
 https://dncodqeqpoqwcxdctzco.supabase.co/functions/v1/mcp
@@ -52,7 +52,15 @@ Menu names change. If yours differ, look for "connectors" or "MCP" in the settin
 
 The public roles on the dashboard (company, title, place, level, role type, region, the start of the posting and a link to the employer), and the full text of one posting when it asks for it. Not anyone's stars, "Not for me" choices, settings or email address.
 
-Postings belong to the employers and are shown as published, as is. Check the employer's page before you apply: every result links to it. Your assistant writes its answers, not Misra: check them. Misra is free and unofficial. Use it for your own job search. Do not copy the postings in bulk or republish them.
+Postings belong to the employers and are shown as published, as is. Check the employer's page before you apply: every result links to it. Your assistant writes its answers, not Misra: check them. Misra is free and unofficial. Use it for your own job search. Do not copy the postings in bulk, republish them, or use them to train models.
+
+### What your assistant can see—and the rules for using it
+
+- **Public job data only:** Your assistant can search open listings and read the full description of one job at a time (up to 20,000 characters, for open roles or roles closed less than 30 days). It cannot see your Misra account, email address, stars, "Not for me" choices, or saved filters.
+- **Your data stays in your assistant:** Connecting Misra requires no sign-in and sends nothing personal to us—your resume and prompts stay inside your own AI assistant. To enforce daily limits (100 searches and 15 full-job reads per day), we store only a daily, non-reversible hash of your network address, which is deleted during the next daily cleanup.
+- **Personal job search only:** All job postings and descriptions belong to the respective employers and are provided "as is". You may use this connection only for your own personal job search—bulk copying, republishing, or training models on the postings is not allowed.
+- **Check before you apply:** Misra is a free, unofficial project and is not affiliated with any employer. Your AI assistant—not Misra—is responsible for anything it writes (such as cover letters or summaries). Always verify details on the employer's own career page before applying.
+- By connecting your assistant, you agree to the [Terms](https://ravidorr.github.io/misra/terms.html) and [Privacy Notice](https://ravidorr.github.io/misra/privacy.html).
 
 ## Limits
 

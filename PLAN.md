@@ -315,23 +315,22 @@ Decisions made in planning (they change the PRD's wording, so update the PRD in 
   text; it returns keys, titles and snippets), `get_job` (everything collected, including the full text, for the
   assistant), no user data, rate limited. Same query code path as the dashboard (shared SQL function) so the results
   match. The text is exposed to assistants and search only by this step and 7.3, as the lawyer approved on 2026-11-16. Done when: FR-6 AC 1 to 4 and 8 hold against a real MCP client.
-  **Built, off, waiting for the lawyer (2026-11-17), so not ticked.** The Edge Function `mcp` (MCP over HTTP, JSON answers,
+  **Built, off; the lawyer approved the wording and `ASSISTANT.md` on 2026-11-17 (with two small edits, now in), going live is the next step, so not ticked.** The Edge Function `mcp` (MCP over HTTP, JSON answers,
   no sessions) with `search_jobs` (the SQL function `search_jobs`, the dashboard's rules, `search_job_keys` for the text) and
-  `get_job` (one job by company and job_id, the full text, open or closed for less than 30 days), rate limited per caller
+  `get_job` (one job by company and job_id, the full text, open or closed for less than 30 days), rate limited per caller (100 searches and 15 job reads a day, 500 job reads for everyone, his answer of 2026-11-17)
   and for everyone through hashed addresses (`assistant_ip_limits`, cleaned by the daily cleanup). It answers 404 unless
   the function secret `ASSISTANT_ENDPOINT_ENABLED` is `true`; it is not deployed and nobody sets the secret before the lawyer
   confirms (his request of 2026-11-17). The migration `20261125100000_assistant_endpoint.sql` is harmless while it is off and
   is applied by the maintainer. Tested with the protocol over HTTP in vitest and once with the official TypeScript client.
-  To finish: the lawyer's answers, the migration, `supabase functions deploy mcp`, the secret, the live check in
+  His answers are in (limits, one job per call, `details` allowlist, no cache, wording in `TERMS.md`, `PRIVACY.md`, `ASSISTANT.md`). To finish: the migration, `supabase functions deploy mcp`, the secret, the live check in
   `supabase/README.md` ("Assistant endpoint"), a real assistant, then tick this step.
 - [ ] 8.2 "Connect your assistant" page on the dashboard with plain step-by-step instructions for the common assistants
   tested by hand, README cut to a short developer note, `llms.txt` updated. Done when: FR-6 AC 5 to 7 hold; a person with
   no technical skills connects in a couple of minutes (hand test).
-  **Built, off, waiting for the lawyer (2026-11-17), so not ticked.** `ASSISTANT.md` (the words, by the technical writer, steps for
+  **Built, off; the lawyer approved the wording and `ASSISTANT.md` on 2026-11-17 (with two small edits, now in), going live is the next step, so not ticked.** `ASSISTANT.md` (the words, by the technical writer, steps for
   Claude and ChatGPT checked against their current help pages on 2026-11-17, and any other assistant) becomes `docs/assistant.html`
   in the template of the privacy page, with a footer link, both behind `ASSISTANT_PAGE_ENABLED` in `build_dashboard.py`
-  (`False`); the README has a short developer note. To finish: the lawyer's answers (his wording goes into the page, the
-  terms and the privacy notice), then set the constant to `True` together with the function secret, add the page to `llms.txt`
+  (`False`); the README has a short developer note. His wording and approval are in. To finish: apply the migration and switch the endpoint on (step 8.1), then set the constant to `True` together with the function secret, add the page to `llms.txt`
   (a test requires it), and do the hand test with a person who is not technical (Claude and ChatGPT).
 
 ## Retire SQLite (last, only when the Supabase path has run clean for a while)

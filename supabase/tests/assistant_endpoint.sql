@@ -26,6 +26,18 @@ begin
   assert not exists (select 1 from public.assistant_ip_limits where day < '2026-11-19'), 'rows older than yesterday stayed';
 end $$;
 
+-- assistant_release gives a place back and never goes below zero.
+do $$
+begin
+  perform public.assistant_reserve('2026-11-21', 'r1', 1);
+  assert public.assistant_reserve('2026-11-21', 'r1', 1) = 'limit', 'the place was free';
+  assert public.assistant_release('2026-11-21', 'r1') = 'ok', 'release refused';
+  assert public.assistant_reserve('2026-11-21', 'r1', 1) = 'ok', 'a released place was not free';
+  perform public.assistant_release('2026-11-21', 'r1');
+  perform public.assistant_release('2026-11-21', 'r1');
+  assert (select calls from public.assistant_ip_limits where ip_hash = 'r1') = 0, 'release went below zero';
+end $$;
+
 -- The daily cleanup (which the sync step calls as report_site_cleanup) deletes the assistant counters of earlier days
 -- along with the report counters, and counts them.
 do $$
@@ -58,6 +70,11 @@ begin
     begin
       perform public.assistant_reserve(current_date, 'x', 5);
       assert false, who || ' ran assistant_reserve';
+    exception when insufficient_privilege then null;
+    end;
+    begin
+      perform public.assistant_release(current_date, 'x');
+      assert false, who || ' ran assistant_release';
     exception when insufficient_privilege then null;
     end;
     begin
