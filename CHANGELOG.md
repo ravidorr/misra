@@ -4,6 +4,26 @@ All notable changes are documented here. Format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
+### Added
+
+- The assistant endpoint (PLAN.md step 8.1, FR-6), built and **switched off**: the Edge Function `mcp`, a public read-only MCP server
+  (JSON-RPC over HTTP, no sessions, no sign-in, no user data) with two tools. `search_jobs` runs the new SQL function of the same
+  name, which applies the dashboard's search (open jobs in Israel, levels, role types, regions, every word in the company, title,
+  team or location or in the full text through `search_job_keys`), 50 roles at most, the snippet and never the text. `get_job`
+  returns one job by company and job_id with everything collected, the full text included, only when it is open or closed for less
+  than 30 days. Per-caller limits (200 searches and 30 `get_job` a day) and a cap of 1,000 `get_job` a day for everyone, counted
+  in `assistant_ip_limits` against a keyed hash of the tool, the caller's network and the day (the address is never stored or
+  logged), cleaned by the daily cleanup. It answers 404 to everything unless the function secret `ASSISTANT_ENDPOINT_ENABLED` is
+  `true`, it is not deployed, and nobody sets the secret before the lawyer has reviewed it. Migration
+  `20261125100000_assistant_endpoint.sql` (harmless while it is off; the maintainer applies it): the counter table, `assistant_reserve`,
+  `search_jobs`, and `report_site_cleanup` replaced so it also clears the new counter. The lint in `tests/test_migrations.py` pins
+  all of it (nothing for the public roles, `search_jobs` never names the text).
+
+### Changed
+
+- The visitor's network and its daily keyed hash moved from `report-site` into `supabase/functions/_shared/visitor.ts`, and the
+  call into a Postgres function got a `callRpc` in `_shared/subscription.ts`, so `report-site` and `mcp` share them. No change in behavior.
+
 ## [0.51.0] - 2026-11-17
 
 ### Added

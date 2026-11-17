@@ -8,13 +8,11 @@ import {
   IP_DAILY_LIMIT,
   MAX_BODY_BYTES,
   handleReport,
-  hashVisitor,
   loadConfig,
-  normalizeAddress,
   renderEmail,
-  visitorNetwork,
 } from '../supabase/functions/report-site/handler.ts';
 import type { Config, Deps, Fetch } from '../supabase/functions/report-site/handler.ts';
+import { hashVisitor, normalizeAddress, visitorNetwork } from '../supabase/functions/_shared/visitor.ts';
 import { LIMITS, checkLink, validateReport } from '../supabase/functions/report-site/validate.ts';
 
 const SECRET = 'a-secret-of-at-least-16-chars';
@@ -502,11 +500,11 @@ describe('email content', () => {
 describe('the visitor network', () => {
   it('prefers the Cloudflare address, then the last forwarded entry, then one shared bucket', () => {
     const headers = (init: Record<string, string>): Headers => new Headers(init);
-    expect(visitorNetwork(headers({ 'cf-connecting-ip': '203.0.113.7', 'x-forwarded-for': '1.1.1.1' }))).toBe('203.0.113.7');
-    expect(visitorNetwork(headers({ 'cf-connecting-ip': 'garbage', 'x-forwarded-for': '1.1.1.1, 192.0.2.9' }))).toBe('192.0.2.9');
-    expect(visitorNetwork(headers({ 'x-forwarded-for': '1.1.1.1, 192.0.2.9' }))).toBe('192.0.2.9');
-    expect(visitorNetwork(headers({ 'x-forwarded-for': 'garbage' }))).toBe('unknown');
-    expect(visitorNetwork(headers({}))).toBe('unknown');
+    expect(visitorNetwork(headers({ 'cf-connecting-ip': '203.0.113.7', 'x-forwarded-for': '1.1.1.1' }), 'report-site')).toBe('203.0.113.7');
+    expect(visitorNetwork(headers({ 'cf-connecting-ip': 'garbage', 'x-forwarded-for': '1.1.1.1, 192.0.2.9' }), 'report-site')).toBe('192.0.2.9');
+    expect(visitorNetwork(headers({ 'x-forwarded-for': '1.1.1.1, 192.0.2.9' }), 'report-site')).toBe('192.0.2.9');
+    expect(visitorNetwork(headers({ 'x-forwarded-for': 'garbage' }), 'report-site')).toBe('unknown');
+    expect(visitorNetwork(headers({}), 'report-site')).toBe('unknown');
   });
 
   it('normalises addresses: IPv6 to its /64, IPv4-mapped to IPv4, junk to nothing', () => {

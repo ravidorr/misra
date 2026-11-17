@@ -73,12 +73,18 @@ PROVIDER_DATA = re.compile(
 AUTH_TRIGGER_FUNCTIONS = {"sync_profile"}  # the only functions allowed to run on auth.users
 # The spam guard of the report-site Edge Function (step 5.1): two counter tables and the two functions that change
 # them. Only the service role may touch any of it (no grant or policy for the public roles, execute for service_role).
-REPORT_COLUMNS = {"report_ip_limits": {"day", "ip_hash", "reports"}, "report_daily_cap": {"day", "sent"}}
+REPORT_COLUMNS = {
+    "report_ip_limits": {"day", "ip_hash", "reports"},
+    "report_daily_cap": {"day", "sent"},
+    # step 8.1: the call counter of the assistant endpoint, built like report_ip_limits (a keyed hash and the day)
+    "assistant_ip_limits": {"day", "ip_hash", "calls"},
+}
 REPORT_TABLES = set(REPORT_COLUMNS)
 REPORT_FUNCTIONS = {
     "report_site_reserve": "p_day date, p_ip_hash text, p_ip_limit integer, p_daily_cap integer",
     "report_site_release": "p_day date, p_ip_hash text",
     "report_site_cleanup": "p_day date",
+    "assistant_reserve": "p_day date, p_ip_hash text, p_limit integer",
 }
 # Step 6.2: the spam guard of the confirmation email (counter tables) and the functions that turn the digest on and off
 # for a signed-in user. Only the service role may touch any of it. The functions touch the subscription tables or these
@@ -131,7 +137,8 @@ HOOK_GRANTS = {
     "grant execute on function public.custom_access_token_hook(jsonb) to supabase_auth_admin",
 }
 REPORT_FUNCTION = re.compile(
-    r"create function public\.(?P<name>report_site_reserve|report_site_release|report_site_cleanup)"
+    r"create (?:or replace )?function public\.(?P<name>report_site_reserve|report_site_release|report_site_cleanup"
+    r"|assistant_reserve)"
     r"\((?P<args>[a-z_0-9 ,]*)\) "
     r"returns (?:text|void|integer) language plpgsql set search_path = '' as \$\$(?P<body>.*)\$\$"
 )
@@ -146,16 +153,18 @@ SUBSCRIBE_FUNCTION = re.compile(
     r"returns (?:text|integer) language plpgsql set search_path = '' as \$\$(?P<body>.*)\$\$"
 )
 REPORT_SIGNATURE = (
-    r"(?:jsonb|date|date, text|date, text, integer, integer|text, timestamptz|date, text, text"
+    r"(?:jsonb|date|date, text|date, text, integer|date, text, integer, integer|text, timestamptz|date, text, text"
     r"|date, text, text, integer, integer, integer|uuid, timestamptz"
-    r"|uuid, text, text, jsonb, text, timestamptz, text, timestamptz|text)?"
+    r"|uuid, text, text, jsonb, text, timestamptz, text, timestamptz"
+    r"|text, text\[\], text\[\], text\[\], integer, integer|text)?"
 )
 REVOKE_FUNCTION = re.compile(
     rf"revoke (?:all|execute) on function public\.(?P<name>\w+)\({REPORT_SIGNATURE}\) from (?P<roles>[a-z, ]+)"
 )
 GRANT_REPORT_FUNCTION = re.compile(
-    r"grant execute on function public\.(?P<name>report_site_reserve|report_site_release|report_site_cleanup)"
-    r"\((?:date, text, integer, integer|date, text|date)\) to service_role"
+    r"grant execute on function public\.(?P<name>report_site_reserve|report_site_release|report_site_cleanup"
+    r"|assistant_reserve)"
+    r"\((?:date, text, integer, integer|date, text, integer|date, text|date)\) to service_role"
 )
 GRANT_SUBSCRIBE_FUNCTION = re.compile(
     r"grant execute on function public\.(?P<name>confirm_email_reserve|confirm_email_release|confirm_email_cleanup"
@@ -190,6 +199,25 @@ SEARCH_INDEX = (
     "create index jobs_description_search on public.jobs using gin (to_tsvector('simple', coalesce(description, '')))"
 )
 GRANT_SEARCH_FUNCTION = "grant execute on function public.search_job_keys(text) to anon, authenticated, service_role"
+# Step 8.1: the search the assistant endpoint runs. It is NOT definer (it runs as the service role, the only role that
+# may execute it), reads `jobs` and `search_job_keys` and nothing else, and never names the text: the full text is
+# reached through search_job_keys alone, so a change that reads `description` or `details` here fails the lint.
+SEARCH_JOBS_NAME = "search_jobs"
+SEARCH_JOBS_ARGS = (
+    "p_query text, p_levels text[], p_role_types text[], p_regions text[], p_limit integer, p_offset integer"
+)
+SEARCH_JOBS_FUNCTION = re.compile(
+    r"create function public\.search_jobs\((?P<args>[a-z_0-9 ,\[\]]*)\) returns jsonb language sql stable "
+    r"set search_path = '' as \$\$(?P<body>.*)\$\$"
+)
+SEARCH_JOBS_GUARDS = (  # each is something the function must keep saying
+    "j.status = 'open'",
+    "limit greatest(1, least(coalesce(p_limit, 20), 50))",
+    "public.search_job_keys(",
+)
+GRANT_SEARCH_JOBS = (
+    "grant execute on function public.search_jobs(text, text[], text[], text[], integer, integer) to service_role"
+)
 DOLLAR_QUOTE = re.compile(r"\$\w*\$")
 CASCADE = "references auth.users (id) on delete cascade"
 
@@ -414,9 +442,9 @@ def problems(stmts: list[str]) -> list[str]:
         elif m := JOBS_TRIM_FUNCTION.fullmatch(s):
             functions[JOBS_TRIM_NAME] = False
             found.extend(jobs_trim_problems(m))
-        elif m := SEARCH_FUNCTION.fullmatch(s):
-            functions[SEARCH_NAME] = True
-            found.extend(search_problems(m))
+        elif search := search_function(s):
+            functions[search[0]] = search[1]
+            found.extend(search[2])
         elif m := TRIGGER.fullmatch(s):
             triggers.append((m["table"], m["function"]))
         elif not (
@@ -425,7 +453,7 @@ def problems(stmts: list[str]) -> list[str]:
             or COLUMN_GRANT.fullmatch(s)
             or GRANT_REPORT_FUNCTION.fullmatch(s)
             or GRANT_JOBS_TRIM_FUNCTION.fullmatch(s)
-            or s in {SEARCH_INDEX, GRANT_SEARCH_FUNCTION}
+            or s in {SEARCH_INDEX, GRANT_SEARCH_FUNCTION, GRANT_SEARCH_JOBS}
             or ADD_JOBS_COLUMN.fullmatch(s)
             or GRANT_SUBSCRIPTION_FUNCTION.fullmatch(s)
             or GRANT_SUBSCRIBE_FUNCTION.fullmatch(s)
@@ -517,6 +545,37 @@ def search_problems(m: re.Match[str]) -> list[str]:
     found += [f"function {SEARCH_NAME} has another where clause"] * (SEARCH_WHERE not in body)
     found += [f"function {SEARCH_NAME} must use plainto_tsquery only, on description only"] * bool(
         re.search(r"(?<!plain)to_tsquery|websearch_|phraseto_|ts_headline|ts_rank|ts_stat|details|snippet", body)
+    )
+    return found
+
+
+def search_function(s: str) -> tuple[str, bool, list[str]] | None:
+    """(name, security definer, problems) of one of the two pinned search functions, or None."""
+    if m := SEARCH_FUNCTION.fullmatch(s):
+        return SEARCH_NAME, True, search_problems(m)
+    if m := SEARCH_JOBS_FUNCTION.fullmatch(s):
+        return SEARCH_JOBS_NAME, False, search_jobs_problems(m)
+    return None
+
+
+def search_jobs_problems(m: re.Match[str]) -> list[str]:
+    """The assistant search reads open jobs through the one text function and returns at most 50 of them; it writes
+    nothing and never names the columns that hold the text."""
+    body = " ".join(m["body"].split())
+    touched = set(re.findall(r"public\.(\w+)", body)) - {"jobs", "search_job_keys"}
+    found = [] if m["args"].strip() == SEARCH_JOBS_ARGS else [f"function {SEARCH_JOBS_NAME} has another signature"]
+    found += [f"function {SEARCH_JOBS_NAME} may touch only jobs and search_job_keys, not {sorted(touched)}"] * bool(
+        touched
+    )
+    found += [f"function {SEARCH_JOBS_NAME} reaches outside public"] * bool(
+        re.search(r"\b(?:auth|storage|vault)\.", body)
+    )
+    found += [f"function {SEARCH_JOBS_NAME} may only read"] * bool(
+        re.search(r"\b(?:insert|update|delete|truncate)\b", body)
+    )
+    found += [f"function {SEARCH_JOBS_NAME} is missing: {g}" for g in SEARCH_JOBS_GUARDS if g not in body]
+    found += [f"function {SEARCH_JOBS_NAME} must not name the text of a posting"] * bool(
+        re.search(r"description|details", body)
     )
     return found
 
@@ -864,7 +923,7 @@ def test_the_report_counters_have_no_policy_and_no_grant_for_anyone_but_the_serv
         and not GRANT_SUBSCRIPTION_FUNCTION.fullmatch(s)
         and not GRANT_SUBSCRIBE_FUNCTION.fullmatch(s)
         and not GRANT_JOBS_TRIM_FUNCTION.fullmatch(s)
-        and s != GRANT_SEARCH_FUNCTION
+        and s not in {GRANT_SEARCH_FUNCTION, GRANT_SEARCH_JOBS}
         and s not in HOOK_GRANTS
     ]
 
@@ -881,11 +940,15 @@ def test_the_report_functions_are_invoker_functions_over_the_two_counters_only()
     assert "delete from public.report_ip_limits where day < p_day - 1" in reserve  # old hashes do not pile up
 
 
-def test_the_daily_cleanup_deletes_only_earlier_days_of_the_two_counters_and_refuses_a_wrong_day() -> None:
-    (cleanup,) = [m for s in statements() if (m := REPORT_FUNCTION.fullmatch(s)) and m["name"] == "report_site_cleanup"]
+def test_the_daily_cleanup_deletes_only_earlier_days_of_the_counters_and_refuses_a_wrong_day() -> None:
+    # the function is defined twice: the report counters (5.1), then replaced to take the assistant's too (8.1)
+    *_, cleanup = [
+        m for s in statements() if (m := REPORT_FUNCTION.fullmatch(s)) and m["name"] == "report_site_cleanup"
+    ]
     body = cleanup["body"]
     assert "delete from public.report_ip_limits where day < p_day;" in body
     assert "delete from public.report_daily_cap where day < p_day;" in body
+    assert "delete from public.assistant_ip_limits where day < p_day;" in body
     assert "p_day is null or p_day > current_date" in body  # a wrong date can never wipe today's counters
     assert body.count("delete from") == len(REPORT_TABLES)  # one delete per counter table, nothing else
 
@@ -1110,3 +1173,63 @@ def test_a_weakened_search_is_refused(old: str, new: str) -> None:
 @pytest.mark.parametrize("columns", ["description", "company, details", "snippet, description"])
 def test_the_search_migration_cannot_open_the_text_by_a_grant(columns: str) -> None:
     assert grant_problem(f"grant select ({columns}) on public.jobs to anon, authenticated")
+
+
+# ---- The assistant endpoint (step 8.1; FR-6): a counter like the report one, and a search that cannot open text ----
+
+ASSISTANT_FILE = MIGRATION_DIR / "20261125100000_assistant_endpoint.sql"
+SEARCH_JOBS_CLOSE = (
+    "revoke all on function public.search_jobs(text, text[], text[], text[], integer, integer)"
+    " from public, anon, authenticated;"
+)
+ASSISTANT_CLOSE = (
+    "revoke all on function public.assistant_reserve(date, text, integer) from public, anon, authenticated;"
+)
+
+
+def test_the_assistant_search_is_for_the_service_role_alone_and_never_names_the_text() -> None:
+    text = ASSISTANT_FILE.read_text(encoding="utf-8")
+    assert SEARCH_JOBS_CLOSE in text
+    assert ASSISTANT_CLOSE in text
+    assert GRANT_SEARCH_JOBS in statements_of(text)
+    (search,) = [m for s in statements() if (m := SEARCH_JOBS_FUNCTION.fullmatch(s))]
+    assert search_jobs_problems(search) == []
+    grants = [s for s in statements() if s.startswith("grant") and "search_jobs" in s]
+    assert grants == [GRANT_SEARCH_JOBS]
+
+
+@pytest.mark.parametrize(
+    ("old", "new"),
+    [
+        (SEARCH_JOBS_CLOSE, ""),
+        (SEARCH_JOBS_CLOSE, SEARCH_JOBS_CLOSE.replace("public, anon, authenticated", "public, anon")),
+        (ASSISTANT_CLOSE, ""),
+        (f"{GRANT_SEARCH_JOBS};", f"{GRANT_SEARCH_JOBS.replace('service_role', 'service_role, anon')};"),
+        ("p_limit integer,\n  p_offset integer", "p_limit integer,\n  p_offset integer,\n  p_x text"),
+        ("where j.status = 'open'", "where true"),
+        ("least(coalesce(p_limit, 20), 50)", "coalesce(p_limit, 20)"),
+        ("public.search_job_keys(array_to_string(q.terms, ' '))", "array[]::jsonb"),
+        ("j.regions, j.locations, j.snippet", "j.regions, j.locations, j.snippet, j.description"),
+        ("j.regions, j.locations, j.snippet", "j.regions, j.locations, j.snippet, j.details"),
+        (
+            "    select j.company, j.job_id, j.title",
+            "    select (select count(*) from public.user_jobs), j.company, j.job_id, j.title",
+        ),
+        ("create function public.search_jobs(", "create function public.search_jobs_x("),
+        ("language sql\nstable\nset search_path = ''\nas $$\n  with q", "language sql\nstable\nas $$\n  with q"),
+        ("  delete from public.assistant_ip_limits where day < p_day - 1;\n", "  delete from auth.users;\n"),
+        ("  ip_hash text    not null,", "  ip_hash text    not null,\n  email text,"),
+        ("alter table public.assistant_ip_limits enable row level security;", ""),
+        (
+            "revoke all on public.assistant_ip_limits from anon, authenticated;",
+            "revoke all on public.assistant_ip_limits from anon;",
+        ),
+    ],
+)
+def test_a_weakened_assistant_migration_is_refused(old: str, new: str) -> None:
+    text = ASSISTANT_FILE.read_text(encoding="utf-8")
+    assert old in text, old
+    others = [p for p in sorted(MIGRATION_DIR.glob("*.sql")) if p != ASSISTANT_FILE]
+    earlier = "\n".join(p.read_text(encoding="utf-8") for p in others)
+    assert problems(statements_of(earlier + "\n" + text)) == []
+    assert problems(statements_of(earlier + "\n" + text.replace(old, new)))
