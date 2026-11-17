@@ -26,6 +26,7 @@ ROWS = [
     job("text", "Software Engineer", "Haifa, Israel"),  # "rust" only in its posting
     job("other", "Office Dog Trainer", "Haifa, Israel"),
 ]
+CLIPPED_PX = 1  # the hidden heading is a 1 px box
 SEARCH_WAIT = 4000  # ms: the page waits 400 ms after the last key, then asks
 
 
@@ -44,6 +45,10 @@ async def asked(page: Page, fake: Backend) -> None:
             return
         await page.wait_for_timeout(50)
     raise AssertionError("the page never asked")
+
+
+async def shown_ids(page: Page) -> list[str]:
+    return [await card.get_attribute("data-job-id") or "" for card in await page.locator("#list article").all()]
 
 
 async def shown(page: Page) -> set[str]:
@@ -246,6 +251,66 @@ async def test_an_answer_just_after_the_dialog_closed_does_not_lose_the_focus(pa
     assert await page.evaluate(ON_OPENER)
     await expect(page.locator("#list article")).to_have_count(2, timeout=SEARCH_WAIT)
     assert await page.evaluate(ON_OPENER)
+
+
+def crowded() -> Backend:
+    """Eleven roles whose title has "rust" (two pages of ten) and one that only its posting has, which by title sorts
+    first: when the answer comes, the last role of the first page moves to the second."""
+    fake = backend(search_seconds=1.0)
+    fake.rows = [job(f"r{n:02d}", f"Rust Engineer {n:02d}", "Haifa, Israel") for n in range(1, 12)]
+    fake.rows.append(job("aard", "Aardvark Developer", "Haifa, Israel"))
+    fake.text_hits = {"rust": [["Acme", "aard"]]}
+    return fake
+
+
+async def test_a_late_answer_that_moves_the_role_gives_the_focus_a_visible_ring_on_the_list_heading(
+    page: Page, site: Path
+) -> None:
+    fake = crowded()
+    await serve(page, site, backend=fake)
+    await page.select_option("#sort", "title")
+    await page.fill("#q", "rust")
+    await asked(page, fake)
+    last = page.locator("#list article").last
+    assert await last.get_attribute("data-job-id") == "Acme|r10"
+    await last.locator("a[href], button").first.focus()
+    await page.keyboard.press("Shift")  # the reader is on the keyboard: the focus ring shows
+    await expect(page.locator("#list article").first).to_have_attribute("data-job-id", "Acme|aard", timeout=SEARCH_WAIT)
+    assert "Acme|r10" not in await shown_ids(page)  # its role moved to the next page
+    seen = await page.evaluate(
+        """() => {
+          const el = document.activeElement;
+          const box = el.getBoundingClientRect();
+          const style = getComputedStyle(el);
+          const probe = document.createElement('i');
+          probe.style.color = getComputedStyle(document.documentElement).getPropertyValue('--accent');
+          document.body.append(probe);
+          const accent = getComputedStyle(probe).color;
+          probe.remove();
+          return {
+            id: el.id, focusVisible: el.matches(':focus-visible'), width: box.width, height: box.height,
+            top: box.top, bottom: box.bottom, inside: box.top >= 0 && box.bottom <= innerHeight,
+            outlineWidth: style.outlineWidth, outlineColor: style.outlineColor, accent,
+          };
+        }"""
+    )
+    assert seen["id"] == "list-h" and seen["focusVisible"]
+    assert min(seen["width"], seen["height"]) > CLIPPED_PX and seen["inside"]  # on screen, not a clipped 1 px box
+    assert seen["outlineWidth"] == "3px" and seen["outlineColor"] == seen["accent"]
+
+
+async def test_the_list_heading_stays_out_of_sight_until_the_keyboard_puts_the_focus_on_it(
+    page: Page, site: Path
+) -> None:
+    fake = crowded()
+    await serve(page, site, backend=fake)
+    box = await page.locator("#list-h").bounding_box()
+    assert box and box["width"] <= 1 and box["height"] <= 1
+    top = "document.querySelector('#list article').getBoundingClientRect().top + scrollY"  # scrolling is not moving
+    before = await page.evaluate(top)
+    await page.locator("#list-h").focus()
+    await page.keyboard.press("Shift")
+    assert await page.evaluate(top) == before  # showing the heading does not move the list
 
 
 async def test_the_text_matches_combine_with_the_other_filters(page: Page, site: Path) -> None:

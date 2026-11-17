@@ -48,14 +48,6 @@ Observations about live sites below come from checks made on 2026-11-14 and may 
     looked at both in Gmail and one other client, the tests above pass, `npm run lint` and `npm run test:coverage` pass,
     and the PR shows screenshots. A change to `send_digests.py` needs a version bump and a changelog entry.
 
-## Focus after a late search answer
-
-- [ ] **Give the focus a visible place when the role under it leaves the page.** Trigger: a late description-search
-  answer redraws the list (`drawList()` in `templates/dashboard.js`) while a reader is on a control of a role that is no
-  longer on the page (it moved to the next page). The focus then goes to the `sr-only` heading `#list-h`, so a sighted
-  keyboard user sees no focus ring (WCAG 2.4.7). Not tested yet. Done when: the case is covered by a test and the focus
-  lands on something visible, or the heading shows a focus ring.
-
 ## Snippet ellipsis
 
 - [ ] **Make the ellipsis on a snippet exact.** Trigger: `cutMark()` in `templates/dashboard.js` guesses that a snippet

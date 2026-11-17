@@ -1489,7 +1489,7 @@ function renderStarred() {
 
 /* Draw the list. replaceChildren drops the focus, and a late search answer draws the list while a reader is on one of
    its controls: put the focus back on the same control of the same role, or on the list heading when that role is not
-   on the page any more. A caller that places the focus itself (a star or a discard) passes false. A modal dialog that is
+   on the page any more (the heading shows itself while it holds the focus, so the reader sees where they are). A caller that places the focus itself (a star or a discard) passes false. A modal dialog that is
    open holds the focus, so it never finds it in the list. */
 function drawList(nodes, keepFocus) {
   const list = $('list');
@@ -1500,7 +1500,9 @@ function drawList(nodes, keepFocus) {
   list.replaceChildren(...nodes);
   if (!held || !keepFocus) return;
   const again = [...list.querySelectorAll('article')].find((art) => art.dataset.jobId === jobId);
-  (again?.querySelectorAll('a[href], button')[spot] ?? $('list-h')).focus({ preventScroll: true }); /* a late answer must not scroll the page */
+  const control = again?.querySelectorAll('a[href], button')[spot];
+  if (control) control.focus({ preventScroll: true }); /* a late answer must not scroll the page */
+  else $('list-h').focus(); /* it shows a focus ring (.list-heading) and may be out of view: let the browser scroll to it */
 }
 
 function render(focusIdx) {
