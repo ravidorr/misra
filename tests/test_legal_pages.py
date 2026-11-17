@@ -21,7 +21,7 @@ from playwright.async_api import Page, Route
 import build_dashboard
 from tests.conftest import add_crawls
 from tests.test_build_dashboard import prepare, read_payload
-from tests.test_dashboard_page import AXE, ORIGIN, PHONE, TAP_MIN, site  # noqa: F401  (site is a fixture)
+from tests.test_dashboard_page import AXE, ORIGIN, PHONE, TAP_MIN, build_site, site  # noqa: F401  (site is a fixture)
 from tests.test_sign_in import AXE_RUN
 
 REPO = Path(__file__).resolve().parents[1]
@@ -170,6 +170,7 @@ def test_the_build_writes_the_pages_from_the_markdown_files(workdir: Path, db: s
     db.close()
     build_dashboard.main()
     assert sorted(p.name for p in (workdir / "docs").glob("*.html")) == [
+        "about.html",
         "assistant.html",
         "email.html",
         "google0e1aa15dbd543e2f.html",
@@ -362,8 +363,8 @@ def test_the_page_is_framed_by_the_template(source: str, output: str) -> None:
     assert f"<title>{page.title}</title>" in html
     assert f'<meta name="description" content="{page.description}">' in html
     assert f'<link rel="canonical" href="https://ravidorr.github.io/misra/{output}">' in html
-    assert 'href="./">Open Misra dashboard</a>' in html
-    assert '<a class="wordmark" href="./">misra</a>' in html
+    assert '<a class="top-home" href="./">' in html  # the logo and "misra" are the way back
+    assert "Open Misra dashboard" not in html
     assert "noindex" not in html  # these pages are meant to be found
     assert not re.search(r"__(?!SRI_)[A-Z_]+__", html)  # every placeholder but the integrity hashes is filled in
 
@@ -371,20 +372,20 @@ def test_the_page_is_framed_by_the_template(source: str, output: str) -> None:
 @pytest.mark.parametrize(("source", "output"), DOCUMENTS)
 def test_the_page_has_no_built_from_line_and_no_link_to_its_source_or_history(source: str, output: str) -> None:
     html = build_dashboard.render_legal(BY_OUTPUT[output], REPO)
-    footer = html.split('<footer class="legal-foot">')[1]
+    footer = html.split('<footer class="foot">')[1]
     assert "built from" not in footer.lower()
     assert "legal-source" not in html
     assert "github.com" not in footer  # the footer leads to the other pages of the site only
     assert f"{BLOB}/{source}" not in html  # no link to the page's own Markdown file
     assert f"github.com/ravidorr/misra/commits/main/{source}" not in html  # nor to its history
-    for target in ("privacy.html", "terms.html", "security.html"):  # the footer navigation is still there
-        assert f'<a href="{target}">' in html
-    assert 'aria-label="Legal and security"' in html
+    for target in ("about.html", "privacy.html", "terms.html", "security.html"):  # the footer navigation is still there
+        assert f'<a href="{target}"' in html
+    assert 'aria-label="Site pages"' in html
 
 
 def test_the_template_has_no_words_of_its_own_to_drift_from_the_markdown() -> None:
     template = (REPO / "templates" / "legal.html").read_text(encoding="utf-8")
-    main = template.split('<main class="legal">')[1].split("</main>")[0]
+    main = template.split('<main class="legal card" id="main">')[1].split("</main>")[0]
     assert main.strip() == "__BODY__"  # the whole of the main region is the converted Markdown
     assert not re.search(r"<h[1-6]", template)
     assert "templates/legal.html" not in build_dashboard.STATIC_FILES  # never copied as it is
@@ -439,6 +440,7 @@ def test_the_publish_workflow_starts_on_the_sources_of_the_pages_and_never_on_it
         "TERMS.md",
         "SECURITY.md",
         "ASSISTANT.md",
+        "ABOUT.md",
         "templates/**",
         "design-system/**",
         "vendor/**",
@@ -556,13 +558,12 @@ async def test_the_links_of_the_footer_and_the_header_are_big_enough_to_tap(
     await page.set_viewport_size(PHONE)  # type: ignore[arg-type]
     await open_legal(page, site, output)
     links = page.locator("header a, footer a")
-    assert await links.count() >= 5  # noqa: PLR2004  (the wordmark, three pages, the way back)
+    assert await links.count() >= 7  # noqa: PLR2004  (the logo, the theme button is not a link, six footer pages)
     for link in await links.all():
         box = await link.bounding_box()
         assert box is not None
-        if "wordmark" not in (await link.get_attribute("class") or ""):
-            assert box["height"] >= TAP_MIN, await link.inner_text()
-            assert box["width"] >= TAP_MIN, await link.inner_text()
+        assert box["height"] >= TAP_MIN, await link.inner_text()
+        assert box["width"] >= TAP_MIN, await link.inner_text()
 
 
 async def test_a_link_to_a_section_of_another_page_opens_it_at_that_section(page: Page, site: Path) -> None:
@@ -574,9 +575,102 @@ async def test_a_link_to_a_section_of_another_page_opens_it_at_that_section(page
     assert top < 100  # noqa: PLR2004  (scrolled to the heading)
 
 
-async def test_the_way_back_and_the_wordmark_lead_to_the_dashboard(page: Page, site: Path) -> None:
+async def test_the_logo_and_the_name_are_one_link_to_the_dashboard(page: Page, site: Path) -> None:
     await open_legal(page, site, "privacy.html")
-    assert await page.get_by_role("link", name="Open Misra dashboard").get_attribute("href") == "./"
-    assert await page.get_by_role("link", name="misra", exact=True).get_attribute("href") == "./"
+    home = page.get_by_role("link", name="misra", exact=True)
+    assert await home.count() == 1
+    assert await home.get_attribute("href") == "./"
+    assert await home.locator("svg.top-mark").count() == 1
     external = page.locator("footer a[target=_blank]")
     assert await external.count() == 0  # the footer only leads to the other pages of the site
+
+
+# ---- The header and the footer every page shares (templates/parts/) ----
+
+PAGES_WITH_CHROME = ["index.html", "email.html", "about.html", "assistant.html", *(out for _s, out in DOCUMENTS)]
+
+
+def chrome_of(html: str) -> tuple[str, str]:
+    """The header and the footer of a built page, without the marks that differ by page."""
+    header = re.search(r'<header class="top">.*?</header>', html, re.DOTALL)
+    footer = re.search(r'<footer class="foot">.*?</footer>', html, re.DOTALL)
+    assert header
+    assert footer
+    marked = lambda s: s.replace(' aria-current="page"', "")  # noqa: E731
+    footer_text = re.sub(r"\s*<p class=\"foot-updated\">.*?</p>", "", marked(footer[0]), flags=re.DOTALL)
+    header_text = re.sub(r'\s*<div class="account".*?\n  </div>', "", marked(header[0]), flags=re.DOTALL)
+    return header_text, footer_text
+
+
+def test_every_page_has_the_same_header_and_footer_apart_from_the_dashboards_two_slots(
+    workdir: Path, db: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(build_dashboard, "DIGEST_SIGNUP_ENABLED", False)
+    docs = build_site(db, workdir)
+    built = {name: chrome_of((docs / name).read_text(encoding="utf-8")) for name in PAGES_WITH_CHROME}
+    assert len(set(built.values())) == 1, "the pages do not share one header and one footer"
+    index = (docs / "index.html").read_text(encoding="utf-8")
+    assert 'id="account"' in index
+    assert 'id="upd"' in index
+    for name in PAGES_WITH_CHROME[1:]:
+        other = (docs / name).read_text(encoding="utf-8")
+        assert 'id="account"' not in other  # they load no sign-in script
+        assert 'id="upd"' not in other  # and nothing that would fill the date
+        assert "__" not in re.sub(r"__SRI_[A-Z_]+__", "", other).replace("__BODY__", "")
+
+
+def test_the_link_of_the_page_shown_is_marked_and_no_other(
+    workdir: Path, db: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(build_dashboard, "DIGEST_SIGNUP_ENABLED", False)
+    docs = build_site(db, workdir)
+    for name in PAGES_WITH_CHROME:
+        html = (docs / name).read_text(encoding="utf-8")
+        marked = re.findall(r'<a [^>]*href="([^"]+)"[^>]*aria-current="page"', html)
+        assert marked == (["./"] if name == "index.html" else [] if name == "email.html" else [name]), name
+
+
+def test_with_the_assistant_switch_off_no_page_links_to_the_assistant_page(
+    workdir: Path, db: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(build_dashboard, "DIGEST_SIGNUP_ENABLED", False)
+    monkeypatch.setattr(build_dashboard, "ASSISTANT_PAGE_ENABLED", False)
+    docs = build_site(db, workdir)
+    assert not (docs / "assistant.html").exists()
+    for name in PAGES_WITH_CHROME:
+        if name != "assistant.html":
+            assert "assistant.html" not in (docs / name).read_text(encoding="utf-8"), name
+    assert f"{BLOB}/ASSISTANT.md" in (docs / "about.html").read_text(encoding="utf-8")  # the file, not a missing page
+
+
+def test_the_footer_lists_each_page_once_in_the_order_the_writer_chose() -> None:
+    footer = (REPO / "templates" / "parts" / "footer.inc").read_text(encoding="utf-8")
+    hrefs = re.findall(r'<a href="([^"]+)"', footer)
+    assert [h.split("@")[0] for h in hrefs] == [
+        "about.html",
+        "assistant.html",
+        "mailto:raanan",
+        "privacy.html",
+        "terms.html",
+        "security.html",
+    ]
+    assert 'aria-label="Site pages"' in footer
+
+
+def test_the_about_page_is_built_from_about_md_and_not_among_the_lawyers_documents() -> None:
+    assert build_dashboard.ABOUT_PAGE.source == "ABOUT.md"
+    assert build_dashboard.ABOUT_PAGE not in build_dashboard.LEGAL_PAGES
+    html = build_dashboard.render_legal(build_dashboard.ABOUT_PAGE, REPO)
+    assert "<title>About - Misra</title>" in html
+    assert '<a href="privacy.html">privacy notice</a>' in html
+    assert "mailto:" not in html.split("<footer")[0]  # the page itself carries no address
+    assert f"{BLOB}/ABOUT.md" not in html
+
+
+def test_about_md_names_no_address_and_says_nothing_the_pages_do_not_back() -> None:
+    text = (REPO / "ABOUT.md").read_text(encoding="utf-8")
+    assert "@" not in text
+    assert "—" not in text
+    assert text.startswith("# About Misra\n")
+    for sentence in ("once a day", "Sundays", "no sign-in"):
+        assert sentence in text

@@ -73,7 +73,7 @@ def test_the_page_renders_in_the_template_with_the_address_in_a_code_block() -> 
     html = build_dashboard.render_legal(build_dashboard.ASSISTANT_PAGE, REPO)
     assert "<title>Connect your assistant - Misra</title>" in html
     assert f'<pre><code class="language-text">{ADDRESS}\n</code></pre>' in html
-    assert 'href="assistant.html"' not in html
+    assert '<a href="assistant.html" aria-current="page">Connect your assistant</a>' in html  # its own footer link
     assert '<a href="privacy.html">privacy notice</a>' in html
     assert "<script" not in re.sub(
         r'<script src="theme.js"[^>]*></script>', "", html
@@ -81,7 +81,7 @@ def test_the_page_renders_in_the_template_with_the_address_in_a_code_block() -> 
 
 
 def test_the_real_dashboard_marks_the_link_so_the_switch_cuts_all_of_it() -> None:
-    template = (REPO / "templates" / "dashboard.html").read_text(encoding="utf-8")
+    template = (REPO / "templates" / "parts" / "footer.inc").read_text(encoding="utf-8")
     assert template.count("<!--assistant-->") == template.count("<!--/assistant-->") == 1
     cut = build_dashboard.ASSISTANT_REGION.sub("", template)
     assert "assistant.html" not in cut
@@ -122,7 +122,8 @@ def test_with_the_switch_off_there_is_no_page_no_link_and_an_old_page_goes(
     for built in docs.iterdir():  # nothing of the real build names the page or the link, not even a CSS comment
         text = built.read_text(encoding="utf-8", errors="ignore")
         assert "assistant.html" not in text, built.name
-        assert "Connect your assistant" not in text, built.name
+        if built.name != "about.html":  # the About page names the assistant, and links to the file on GitHub
+            assert "Connect your assistant" not in text, built.name
 
 
 async def test_the_page_has_no_accessibility_problem_in_light_and_dark(page: Page, assistant_site: Path) -> None:
@@ -144,8 +145,7 @@ async def test_the_page_fits_a_small_phone_and_its_links_are_big_enough_to_tap(
     for link in await page.locator("header a, footer a").all():
         box = await link.bounding_box()
         assert box is not None
-        if "wordmark" not in (await link.get_attribute("class") or ""):
-            assert box["height"] >= TAP_MIN, await link.inner_text()
+        assert box["height"] >= TAP_MIN, await link.inner_text()
 
 
 async def test_the_dashboard_footer_leads_to_the_page(page: Page, assistant_site: Path) -> None:

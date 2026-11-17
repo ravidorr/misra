@@ -14,6 +14,7 @@ on:
       - TERMS.md
       - SECURITY.md
       - ASSISTANT.md
+      - ABOUT.md
       - templates/**
       - design-system/**
       - vendor/**

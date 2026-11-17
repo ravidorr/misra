@@ -5,6 +5,7 @@
 ## Project
 
 - [Dashboard](https://ravidorr.github.io/misra/): Open entry-level, student and product roles in Israel, read daily from company career pages; the search field gives the live company count and the Coverage gaps card lists the companies whose roles may be missing or old.
+- [About](https://ravidorr.github.io/misra/about.html): What Misra is, where the roles come from, how often they are read, what it does not do, job alerts and the assistant, for people who use the dashboard.
 - [Connect your assistant](https://ravidorr.github.io/misra/assistant.html): How to add the read-only Misra job search to Claude, ChatGPT or another AI assistant (MCP, no sign-in).
 - [Overview and quickstart](/README.md): Pipeline commands, the daily run, the dashboard and development setup.
 - [Changelog](/CHANGELOG.md): Released changes.

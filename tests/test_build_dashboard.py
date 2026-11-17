@@ -67,8 +67,21 @@ def write_static(workdir: Path) -> None:
     (workdir / "templates" / "auth.js").write_text("const auth = '__SUPABASE_URL__';\n", encoding="utf-8")
     (workdir / "templates" / "email.html").write_text("<!doctype html><title>e</title>", encoding="utf-8")
     (workdir / "templates" / "email.js").write_text("const email = '__SUPABASE_URL__';\n", encoding="utf-8")
-    (workdir / "templates" / "legal.html").write_text("<title>__TITLE__</title><main>__BODY__</main>", encoding="utf-8")
-    for legal in (*build_dashboard.LEGAL_PAGES, build_dashboard.ASSISTANT_PAGE):
+    (workdir / "templates" / "legal.html").write_text(
+        "<title>__TITLE__</title>__HEADER__<main>__BODY__</main>__FOOTER__", encoding="utf-8"
+    )
+    parts = workdir / "templates" / "parts"
+    parts.mkdir(exist_ok=True)
+    (parts / "header.inc").write_text('<header><a href="./">misra</a>\n__ACCOUNT__\n</header>\n', encoding="utf-8")
+    (parts / "footer.inc").write_text(
+        '<footer>\n__FOOT_NOTE__\n<nav><a href="about.html">About</a>'
+        '<!--assistant--><a href="assistant.html">Assistant</a><!--/assistant-->'
+        '<a href="privacy.html">Privacy</a></nav>\n</footer>\n',
+        encoding="utf-8",
+    )
+    (parts / "account.inc").write_text("<div>account</div>\n", encoding="utf-8")
+    (parts / "updated.inc").write_text("<p>updated</p>\n", encoding="utf-8")
+    for legal in (*build_dashboard.LEGAL_PAGES, build_dashboard.ASSISTANT_PAGE, build_dashboard.ABOUT_PAGE):
         (workdir / legal.source).write_text(f"# {legal.source}\n", encoding="utf-8")
     (workdir / "templates" / "report.js").write_text("const report = '__SUPABASE_URL__/report';\n", encoding="utf-8")
     (workdir / "templates" / "digest.js").write_text("const digest = '__SUPABASE_URL__/digest';\n", encoding="utf-8")
@@ -254,6 +267,7 @@ def test_site_files_are_written_next_to_the_page(db: sqlite3.Connection, workdir
     build_dashboard.main()
     docs = workdir / "docs"
     assert sorted(p.name for p in docs.iterdir()) == [
+        "about.html",
         "apple-touch-icon.png",
         "assistant.html",
         "auth.js",
@@ -559,7 +573,9 @@ def test_with_the_signup_switch_on_the_page_has_the_control_the_script_and_its_i
 
 
 def test_the_real_page_marks_every_part_of_the_signup_so_the_switch_cuts_all_of_it() -> None:
-    template = (Path(__file__).resolve().parents[1] / "templates" / "dashboard.html").read_text(encoding="utf-8")
+    templates = Path(__file__).resolve().parents[1] / "templates"
+    template = (templates / "dashboard.html").read_text(encoding="utf-8")
+    template += (templates / "parts" / "account.inc").read_text(encoding="utf-8")  # the button is in the header's slot
     regions = build_dashboard.DIGEST_REGION.findall(template)
     assert len(regions) == DIGEST_PARTS  # the script tag, the button and the dialog
     assert template.count("<!--digest-->") == template.count("<!--/digest-->") == DIGEST_PARTS

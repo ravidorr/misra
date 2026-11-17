@@ -67,17 +67,14 @@ waits for him. Do not write the maintainer's email address in this repository (i
 
 ### Footer and pages (![footer](todo-images/footer.png))
 
-- [ ] **One header and one footer for every page.** `index.html` has no link to `security.html`, the other pages do.
-  Build one shared header and one shared footer component (DRY) and use it on `index.html`, `privacy.html`, `terms.html`,
-  `security.html` and `assistant.html` (the last four come from `templates/legal.html`). The logo and "misra" in the header link
-  to `index.html`. The four legal pages must look much more like `index.html`. Ask Claude Design and the UI/UX expert.
-- [ ] **Order of the footer links.** Ask Claude Design, the UI/UX expert and the technical writer.
-- [ ] **An "About" page, linked from the footer.** Content like `README.md` but for the end user. Ask Claude Design, the
-  UI/UX expert and the technical writer.
 - [ ] **A "Contact" page instead of an email link.** All contact information plus a form that sends an email (needs a
   design for spam and for where the mail goes; the endpoint must not log addresses, see `PRIVACY.md`). Ask the same three.
 - [ ] **The "Contact" section of `PRIVACY.md` is wrong for users without a GitHub account** (it points to a GitHub issue
   and the security note). It should point to the new Contact page. `PRIVACY.md` is the lawyer's: ask him.
+
+- [ ] **Ask the lawyer about two lines found while writing the About page** (his files were not touched). `PRIVACY.md`
+  ("The jobs data is public") still says the job history `data/jobs.db` is in the public repository; since step 9.1 the
+  history lives in Supabase and the file is not committed. `ASSISTANT.md` repeats a heading and uses em dashes.
 
 ### Tooling
 

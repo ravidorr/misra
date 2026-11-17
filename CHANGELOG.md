@@ -4,6 +4,17 @@ All notable changes are documented here. Format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
+## [0.62.0] - 2026-11-17
+
+### Added
+
+- An About page (`about.html`, from the new `ABOUT.md`, in the same template as the privacy, terms, security and assistant pages) for people who use the dashboard: where the roles come from, how often they are read, what Misra does not do, the Coverage gaps card, sign-in, job alerts, the assistant and the open source code. `ABOUT.md` is in the `publish-docs` trigger paths and the daily workflow's docs commit list.
+
+### Changed
+
+- One header and one footer for every page (`templates/parts/`, put in by `build_dashboard.py`): the logo and "misra" are one link to the dashboard; the footer is the same on the dashboard, the email page, and the privacy, terms, security, assistant and About pages: About, Connect your assistant, Contact, Privacy, Terms, Security (the nav is named "Site pages"), with `aria-current="page"` on the link of the page shown. The dashboard still fills two slots only it can use: the account controls and the "last read" line. The theme button works on every page (its code moved from `dashboard.js` to `theme.js`).
+- The privacy, terms, security and assistant pages are a card under the header with the title on the lime swipe, like the dashboard; their own footer and the "Open Misra dashboard" button are gone (the logo is the way back). The assistant link of the footer is now cut by the assistant switch on every page.
+
 ## [0.61.0] - 2026-11-17
 
 ### Changed
