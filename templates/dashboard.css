@@ -861,7 +861,7 @@ html:has(.sheet:modal) {
   font-size: var(--text-lg);
 }
 
-/* The legal pages (privacy.html, terms.html, security.html) and the assistant page (assistant.html): the Markdown of the repository, converted by
+/* The legal pages (privacy.html, terms.html, security.html): the Markdown of the repository, converted by
    build_dashboard.py. A readable measure, and links, table cells and long words that never push the page sideways. */
 .legal {
   max-width: 68ch;

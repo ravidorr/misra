@@ -2,7 +2,7 @@
 
 Connect your own AI assistant, such as Claude or ChatGPT, and it can search the roles on Misra and read one posting in full, for example to compare roles or draft a cover letter.
 
-This is optional: the dashboard and the job alerts work without it. It is free and read-only, with no account and no sign-in. Nothing about you or your CV is sent to Misra: your CV stays in your assistant.
+This is optional: the dashboard and the job alerts work without it. It is free and read-only, with no account and no sign-in. Your assistant sends Misra only the search words and the posting it asks for. Misra does not keep them and does not log your address. Your CV stays in your assistant.
 
 Select this address and copy it. You paste it in the steps below.
 
@@ -56,7 +56,7 @@ Postings belong to the employers and are shown as published, as is. Check the em
 
 ## Limits
 
-There is a daily limit for each person and one for everyone. When a limit is reached, your assistant tells you. It resets the next day (UTC).
+There is a daily limit for each connection, and one for everyone on reading full postings. When a limit is reached, your assistant tells you. It resets the next day (UTC).
 
 ## If it does not work
 

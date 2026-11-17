@@ -56,7 +56,9 @@ def test_the_real_dashboard_marks_the_link_so_the_switch_cuts_all_of_it() -> Non
     assert template.count("<!--assistant-->") == template.count("<!--/assistant-->") == 1
     cut = build_dashboard.ASSISTANT_REGION.sub("", template)
     assert "assistant.html" not in cut
-    assert not [line for line in build_dashboard.ASSISTANT_LINE.sub("", template).splitlines() if line != line.rstrip()]
+    removed = build_dashboard.ASSISTANT_LINE.sub("", template)
+    assert len(removed.splitlines()) == len(template.splitlines()) - 1  # the whole line goes, no blank one is left
+    assert "<!--assistant-->" not in removed
 
 
 @pytest.fixture
@@ -89,6 +91,10 @@ def test_with_the_switch_off_there_is_no_page_no_link_and_an_old_page_goes(
     docs = build_site(db, workdir)
     assert not (docs / "assistant.html").exists()
     assert "assistant" not in (docs / "index.html").read_text(encoding="utf-8").lower()
+    for built in docs.iterdir():  # nothing of the real build names the page or the link, not even a CSS comment
+        text = built.read_text(encoding="utf-8", errors="ignore")
+        assert "assistant.html" not in text, built.name
+        assert "Connect your assistant" not in text, built.name
 
 
 async def test_the_page_has_no_accessibility_problem_in_light_and_dark(page: Page, assistant_site: Path) -> None:
