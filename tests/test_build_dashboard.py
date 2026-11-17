@@ -83,6 +83,22 @@ def read_payload(workdir: Path) -> Any:
     return json.loads((workdir / "docs" / "jobs.json").read_text(encoding="utf-8"))
 
 
+def test_the_jobs_are_listed_in_byte_order_of_company_and_job_id_whatever_the_insert_order(
+    db: sqlite3.Connection, workdir: Path
+) -> None:
+    """A rebuild over the same data must never reorder docs/jobs.json (and the daily commit with it)."""
+    prepare(workdir)
+    for company, job_id in [("acme", "b"), ("Zed", "10"), ("Acme", "B"), ("Acme", "9"), ("Acme", "10"), ("Beta", "a")]:
+        add_job(db, company, job_id, "Product Manager")
+    db.close()
+    build_dashboard.main()
+    first = (workdir / "docs" / "jobs.json").read_bytes()
+    keys = [(j["c"], j["i"]) for j in json.loads(first)["jobs"]]
+    assert keys == [("Acme", "10"), ("Acme", "9"), ("Acme", "B"), ("Beta", "a"), ("Zed", "10"), ("acme", "b")]
+    build_dashboard.main()
+    assert (workdir / "docs" / "jobs.json").read_bytes() == first
+
+
 def test_main_builds_dashboard(db: sqlite3.Connection, workdir: Path, capsys: pytest.CaptureFixture[str]) -> None:
     prepare(workdir)
     log(db, "2024-01-01", "Down", 1)
@@ -238,6 +254,7 @@ def test_site_files_are_written_next_to_the_page(db: sqlite3.Connection, workdir
     docs = workdir / "docs"
     assert sorted(p.name for p in docs.iterdir()) == [
         "apple-touch-icon.png",
+        "assistant.html",
         "auth.js",
         "dashboard.css",
         "dashboard.js",

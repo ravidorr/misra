@@ -50,9 +50,7 @@ Menu names change. If yours differ, look for "connectors" or "MCP" in the settin
 
 ## What your assistant can see
 
-The public roles on the dashboard (company, title, place, level, role type, region, the start of the posting and a link to the employer), and the full text of one posting when it asks for it. Not anyone's stars, "Not for me" choices, settings or email address.
-
-Postings belong to the employers and are shown as published, as is. Check the employer's page before you apply: every result links to it. Your assistant writes its answers, not Misra: check them. Misra is free and unofficial. Use it for your own job search. Do not copy the postings in bulk, republish them, or use them to train models.
+Each role has the company, title, place, level, role type, region, the start of the posting and a link to the employer's page.
 
 ### What your assistant can see—and the rules for using it
 

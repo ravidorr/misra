@@ -48,10 +48,10 @@ DIGEST_REGION = re.compile(r"<!--digest-->(.*?)<!--/digest-->", re.DOTALL)
 DIGEST_LINE = re.compile(r"^[ \t]*<!--digest-->.*?<!--/digest-->[ \t]*\n", re.DOTALL | re.MULTILINE)
 # The "Connect your assistant" page (PLAN.md step 8.2) and the link to it. While False, docs/assistant.html is not built
 # (and an old one is deleted) and everything between `<!--assistant-->` and `<!--/assistant-->` in
-# templates/dashboard.html is cut out. It stays False until the lawyer has reviewed the assistant endpoint (PLAN.md
-# step 8.1, the Edge Function `mcp`, which answers 404 until the function secret ASSISTANT_ENDPOINT_ENABLED is
-# "true"), and is set to True together with that secret and with llms.txt naming the page (a test keeps them in step).
-ASSISTANT_PAGE_ENABLED = False
+# templates/dashboard.html is cut out. It is True since the lawyer approved the assistant endpoint and ASSISTANT.md
+# (2026-11-17; PLAN.md step 8.1, the Edge Function `mcp`, on since the function secret ASSISTANT_ENDPOINT_ENABLED is
+# "true"), together with llms.txt naming the page (a test keeps them in step). To close it, unset the secret.
+ASSISTANT_PAGE_ENABLED = True
 ASSISTANT_REGION = re.compile(r"<!--assistant-->(.*?)<!--/assistant-->", re.DOTALL)
 ASSISTANT_LINE = re.compile(r"^[ \t]*<!--assistant-->.*?<!--/assistant-->[ \t]*\n", re.DOTALL | re.MULTILINE)
 # The built pages that carry __SRI_*__ placeholders.

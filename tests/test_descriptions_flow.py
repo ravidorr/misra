@@ -551,3 +551,27 @@ def test_a_failing_trim_does_not_stop_the_step_and_is_not_logged_as_a_count(
     assert "was not trimmed today" in out
     assert "closed jobs lost their text" not in out
     assert "Supabase: 14 spam-guard counter rows deleted" in out  # the cleanups after it still ran
+
+
+def test_a_crawl_that_died_in_the_browser_leaves_a_history_the_sync_stores_without_texts(
+    workdir: Path, crawl: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The workflow syncs after a failed crawl: the companies recorded before the crash are stored; the texts of that
+    day are not (the work file is written at the end of the crawl), and the sync does not stop for it."""
+    descriptions.work_path().unlink(missing_ok=True)
+
+    def crash(_urls: list[str]) -> Any:
+        raise RuntimeError("browser died")
+
+    monkeypatch.setattr(run, "crawl_many", crash)
+    with pytest.raises(RuntimeError, match="browser died"):
+        crawl(
+            [co("Acme", "acme"), {"name": "Br", "ats": "browser", "slug": "https://br", "status": "ok"}],
+            {"acme": [posting("1")]},
+        )
+    fake = FakeSupabase()
+    conn = sqlite3.connect(run.DB)
+    result = sync(conn, client(fake))
+    conn.close()
+    assert (result.upserted, result.texts, result.logged) == (1, 0, 1)
+    assert list(fake.table) == [("Acme", "1")]
