@@ -751,7 +751,7 @@ dialog.sheet:not(:modal) .sheet-done {
 .story {
   position: relative; /* the hidden count (.sr-only) is absolute: without a positioned parent it sits off the page and widens it */
   flex: 0 0 auto;
-  width: 5.5rem; /* wide enough for "monday.com" in one piece; longer names wrap at their spaces */
+  width: 6.5rem; /* wide enough for the longest ordinary word (13 letters, "Semiconductor") in the widest common bold sans (Verdana, Linux fallbacks: 101 px); names wrap at their spaces */
   padding: 0;
   border: 0;
   background: none;
@@ -1184,6 +1184,7 @@ dialog.sheet[hidden],
 .hiring {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-rows: minmax(var(--tap), auto) auto; /* the heading row keeps the button's height, so the circles do not move when the button goes or comes */
   align-items: center;
   gap: var(--space-2) var(--space-3);
   margin-bottom: var(--space-4);
@@ -1217,7 +1218,7 @@ dialog.sheet[hidden],
 
 .stories > li {
   display: flex;
-  flex: 0 0 5.5rem;
+  flex: 0 0 6.5rem;
   align-items: flex-start; /* a button centres its content when stretched: keep it as tall as its content */
   justify-content: center;
 }
