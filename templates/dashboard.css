@@ -107,6 +107,10 @@ a {
   text-decoration: none;
 }
 
+.top > :not(.top-home) {
+  flex-shrink: 0; /* the controls keep their 44px; the logo link gives way on a narrow phone */
+}
+
 .top-home:focus-visible {
   outline: 3px solid var(--accent);
   outline-offset: 2px;
