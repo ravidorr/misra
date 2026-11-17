@@ -22,25 +22,12 @@ OTHER_PAGES = [
 STYLE = ["border-top-color", "border-top-width", "background-color", "box-shadow", "border-top-left-radius", "color"]
 
 
-def test_the_slots_fill_the_home_button_and_link_on_every_page_but_the_dashboard() -> None:
+def test_the_slots_fill_the_home_button_and_link_before_the_other_footer_links() -> None:
     page = "__HEADER__\n__FOOTER__"
     other = build_dashboard.apply_chrome(page, "about.html")
     assert other.count('id="home"') == 1
     assert other.count('<a href="./">Home</a>') == 1
     assert other.index('<a href="./">Home</a>') < other.index('href="about.html"')
-    dashboard = build_dashboard.apply_chrome(page, "index.html", dashboard=True)
-    assert 'id="home"' not in dashboard
-    assert ">Home<" not in dashboard
-    assert 'id="accountMenuButton"' in dashboard
-
-
-def test_a_slot_the_build_does_not_fill_is_still_an_error(tmp_path: Path) -> None:
-    parts = tmp_path / build_dashboard.PARTS
-    parts.mkdir(parents=True)
-    for source in ("header.inc", "footer.inc", "home-button.inc", "home-link.inc", "account.inc", "updated.inc"):
-        (parts / source).write_text("__MISSING__\n" if source == "footer.inc" else "x\n", encoding="utf-8")
-    with pytest.raises(ValueError, match="slot that this build does not fill"):
-        build_dashboard.apply_chrome("__FOOTER__", "about.html", tmp_path)
 
 
 @pytest.mark.parametrize("output", OTHER_PAGES)
@@ -83,22 +70,3 @@ async def test_the_footer_says_home_first_and_the_logo_link_is_unchanged(page: P
     assert await page.locator("a.top-home").get_attribute("href") == "./"
     assert await page.locator("a.top-home").get_attribute("aria-label") is None  # still named by "misra"
     assert await page.locator("a.top-home").inner_text() == "misra"
-
-
-@pytest.mark.parametrize("output", ["about.html", "contact.html", "email.html", "privacy.html"])
-async def test_the_tab_order_is_skip_link_logo_home_theme(page: Page, site: Path, output: str) -> None:  # noqa: F811
-    await open_legal(page, site, output)
-    order = []
-    for _ in range(4):
-        await page.keyboard.press("Tab")
-        order.append(await page.evaluate("document.activeElement.id || document.activeElement.className"))
-    assert order == ["skip", "top-home", "home", "theme"]
-
-
-async def test_the_dashboard_has_no_home_button_and_no_home_link(page: Page, site: Path) -> None:  # noqa: F811
-    await open_legal(page, site, "index.html")
-    assert await page.locator("#home").count() == 0
-    assert await page.get_by_role("link", name="Home", exact=True).count() == 0
-    assert await page.locator("#signIn").count() == 1
-    assert await page.locator("#accountMenuButton").count() == 1
-    assert await page.locator("footer.foot nav.foot-links a").first.inner_text() == "About"

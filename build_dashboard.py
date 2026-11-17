@@ -399,8 +399,8 @@ def apply_chrome(text: str, output: str, root: Path = Path(), dashboard: bool = 
         "__HEADER__": (parts / "header.inc").read_text(encoding="utf-8"),
         "__FOOTER__": (parts / "footer.inc").read_text(encoding="utf-8"),
     }
-    for placeholder, sources in SLOTS.items():
-        source = sources[0] if dashboard else sources[1]
+    for placeholder, (on_dashboard, elsewhere) in SLOTS.items():
+        source = on_dashboard if dashboard else elsewhere
         filled = (parts / source).read_text(encoding="utf-8") if source else ""
         for name, part in shared.items():
             shared[name] = part.replace(f"{placeholder}\n", filled)

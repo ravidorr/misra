@@ -622,7 +622,7 @@ def chrome_of(html: str) -> tuple[str, str]:
     return header_text, footer_text
 
 
-def test_every_page_has_the_same_header_and_footer_apart_from_the_dashboards_two_slots(
+def test_every_page_has_the_same_header_and_footer_apart_from_what_the_slots_fill(
     workdir: Path, db: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setattr(build_dashboard, "DIGEST_SIGNUP_ENABLED", False)
@@ -635,8 +635,8 @@ def test_every_page_has_the_same_header_and_footer_apart_from_the_dashboards_two
     assert 'id="home"' not in index  # the dashboard has the account controls and no way home but the logo
     assert '<a href="./">Home</a>' not in index
     for name in PAGES_WITH_CHROME[1:]:
-        assert (docs / name).read_text(encoding="utf-8").count('id="home"') == 1
         other = (docs / name).read_text(encoding="utf-8")
+        assert other.count('id="home"') == 1
         assert 'id="account"' not in other  # they load no sign-in script
         assert 'id="upd"' not in other  # and nothing that would fill the date
         assert "__" not in re.sub(r"__SRI_[A-Z_]+__", "", other).replace("__BODY__", "")
@@ -720,7 +720,7 @@ def test_every_skip_link_leads_to_an_element_of_its_page(
         assert f'id="{target[1]}"' in html, name
 
 
-@pytest.mark.parametrize("output", ["privacy.html", "about.html"])
+@pytest.mark.parametrize("output", ["privacy.html", "about.html", "contact.html", "email.html"])
 async def test_the_header_is_in_the_same_tab_order_on_every_page_and_the_skip_link_comes_first(
     page: Page, site: Path, output: str
 ) -> None:
