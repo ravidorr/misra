@@ -38,12 +38,6 @@ for wording, the technical-writer agent, before building; the maintainer may be 
 disagree. The wording of `PRIVACY.md`, `TERMS.md` and `ASSISTANT.md` is the lawyer's (`AGENTS.md`): a change to them
 waits for him. Do not write the maintainer's email address in this repository (it is public).
 
-### Other modals and the profile menu
-
-- [ ] **Follow-ups from the modals review** (the experts' reasons are in the PR that closed the rest of this section).
-  The report dialog and the filters sheet keep their "Close" buttons: move them to the corner (x)
-  (`.dialog-close`, `design-system/components/dialog.css`) so all dialogs match.
-
 ### Contact form
 
 - [ ] **Ask the lawyer to confirm one bullet for "What we store" in `PRIVACY.md`.** He approved "a bullet for the form" on

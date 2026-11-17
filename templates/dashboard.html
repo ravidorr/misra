@@ -58,7 +58,7 @@ __HEADER__
   <dialog class="sheet" id="moreFilters" aria-labelledby="sheetTitle" open>
     <div class="sheet-head">
       <h2 class="sheet-title" id="sheetTitle" tabindex="-1">Filters</h2>
-      <button type="button" class="btn btn-pill sheet-close" id="filtersClose">Close</button>
+      <button type="button" class="dialog-close sheet-close" id="filtersClose" aria-label="Close"><svg aria-hidden="true" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
     </div>
     <div class="sheet-body">
       <div class="filter-group">
@@ -181,6 +181,7 @@ __FOOTER__
 </dialog>
 <!--/digest-->
 <dialog class="dialog" id="reportDialog" aria-labelledby="reportTitle" aria-describedby="reportIntro" data-report="dialog" data-state="idle">
+  <button type="button" class="dialog-close" id="reportClose" aria-label="Close"><svg aria-hidden="true" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
   <h2 class="dialog-title" id="reportTitle" tabindex="-1">Add a company</h2>
   <form id="reportForm" novalidate data-report="form">
     <p id="reportIntro">Tell us about a company whose career page is missing from this list, or one we read wrong. You need no account and no personal details. We email the report to the maintainer. Only the career page link is required.</p>
@@ -216,7 +217,6 @@ __FOOTER__
   <div id="reportDone" data-report="done" hidden>
     <h3 class="dialog-title" id="reportDoneTitle" tabindex="-1">Report sent</h3>
     <p role="status">Your report was emailed to the maintainer. Companies we accept are added to the crawl, or listed on this card with the reason we do not read them.</p>
-    <p class="dialog-actions"><button type="button" class="btn btn-pill btn-primary" id="reportClose">Close</button></p>
   </div>
 </dialog>
 </body>
