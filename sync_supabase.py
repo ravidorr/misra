@@ -379,12 +379,11 @@ def sync(conn: sqlite3.Connection, client: Client, excluded: Sequence[str] = ())
     skipped = robots_skipped(conn)
     robots_jobs, robots_companies = delete_robots_skipped(client, skipped)
     print(f"Supabase: robots.txt, deleted {robots_jobs} jobs of {robots_companies} companies")
-    # a crawl that crashed after its robots skips can leave their jobs in the scratch history: never send them back
-    rows = [
-        row
-        for row in open_rows(conn)
-        if not is_excluded(row["company"], list(excluded)) and row["company"] not in skipped
-    ]
+    # a crawl that crashed after its robots skips can leave their jobs in the scratch history: drop them there too, so
+    # neither this sync nor a retry on the same file (the log rows are marked written by then) sends them back
+    conn.executemany("DELETE FROM jobs WHERE company=?", [(name,) for name in skipped])
+    conn.commit()
+    rows = [row for row in open_rows(conn) if not is_excluded(row["company"], list(excluded))]
     if not rows:
         raise SyncError("no open jobs in the local database: refusing to close every job in Supabase")
     client.upsert(rows)

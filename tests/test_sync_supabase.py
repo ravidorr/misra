@@ -526,6 +526,8 @@ def test_jobs_a_crashed_crawl_left_in_the_history_are_not_sent_back_after_the_de
     stored(fake, "Walled", "1")
     sync(jobs, client(fake))
     assert ("Walled", "1") not in fake.table
+    sync(jobs, client(fake))  # a retry on the same file: the log rows are marked written, the jobs must stay gone
+    assert ("Walled", "1") not in fake.table
 
 
 def test_a_second_sync_finds_nothing_to_delete_and_sends_no_delete(jobs: sqlite3.Connection) -> None:
