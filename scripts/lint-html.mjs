@@ -5,7 +5,8 @@ const files = execFileSync('git', ['ls-files', '--cached', '--others', '--exclud
   encoding: 'utf8',
 })
   .split('\n')
-  .filter(Boolean);
+  // Google Search Console ownership files hold one line of text, not HTML.
+  .filter((file) => file && !/(^|\/)google[0-9a-f]+\.html$/.test(file));
 
 if (files.length === 0) {
   console.log('lint-html: no HTML files, nothing to validate.');

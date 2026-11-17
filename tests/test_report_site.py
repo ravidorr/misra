@@ -683,7 +683,10 @@ def test_privacy_md_says_where_the_form_is() -> None:
 
 def test_the_daily_workflow_publishes_every_file_the_page_loads() -> None:
     workflow = (REPO / ".github" / "workflows" / "daily.yml").read_text(encoding="utf-8")
-    names = {Path(s).name for s in (*build_dashboard.STATIC_FILES, *build_dashboard.VENDORED_FILES)}
+    names = {
+        Path(s).name
+        for s in (*build_dashboard.STATIC_FILES, *build_dashboard.VENDORED_FILES, *build_dashboard.VERIFICATION_FILES)
+    }
     names |= {"dashboard.css", "jobs.json", "jobs.jsonld"}
     names.discard("dashboard.html")
     for name in names:
