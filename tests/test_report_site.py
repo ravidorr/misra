@@ -226,6 +226,7 @@ async def test_fr7_ac4_a_sent_report_shows_a_confirmation_and_the_next_report_st
     assert await page.locator("#reportForm").is_hidden()
     assert await page.locator("#reportError").is_hidden()
     assert await dialog.get_attribute("data-state") == "sent"
+    await expect(page.locator("#reportClose")).to_be_visible()  # the corner (x) is the way out of the confirmation
     await page.click("#reportClose")
     await expect(dialog).to_be_hidden()
     assert await page.evaluate("document.activeElement.id") == "reportOpen"  # back where the user was
@@ -252,6 +253,9 @@ async def test_the_button_is_busy_while_it_waits_and_one_click_sends_one_report(
     await page.focus("#reportCompany")
     await page.keyboard.press("Enter")
     await page.click("#reportCancel", force=True)
+    for name in ("reportSend", "reportCancel", "reportClose"):
+        assert await page.locator(f"#{name}").get_attribute("aria-disabled") == "true"
+    await page.click("#reportClose", force=True)  # the corner (x) does not abandon a request in flight either
     await page.keyboard.press("Escape")
     await expect(page.locator(DIALOG)).to_be_visible()
     backend.gate.set()
@@ -486,7 +490,7 @@ async def test_the_honeypot_is_off_screen_not_hidden_and_never_reached_by_keyboa
     assert box is not None
     assert box["x"] + box["width"] < 0 or box["x"] > PHONE["width"] * 10  # off the screen, either direction
     reached = []
-    for _ in range(8):  # a full lap round the dialog
+    for _ in range(9):  # a full lap round the dialog, the corner (x) included
         await page.keyboard.press("Tab")
         reached.append(await page.evaluate("document.activeElement.id"))
     assert "reportWebsite" not in reached
@@ -526,7 +530,7 @@ async def test_the_keyboard_alone_opens_fills_sends_and_closes(page: Page, site:
     assert await page.evaluate("document.activeElement.id") == "reportSend"
     await page.keyboard.press("Enter")
     await expect(page.locator("#reportDoneTitle")).to_be_focused()
-    await page.keyboard.press("Tab")
+    await page.keyboard.press("Shift+Tab")  # the corner (x) comes first in the dialog, before the heading
     assert await page.evaluate("document.activeElement.id") == "reportClose"
     await page.keyboard.press("Enter")
     await expect(page.locator(DIALOG)).to_be_hidden()
@@ -619,7 +623,8 @@ async def test_the_form_reads_well_on_a_phone(page: Page, site: Path) -> None:
     assert box is not None
     assert box["x"] >= 0
     assert box["x"] + box["width"] <= PHONE["width"]
-    for control in await page.locator(f"{DIALOG} .btn, {DIALOG} .field").and_(page.locator(":visible")).all():
+    controls = page.locator(f"{DIALOG} .btn, {DIALOG} .dialog-close, {DIALOG} .field").and_(page.locator(":visible"))
+    for control in await controls.all():
         size = await control.bounding_box()
         assert size is not None
         assert size["height"] >= TAP_MIN
@@ -630,6 +635,31 @@ async def test_the_form_reads_well_on_a_phone(page: Page, site: Path) -> None:
     assert target["width"] >= TAP_MIN
     await page.evaluate(AXE.read_text(encoding="utf-8"))
     assert await page.evaluate(AXE_RUN) == []
+
+
+@pytest.mark.parametrize("width", [320, 375])
+async def test_the_corner_close_is_named_big_and_clear_of_the_heading_in_both_states(
+    page: Page, site: Path, width: int
+) -> None:
+    await page.set_viewport_size({"width": width, "height": 640})
+    await ready(page, site)
+    await open_form(page)
+    close = page.locator("#reportClose")
+    assert await close.get_attribute("aria-label") == "Close"
+    assert await page.locator("#reportDone .btn").count() == 0  # no text "Close" button is left in the confirmation
+    for heading in ("#reportTitle", "#reportDoneTitle"):
+        if heading == "#reportDoneTitle":
+            await send_good(page)
+            await confirmed(page)
+        box = await close.bounding_box()
+        assert box is not None
+        assert box["height"] >= TAP_MIN
+        assert box["width"] >= TAP_MIN
+        title = await page.locator(heading).evaluate(
+            "e => { const r = document.createRange(); r.selectNodeContents(e);"
+            " return Math.max(...[...r.getClientRects()].map(c => c.right)); }"
+        )
+        assert title <= box["x"]  # the heading's text never runs under the (x)
 
 
 async def test_the_card_action_is_big_enough_on_a_phone(page: Page, site: Path) -> None:

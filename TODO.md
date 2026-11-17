@@ -56,11 +56,9 @@ waits for him. Do not write the maintainer's email address in this repository (i
 ### Other modals and the profile menu
 
 - [ ] **Follow-ups from the modals review** (the experts' reasons are in the PR that closed the rest of this section).
-  The report dialog and the filters sheet keep their "Close" buttons: move them to the corner (x)
-  (`.dialog-close`, `design-system/components/dialog.css`) so all dialogs match. Ask the lawyer, with the next review of
-  `templates/email.js`, whether "Send the confirmation again" (named in an approved sentence there) may become "Resend
-  confirmation", and whether the agreement links in the job alerts dialog (pinned as raw HTML in
-  `tests/test_legal_wording.py`) may open in a new tab like the ones in the sign-in dialog.
+  Ask the lawyer, with the next review of `templates/email.js`, whether "Send the confirmation again" (named in an
+  approved sentence there) may become "Resend confirmation", and whether the agreement links in the job alerts dialog
+  (pinned as raw HTML in `tests/test_legal_wording.py`) may open in a new tab like the ones in the sign-in dialog.
 
 ### Footer and pages
 
