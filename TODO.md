@@ -152,12 +152,12 @@ waits for him. Do not write the maintainer's email address in this repository (i
 
 ## Research the remaining unresolved companies
 
-- [ ] `data/unresolved_candidates.csv` lists 77 researched companies with no usable job feed (as of 2026-11-14: 22
-  multinational, 34 deeptech, 11 cyber_infra, 10 biz_software). Each needs
+- [ ] `data/companies.json` holds 77 researched companies with no usable job feed (as of 2026-11-14: 22
+  multinational, 34 deeptech, 11 cyber_infra, 10 biz_software; they are the records with a `gap`). Each needs
   its own research; there is no batch fix left. Every observation about a live site below is from the checks of
   2026-11-14, a crawl of the 105 rows that had a careers URL that day (54 today) and a scan of their rendered pages. The
   remaining work falls into these groups:
-  - **No careers URL (23).** Status `not_found` in `data/new/*_companies.json`: Upsolver, Speedata,
+  - **No careers URL (23).** They have no `careers_url` in `data/companies.json`: Upsolver, Speedata,
     Teramount, X-Globe, Q Factor, Gilat, Siklu, Silicom, Sight Diagnostics, Brainsway, EarlySign, Diagnostic Robotics,
     Tevel Aerobotics, SolarEdge, Watergen, AIR, SAP, eBay,
     Akamai, Ford, Ericsson, Uber, Keysight. Find the real
@@ -344,30 +344,24 @@ waits for him. Do not write the maintainer's email address in this repository (i
     3. Read the result before pinning. It needs real titles, distinct links and a location per job that the Israel matcher
        (`discover.ISRAEL`) can recognise, for the jobs that will appear and not only the ones there today. A list of
        navigation links, a worldwide first page or a partial list is not a feed.
-    4. Pin with four edits (`israel_only` for a large multinational), one company or one source per PR so a bad pin is
-       easy to drop. Edit the files by hand and append at the end: do not rerun `discover.py`, which re-probes every
-       company and rewrites `data/companies.json`.
-       - `data/overrides.json`: `"Visa": {"ats": "workday", "slug": "visa/wd5/Visa", "israel_only": true}`
-       - `data/companies.json`: `{"name", "domain", "careers_url": "", "ats": "workday", "slug", "source": "override",
-         "status": "ok", "n_jobs", "n_israel", "israel_only": true}`, with `n_jobs` and `n_israel` from the probe (an
-         `israel_only` adapter returns Israel jobs only, so they are equal; the domain is in
-         `data/unresolved_candidates.csv`)
-       - `data/seed_companies.csv`: one `Name,domain` row
-       - remove the row from `data/unresolved_candidates.csv`
-       - both CSV files use CRLF line endings: keep them, and update the counts named at the top.
+    4. Pin with one edit of the company's record in `data/companies.json` (one company per PR, so a bad pin is easy to
+       drop): set `"crawl": true`, `"ats"`, `"slug"`, `"source": "override"` (that is what pins it: `discover.py`
+       keeps the `ats` and `slug` of a pinned record and only checks them), `"status": "ok"` and, for a large
+       multinational, `"israel_only": true`; remove the `gap` (and the `segment`). Do not rerun `discover.py` for it: it
+       re-probes every crawled company.
        A board with no Israel job today is fine to pin: the `israel_only` rule reports the first Israel job it ever
        lists. Code changes (an adapter, a parser fix) need a version bump and a changelog entry; data-only PRs do not.
        Probe a Workday slug with `.venv/bin/python -c "import adapters; print(adapters.workday('visa/wd5/Visa'))"`:
        `None` is a host that did not answer with a job search (Workday tenants go to a maintenance page for hours at a
        time, and answer again later: probe on more than one day before giving up), `[]` is a board with no Israel job.
-    5. If a company cannot be done, say why. Set the `reason` (one of the keys of `build_dashboard.REASONS`) and a short `note` of
-       the row in `data/unresolved_candidates.csv`: the coverage gap card reads them, and `tests/test_todo_counts.py` fails
-       when the counts quoted here and the rows disagree.
+    5. If a company cannot be done, say why. Set the `reason` (one of the keys of `build_dashboard.REASONS`) and a short `note` in
+       the `gap` of its record in `data/companies.json`: the coverage gap card reads them, and `tests/test_todo_counts.py`
+       fails when the counts quoted here and the records disagree.
   - Tools: `browser_crawl.crawl_many` over every row with a careers URL, and a scan of the rendered pages for ATS links,
     were the two passes behind this list; both were throwaway scripts and are not in the repo. Adding them as a dev tool
     next to `survey.py` and `survey2.py` would make a re-run easy (a new module must be registered as `AGENTS.md`
     describes).
-  - Done when: `data/unresolved_candidates.csv` is empty, or every remaining row has a `reason` that says why it cannot be done.
+  - Done when: no record of `data/companies.json` has a `gap`, or every remaining one has a `reason` that says why it cannot be done.
 
 ## Step 9.1 live checks
 

@@ -196,9 +196,6 @@ async def test_the_card_offers_the_action_even_when_no_company_is_known_to_be_mi
     page: Page,
     site: Path,
 ) -> None:
-    (site.parent / "data" / "unresolved_candidates.csv").write_text(
-        "name,domain,segment,reason,note\r\n", encoding="utf-8"
-    )
     (site.parent / "data" / "companies.json").write_text('[{"name": "Acme", "status": "ok"}]', encoding="utf-8")
     build_dashboard.main()
     await ready(page, site)
@@ -671,7 +668,7 @@ def test_the_page_calls_only_the_projects_function_with_no_secret() -> None:
 def test_fr7_ac6_contributing_md_says_how_a_reported_site_is_accepted() -> None:
     text = (REPO / "CONTRIBUTING.md").read_text(encoding="utf-8")
     assert "Reported sites" in text
-    for words in ("data/seed_companies.csv", "data/unresolved_candidates.csv", "reason", "note"):
+    for words in ("data/companies.json", "crawl", "gap", "reason", "note"):
         assert words in text, words
 
 

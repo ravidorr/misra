@@ -1,7 +1,10 @@
-"""Find careers_url + ATS for each seed company. Writes data/companies.json"""
+"""Find careers_url + ATS for each crawled company of data/companies.json and write the result back into it.
 
-import csv
-import glob
+Only the discovered fields (DISCOVERED) of a record that has `crawl` true are rewritten, in place and in the same order;
+everything a person wrote (`crawl`, `israel_only`, `verify`, `links`, `gap`, `segment`) is left as it is, and so are
+the records of the companies that are not crawled. A record whose `source` is `override` is pinned by hand: its `ats`
+and `slug` are kept and only checked. To add a company, add `{"name", "domain", "crawl": true}` and run this."""
+
 import json
 import re
 import sys
@@ -10,10 +13,10 @@ from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
 from adapters import ADAPTERS
-from common import ISRAEL, get, is_excluded, load_excluded, slug_candidates
+from common import COMPANIES, ISRAEL, get, is_excluded, load_companies, load_excluded, slug_candidates
 
 HTTP_OK = 200
-MIN_DST_ARGS = 2
+DISCOVERED = ("careers_url", "ats", "slug", "source", "status")  # the fields this script owns
 PROBE_ORDER = ["greenhouse", "lever", "ashby", "workable", "smartrecruiters"]
 ATS_LINK = [
     ("comeet", re.compile(r"comeet\.com/jobs/([A-Za-z0-9_.\-]+/[A-Z0-9.]+)", re.I)),
@@ -49,19 +52,7 @@ def israel_count(jobs: list[dict[str, Any]]) -> int:
     return sum(1 for j in jobs if ISRAEL.search(j["location"] or ""))
 
 
-def load_overrides() -> dict[str, Any]:
-    out: dict[str, Any] = {}
-    # agents add data/new/<segment>_overrides.json
-    for _p in ["data/overrides.json", *sorted(glob.glob("data/new/*_overrides.json"))]:
-        with open(_p) as fh:
-            out.update(json.load(fh))
-    return out
-
-
-OVERRIDES = load_overrides()
-
-
-def discover(row: dict[str, str]) -> dict[str, Any]:  # noqa: PLR0912
+def discover(row: dict[str, Any]) -> dict[str, Any]:  # noqa: PLR0912
     name, domain = row["name"], row["domain"]
     res: dict[str, Any] = {
         "name": name,
@@ -74,13 +65,11 @@ def discover(row: dict[str, str]) -> dict[str, Any]:  # noqa: PLR0912
         "n_jobs": None,
         "n_israel": None,
     }
-    ov = OVERRIDES.get(name)
+    ov = row if row.get("source") == "override" else None  # pinned by hand: its ats and slug are the answer
     if ov:
         res.update(
             ats=ov["ats"], slug=ov["slug"], source="override", careers_url=ov["slug"] if ov["ats"] == "browser" else ""
         )
-        if ov.get("israel_only"):
-            res["israel_only"] = True  # the crawl keeps only jobs located in Israel
         if ov["ats"] == "browser":
             res["status"] = "ok"  # verified at crawl time
             print(f"{name:25s} ok(browser)        {ov['slug']}", flush=True)
@@ -142,22 +131,18 @@ def discover(row: dict[str, str]) -> dict[str, Any]:  # noqa: PLR0912
 
 
 def main() -> None:
-    src = sys.argv[1] if len(sys.argv) > 1 else "data/seed_companies.csv"
-    dst = sys.argv[2] if len(sys.argv) > MIN_DST_ARGS else "data/companies.json"
+    path = sys.argv[1] if len(sys.argv) > 1 else COMPANIES
     excluded = load_excluded()  # a company that asked to be removed is never looked at again
-    with open(src) as fh:
-        rows = [r for r in csv.DictReader(fh) if not is_excluded(r["name"], excluded)]
-    seen: set[str] = set()
-    uniq: list[dict[str, str]] = []
-    for r in rows:
-        if r["domain"] not in seen:
-            seen.add(r["domain"])
-            uniq.append(r)
+    records = load_companies(path)
+    todo = [r for r in records if r.get("crawl") and not is_excluded(r["name"], excluded)]
     with ThreadPoolExecutor(8) as ex:
-        out = list(ex.map(discover, uniq))
-    with open(dst, "w") as fh:
-        json.dump(out, fh, indent=1, ensure_ascii=False)
-    print(Counter(r["status"] for r in out))
+        found = list(ex.map(discover, todo))
+    for record, res in zip(todo, found, strict=True):
+        record.update({k: res[k] for k in DISCOVERED})
+    with open(path, "w", encoding="utf-8") as fh:
+        json.dump(records, fh, indent=1, ensure_ascii=False)
+        fh.write("\n")
+    print(Counter(r["status"] for r in found))
 
 
 if __name__ == "__main__":

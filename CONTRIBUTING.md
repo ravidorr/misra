@@ -28,12 +28,22 @@ GitHub Pages serves the dashboard: Settings, Pages, Deploy from a branch, `main`
 
 ## Adding a company
 
-1. Add the company to `data/seed_companies.csv` (`name,domain`).
-2. Run `python3 discover.py`. It writes each company's careers URL and job feed to `data/companies.json`. Commit both.
-3. If `discover.py` finds the wrong feed or none, pin the company in `data/overrides.json`, to an ATS and slug or to a
-   career page URL (`"ats": "browser"`).
+`data/companies.json` is the one list of every company: the ones we crawl (`"crawl": true`) and the ones we only
+researched (`"crawl": false`, with a `gap`). Nothing about a company lives anywhere else. A record has these fields:
 
-Add `"israel_only": true` to an override to keep only the jobs located in Israel. Use it for large multinational boards.
+- Written by a person: `name`, `domain`, `crawl`, `segment` (research only), `israel_only`, `verify`, `links` (the
+  `israel` and `global` career pages the coverage card opens), `gap` (`reason` and `note`: why it is not crawled).
+- Written by `discover.py`: `careers_url`, `ats`, `slug`, `source`, `status`. It never touches the others, and never
+  touches a record whose `crawl` is not true.
+
+1. Add `{"name": "Acme", "domain": "acme.com", "crawl": true}` to `data/companies.json`, in name order.
+2. Run `python3 discover.py`. It fills in each crawled company's careers URL and job feed. Commit the file.
+3. If `discover.py` finds the wrong feed or none, pin the company: set `"source": "override"` and its `ats` and `slug`
+   (or `"ats": "browser"` and a career page URL as the `slug`). `discover.py` keeps a pinned `ats` and `slug` and only
+   checks them. Remove `source` to let it search again.
+
+Add `"israel_only": true` to a record to keep only the jobs located in Israel. Use it for large multinational boards.
+Add `"verify": false` to a pin whose board this network cannot reach: it is trusted and checked at crawl time.
 
 The slug for the systems where it is not obvious:
 
@@ -433,7 +443,7 @@ from public.jobs
 where status = 'open';
 ```
 
-Accepted sites are not in Supabase: a report is only an email, and accepting it adds a row to `data/seed_companies.csv` (see "Reported sites"). Count the additions of the month from git, for example `git log --since=2026-11-01 --until=2026-12-01 -p --format= -- data/seed_companies.csv | grep -c '^+[^+]'`, and compare with the number of report emails received.
+Accepted sites are not in Supabase: a report is only an email, and accepting it adds a `"crawl": true` record to `data/companies.json` (see "Reported sites"). Count the additions of the month from git, for example `git log --since=2026-11-01 --until=2026-12-01 -p --format= -- data/companies.json | grep -c '^+  "crawl": true'`, and compare with the number of report emails received.
 
 ## Backups of the account tables and the job history
 
@@ -551,11 +561,11 @@ Not covered, and said plainly: a real PostgREST and a real Supabase project (the
 
 Visitors report a missing company with "Add a company" on the dashboard's coverage gap card (PLAN.md step 5.2). Each report reaches the maintainer by email (company, career page link and why it matters). Nothing is stored about it, so the email is the record: act on it or answer it, then do one of these in a PR:
 
-1. **Accept it for the crawl.** Check that the link is the company's own career page and that it lists roles in Israel, then add the company to `data/seed_companies.csv` (`name,domain`). Run `python3 discover.py` (it rewrites `data/companies.json` with each company's careers URL and job feed) and commit the result; the daily crawl then reads the company. If `discover.py` finds no feed for it, the next step applies.
-2. **Keep it on the gap card, with a reason.** Add a row to `data/unresolved_candidates.csv` (`name,domain,careers_url,segment,reason,note`, CRLF line endings). `reason` must be one of the keys of `REASONS` in `build_dashboard.py` (for example `no_feed_found` or `needs_reader`) and `note` says in a few words why we cannot read the site; the dashboard shows both on the coverage gap card. `careers_url` is the company's career page over `https` (leave it empty only for `no_careers_url`, which has none); the card links every site, to the career page, or to `https://<domain>` when there is none, and `tests/test_build_dashboard.py` fails when a row has no usable address.
+1. **Accept it for the crawl.** Check that the link is the company's own career page and that it lists roles in Israel, then add it to `data/companies.json` as in "Adding a company" (`name`, `domain`, `"crawl": true`). Run `python3 discover.py` (it fills in the careers URL and job feed) and commit the result; the daily crawl then reads the company. If `discover.py` finds no feed for it, the next step applies.
+2. **Keep it on the gap card, with a reason.** Add a record to `data/companies.json` with `"crawl": false`, its `name`, `domain` and `careers_url`, and a `gap` of `reason` and `note`. `reason` must be one of the keys of `REASONS` in `build_dashboard.py` (for example `no_feed_found` or `needs_reader`) and `note` says in a few words why we cannot read the site; the dashboard shows both on the coverage gap card. `careers_url` is the company's career page over `https` (leave it empty only for `no_careers_url`, which has none); the card links every site, to the career page, or to `https://<domain>` when there is none, and `tests/test_build_dashboard.py` fails when a record has no usable address.
 3. **Decline it** when the link is not a career page, the company has no roles in Israel, or the report looks like spam. Nothing needs to be recorded.
 
-Rows in `data/seed_companies.csv` and `data/unresolved_candidates.csv` are public, so never copy anything from a report beyond the company and its public site.
+Records in `data/companies.json` are public, so never copy anything from a report beyond the company and its public site.
 
 ## The legal pages
 

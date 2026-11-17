@@ -2,7 +2,6 @@
 Supabase), mark new/closed. `--gaps` logs the coverage gaps."""
 
 import datetime
-import json
 import sqlite3
 import sys
 import time
@@ -23,7 +22,9 @@ from common import (
     ROBOTS_NOTE,
     SCHEMA,
     ExclusionError,
+    crawled_companies,
     is_excluded,
+    load_companies,
     load_excluded,
     open_history,
 )
@@ -308,8 +309,7 @@ def save_descriptions(texts: list[dict[str, Any]], crawled: list[tuple[str, list
 
 def main() -> None:  # noqa: PLR0915
     excluded = load_excluded()  # a bad list stops the run: nobody can say who must not be crawled
-    with open("data/companies.json") as fh:
-        every = json.load(fh)
+    every = crawled_companies(load_companies())
     companies = [c for c in every if c["status"] == "ok" and not is_excluded(c["name"], excluded)]
     c = open_history()
     c.executescript(SCHEMA)  # a pulled file has the tables; `touch data/jobs.db` for a local trial does not

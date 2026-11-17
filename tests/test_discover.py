@@ -122,13 +122,6 @@ def test_israel_matcher_names_a_place_never_on_the_bare_code(text: str, expected
     assert common.ISRAEL.names_a_place(text) is expected
 
 
-def test_load_overrides(workdir: Path) -> None:
-    write_json(workdir / "data" / "overrides.json", {"A": {"ats": "x"}})
-    (workdir / "data" / "new").mkdir()
-    write_json(workdir / "data" / "new" / "b_overrides.json", {"B": {"ats": "y"}})
-    assert discover.load_overrides() == {"A": {"ats": "x"}, "B": {"ats": "y"}}
-
-
 class Env:
     """Fake network: pages maps URL -> (ats, value); adapters maps (ats, slug) -> jobs."""
 
@@ -150,41 +143,38 @@ class Env:
 
 @pytest.fixture
 def env(monkeypatch: pytest.MonkeyPatch) -> Env:
-    monkeypatch.setattr(discover, "OVERRIDES", {})
     return Env(monkeypatch)
 
 
 ROW = {"name": "Acme Co", "domain": "acme.com"}
 
 
-def test_override_browser(env: Env, monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(discover, "OVERRIDES", {"Acme Co": {"ats": "browser", "slug": "https://acme.com/jobs"}})
-    res = discover.discover(ROW)
+def pinned(**pin: Any) -> dict[str, Any]:
+    """A record of companies.json that someone pinned by hand: its `source` is `override`."""
+    return {**ROW, "source": "override", **pin}
+
+
+def test_pin_browser(env: Env) -> None:
+    res = discover.discover(pinned(ats="browser", slug="https://acme.com/jobs"))
     assert (res["status"], res["careers_url"], res["source"]) == ("ok", "https://acme.com/jobs", "override")
 
 
-def test_override_unverified(env: Env, monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(discover, "OVERRIDES", {"Acme Co": {"ats": "ov", "slug": "s", "verify": False}})
-    res = discover.discover(ROW)
+def test_pin_unverified(env: Env) -> None:
+    res = discover.discover(pinned(ats="ov", slug="s", verify=False))
     assert (res["status"], res["ats"], res["careers_url"]) == ("ok", "ov", "")
     assert env.calls == []
 
 
-def test_override_israel_only_flag(env: Env, monkeypatch: pytest.MonkeyPatch) -> None:
-    flagged = {"Acme Co": {"ats": "ov", "slug": "s", "verify": False, "israel_only": True}}
-    monkeypatch.setattr(discover, "OVERRIDES", flagged)
-    assert discover.discover(ROW)["israel_only"] is True
-    monkeypatch.setattr(discover, "OVERRIDES", {"Acme Co": {"ats": "ov", "slug": "s", "verify": False}})
-    assert "israel_only" not in discover.discover(ROW)
+def test_a_record_that_was_not_pinned_is_discovered_even_when_it_names_an_ats(env: Env) -> None:
+    res = discover.discover({**ROW, "source": "page", "ats": "ov", "slug": "s"})
+    assert (res["status"], res["source"]) == ("not_found", "")
 
 
-def test_override_verified(env: Env, monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(discover, "OVERRIDES", {"Acme Co": {"ats": "ov", "slug": "s"}})
+def test_pin_verified(env: Env) -> None:
     env.jobs[("ov", "s")] = [IL_JOB, US_JOB]
-    res = discover.discover(ROW)
+    res = discover.discover(pinned(ats="ov", slug="s"))
     assert (res["status"], res["n_jobs"], res["n_israel"]) == ("ok", 2, 1)
-    monkeypatch.setattr(discover, "OVERRIDES", {"Acme Co": {"ats": "ov", "slug": "gone"}})
-    res = discover.discover(ROW)
+    res = discover.discover(pinned(ats="ov", slug="gone"))
     assert (res["status"], res["n_jobs"], res["n_israel"]) == ("ats_failed", None, None)
 
 
@@ -230,25 +220,34 @@ def test_nothing_found(env: Env) -> None:
     assert len(env.calls) == len(discover.PROBE_ORDER) * len(discover.slug_candidates("Acme Co", "acme.com"))
 
 
-def test_main_defaults_and_explicit_paths(
+def test_main_rewrites_only_the_discovered_fields_of_the_crawled_records(
     workdir: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    csv_text = "name,domain\nA,a.com\nA again,a.com\nB,b.com\n"
-    (workdir / "data" / "seed_companies.csv").write_text(csv_text)
-    monkeypatch.setattr(discover, "discover", lambda row: {"name": row["name"], "status": "ok"})
+    records = [
+        {"name": "A", "domain": "a.com", "crawl": True, "israel_only": True, "links": {"global": "https://a.com/x"}},
+        {"name": "B", "domain": "b.com", "crawl": False, "gap": {"reason": "no_openings", "note": "n"}},
+        {"name": "C", "domain": "c.com", "crawl": True, "status": "old", "verify": False},
+    ]
+    write_json(workdir / "data" / "companies.json", records)
+    found = {"careers_url": "u", "ats": "x", "slug": "s", "source": "page", "status": "ok", "n_jobs": 3, "n_israel": 1}
+    monkeypatch.setattr(discover, "discover", lambda row: found)
     monkeypatch.setattr(sys, "argv", ["discover.py"])
     discover.main()
-    assert [r["name"] for r in json.loads((workdir / "data" / "companies.json").read_text())] == ["A", "B"]
+    text = (workdir / "data" / "companies.json").read_text()
+    assert text.endswith("]\n")
+    out = json.loads(text)
+    new = {k: v for k, v in found.items() if k in discover.DISCOVERED}
+    assert out == [{**records[0], **new}, records[1], {**records[2], **new}]  # no n_jobs: it would make noisy diffs
+    assert list(out[0]) == ["name", "domain", "crawl", "israel_only", "links", *new]  # order kept, new keys appended
     assert "Counter({'ok': 2})" in capsys.readouterr().out
-    (workdir / "in.csv").write_text("name,domain\n")
-    monkeypatch.setattr(sys, "argv", ["discover.py", "in.csv", "out.json"])
+    write_json(workdir / "other.json", [])
+    monkeypatch.setattr(sys, "argv", ["discover.py", "other.json"])
     discover.main()
-    assert json.loads((workdir / "out.json").read_text()) == []
+    assert json.loads((workdir / "other.json").read_text()) == []
 
 
 def test_run_as_script(workdir: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    write_json(workdir / "data" / "overrides.json", {})
-    (workdir / "data" / "seed_companies.csv").write_text("name,domain\n")
+    write_json(workdir / "data" / "companies.json", [])
     monkeypatch.setattr(sys, "argv", ["discover.py"])
     runpy.run_module("discover", run_name="__main__")
     assert json.loads((workdir / "data" / "companies.json").read_text()) == []

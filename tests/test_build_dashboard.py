@@ -1,5 +1,4 @@
 import base64
-import csv
 import hashlib
 import json
 import re
@@ -12,6 +11,7 @@ from urllib.parse import parse_qs, urlsplit
 import pytest
 
 import build_dashboard
+from common import crawled_companies, load_companies
 from tests.conftest import add_job, write_json
 
 
@@ -45,13 +45,23 @@ def write_css(workdir: Path) -> None:
 
 
 def write_unresolved(workdir: Path, *rows: tuple[str, str, str]) -> None:
-    """data/unresolved_candidates.csv with the given (name, reason, note) rows; each has the careers page
-    https://<name>.test/careers, except a no_careers_url row."""
-    lines = ["name,domain,careers_url,segment,reason,note"] + [
-        f'{n},{n.lower()}.test,{"" if r == "no_careers_url" else f"https://{n.lower()}.test/careers"},deeptech,{r},"{note}"'
-        for n, r, note in rows
-    ]
-    (workdir / "data" / "unresolved_candidates.csv").write_text("\r\n".join(lines) + "\r\n", encoding="utf-8")
+    """Add to data/companies.json the researched companies with the given (name, reason, note); each has the careers
+    page https://<name>.test/careers, except a no_careers_url row. They are not crawled."""
+    path = workdir / "data" / "companies.json"
+    records = json.loads(path.read_text(encoding="utf-8")) if path.exists() else []
+    for n, r, note in rows:
+        records.append(
+            {
+                "name": n,
+                "domain": f"{n.lower()}.test",
+                "segment": "deeptech",
+                "crawl": False,
+                "careers_url": "" if r == "no_careers_url" else f"https://{n.lower()}.test/careers",
+                "status": "careers_page_only",
+                "gap": {"reason": r, "note": note},
+            }
+        )
+    write_json(path, records)
 
 
 def prepare(workdir: Path) -> None:
@@ -406,9 +416,13 @@ def test_gap_groups_leave_out_a_reason_with_no_site() -> None:
     assert build_dashboard.gap_groups([], [], []) == []
 
 
-def test_read_unresolved_returns_the_rows(workdir: Path) -> None:
+def test_read_unresolved_returns_the_companies_with_a_gap(workdir: Path) -> None:
     write_unresolved(workdir, ("Beta", "no_openings", "No open roles, none at all"))
-    assert build_dashboard.read_unresolved() == [
+    records = [
+        {"name": "Plain", "crawl": True, "status": "ok"},
+        *json.loads((workdir / "data/companies.json").read_text()),
+    ]
+    assert build_dashboard.read_unresolved(records) == [
         {
             "name": "Beta",
             "domain": "beta.test",
@@ -420,38 +434,19 @@ def test_read_unresolved_returns_the_rows(workdir: Path) -> None:
     ]
 
 
-def test_read_unresolved_rejects_a_reason_that_is_not_known(workdir: Path) -> None:
-    write_unresolved(workdir, ("Beta", "because", ""))
+def test_read_unresolved_rejects_a_reason_that_is_not_known() -> None:
     with pytest.raises(ValueError, match="Beta has the unknown reason 'because'"):
-        build_dashboard.read_unresolved()
+        build_dashboard.read_unresolved([{"name": "Beta", "gap": {"reason": "because"}}])
 
 
-def test_read_unresolved_needs_the_reason_and_note_columns(workdir: Path) -> None:
-    (workdir / "data" / "unresolved_candidates.csv").write_text(
-        "name,domain,segment\r\nBeta,b.test,x\r\n", encoding="utf-8"
-    )
-    with pytest.raises(ValueError, match="no note, reason column"):
-        build_dashboard.read_unresolved()
+def test_read_unresolved_reads_a_bare_gap_as_an_empty_note_domain_and_address() -> None:
+    (row,) = build_dashboard.read_unresolved([{"name": "Beta", "gap": {"reason": "no_openings"}}])
+    assert (row["note"], row["domain"], row["careers_url"], row["segment"]) == ("", "", "", "")
 
 
-def test_read_unresolved_reads_a_short_row_as_an_empty_note(workdir: Path) -> None:
-    (workdir / "data" / "unresolved_candidates.csv").write_text(
-        "name,domain,segment,reason,note\r\nBeta,b.test,x,no_openings\r\n", encoding="utf-8"
-    )
-    assert [r["note"] for r in build_dashboard.read_unresolved()] == [""]
-
-
-def test_read_unresolved_reads_a_csv_without_the_domain_and_careers_columns(workdir: Path) -> None:
-    (workdir / "data" / "unresolved_candidates.csv").write_text(
-        "name,reason,note\r\nBeta,no_openings,none\r\n", encoding="utf-8"
-    )
-    (row,) = build_dashboard.read_unresolved()
-    assert (row["domain"], row["careers_url"]) == ("", "")
-
-
-def test_the_real_unresolved_csv_has_only_known_reasons(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_the_real_gaps_have_only_known_reasons(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.chdir(Path(__file__).resolve().parents[1])
-    assert build_dashboard.read_unresolved()
+    assert build_dashboard.read_unresolved(load_companies())
 
 
 def test_the_backend_settings_and_page_data_are_injected_into_the_page(db: sqlite3.Connection, workdir: Path) -> None:
@@ -711,11 +706,11 @@ def test_every_site_on_the_real_coverage_gap_card_has_an_https_address(monkeypat
     monkeypatch.chdir(REPO)
     excluded = build_dashboard.load_excluded()
     blocked = json.loads((REPO / "docs" / "jobs.json").read_text(encoding="utf-8"))["gaps"]["blocked"]
-    everyone = json.loads((REPO / "data" / "companies.json").read_text(encoding="utf-8"))
-    companies = [c for c in everyone if not build_dashboard.is_excluded(c["name"], excluded)]
-    unfed = [c for c in companies if c["status"] != "ok"]
-    links = build_dashboard.read_career_links()
-    groups = build_dashboard.gap_groups(blocked, unfed, build_dashboard.read_unresolved(excluded), companies, links)
+    everyone = [c for c in load_companies() if not build_dashboard.is_excluded(c["name"], excluded)]
+    crawled = crawled_companies(everyone)
+    unfed = [c for c in crawled if c["status"] != "ok"]
+    links = build_dashboard.read_career_links(everyone)
+    groups = build_dashboard.gap_groups(blocked, unfed, build_dashboard.read_unresolved(everyone), crawled, links)
     sites = [site for group in groups for site in group["sites"]]
     assert sites
     assert all((site["url"], site["to"]) == links[site["c"]] for site in sites if site["c"] in links)
@@ -724,17 +719,12 @@ def test_every_site_on_the_real_coverage_gap_card_has_an_https_address(monkeypat
 
 
 def test_every_company_in_companies_json_has_an_address_for_the_card() -> None:
-    companies = json.loads((REPO / "data" / "companies.json").read_text(encoding="utf-8"))
-    assert [c["name"] for c in companies if not build_dashboard.careers_address(c)] == []
+    assert [c["name"] for c in load_companies() if not build_dashboard.careers_address(c)] == []
 
 
-def test_the_real_unresolved_csv_has_an_address_for_every_row() -> None:
-    raw = (REPO / "data" / "unresolved_candidates.csv").read_bytes()
-    assert raw.count(b"\r\n") == raw.count(b"\n")  # CRLF line endings
-    with open(REPO / "data" / "unresolved_candidates.csv", newline="", encoding="utf-8") as fh:
-        reader = csv.DictReader(fh)
-        assert reader.fieldnames == ["name", "domain", "careers_url", "segment", "reason", "note"]
-        rows = list(reader)
+def test_every_real_gap_has_an_address() -> None:
+    rows = build_dashboard.read_unresolved(load_companies())
+    assert rows
     for row in rows:
         assert build_dashboard.own_site(row["domain"]), row["name"]
         if row["reason"] == "no_careers_url":
@@ -798,19 +788,17 @@ def test_a_link_says_where_it_goes() -> None:
     assert {s["c"]: s["to"] for s in group["sites"]} == {"Root": "careers", "Bare": "site", "Deep": "careers"}
 
 
-def test_read_career_links_takes_the_israeli_page_then_the_global_one(workdir: Path) -> None:
-    write_json(
-        workdir / "data" / "career_links.json",
-        {
-            "Both": {"israel": "https://a.test/il", "global": "https://a.test/world"},
-            "OnlyGlobal": {"global": "https://b.test/jobs"},
-            "OnlyIsrael": {"israel": "https://c.test/il"},
-            "Unsafe": {"israel": "javascript:alert(1)", "global": "https://d.test"},
-            "Plain": {"global": "http://e.test"},
-            "Empty": {},
-        },
-    )
-    assert build_dashboard.read_career_links() == {
+def test_read_career_links_takes_the_israeli_page_then_the_global_one() -> None:
+    records = [
+        {"name": "Both", "links": {"israel": "https://a.test/il", "global": "https://a.test/world"}},
+        {"name": "OnlyGlobal", "links": {"global": "https://b.test/jobs"}},
+        {"name": "OnlyIsrael", "links": {"israel": "https://c.test/il"}},
+        {"name": "Unsafe", "links": {"israel": "javascript:alert(1)", "global": "https://d.test"}},
+        {"name": "Plain", "links": {"global": "http://e.test"}},
+        {"name": "Empty", "links": {}},
+        {"name": "None"},
+    ]
+    assert build_dashboard.read_career_links(records) == {
         "Both": ("https://a.test/il", "israel"),
         "OnlyGlobal": ("https://b.test/jobs", "careers"),
         "OnlyIsrael": ("https://c.test/il", "israel"),
@@ -822,17 +810,14 @@ TRACKING = re.compile(r"^(utm_.*|source|ref|ref_src|fbclid|gclid|mc_cid|mc_eid|c
 HOST = re.compile(r"[a-z0-9-]+(\.[a-z0-9-]+)+")
 
 
-def test_the_real_career_links_are_safe_and_belong_to_known_companies() -> None:
-    """data/career_links.json is public data a person reviews by hand; the card links it from every visitor's page."""
-    raw = (REPO / "data" / "career_links.json").read_text(encoding="utf-8")
-    links = json.loads(raw)
-    assert raw.endswith("}\n")
-    assert list(links) == sorted(links, key=str.lower)  # one place per company, easy to review
-    companies = json.loads((REPO / "data" / "companies.json").read_text(encoding="utf-8"))
-    with open(REPO / "data" / "unresolved_candidates.csv", newline="", encoding="utf-8") as fh:
-        known = {c["name"] for c in companies} | {row["name"] for row in csv.DictReader(fh)}
-    assert sorted(set(links) - known) == []  # a typo in a name would silently drop the link
-    for name, page in links.items():
+def test_the_real_career_links_are_safe() -> None:
+    """The `links` of data/companies.json are public data a person reviews by hand; the card links them from every
+    visitor's page."""
+    for company in load_companies():
+        page = company.get("links")
+        if page is None:
+            continue
+        name = company["name"]
         assert set(page) <= {"israel", "global"}, name
         assert page, name
         assert page.get("israel") != page.get("global"), name  # the same page is listed once, under "global"

@@ -8,6 +8,22 @@ All notable changes are documented here. Format follows [Keep a Changelog](https
 
 - A Copy button under every code block of the legal pages (the address on "Connect your assistant", the command for Claude Code), in `templates/theme.js`.
 
+## [0.65.0] - 2026-11-17
+
+### Changed
+
+- One list of every company: `data/companies.json` now holds the companies the pipeline crawls (`"crawl": true`) and the 77 researched ones it does not (`"crawl": false`, with a `gap` of `reason` and `note`), with each company's `links`, `segment`, `israel_only` and `verify`. It replaces `data/seed_companies.csv`, `data/overrides.json`, `data/career_links.json`, `data/unresolved_candidates.csv` and the research output in `data/new/`. A company is crawled only when its record says `crawl: true`.
+- `discover.py` fills in each crawled record in place (`careers_url`, `ats`, `slug`, `source`, `status`) and leaves every other field and every other record as it is; a record with `"source": "override"` is a pin: its `ats` and `slug` are kept and checked. It no longer writes `n_jobs` and `n_israel`, which nothing read. `common.load_companies` and `common.crawled_companies` read the file; `run.py`, `build_dashboard.py`, `survey.py` and `survey2.py` use them.
+- The crawl list, the coverage card, the career links and the covered count are the same as before (checked against the old files); the file is sorted by name.
+
+### Fixed
+
+- A `discover.py` run would have dropped `israel_only` from Datadog, MongoDB, Zscaler, Okta, Snowflake and ServiceNow: the research file `data/new/multinational_overrides.json` was read last and lacks the flag.
+
+### Added
+
+- `tests/test_companies_data.py` checks the real file: unique names and domains, known keys, a `crawl` that is a boolean on every record, and that a record is crawled or has a `gap`, never both.
+
 ## [0.64.1] - 2026-11-17
 
 ### Changed
