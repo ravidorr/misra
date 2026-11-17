@@ -317,9 +317,10 @@ def main() -> None:  # noqa: PLR0915
     texts: list[dict[str, Any]] = []  # the descriptions for the sync step: never stored in the database
 
     def record(batch: list[tuple[dict[str, Any], list[dict[str, Any]] | None]]) -> None:  # noqa: PLR0912
-        """Write the results of these companies into the history and commit them, company by company. A crash later
-        (the browser crawl, a bad page, the end of the run) then loses only the company it was in: the workflow still
-        runs the sync after a failed crawl, so what was recorded reaches Supabase and the run goes red as it should."""
+        """Write the results of these companies into the history and commit them, company by company. A crash while
+        recording loses only the company being recorded, and a crash in the browser crawl keeps the API companies (the
+        browser results themselves are lost, TODO.md): the workflow syncs after a failed crawl, so what was recorded
+        reaches Supabase, and the run is red anyway."""
         for co, fetched in batch:
             c.commit()  # the previous company is complete: keep it whatever comes next
             name = co["name"]

@@ -365,7 +365,7 @@ def test_nothing_is_built_or_committed_after_a_failed_pull_or_sync_and_the_alert
 def test_a_crawl_that_failed_part_way_is_still_synced_but_a_failed_pull_syncs_nothing() -> None:
     """run.py commits each company as it goes, so the sync runs after a failed crawl; not after a failed pull (the
     crawl is then skipped)."""
-    condition = "if: ${{ always() && steps.pull.outcome == 'success' && steps.crawl.outcome != 'skipped' }}"
+    condition = "if: ${{ !cancelled() && steps.pull.outcome == 'success' && steps.crawl.outcome != 'skipped' }}"
     assert condition in steps()["sync"]
 
 

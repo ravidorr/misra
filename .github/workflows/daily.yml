@@ -144,8 +144,9 @@ jobs:
       - name: Sync jobs to Supabase
         id: sync
         # Also after a crawl that failed part of the way: run.py commits each company as it goes, so what it recorded
-        # is stored (the run is red anyway). Not when the pull failed (the crawl is then skipped).
-        if: ${{ always() && steps.pull.outcome == 'success' && steps.crawl.outcome != 'skipped' }}
+        # is stored (the run is red anyway). Not when the run was cancelled (nothing is emailed or published after a cancel),
+        # and not when the pull failed (the crawl is then skipped).
+        if: ${{ !cancelled() && steps.pull.outcome == 'success' && steps.crawl.outcome != 'skipped' }}
         timeout-minutes: 10
         env:
           # Exposed to this step only, after the crawl. An unset secret arrives empty and fails the step.
