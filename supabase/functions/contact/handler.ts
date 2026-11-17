@@ -190,7 +190,11 @@ function tooFast(body: Record<string, unknown>): boolean {
 
 export async function handleContact(request: Request, deps: Deps): Promise<Response> {
   if (!deps.enabled) {
-    return new Response('{"error":"not_found"}', { status: 404, headers: { 'content-type': 'application/json' } });
+    // Nothing is done. The site's own page still gets to read the 404 (CORS headers for its origin only, and its preflight
+    // is answered), so it can say "not available" and not "could not reach the service".
+    const origin = request.headers.get('origin');
+    const allowed = origin === ALLOWED_ORIGIN ? origin : null;
+    return request.method === 'OPTIONS' && allowed ? reply(allowed, 204, null) : reply(allowed, 404, { error: 'not_found' });
   }
   let origin: string | null = null;
   try {

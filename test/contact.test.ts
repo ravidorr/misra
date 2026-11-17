@@ -91,11 +91,25 @@ interface Answer {
 const json = async (response: Response): Promise<Answer> => (await response.json()) as Answer;
 
 describe('the switch', () => {
-  it('answers 404 to everything while off, before any other check', async () => {
+  it('answers 404 to everything while off, before any other check, and does nothing', async () => {
     const world = fakeWorld({ enabled: false });
-    for (const request of [post(GOOD), new Request('https://x.test/', { method: 'OPTIONS' }), post(GOOD, { origin: 'https://evil.test' })]) {
+    for (const request of [post(GOOD), new Request('https://x.test/', { method: 'GET' }), post(GOOD, { origin: 'https://evil.test' })]) {
       expect((await handleContact(request, world.deps)).status).toBe(404);
     }
+    expect(world.fakeFetch).not.toHaveBeenCalled();
+  });
+
+  it('lets the site read the 404 and answers its preflight while off, and nobody else', async () => {
+    const world = fakeWorld({ enabled: false });
+    const closed = await handleContact(post(GOOD), world.deps);
+    expect(closed.status).toBe(404);
+    expect(closed.headers.get('access-control-allow-origin')).toBe(ORIGIN);
+    const preflight = await handleContact(new Request('https://x.test/', { method: 'OPTIONS', headers: { origin: ORIGIN } }), world.deps);
+    expect(preflight.status).toBe(204);
+    expect(preflight.headers.get('access-control-allow-origin')).toBe(ORIGIN);
+    const other = await handleContact(new Request('https://x.test/', { method: 'OPTIONS', headers: { origin: 'https://evil.test' } }), world.deps);
+    expect(other.status).toBe(404);
+    expect(other.headers.get('access-control-allow-origin')).toBeNull();
     expect(world.fakeFetch).not.toHaveBeenCalled();
   });
 

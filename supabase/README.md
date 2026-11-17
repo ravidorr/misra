@@ -148,7 +148,7 @@ In the Supabase dashboard, Authentication:
 
 The form of the Contact page (`templates/contact.html`, `templates/contact.js`). OFF until the lawyer agrees (the TODO.md item): the build constant
 `CONTACT_FORM_ENABLED` in `build_dashboard.py` is `False` (the page then has no form, no script and no `connect-src`), and the function answers 404 to
-everything unless the function secret `CONTACT_FORM_ENABLED` is exactly `true`. Files: `supabase/functions/contact/` (`index.ts` starts the server,
+everything (with the site's CORS headers, so the page can read it) unless the function secret `CONTACT_FORM_ENABLED` is exactly `true`. Files: `supabase/functions/contact/` (`index.ts` starts the server,
 `handler.ts` the logic, `validate.ts` the input checks), `_shared/resend.ts` (the Resend call it shares with `report-site`), `test/contact.test.ts`.
 
 `POST <project url>/functions/v1/contact` with `{"name", "email", "message", "website", "elapsed"}`: only `message` (1 to 2000 characters) is required,
