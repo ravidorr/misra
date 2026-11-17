@@ -1126,7 +1126,7 @@ async def test_the_circles_do_not_move_when_the_button_goes_or_comes(page: Page,
     gaps = []
     for width in (1650, 375, 1650, 768, 320):
         await page.set_viewport_size({"width": width, "height": 800})
-        await page.wait_for_timeout(300)  # the page script answers a resize a moment later
+        await settle(page, f"document.querySelector('#hiringToggle').hidden === {str(width >= WIDE).lower()}")
         seen.add(await page.locator("#hiringToggle").is_visible())
         badge = await page.locator("#stories .story-badge").first.bounding_box()
         heading = await page.locator("#hiring-h").bounding_box()
@@ -1158,3 +1158,16 @@ async def test_a_chosen_company_outside_the_first_fifteen_shows_on_the_closed_st
     await chosen.click()  # the visible way to turn the filter off
     assert await page.evaluate("document.querySelector('#company').value") == ""
     assert await page.locator('#stories .story[data-company="Zeta Outsider"]').count() == 0
+
+
+async def test_a_chosen_company_among_the_first_fifteen_is_moved_first_not_repeated(
+    page: Page, db: sqlite3.Connection, workdir: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    await open_page(page, names_site(SIXTEEN, db, workdir, monkeypatch), 375)
+    await page.evaluate(
+        "() => { const c = document.querySelector('#company'); c.value = 'Company 07';"
+        " c.dispatchEvent(new Event('change', { bubbles: true })); }"
+    )
+    names = await page.locator("#stories .story").evaluate_all("els => els.map(e => e.dataset.company)")
+    assert names[0] == "Company 07"
+    assert len(names) == len(set(names)) == HIRING_COMPANIES  # still 15, none twice
