@@ -42,18 +42,27 @@ end $$;
 set local role anon;
 do $$
 begin
-  assert (select count(*) from public.jobs where snippet_cut is not null) = 2, 'anon sees a flag of a job that is not open';
+  assert (select count(*) from public.jobs where company = 'Acme' and snippet_cut is not null) = 2, 'anon sees a flag of a job that is not open';
   assert (select snippet_cut from public.jobs where job_id = 'cut'), 'the cut flag is not true';
   assert not (select snippet_cut from public.jobs where job_id = 'whole'), 'the whole flag is not false';
   assert (select snippet_cut from public.jobs where job_id = 'old') is null, 'a row with no flag is not null';
 end $$;
 reset role;
 
--- The backfill rule of the migration, on the three cases: shorter than the trimmed text, equal, and white space around.
+-- The migration's backfill, as written there, on rows stored before the column: shorter than the trimmed text, the whole
+-- text, white space around, no snippet and no text.
+insert into public.jobs (company, job_id, title, url, first_seen, last_seen, status, description, snippet) values
+  ('Backfill', 'cut',      'a', 'u', '2025-01-01T00:00:00', '2025-01-02T00:00:00', 'open', E'  word word word \n', 'word word'),
+  ('Backfill', 'whole',    'b', 'u', '2025-01-01T00:00:00', '2025-01-02T00:00:00', 'open', E' word word\n', 'word word'),
+  ('Backfill', 'nosnip',   'c', 'u', '2025-01-01T00:00:00', '2025-01-02T00:00:00', 'open', 'a' || repeat('b', 300), null),
+  ('Backfill', 'notext',   'd', 'u', '2025-01-01T00:00:00', '2025-01-02T00:00:00', 'open', null, 'word');
+update public.jobs set snippet_cut = length(snippet) < length(regexp_replace(description, '^\s+|\s+$', '', 'g')) where snippet is not null and description is not null;
 do $$
 begin
-  assert length('word word') < length(regexp_replace(E'  word word word \n', '^\s+|\s+$', '', 'g')), 'cut rule';
-  assert not (length('word word') < length(regexp_replace(E' word word\n', '^\s+|\s+$', '', 'g'))), 'whole rule';
+  assert (select snippet_cut from public.jobs where company = 'Backfill' and job_id = 'cut'), 'backfill: cut is not true';
+  assert not (select snippet_cut from public.jobs where company = 'Backfill' and job_id = 'whole'), 'backfill: whole is not false';
+  assert (select snippet_cut from public.jobs where company = 'Backfill' and job_id = 'nosnip') is null, 'backfill: no snippet is not null';
+  assert (select snippet_cut from public.jobs where company = 'Backfill' and job_id = 'notext') is null, 'backfill: no text is not null';
 end $$;
 
 rollback;

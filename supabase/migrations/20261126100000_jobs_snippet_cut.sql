@@ -7,7 +7,8 @@
 -- from what it computes, so the daily run corrects any row the backfill below got wrong. The backfill computes the same
 -- rule in SQL from the stored text (white space trimmed at both ends, as Python's strip does), so the page is exact from
 -- the first load and no crawl is needed. Additive: nothing is dropped or changed but this one column. Not applied by the
--- pull request: apply it once after the merge, see supabase/README.md.
+-- pull request: apply it once BEFORE the merge (old code ignores the column, but the new page and sync ask for it), see
+-- supabase/README.md.
 
 alter table public.jobs add column snippet_cut boolean;
 grant select (snippet_cut) on public.jobs to anon, authenticated;

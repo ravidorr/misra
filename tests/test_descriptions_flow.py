@@ -477,6 +477,7 @@ def test_a_text_with_no_snippet_is_not_rewritten_every_day(seeded: sqlite3.Conne
     fake = FakeSupabase()
     assert sync(seeded, client(fake)).texts == 1
     assert stored(fake, ("Acme", "1"))["snippet"] is None
+    assert stored(fake, ("Acme", "1"))["snippet_cut"] is None
     assert sync(seeded, client(fake)).texts == 0
 
 
