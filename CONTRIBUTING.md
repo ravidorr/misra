@@ -9,6 +9,8 @@ python3 -m venv .venv
 .venv/bin/pip install -e '.[dev]'
 ```
 
+GitHub Pages serves the dashboard: Settings, Pages, Deploy from a branch, `main`, `/docs`.
+
 ## Workflow
 
 1. Branch from `main`.
@@ -23,6 +25,33 @@ python3 -m venv .venv
 - Python test coverage must be 100% (lines and branches). It is enforced on push and in CI; never lower `fail_under` or add blanket omits.
 - The only UI is the static dashboard. `build_dashboard.py` generates it in `docs/` from `templates/`: edit the templates, never `docs/`.
 - See [AGENTS.md](./AGENTS.md) for the full rule list.
+
+## Adding a company
+
+1. Add the company to `data/seed_companies.csv` (`name,domain`).
+2. Run `python3 discover.py`. It writes each company's careers URL and job feed to `data/companies.json`. Commit both.
+3. If `discover.py` finds the wrong feed or none, pin the company in `data/overrides.json`, to an ATS and slug or to a
+   career page URL (`"ats": "browser"`).
+
+Add `"israel_only": true` to an override to keep only the jobs located in Israel. Use it for large multinational boards.
+
+The slug for the systems where it is not obvious:
+
+| System | Slug |
+| --- | --- |
+| Comeet plugin page (WordPress) | The page address. Its job links look like `/co/<place>/<uid>/<title>`. |
+| Workday | `tenant/wdN/site`, from `<tenant>.<wdN>.myworkdayjobs.com/<site>`. Israel only. |
+| JazzHR | `<slug>` of `<slug>.applytojob.com`. Read from the board page. |
+| BambooHR | `<slug>` of `<slug>.bamboohr.com`. Read from its `/careers/list` JSON. |
+| Oracle Fusion HCM | `host/site`. Read from the public requisition search. Israel only. |
+| Amazon | `ISR`. Read from the amazon.jobs search JSON for that one country. |
+| Phenom | `host/country/lang`. Read from the search widget, filtered to Israel. |
+| Eightfold | `"ats": "browser"` with the `...careers?location=Israel` URL. |
+
+`survey.py` is a dev tool, not part of the daily run: it finds which ATS a custom career page uses.
+
+A company seen for the first time is baselined silently: its current jobs are recorded but not sent, so adding companies
+never floods the job alerts.
 
 ## Removing a company on request
 
