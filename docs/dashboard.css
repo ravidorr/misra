@@ -58,13 +58,13 @@
     --panel: #1d1b24;
     --ink: #f5f0e6;
     --line: #5a5570;
-    --shadow: #6c47ff;
+    --shadow: color-mix(in srgb, var(--solid) 60%, var(--bg)); /* a deeper shade of the fill: every hard shadow reads as the same family */
     --muted: #b4b0be;
     --accent: #a58fff;
     --accent-bg: #2b2447;
     --warn-bg: #4a3512;
     --solid-line: var(--solid);
-    --solid-shadow: var(--line);
+    --solid-shadow: var(--shadow);
   }
 }
 
@@ -75,13 +75,13 @@
   --panel: #1d1b24;
   --ink: #f5f0e6;
   --line: #5a5570;
-  --shadow: #6c47ff;
+  --shadow: color-mix(in srgb, var(--solid) 60%, var(--bg));
   --muted: #b4b0be;
   --accent: #a58fff;
   --accent-bg: #2b2447;
   --warn-bg: #4a3512;
   --solid-line: var(--solid);
-  --solid-shadow: var(--line);
+  --solid-shadow: var(--shadow);
 }
 /*
  * Button. Use <a> for navigation (Apply) and <button type="button"> for actions.
