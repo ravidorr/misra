@@ -375,28 +375,42 @@ dialog.sheet[hidden],
   font-weight: 700;
 }
 
+/* "New this week": the heading with its button at the right ("Show all 15" / "Show fewer", in the same place in both
+   states), the circles below it, wrapping from the left. The circles that do not fit on one line wait behind the
+   button (dashboard.js sets `hidden` on them). Nothing here scrolls. The wrapper has no box: the button and the list
+   are placed by the section's grid. */
 .hiring {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
   margin-bottom: var(--space-4);
 }
 
-/* One line of circles with the button at its end. The circles that do not fit wait behind the button (dashboard.js sets
-   `hidden` on them); open, they wrap below. Nothing here scrolls. */
+.hiring[hidden] {
+  display: none;
+}
+
 .hiring-row {
-  display: flex;
-  align-items: flex-start;
-  gap: var(--space-3);
+  display: contents;
+}
+
+.hiring .label {
+  grid-area: 1 / 1;
+  margin: 0;
 }
 
 .hiring-toggle {
-  flex: none;
-  margin-top: var(--space-2);
+  grid-area: 1 / 2;
   white-space: nowrap;
 }
 
 .stories {
+  grid-area: 2 / 1 / 3 / 3;
   display: flex;
   flex: 1 1 0;
   flex-wrap: wrap;
+  align-items: flex-start; /* the circles share one top, whatever the lines of their labels */
   min-width: 0;
   gap: var(--space-3) var(--space-2);
   margin: 0;
@@ -406,7 +420,8 @@ dialog.sheet[hidden],
 
 .stories > li {
   display: flex;
-  flex: 0 0 4.5rem;
+  flex: 0 0 5.5rem;
+  align-items: flex-start; /* a button centres its content when stretched: keep it as tall as its content */
   justify-content: center;
 }
 
