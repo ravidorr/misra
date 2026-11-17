@@ -122,8 +122,7 @@ def test_with_the_switch_off_there_is_no_page_no_link_and_an_old_page_goes(
     for built in docs.iterdir():  # nothing of the real build names the page or the link, not even a CSS comment
         text = built.read_text(encoding="utf-8", errors="ignore")
         assert "assistant.html" not in text, built.name
-        if built.name != "about.html":  # the About page names the assistant, and links to the file on GitHub
-            assert "Connect your assistant" not in text, built.name
+        assert "Connect your assistant" not in text, built.name
 
 
 async def test_the_page_has_no_accessibility_problem_in_light_and_dark(page: Page, assistant_site: Path) -> None:

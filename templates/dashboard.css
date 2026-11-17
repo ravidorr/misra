@@ -814,7 +814,7 @@ html:has(.sheet:modal) {
 
   /* The company, the title and Apply come first; the tags (place, level, role types) follow. Only the look changes: the
      tags are not controls, so the Tab order is the same. */
-  .card {
+  .card:not(.legal) {
     display: flex;
     flex-direction: column;
   }

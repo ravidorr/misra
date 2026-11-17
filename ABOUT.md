@@ -42,9 +42,13 @@ Signed in, open **Job alerts** in the account menu to get new roles that match y
 - The alert keeps the filters you set for it. Changing the dashboard filters later does not change it.
 - To stop, use the unsubscribe link in any alert (no sign-in needed), or **End job alerts** in the **Job alerts** dialog.
 
+<!--assistant-->
+
 ## Connect your AI assistant (optional)
 
 You can connect your own AI assistant, such as Claude or ChatGPT. It can search the roles and read one posting at a time. It cannot change anything and needs no sign-in. [Connect your assistant](./ASSISTANT.md) has the steps and the limits.
+
+<!--/assistant-->
 
 ## Free and open source
 

@@ -559,7 +559,7 @@ Rows in `data/seed_companies.csv` and `data/unresolved_candidates.csv` are publi
 
 ## The legal pages
 
-The privacy notice, the terms and the security note are on the site as `privacy.html`, `terms.html` and `security.html`. They are generated, never written by hand: `build_dashboard.py` converts `PRIVACY.md`, `TERMS.md` and `SECURITY.md` into `templates/legal.html`.
+The privacy notice, the terms and the security note are on the site as `privacy.html`, `terms.html` and `security.html`, and the About page (not a legal text) as `about.html`. They are generated, never written by hand: `build_dashboard.py` converts `PRIVACY.md`, `TERMS.md`, `SECURITY.md` and `ABOUT.md` into `templates/legal.html`. The header and the footer of every page (these and the dashboard and email pages) are written once in `templates/parts/`; to add a footer link, add one line to `footer.inc`.
 
 - **Edit the Markdown, never the HTML.** The Markdown file is the source of truth. A change to `docs/privacy.html` (or to the body of `templates/legal.html`) is overwritten at the next build. Raw HTML in the Markdown is shown as text, not run.
 - **Links.** Write a link to another legal document as `[terms](./TERMS.md)`: it becomes a link to `terms.html` on the site and still works on GitHub. A link to any other file of the repository (`./CONTRIBUTING.md`) becomes a link to it on GitHub. Keep an unambiguous heading: its anchor is the text lowercased with dashes, as on GitHub. No images.

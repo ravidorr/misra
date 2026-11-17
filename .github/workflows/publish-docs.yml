@@ -1,6 +1,6 @@
 name: publish-docs
 
-# Rebuilds docs/ (the dashboard and the privacy, terms, security and assistant pages) when a source of those pages changes on
+# Rebuilds docs/ (the dashboard and the privacy, terms, security, about and assistant pages) when a source of those pages changes on
 # main, so a merged edit to PRIVACY.md is on the site in minutes and not at the next daily run. It runs only
 # `sync_supabase.py --pull` and build_dashboard.py: no crawl, no email, nothing written to Supabase. The build needs the
 # history (PLAN.md step 9.1: it lives in Supabase, data/jobs.db is a scratch file), so the pull step holds the

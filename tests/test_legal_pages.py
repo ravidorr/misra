@@ -27,7 +27,11 @@ from tests.test_sign_in import AXE_RUN
 REPO = Path(__file__).resolve().parents[1]
 BLOB = "https://github.com/ravidorr/misra/blob/main"
 DOCUMENTS = [(page.source, page.output) for page in build_dashboard.LEGAL_PAGES]
-BY_OUTPUT = {page.output: page for page in build_dashboard.LEGAL_PAGES}
+PAGES = [
+    *DOCUMENTS,
+    (build_dashboard.ABOUT_PAGE.source, build_dashboard.ABOUT_PAGE.output),
+]  # the date lines are the lawyer's
+BY_OUTPUT = {page.output: page for page in (*build_dashboard.LEGAL_PAGES, build_dashboard.ABOUT_PAGE)}
 DATE_LINES = {
     "PRIVACY.md": r"Last updated: \d{4}-\d{2}-\d{2}",
     "TERMS.md": r"Last updated: \d{4}-\d{2}-\d{2}",
@@ -286,7 +290,12 @@ def site_href(href: str) -> str:
     if re.match(r"^(https?:|mailto:|#)", href):
         return href
     name, _, fragment = href.removeprefix("./").partition("#")
-    local = {"PRIVACY.md": "privacy.html", "TERMS.md": "terms.html", "SECURITY.md": "security.html"}
+    local = {
+        "PRIVACY.md": "privacy.html",
+        "TERMS.md": "terms.html",
+        "SECURITY.md": "security.html",
+        "ASSISTANT.md": "assistant.html",  # built while its switch is on, as it is in the repository
+    }
     target = local.get(name, f"{BLOB}/{name}")
     return f"{target}#{fragment}" if fragment else target
 
@@ -297,7 +306,7 @@ def read_page(output: str) -> Body:
     return parsed
 
 
-@pytest.mark.parametrize(("source", "output"), DOCUMENTS)
+@pytest.mark.parametrize(("source", "output"), PAGES)
 def test_every_heading_of_the_markdown_is_on_the_page_in_order_with_an_anchor(source: str, output: str) -> None:
     tokens = MarkdownIt("commonmark").enable("table").parse((REPO / source).read_text(encoding="utf-8"))
     expected = [(int(t.tag[1]), plain(tokens[i + 1])) for i, t in enumerate(tokens) if t.type == "heading_open"]
@@ -308,7 +317,7 @@ def test_every_heading_of_the_markdown_is_on_the_page_in_order_with_an_anchor(so
     assert len(set(page.ids)) == len(page.ids)  # an anchor names one place only
 
 
-@pytest.mark.parametrize(("source", "output"), DOCUMENTS)
+@pytest.mark.parametrize(("source", "output"), PAGES)
 def test_every_link_of_the_markdown_is_on_the_page_pointing_where_it_must(source: str, output: str) -> None:
     tokens = MarkdownIt("commonmark").enable("table").parse((REPO / source).read_text(encoding="utf-8"))
     hrefs = [
@@ -333,7 +342,7 @@ def test_every_link_of_the_markdown_is_on_the_page_pointing_where_it_must(source
             assert href.split("#")[1] in read_page(href.split("#")[0]).ids  # and so does one to another page
 
 
-@pytest.mark.parametrize(("source", "output"), DOCUMENTS)
+@pytest.mark.parametrize(("source", "output"), PAGES)
 def test_every_paragraph_list_item_and_table_cell_of_the_markdown_is_on_the_page_in_order(
     source: str, output: str
 ) -> None:
@@ -356,7 +365,7 @@ def test_the_page_carries_the_date_line_of_the_document_word_for_word(source: st
     assert found[0] in read_page(output).text
 
 
-@pytest.mark.parametrize(("source", "output"), DOCUMENTS)
+@pytest.mark.parametrize(("source", "output"), PAGES)
 def test_the_page_is_framed_by_the_template(source: str, output: str) -> None:
     page = BY_OUTPUT[output]
     html = build_dashboard.render_legal(page, REPO)
@@ -369,7 +378,7 @@ def test_the_page_is_framed_by_the_template(source: str, output: str) -> None:
     assert not re.search(r"__(?!SRI_)[A-Z_]+__", html)  # every placeholder but the integrity hashes is filled in
 
 
-@pytest.mark.parametrize(("source", "output"), DOCUMENTS)
+@pytest.mark.parametrize(("source", "output"), PAGES)
 def test_the_page_has_no_built_from_line_and_no_link_to_its_source_or_history(source: str, output: str) -> None:
     html = build_dashboard.render_legal(BY_OUTPUT[output], REPO)
     footer = html.split('<footer class="foot">')[1]
@@ -521,7 +530,7 @@ async def open_legal(page: Page, docs: Path, name: str) -> list[str]:
 
 @pytest.mark.parametrize("scheme", ["light", "dark"])
 @pytest.mark.parametrize("size", [PHONE, {"width": 1280, "height": 900}], ids=["phone", "desktop"])
-@pytest.mark.parametrize(("_source", "output"), DOCUMENTS)
+@pytest.mark.parametrize(("_source", "output"), PAGES)
 async def test_the_pages_have_no_axe_violations_in_light_and_dark_on_a_phone_and_a_desktop(
     page: Page, site: Path, output: str, size: dict[str, int], scheme: str, _source: str
 ) -> None:
@@ -533,7 +542,7 @@ async def test_the_pages_have_no_axe_violations_in_light_and_dark_on_a_phone_and
     assert problems == []  # nothing the policy blocks, no script error
 
 
-@pytest.mark.parametrize(("_source", "output"), DOCUMENTS)
+@pytest.mark.parametrize(("_source", "output"), PAGES)
 async def test_the_pages_never_scroll_sideways_on_a_small_phone(
     page: Page, site: Path, output: str, _source: str
 ) -> None:
@@ -551,7 +560,7 @@ async def test_the_table_of_the_security_page_fits_a_small_phone(page: Page, sit
     assert box["x"] + box["width"] <= SMALL_PHONE["width"]
 
 
-@pytest.mark.parametrize(("_source", "output"), DOCUMENTS)
+@pytest.mark.parametrize(("_source", "output"), PAGES)
 async def test_the_links_of_the_footer_and_the_header_are_big_enough_to_tap(
     page: Page, site: Path, output: str, _source: str
 ) -> None:
@@ -640,7 +649,7 @@ def test_with_the_assistant_switch_off_no_page_links_to_the_assistant_page(
     for name in PAGES_WITH_CHROME:
         if name != "assistant.html":
             assert "assistant.html" not in (docs / name).read_text(encoding="utf-8"), name
-    assert f"{BLOB}/ASSISTANT.md" in (docs / "about.html").read_text(encoding="utf-8")  # the file, not a missing page
+    assert "assistant" not in (docs / "about.html").read_text(encoding="utf-8").lower()  # the section is cut too
 
 
 def test_the_footer_lists_each_page_once_in_the_order_the_writer_chose() -> None:
@@ -674,3 +683,69 @@ def test_about_md_names_no_address_and_says_nothing_the_pages_do_not_back() -> N
     assert text.startswith("# About Misra\n")
     for sentence in ("once a day", "Sundays", "no sign-in"):
         assert sentence in text
+
+
+def test_a_slot_the_build_does_not_fill_stops_the_build_instead_of_reaching_the_page(
+    workdir: Path, db: sqlite3.Connection
+) -> None:
+    prepare(workdir)
+    (workdir / "templates" / "parts" / "footer.inc").write_text("<footer>__NEW_SLOT__</footer>\n", encoding="utf-8")
+    with pytest.raises(ValueError, match="slot"):
+        build_dashboard.apply_chrome("__FOOTER__", "about.html", workdir)
+
+
+def test_every_skip_link_leads_to_an_element_of_its_page(
+    workdir: Path, db: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(build_dashboard, "DIGEST_SIGNUP_ENABLED", False)
+    docs = build_site(db, workdir)
+    for name in PAGES_WITH_CHROME:
+        html = (docs / name).read_text(encoding="utf-8")
+        target = re.search(r'<a class="skip" href="#([^"]+)"', html)
+        assert target, name
+        assert f'id="{target[1]}"' in html, name
+
+
+@pytest.mark.parametrize("output", ["privacy.html", "about.html"])
+async def test_the_header_is_in_the_same_tab_order_on_every_page_and_the_skip_link_comes_first(
+    page: Page, site: Path, output: str
+) -> None:
+    await open_legal(page, site, output)
+    order = []
+    for _ in range(3):
+        await page.keyboard.press("Tab")
+        order.append(await page.evaluate("document.activeElement.id || document.activeElement.className"))
+    assert order == ["skip", "top-home", "theme"]
+    await page.keyboard.press("Shift+Tab")
+    await page.keyboard.press("Shift+Tab")
+    await page.keyboard.press("Enter")
+    assert await page.evaluate("location.hash") == "#main"
+
+
+@pytest.mark.parametrize("output", ["privacy.html", "about.html", "assistant.html"])
+async def test_the_theme_button_works_on_the_text_pages_and_the_choice_follows_to_the_dashboard(
+    page: Page, site: Path, output: str
+) -> None:
+    problems = await open_legal(page, site, output)
+    button = page.locator("#theme")
+    assert await button.get_attribute("aria-label") == "Theme: auto"
+    labels = []
+    for _ in range(3):
+        await button.click()
+        labels.append(await button.get_attribute("aria-label"))
+        assert await button.get_attribute("title") == labels[-1]
+    assert labels == ["Theme: light", "Theme: dark", "Theme: auto"]
+    assert await page.evaluate("document.documentElement.hasAttribute('data-theme')") is False
+    assert await page.evaluate("localStorage.getItem('misra-theme')") is None
+    await button.click()
+    assert await page.evaluate("localStorage.getItem('misra-theme')") == "light"
+    await page.goto(f"{ORIGIN}/about.html")
+    assert await page.evaluate("document.documentElement.dataset.theme") == "light"
+    assert await page.locator("#theme").get_attribute("aria-label") == "Theme: light"  # the label is true on load too
+    assert problems == []
+
+
+async def test_the_text_pages_are_not_laid_out_like_a_role_card_on_a_phone(page: Page, site: Path) -> None:
+    await page.set_viewport_size(PHONE)  # type: ignore[arg-type]
+    await open_legal(page, site, "privacy.html")
+    assert await page.locator("main.legal").evaluate("e => getComputedStyle(e).display") == "block"

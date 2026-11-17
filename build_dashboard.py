@@ -117,17 +117,21 @@ ABOUT_PAGE = LegalPage(
     "ABOUT.md",
     "about.html",
     "About - Misra",
-    "What Misra is, where its roles in Israel come from, how often it updates, and how the optional job alerts and "
-    "assistant connection work.",
+    "What Misra is, where its roles in Israel come from, how often it updates, what it does not do, and how the "
+    "optional job alerts work.",
 )
+
+
+def built_pages() -> tuple[LegalPage, ...]:
+    """The pages built from a Markdown file: the assistant page only while its switch is on."""
+    return (*LEGAL_PAGES, ABOUT_PAGE, *((ASSISTANT_PAGE,) if ASSISTANT_PAGE_ENABLED else ()))
 
 
 def legal_links() -> dict[str, str]:
     """A link from one of these pages to another page of the set stays on the site. The assistant page is in the set
     only while it is built: with its switch off a link to ASSISTANT.md goes to the file on GitHub, never to a missing
     page."""
-    pages = (*LEGAL_PAGES, ABOUT_PAGE, *((ASSISTANT_PAGE,) if ASSISTANT_PAGE_ENABLED else ()))
-    return {page.source: page.output for page in pages}
+    return {page.source: page.output for page in built_pages()}
 
 
 NEW_TAB = '<span class="sr-only"> (opens in a new tab)</span>'
@@ -386,6 +390,8 @@ def apply_chrome(text: str, output: str, root: Path = Path(), dashboard: bool = 
         for name, part in shared.items():
             shared[name] = part.replace(f"{placeholder}\n", filled)
     for name, part in shared.items():
+        if re.search(r"__[A-Z_]+__", part):
+            raise ValueError(f"{name} of templates/parts has a slot that this build does not fill")
         text = text.replace(name, part.replace(f'href="{here}"', f'href="{here}" aria-current="page"'))
     return text
 
@@ -399,7 +405,7 @@ def render_legal(page: LegalPage, root: Path = Path(), docs: Path | None = None)
     )
     if docs:
         template = INTEGRITY.sub(lambda m: integrity(docs / f"{m[1]}.{m[2]}".lower()), template)
-    body = markdown_to_html((root / page.source).read_text(encoding="utf-8"))
+    body = markdown_to_html(apply_assistant_switch((root / page.source).read_text(encoding="utf-8")))
     for placeholder, value in (
         ("__TITLE__", escape(page.title)),
         ("__DESCRIPTION__", escape(page.description)),
@@ -615,7 +621,7 @@ def main() -> None:
         (out / output).write_text(text, encoding="utf-8")
     if not ASSISTANT_PAGE_ENABLED:
         (out / ASSISTANT_PAGE.output).unlink(missing_ok=True)  # a file of an earlier build must not outlive the switch
-    for legal in (*LEGAL_PAGES, ABOUT_PAGE, *((ASSISTANT_PAGE,) if ASSISTANT_PAGE_ENABLED else ())):
+    for legal in built_pages():
         (out / legal.output).write_text(render_legal(legal, docs=out), encoding="utf-8")
     for source in VENDORED_FILES:
         shutil.copyfile(source, out / Path(source).name)
