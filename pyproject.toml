@@ -1,6 +1,6 @@
 [project]
 name = "misra"
-version = "0.64.0"
+version = "0.64.1"
 description = "Daily batch pipeline: crawls career pages, keeps history in SQLite, and emails a digest."
 readme = "README.md"
 license = "MIT"
@@ -15,6 +15,7 @@ dependencies = [
 dev = [
   "pytest",
   "pytest-cov",
+  "pytest-xdist",
   "pytest-asyncio",
   "ruff",
   "mypy",
@@ -64,6 +65,7 @@ select = ["E", "F", "W", "I", "B", "UP", "SIM", "C4", "PL", "RUF"]
 testpaths = ["tests"]
 pythonpath = ["."]
 asyncio_mode = "auto"
+addopts = "-n auto"
 
 [tool.coverage.run]
 branch = true

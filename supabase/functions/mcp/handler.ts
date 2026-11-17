@@ -32,7 +32,13 @@ export const MAX_BODY_BYTES = 16_384;
 /** A closed job's text is deleted 30 days after it closes (`jobs_text_trim`); it is not offered after that either. */
 const CLOSED_DAYS = 30;
 const REQUEST_TIMEOUT_MS = 10_000;
-const SERVER_INFO = { name: 'misra-jobs', title: 'Misra job search', version: '1.0.0' };
+const SERVER_INFO = {
+  name: 'misra-jobs',
+  title: 'Misra job search',
+  version: '1.0.0',
+  // The logo, for the connector list of an assistant (MCP `icons`); a client that does not read it shows its own.
+  icons: [{ src: 'https://ravidorr.github.io/misra/favicon.svg', mimeType: 'image/svg+xml', sizes: ['any'] }],
+};
 /** Newest first. A client that asks for one of these gets it; for anything else the server answers with the newest. */
 export const PROTOCOL_VERSIONS = ['2025-11-25', '2025-06-18', '2025-03-26', '2024-11-05'] as const;
 const INSTRUCTIONS =

@@ -49,3 +49,29 @@ document.addEventListener('DOMContentLoaded', () => {
     labelButton(button);
   });
 });
+
+/* Code blocks of the legal pages (an address or a command to paste elsewhere) get a Copy button. */
+document.addEventListener('DOMContentLoaded', () => {
+  for (const pre of document.querySelectorAll('.legal pre')) {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'btn copy';
+    button.textContent = 'Copy';
+    button.addEventListener('click', async () => {
+      try {
+        await navigator.clipboard.writeText(pre.textContent.trim());
+        button.textContent = 'Copied';
+      } catch {
+        const range = document.createRange();
+        range.selectNodeContents(pre);
+        getSelection().removeAllRanges();
+        getSelection().addRange(range);
+        button.textContent = 'Press copy';
+      }
+      setTimeout(() => {
+        button.textContent = 'Copy';
+      }, 2000);
+    });
+    pre.after(button);
+  }
+});
