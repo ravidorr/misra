@@ -11,11 +11,10 @@ Observations about live sites below come from checks made on 2026-11-14 and may 
 - [ ] **Hand-test the assistant connection with someone who is not technical.** Trigger: the endpoint and the page "Connect your
   assistant" are on since 2026-11-17. How and done when: the hand test plan in `PLAN.md`, step 8.2. Steps 8.1 and 8.2 are
   ticked when it passes.
-- [ ] **Revisit the missing per-caller limit on `search_job_keys`.** Decided 2026-11-17 to leave it: a counter for dashboard
-  searchers needs new `PRIVACY.md` wording, and a global cap would let one scraper switch the search off for everyone (reasons
-  and what a limit would need: `supabase/README.md`, "Why `search_job_keys` has no per-caller limit"). Trigger: any sign of
-  scraping of `rpc/search_job_keys` in the Supabase API logs, or the lawyer asking for it. Done when: a per-caller limit is
-  built as that section describes, or the lawyer confirms in writing that none is wanted and this item is deleted.
+- [ ] **Watch `rpc/search_job_keys` for abnormal query volume.** Standing note, not a task. The lawyer agreed on 2026-11-17
+  that there is no per-caller limit and no `PRIVACY.md` change (reasons and what a limit would need: `supabase/README.md`,
+  "Why `search_job_keys` has no per-caller limit"). Trigger: abnormal query volume on `rpc/search_job_keys` in the database
+  or API logs. Then build the limit as that section describes.
 
 ## Yearly security review
 
@@ -293,11 +292,3 @@ could not prove: a real PostgREST, a real Supabase project and a real Actions ru
   it loses the browser companies of that day. Trigger: it happens in a real run (the alert shows `crawl=failure` and the
   log stops in the browser crawl). How: let `crawl_many` hand over each company as it finishes (a callback or a
   generator) and record it then. Done when a timeout in the browser crawl keeps the companies already crawled.
-
-## Questions for the lawyer
-
-- Dashboard description search has no per-visitor limit; to add one we would store a daily hashed-address counter for people who
-  search without signing in, which needs new `PRIVACY.md` wording: do you want that?
-- `PRIVACY.md` (the "Reporting a missing career site" bullet, line 42) names the dashboard button "Report a site", and the
-  short version and the line about the spam counter say "if you report a site". The button now reads "Add a company"
-  (the form is the same). Do you want the notice to say "Add a company" too? Left as approved until you answer.
