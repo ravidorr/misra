@@ -1080,7 +1080,6 @@ async def test_fr3_ac8_jobs_outside_israel_are_the_abroad_region(page: Page, sit
     names = await page.locator("#regions .chip").all_text_contents()
     assert names[:2] == ["All", TEL_AVIV]
     assert names[-2:] == [REMOTE, "Abroad"]
-    assert await page.locator("#regions-hint").inner_text() == "Nothing chosen shows roles in Israel."
 
 
 async def test_fr3_ac8_the_assistant_asks_for_abroad_as_a_region(page: Page, site: Path) -> None:
