@@ -38,73 +38,24 @@ for wording, the technical-writer agent, before building; the maintainer may be 
 disagree. The wording of `PRIVACY.md`, `TERMS.md` and `ASSISTANT.md` is the lawyer's (`AGENTS.md`): a change to them
 waits for him. Do not write the maintainer's email address in this repository (it is public).
 
-### Job alerts modal waits for the lawyer
+### Contact form
 
-- [ ] **"Email me new matching roles" text is half redundant.** The label and the helper text ("We first send a
-  confirmation link to ... Nothing is sent until you confirm, and you get an email only when there are new matches.
-  One-click unsubscribe is in every email. By turning this on you agree to ...") are the lawyer's wording (`CHANGELOG.md`
-  0.31.0, `PLAN.md` step 6.6). The experts would cut the heading and keep only the unsubscribe and agreement sentences
-  (the rest repeats the state line and the title); ask him. Same ask for "Choices saved locally in this browser while you
-  were signed out are not affected. This action cannot be undone." in the delete dialog (the writer would say "What this
-  browser saved while you were signed out stays until you clear your browser's data. This cannot be undone.").
-
-- [ ] **`PRIVACY.md` still lists "places" among the saved filters** (line 33). The "Places" and "Location" filters are gone
-  (the page keeps regions, levels, role types, search words, company, sort order and the show or hide options). Ask the
-  lawyer to drop the word. Also tell him the "Read full description & apply on `<Company>`" link he asked for is now under the
-  snippet of every card (the "Details" button and its dialog are gone).
-
-### Other modals and the profile menu
-
-- [ ] **Follow-ups from the modals review** (the experts' reasons are in the PR that closed the rest of this section).
-  The report dialog and the filters sheet keep their "Close" buttons: move them to the corner (x)
-  (`.dialog-close`, `design-system/components/dialog.css`) so all dialogs match. Ask the lawyer, with the next review of
-  `templates/email.js`, whether "Send the confirmation again" (named in an approved sentence there) may become "Resend
-  confirmation", and whether the agreement links in the job alerts dialog (pinned as raw HTML in
-  `tests/test_legal_wording.py`) may open in a new tab like the ones in the sign-in dialog.
-
-### Footer and pages
-
-- [ ] **Ask the lawyer about the Contact page and its form (turn-on gate).** The page is built and live without the form
-  (GitHub issues, the security note, the privacy notice; the footer link replaced the email link). The form, the
-  `contact` Edge Function and its switches are built but off: `CONTACT_FORM_ENABLED` in `build_dashboard.py` is `False`
-  and the function answers 404 until its secret `CONTACT_FORM_ENABLED` is `true`. Nobody turns either on before he
-  agrees (`tests/test_legal_wording.py` pins both). Write him a note from this list; `PRIVACY.md` is his, do not edit it.
-  - What the form collects: a message (required, up to 2,000 characters), a name (optional) and an email address
-    (optional). Without an email address we cannot reply.
-  - Purpose: to answer the visitor, and nothing else.
-  - Where it goes: by email to the maintainer's own mailbox (a function secret, never in the repository), sent through
-    Resend. Resend is already approved for the digest and the site-report email; this is a new purpose with new personal
-    data (free text, a name, an email address). The visitor is never emailed automatically. The mailbox provider may also
-    need naming: his Gmail approval covers failure alerts with no account data only.
-  - Retention: Misra stores none of it. The email stays in the maintainer's mailbox and in Resend's logs (their
-    retention is not stated in the repository). He gives the retention wording and says how a deletion request covers
-    the mailbox and Resend.
-  - Logs: the function never logs the message, the name, the email address or the network address, counts only.
-  - Spam limits: a daily keyed hash of the network address (per-visitor limit and a site-wide daily cap, the same counter
-    table as the assistant), deleted in the next daily cleanup. The form says it with his round-5 wording.
-  - His wording for `PRIVACY.md`: the "Contact" section should point to the Contact page for everyone (today it points to a
-    GitHub issue and the security note, which fails for people without a GitHub account). Proposed text, keeping the
-    heading "Contact" so `privacy.html#contact` still works: "Raanan Avidor, [address, unchanged], for any question, a
-    request to see, correct or delete your data, or a complaint. The Contact page
-    <https://ravidorr.github.io/misra/contact.html> lists every way to reach us. Its form emails your message, and your
-    name and email address if you give them, to the maintainer's mailbox through Resend. We do not store them. To prevent
-    spam, we store a daily non-reversible hash of your network address that is deleted in the next daily cleanup. General
-    questions can also go in a GitHub issue; do not put personal details in it. To report a security problem, use the
-    private route in the security note." Also: "What we store" (add "or use the contact form" to the first paragraph and a
-    bullet for the form), the Resend entry in the provider list ("the site-report and contact-form emails") and a line in
-    "How long we keep it" for the mail in the mailbox and in Resend's logs.
-  - The maintainer's address is also written in `PRIVACY.md`, `SECURITY.md`, `ASSISTANT.md`, `TERMS.md` (removal
-    requests), `templates/email.js` and the code (`common.CONTACT`, `send_digests.py`, `email-settings`): the new page and
-    function add none, and these stay as they are unless he says otherwise.
-  - Then the maintainer sets the secrets, applies nothing (no migration is needed), deploys the function and flips the
-    constant (steps in `supabase/README.md`, "Contact form").
-
-- [ ] **Ask the lawyer about two lines found while writing the About page** (his files were not touched). `PRIVACY.md`
-  ("The jobs data is public") still says the job history `data/jobs.db` is in the public repository; since step 9.1 the
-  history lives in Supabase and the file is not committed. `ASSISTANT.md` repeats a heading and uses five em dashes (in
-  "What your assistant can see"; his other files have none). `npm run lint` fails on an em dash everywhere else, so it skips his files
-  (`LAWYER_FILES` in `scripts/lint-text.mjs`): if he agrees to hyphens or commas, change the five, and drop the file
-  from that list.
+- [ ] **Ask the lawyer to confirm one bullet for "What we store" in `PRIVACY.md`.** He approved "a bullet for the form" on
+  2026-11-17 but gave no words, so none is in `PRIVACY.md` (a bullet we assembled is not his text; a test pins its
+  absence). Send him this proposal, built only from his sentences, for the list "Technical records" under "What we
+  store": "**Contact form** needs no sign-in. Your message, and your name and email address if you give them, are emailed to the maintainer's mailbox through Resend and not stored by us anywhere else. To prevent spam, we store a daily non-reversible hash of your network address that is deleted in the next daily cleanup." When he confirms or rewords it, add it and drop the test's absence pin.
+  - The contact form must NOT be switched on (neither the `CONTACT_FORM_ENABLED` constant in `build_dashboard.py` nor the
+    function secret of the same name) until he confirms this bullet.
+  - Also for that round (not asked yet, his words are not changed here): "The short version" still says the spam counter
+    exists only "if you report a site"; the "Provider logs" bullet lists the Edge Functions without the contact form.
+- [ ] **Turn the contact form on** (after the item above). The lawyer agreed on 2026-11-17 (round 11) and his wording is in
+  `PRIVACY.md` and on the page. The form, the `contact` Edge Function and its switches are still off: the constant is
+  `False` and the function answers 404 until its secret is `true` (`tests/test_legal_wording.py` pins both). The
+  maintainer does the steps in `supabase/README.md`, "Contact form" ("Turn it on"): set the secret `CONTACT_TO` (his own
+  mailbox) and deploy the function, set the function secret `CONTACT_FORM_ENABLED=true` and check with the `curl` there
+  (one real email arrives). Then a later PR sets `CONTACT_FORM_ENABLED = True` in `build_dashboard.py` and updates
+  `tests/test_build_dashboard.py` and `tests/test_legal_wording.py`. Done when the live Contact page shows the form and a
+  test message reaches the mailbox.
 
 ## Yearly security review
 

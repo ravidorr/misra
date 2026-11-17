@@ -7,8 +7,9 @@
  *     <p class="dialog-actions"><button type="button" class="btn btn-pill">Cancel</button>
  *     <button type="button" class="btn btn-pill btn-danger">Delete</button></p>
  *   </dialog>
- * A dialog that needs no Cancel button has the corner (x) as its first child, `.dialog-close`
- * (a 44px round button; the dialog needs no other change):
+ * Every other dialog has the corner (x) as its first child, `.dialog-close` (a 44px round button; the dialog needs
+ * no other change). A form keeps its Cancel button beside it. The filters sheet puts the (x) in its sticky head
+ * (see sheet.css), so it stays in view while the controls scroll:
  *   <button type="button" class="dialog-close" aria-label="Close"><svg aria-hidden="true" ...>x</svg></button>
  * A link that opens in a new tab carries the `.icon-ext` arrow and the words "(opens in a new tab)":
  *   <a href="terms.html" target="_blank" rel="noopener">Terms<svg class="icon-ext" aria-hidden="true" ...></svg>

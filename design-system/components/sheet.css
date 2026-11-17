@@ -5,7 +5,7 @@
  * media query below in step with the one in the script.
  *   <dialog class="sheet" aria-labelledby="t" open>
  *     <div class="sheet-head"><h2 class="sheet-title" id="t" tabindex="-1">Filters</h2>
- *     <button type="button" class="btn btn-pill sheet-close">Close</button></div>
+ *     <button type="button" class="dialog-close sheet-close" aria-label="Close">x</button></div>
  *     <div class="sheet-body">Controls</div>
  *     <div class="sheet-foot"><button type="button" class="btn btn-pill">Reset</button>
  *     <button type="button" class="btn btn-pill btn-primary sheet-done">Show 12 roles</button></div>
@@ -68,6 +68,12 @@ dialog.sheet[open] {
   justify-content: space-between;
   gap: var(--space-3);
   padding: var(--space-2) var(--space-4) var(--space-3);
+}
+
+/* The corner (x) of dialog.css, in the head: a flex item, not pinned to the sheet. */
+.sheet-head .dialog-close {
+  position: static;
+  flex: none;
 }
 
 /* The close and "show roles" buttons only mean something while the sheet covers the page. */

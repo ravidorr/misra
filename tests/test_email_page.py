@@ -35,7 +35,7 @@ KEEP = (
 NOT_VALID_TEXT = (
     f"{KEEP} If you got more than one confirmation email, use the link in the newest one. "
     "To manage your job alerts or delete your account, sign in on the Misra dashboard. "
-    'If your job alerts are waiting for confirmation, press "Send the confirmation again" there to get a new link.'
+    'If your job alerts are waiting for confirmation, press "Resend confirmation" there to get a new link.'
 )
 ANSWERS = {
     "ok": (200, {"ok": True, "status": "confirmed", "schedule": "weekly"}),
