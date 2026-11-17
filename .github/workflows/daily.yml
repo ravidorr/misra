@@ -186,7 +186,7 @@ jobs:
           [ "$GITHUB_REF" = "refs/heads/main" ] || { echo "refusing to push from $GITHUB_REF" >&2; exit 1; }
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          for f in docs/index.html docs/dashboard.css docs/dashboard.js docs/auth.js docs/report.js docs/digest.js docs/email.html docs/email.js docs/supabase.js docs/theme.js docs/jobs.json docs/jobs.jsonld docs/privacy.html docs/terms.html docs/security.html docs/assistant.html docs/favicon.svg docs/apple-touch-icon.png; do
+          for f in docs/index.html docs/dashboard.css docs/dashboard.js docs/auth.js docs/report.js docs/digest.js docs/email.html docs/email.js docs/supabase.js docs/theme.js docs/jobs.json docs/jobs.jsonld docs/privacy.html docs/terms.html docs/security.html docs/assistant.html docs/favicon.svg docs/apple-touch-icon.png docs/google0e1aa15dbd543e2f.html; do
             if [ -f "$f" ]; then
               git add "$f"
             fi

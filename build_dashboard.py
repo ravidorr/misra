@@ -64,6 +64,9 @@ ICON_FILES = {
     "design-system/assets/mark.svg": "favicon.svg",
     "design-system/assets/apple-touch-icon.png": "apple-touch-icon.png",
 }
+# The Google Search Console ownership file (a public value, not a secret): it must stay at this address for good, so it
+# is copied to docs/ unchanged on every build. It is not HTML to lint (scripts/lint-html.mjs skips it).
+VERIFICATION_FILES = ("templates/google0e1aa15dbd543e2f.html",)
 # Placeholders in the page for the integrity hash of the file with that name in docs/.
 INTEGRITY = re.compile(r"__SRI_([A-Z]+)_([A-Z]+)__")
 
@@ -554,6 +557,8 @@ def main() -> None:
     for legal in (*LEGAL_PAGES, *((ASSISTANT_PAGE,) if ASSISTANT_PAGE_ENABLED else ())):
         (out / legal.output).write_text(render_legal(legal, docs=out), encoding="utf-8")
     for source in VENDORED_FILES:
+        shutil.copyfile(source, out / Path(source).name)
+    for source in VERIFICATION_FILES:
         shutil.copyfile(source, out / Path(source).name)
     for source, name in ICON_FILES.items():
         shutil.copyfile(source, out / name)

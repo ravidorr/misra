@@ -4,6 +4,12 @@ All notable changes are documented here. Format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
+## [0.60.0] - 2026-11-17
+
+### Added
+
+- The Google Search Console ownership file `google0e1aa15dbd543e2f.html` (a public value, not a secret) is served at `https://ravidorr.github.io/misra/google0e1aa15dbd543e2f.html`: `build_dashboard.py` copies `templates/google0e1aa15dbd543e2f.html` to `docs/` unchanged on every build, the daily workflow commits it with the other files, and `scripts/lint-html.mjs` and lint-staged skip it (it is one line of text, not HTML). It must stay there for good.
+
 ## [0.59.0] - 2026-11-17
 
 ### Added

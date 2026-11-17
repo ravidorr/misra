@@ -75,6 +75,7 @@ def write_static(workdir: Path) -> None:
     (workdir / "design-system" / "assets").mkdir(parents=True, exist_ok=True)
     (workdir / "design-system" / "assets" / "mark.svg").write_text("<svg><title>mark</title></svg>", encoding="utf-8")
     (workdir / "design-system" / "assets" / "apple-touch-icon.png").write_bytes(b"\x89PNG stand-in")
+    (workdir / "templates" / "google0e1aa15dbd543e2f.html").write_bytes(b"google-site-verification: stand-in")
     (workdir / "vendor").mkdir(exist_ok=True)
     (workdir / "vendor" / "supabase.js").write_bytes(b"var supabase = '__SUPABASE_URL__'; \xc3\xa9\r\n")
 
@@ -262,6 +263,7 @@ def test_site_files_are_written_next_to_the_page(db: sqlite3.Connection, workdir
         "email.html",
         "email.js",
         "favicon.svg",
+        "google0e1aa15dbd543e2f.html",
         "index.html",
         "jobs.json",
         "jobs.jsonld",
@@ -795,3 +797,14 @@ def test_the_real_career_links_are_safe_and_belong_to_known_companies() -> None:
             assert not parts.username and not parts.fragment, (name, url)
             assert not re.search(r"[\s*<>\"']", url), (name, url)  # no wildcard, no markup
             assert not [k for k in parse_qs(parts.query) if TRACKING.match(k)], (name, url)
+
+
+def test_the_google_verification_file_is_the_one_google_gave_and_is_built_unchanged(
+    db: sqlite3.Connection, workdir: Path
+) -> None:
+    prepare(workdir)
+    db.close()
+    build_dashboard.main()
+    assert (workdir / "docs" / "google0e1aa15dbd543e2f.html").read_bytes() == b"google-site-verification: stand-in"
+    source = Path(__file__).resolve().parents[1] / "templates" / "google0e1aa15dbd543e2f.html"
+    assert source.read_bytes() == b"google-site-verification: google0e1aa15dbd543e2f.html"
