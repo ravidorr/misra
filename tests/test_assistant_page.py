@@ -1,6 +1,6 @@
 """The "Connect your assistant" page (PLAN.md step 8.2, FR-6 AC 5 to 7): docs/assistant.html, from ASSISTANT.md in the
 template of the privacy page, and the link to it in the dashboard footer. Both are behind `ASSISTANT_PAGE_ENABLED`,
-which is False until the lawyer has reviewed the assistant endpoint (PLAN.md step 8.1)."""
+which is True since the lawyer approved the assistant endpoint (PLAN.md step 8.1)."""
 
 import re
 import shutil
@@ -20,13 +20,13 @@ ADDRESS = f"{build_dashboard.SUPABASE_URL}/functions/v1/mcp"
 ADDRESS_MENTIONS = 2  # the one to copy, and the developer command
 
 
-def test_the_page_is_off_in_the_repository_and_llms_txt_agrees() -> None:
+def test_the_page_is_on_in_the_repository_and_llms_txt_agrees() -> None:
     """Turning the page on is one decision with the endpoint's secret: the constant and the line of llms.txt that names
     the page change together, so the file never points at a page that is not published (or hides one that is)."""
     llms = (REPO / "llms.txt").read_text(encoding="utf-8")
     named = "https://ravidorr.github.io/misra/assistant.html" in llms
     assert named is build_dashboard.ASSISTANT_PAGE_ENABLED
-    assert build_dashboard.ASSISTANT_PAGE_ENABLED is False  # until the lawyer confirms (AGENTS.md)
+    assert build_dashboard.ASSISTANT_PAGE_ENABLED is True  # on since the lawyer approved it (AGENTS.md)
 
 
 def test_the_markdown_says_where_to_connect_and_makes_no_promise_the_endpoint_does_not_keep() -> None:

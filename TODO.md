@@ -50,13 +50,11 @@ Observations about live sites below come from checks made on 2026-11-14 and may 
 
 ## Assistant endpoint
 
-- [ ] **Turn on the assistant endpoint.** Trigger: the lawyer answered and approved `ASSISTANT.md` on 2026-11-17 (limits, one job per
-  call, wording, two small edits; recorded in `PRD.md`; a clean copy is at `~/Desktop/misra-assistant-for-lawyer.md`). Where:
-  `supabase/README.md`, "Assistant endpoint", "Turn it on". How: apply `supabase/migrations/20261125100000_assistant_endpoint.sql`,
-  deploy `mcp`, set the secret `ASSISTANT_ENDPOINT_ENABLED=true`, run the live check; then set `ASSISTANT_PAGE_ENABLED = True` in
-  `build_dashboard.py` (PLAN.md step 8.2), add the page to `llms.txt` (`tests/test_assistant_page.py` requires both together),
-  and hand-test a real assistant (Claude and ChatGPT) with someone who is not technical. Done when: a real assistant lists the
-  tools, searches and reads one job, and PLAN.md steps 8.1 and 8.2 are ticked.
+- [ ] **Hand-test the assistant connection with someone who is not technical.** Trigger: the endpoint and the page "Connect your
+  assistant" are on since 2026-11-17 (the lawyer approved them), and PLAN.md steps 8.1 and 8.2 stay unticked until a real
+  assistant has done it. How: someone who is not technical follows `https://ravidorr.github.io/misra/assistant.html` in Claude
+  and in ChatGPT, asks for junior roles, has one read in full and a cover letter drafted. Done when: both connect in a couple of
+  minutes without help, the wording of the page is fixed only with the lawyer's agreement, and steps 8.1 and 8.2 are ticked.
 - [ ] **A per-caller limit on `search_job_keys`.** Trigger: the full-text function the dashboard uses is open to the public key and
   has no limit per caller, so the assistant's `search_jobs` limit of 100 a day can be bypassed by calling it directly (it returns
   keys only, never text). How: only if it matters; it needs the dashboard to call it through a function that counts. Done when:

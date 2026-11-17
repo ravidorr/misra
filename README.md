@@ -43,7 +43,7 @@ The daily workflow rebuilds and commits it. Serve it with GitHub Pages: Settings
 An MCP endpoint (Streamable HTTP, public, read-only) lets a person connect their own AI assistant: the Supabase Edge Function
 `mcp` with the tools `search_jobs` and `get_job`, documented in [`supabase/README.md`](./supabase/README.md) (Assistant
 endpoint). The step-by-step page for people is [`ASSISTANT.md`](./ASSISTANT.md), published as `assistant.html`. Both are built
-and switched off until the lawyer has reviewed them (`ASSISTANT_ENDPOINT_ENABLED` on the function, `ASSISTANT_PAGE_ENABLED` in
+and on since the lawyer approved them on 2026-11-17 (`ASSISTANT_ENDPOINT_ENABLED` on the function, `ASSISTANT_PAGE_ENABLED` in
 `build_dashboard.py`).
 
 ## Development
