@@ -1167,12 +1167,13 @@ function newRoles() {
   return { counts, total: jobs.length };
 }
 
-/* One circle per company with new roles, 15 at most, most first; the chosen company always stays, so it can be turned off. */
+/* One circle per company with new roles, 15 at most, most first. The chosen company is always there and always first, so
+   its circle is on the line while the strip is closed and it can be turned off. */
 function renderStories(counts) {
-  const names = Object.keys(counts)
+  let names = Object.keys(counts)
     .sort((a, b) => counts[b] - counts[a] || a.localeCompare(b))
     .slice(0, 15);
-  if (F.company && !names.includes(F.company)) names.push(F.company);
+  if (F.company) names = [F.company, ...names.filter((company) => company !== F.company)];
   const focused = document.activeElement?.closest('#stories .story')?.dataset.company; /* replaceChildren drops the focus */
   $('hiring').hidden = names.length === 0;
   $('stories').replaceChildren(

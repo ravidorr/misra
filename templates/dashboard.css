@@ -382,6 +382,7 @@ dialog.sheet[hidden],
 .hiring {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-rows: var(--tap) auto; /* the heading row keeps the button's height, so the circles do not move when the button goes or comes */
   align-items: center;
   gap: var(--space-2) var(--space-3);
   margin-bottom: var(--space-4);
