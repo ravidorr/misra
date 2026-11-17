@@ -71,10 +71,11 @@ Observations about live sites below come from checks made on 2026-11-14 and may 
   assistant has done it. How: someone who is not technical follows `https://ravidorr.github.io/misra/assistant.html` in Claude
   and in ChatGPT, asks for junior roles, has one read in full and a cover letter drafted. Done when: both connect in a couple of
   minutes without help, the wording of the page is fixed only with the lawyer's agreement, and steps 8.1 and 8.2 are ticked.
-- [ ] **A per-caller limit on `search_job_keys`.** Trigger: the full-text function the dashboard uses is open to the public key and
-  has no limit per caller, so the assistant's `search_jobs` limit of 100 a day can be bypassed by calling it directly (it returns
-  keys only, never text). How: only if it matters; it needs the dashboard to call it through a function that counts. Done when:
-  a caller has a daily limit on it or the decision to leave it is written in `supabase/README.md`.
+- [ ] **Revisit the missing per-caller limit on `search_job_keys`.** Decided 2026-11-17 to leave it: a counter for dashboard
+  searchers needs new `PRIVACY.md` wording, and a global cap would let one scraper switch the search off for everyone (reasons
+  and what a limit would need: `supabase/README.md`, "Why `search_job_keys` has no per-caller limit"). Trigger: any sign of
+  scraping of `rpc/search_job_keys` in the Supabase API logs, or the lawyer asking for it. Done when: a per-caller limit is
+  built as that section describes, or the lawyer confirms in writing that none is wanted and this item is deleted.
 
 ## Yearly security review
 
@@ -355,3 +356,8 @@ could not prove: a real PostgREST, a real Supabase project and a real Actions ru
   it loses the browser companies of that day. Trigger: it happens in a real run (the alert shows `crawl=failure` and the
   log stops in the browser crawl). How: let `crawl_many` hand over each company as it finishes (a callback or a
   generator) and record it then. Done when a timeout in the browser crawl keeps the companies already crawled.
+
+## Questions for the lawyer
+
+- Dashboard description search has no per-visitor limit; to add one we would store a daily hashed-address counter for people who
+  search without signing in, which needs new `PRIVACY.md` wording: do you want that?
