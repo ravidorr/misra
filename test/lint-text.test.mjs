@@ -50,9 +50,12 @@ describe('lint-text: Markdown and Python', () => {
     expect(findProblems('x.md', plain)).toEqual([]);
   });
 
-  it('skips the em dash, not the emoji, in the lawyer files', () => {
+  it('skips the em dash, not the emoji, in exactly the lawyer files', () => {
     expect(LAWYER_FILES).toContain('ASSISTANT.md');
-    expect(findProblems('ASSISTANT.md', `a ${EM_DASH} b\n`)).toEqual([]);
-    expect(findProblems('ASSISTANT.md', `${EMOJI}\n`)).toEqual(['ASSISTANT.md:1: emoji']);
+    for (const file of LAWYER_FILES) {
+      expect(findProblems(file, `a ${EM_DASH} b\n`)).toEqual([]);
+      expect(findProblems(file, `${EMOJI}\n`)).toEqual([`${file}:1: emoji`]);
+    }
+    expect(findProblems('docs/ASSISTANT.md', `a ${EM_DASH} b\n`)).toEqual(['docs/ASSISTANT.md:1: em dash']);
   });
 });

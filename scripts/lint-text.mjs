@@ -1,5 +1,6 @@
-// No emoji and no em dash in Markdown and Python files. ESLint covers the strings of the JS and TS files
-// (eslint-plugin-no-emoji, eslint-plugin-no-em-dash); this covers the files it cannot reach.
+// No emoji and no em dash in any source file, comments included. ESLint also checks the strings of the JS and TS
+// files (eslint-plugin-no-emoji, eslint-plugin-no-em-dash); this covers the rest: Markdown, Python, HTML, CSS, YAML, SQL
+// and the comments of the scripts.
 //
 // Run from the repository root: node scripts/lint-text.mjs
 import { execFileSync } from 'node:child_process';
@@ -17,11 +18,13 @@ export const LAWYER_FILES = [
   'templates/email.js',
 ];
 
+const TEXT_FILES = ['*.md', '*.py', '*.html', '*.css', '*.yml', '*.sql', '*.js', '*.mjs', '*.ts'];
+
 // docs/ is generated, vendor/ is third-party, data/ holds crawled text.
 const SKIPPED = /^(docs|vendor|data)\//;
 
 // \p{Emoji_Presentation} is the real emoji (a check mark or an arrow is not); U+FE0F turns a symbol into one.
-const EMOJI = /[\p{Emoji_Presentation}️]/u;
+const EMOJI = /[\p{Emoji_Presentation}\uFE0F]/u;
 const EM_DASH = String.fromCodePoint(0x2014); // not a string literal: ESLint's no-em-dash would flag it
 
 /** The problems of one file, as "file:line: message" strings. */
@@ -36,7 +39,7 @@ export function findProblems(file, text) {
 }
 
 function main() {
-  const files = execFileSync('git', ['ls-files', '--cached', '--others', '--exclude-standard', '*.md', '*.py'], {
+  const files = execFileSync('git', ['ls-files', '--cached', '--others', '--exclude-standard', ...TEXT_FILES], {
     encoding: 'utf8',
   })
     .split('\n')
