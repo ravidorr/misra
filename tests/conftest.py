@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from playwright.async_api import Page, async_playwright
+from playwright.async_api import Browser, Page, async_playwright
 
 import browser_crawl
 import common
@@ -141,19 +141,31 @@ def add_job(conn: sqlite3.Connection, company: str, job_id: str, title: str, **k
     conn.commit()
 
 
-@pytest.fixture
-async def page() -> AsyncIterator[Page]:
+@pytest.fixture(scope="session")
+async def browser() -> AsyncIterator[Browser]:
+    """One Chromium for all the browser tests of a worker: starting Playwright and the browser for every test cost
+    more than most of the tests."""
     async with async_playwright() as p:
         try:
             launch_args = {"args": ["--no-sandbox"]}
             if browser_crawl.EXE:
                 launch_args["executable_path"] = browser_crawl.EXE
-            browser = await p.chromium.launch(**launch_args)  # type: ignore[arg-type]
+            chromium = await p.chromium.launch(**launch_args)  # type: ignore[arg-type]
         except Exception as exc:
             if os.environ.get("CI"):
                 raise
             pytest.skip(f"no Chromium to run the browser tests: {str(exc).splitlines()[0]}")
         try:
-            yield await browser.new_page()
+            yield chromium
         finally:
-            await browser.close()
+            await chromium.close()
+
+
+@pytest.fixture
+async def page(browser: Browser) -> AsyncIterator[Page]:
+    """A new page in a context of its own: no cookies, storage or routes are shared between tests."""
+    context = await browser.new_context()
+    try:
+        yield await context.new_page()
+    finally:
+        await context.close()
