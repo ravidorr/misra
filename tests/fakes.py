@@ -287,6 +287,7 @@ class FakeSupabase:
                         "job_id": j,
                         "hash": (self.table[(c, j)].get("details") or {}).get("text_sha256"),
                         "snippet": self.table[(c, j)].get("snippet"),
+                        "snippet_cut": self.table[(c, j)].get("snippet_cut"),
                     }
                     for c, j in window
                 ]
