@@ -1,11 +1,12 @@
-// The logic of the `contact` Edge Function (TODO.md "Dashboard and site review", the Contact page): a visitor of the Contact
+// The logic of the `contact` Edge Function (the Contact page): a visitor of the Contact
 // page writes to the maintainer, and the maintainer gets one plain-text email through Resend. Nothing is stored: not the
 // message, not the name, not the address. The visitor is never emailed (no copy, no acknowledgement), so it cannot be
 // used to send mail to someone else.
 //
-// IT IS OFF UNTIL THE LAWYER HAS AGREED. Every request is answered 404 unless the function secret CONTACT_FORM_ENABLED is
-// exactly "true" (the same pattern as ASSISTANT_ENDPOINT_ENABLED). The page that calls it is behind the build constant
-// CONTACT_FORM_ENABLED in build_dashboard.py. Nobody turns either on before he says so. See supabase/README.md.
+// THE LAWYER HAS AGREED (2026-11-17 and 2026-11-18). Every request is still answered 404 unless the function secret
+// CONTACT_FORM_ENABLED is exactly "true" (the same pattern as ASSISTANT_ENDPOINT_ENABLED); unsetting it closes the
+// form. The page that calls it is behind the build constant CONTACT_FORM_ENABLED in build_dashboard.py. See
+// supabase/README.md.
 //
 // Everything that touches the outside world comes in through `Deps` (the secrets, `fetch`, the clock), so the vitest suite
 // runs this file as it is. `index.ts` is the only file that knows Deno.
