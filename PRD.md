@@ -479,3 +479,9 @@ Recorded 2026-11-15, one line per decision, newest last. The first lines were ma
   `get_job` returns the full text of a posting. It is built and switched off: the Edge Function `mcp` answers 404 to everything
   unless the function secret `ASSISTANT_ENDPOINT_ENABLED` is `true`, and it is not deployed. Nobody turns it on before he
   confirms the rate limits, that the full text may be returned to AI assistants at all, and the wording of `TERMS.md`.
+- 2026-11-17: The lawyer answered on the assistant endpoint. Limits: per caller per day 15 `get_job` and 100 `search` calls,
+  500 `get_job` calls a day for everyone, the 20,000-character cutoff stays. One job per call by id, open or closed for less than 30
+  days, approved as designed; the rate limit keys on a keyed hash of the network address, IPv6 as its /64. Robots and employer
+  exclusions are honoured because `get_job` reads the live table. His wording is in `TERMS.md` (AI assistant connection),
+  `PRIVACY.md` (technical records and provider logs) and `ASSISTANT.md` ("What your assistant can see, and the rules for using
+  it"). He then read the final `ASSISTANT.md` and approved it the same day with two edits (the hash in the address sentence, the ban on training models), both in.

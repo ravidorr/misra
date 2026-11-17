@@ -131,11 +131,12 @@ class Backend:
         self.mode = mode
         self.requests: list[Any] = []
         # The full-text search (search_job_keys): the keys it finds by query, the queries it was asked (in the body, as
-        # the page sends them), how long it takes, and how it breaks: error (HTTP 503) or not_a_list.
+        # the page sends them), how long it takes, and how it breaks: down, error (HTTP 503) or not_a_list.
         self.text_hits: dict[str, list[list[str]]] = {}
         self.searches: list[str] = []
         self.search_mode = "ok"
         self.search_seconds = 0.0
+        self.search_delays: dict[str, float] = {}  # a query that takes its own time
 
     async def search(self, route: Route) -> None:
         request = route.request
@@ -146,7 +147,10 @@ class Backend:
         assert "?" not in request.url  # the words are in the body, never in the address
         key = build_dashboard.SUPABASE_ANON_KEY
         assert request.headers.get("apikey") == key and request.headers.get("authorization") == f"Bearer {key}"
-        await asyncio.sleep(self.search_seconds)
+        await asyncio.sleep(self.search_delays.get(query, self.search_seconds))
+        if self.search_mode == "down":
+            await route.abort()
+            return
         if self.search_mode == "error":
             await route.fulfill(status=503, headers=CORS, body="unavailable")
             return

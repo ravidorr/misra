@@ -9,7 +9,7 @@ import publish_backup
 
 REPO = Path(__file__).resolve().parents[1]
 CONTACT = "raanan@avidor.org"
-MAX_TERMS_BULLETS = 7
+MAX_TERMS_BULLETS = 8
 PROMISED_DAYS = 30
 SECRET_MENTIONS = 2
 FOOTERS = 2  # the confirmation email and the digest
@@ -343,7 +343,8 @@ def test_the_lawyers_round_of_2026_11_16_editorial_wording_is_in_the_notice_the_
     assert "one-way codes (keyed hashes, made with a secret that changes every day;" in privacy
     assert "Supabase may keep database backups" not in privacy
     assert (
-        "the small programs (Edge Functions) behind the report form, account deletion, job alerts, and the" in privacy
+        "the small programs (Edge Functions) behind the report form, account deletion, job alerts, the confirmation and"
+        in privacy
     )
     assert (
         "- **Gmail (Google SMTP)**: failure alerts about the daily run go to the maintainer's own address."
@@ -405,6 +406,28 @@ def test_the_screens_carry_the_lawyers_round_of_2026_11_16_editorial_wording() -
     assert "roles Misra finds from now on" in email
 
 
-def test_the_three_documents_carry_the_date_of_the_round_of_2026_11_16() -> None:
-    for name in ("PRIVACY.md", "TERMS.md", "SECURITY.md"):
-        assert "\nLast updated: 2026-11-16\n" in read(name), name
+def test_the_documents_carry_their_dates() -> None:
+    for name, day in (("PRIVACY.md", "2026-11-17"), ("TERMS.md", "2026-11-17"), ("SECURITY.md", "2026-11-16")):
+        assert f"\nLast updated: {day}\n" in read(name), name
+
+
+def test_the_lawyers_assistant_wording_of_2026_11_17_is_in_the_notice_and_the_terms() -> None:
+    privacy = read("PRIVACY.md")
+    assert (
+        "- **AI assistant connection** needs no sign-in. We do not log your search words, the jobs your assistant "
+        "reads, or your network address. To enforce daily rate limits, our database keeps a short-lived counter per "
+        "day: a keyed, non-reversible hash of your network address (or /64 IPv6 prefix, made with a secret key that "
+        "changes every day) and the number of calls made that day. Counters from earlier days are deleted in the "
+        "next daily cleanup."
+    ) in privacy
+    assert (
+        "behind the report form, account deletion, job alerts, the confirmation and unsubscribe links, and the AI "
+        "assistant connection: the caller's IP address, approximate location, user agent, and the request path."
+    ) in privacy
+    assert (
+        "- **AI assistant connection:** You may connect an AI assistant to Misra solely for your own personal, "
+        "non-commercial job search. Automated bulk querying, scraping, or republishing of job descriptions, or using "
+        "Misra's endpoint or data to train or fine-tune AI models, is prohibited. Job descriptions remain the "
+        'property of the respective employers, are provided "as is", and are removed from both the dashboard and the '
+        "assistant connection promptly upon an employer's request."
+    ) in read("TERMS.md")
