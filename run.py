@@ -20,7 +20,6 @@ from common import (
     DROP_NOTE,
     ISRAEL,
     MAX_PURGE_COMPANIES,
-    ROBOTS_CLOSE_DAYS,
     ROBOTS_NOTE,
     SCHEMA,
     ExclusionError,
@@ -76,33 +75,15 @@ def close_unseen(c: sqlite3.Connection, name: str, seen: set[str]) -> None:
             c.execute("UPDATE jobs SET status='closed' WHERE company=? AND job_id=?", (name, jid))
 
 
-def track_robots_skips(c: sqlite3.Connection, skipped: set[str], attempted: set[str], today: str) -> tuple[int, int]:
-    """Close the open jobs of a company that robots.txt has kept us away from for ROBOTS_CLOSE_DAYS days in a row.
-    Returns (companies that had open jobs closed, jobs closed).
+def delete_robots_skips(c: sqlite3.Connection, names: set[str]) -> int:
+    """Delete the jobs of the companies that robots.txt kept us away from in this run, from the scratch history, and
+    return how many went. We do not hold the roles of a site whose policy does not allow us to read them: the sync
+    deletes them from Supabase the same way, and the dashboard build no longer lists them.
 
-    `skipped` is the companies skipped by robots.txt in this run and `attempted` the ones with any other result in this
-    run (crawled, held or failed). Two boards can share a company name: such a name is never closed by this rule.
-    The streak is read from the crawl log, which already holds this run: it is the company's latest crawls that carry
-    the robots.txt note, and it starts on the day of the first of them. Any other result in between ends it, so one
-    run that is not a skip means the block is not steady.
-    A closing uses the same close_unseen as every other close, so the Supabase sync marks the jobs closed and a later
-    crawl reopens them."""
-    companies = jobs = 0
-    for name in sorted(skipped - attempted):
-        since = today
-        for day, note in c.execute(
-            "SELECT substr(ts,1,10), note FROM crawl_log WHERE company=? ORDER BY ts DESC, rowid DESC", (name,)
-        ):
-            if not (note or "").startswith(ROBOTS_NOTE):
-                break
-            since = day
-        if (datetime.date.fromisoformat(today) - datetime.date.fromisoformat(since)).days < ROBOTS_CLOSE_DAYS:
-            continue
-        n = c.execute("SELECT COUNT(*) FROM jobs WHERE company=? AND status='open'", (name,)).fetchone()[0]
-        companies += bool(n)  # a company closed on an earlier run has nothing left to close
-        jobs += n
-        close_unseen(c, name, set())
-    return companies, jobs
+    `names` is the companies skipped in this run that had no other result in it: two boards can share a company name,
+    and a name with a crawled or failed board is never touched. Only a read robots.txt that disallows us makes a skip
+    (common.robots_gate): one that cannot be fetched counts as allowed, so a glitch at a host deletes nothing."""
+    return sum(c.execute("DELETE FROM jobs WHERE company=?", (name,)).rowcount for name in sorted(names))
 
 
 def is_known(c: sqlite3.Connection, co: dict[str, Any], now: str) -> bool:
@@ -410,13 +391,13 @@ def main() -> None:  # noqa: PLR0915
         later = [(co, got.get(co["slug"])) for co in br]
         record(later)
         results.extend(later)
-    closed_companies, closed_jobs = track_robots_skips(c, set(skipped), attempted, now[:10])
+    dropped = delete_robots_skips(c, set(skipped) - attempted)
     c.commit()
     n_open = c.execute("SELECT COUNT(*) FROM jobs WHERE status='open'").fetchone()[0]
     print(f"crawled {len(companies)} companies, failed {len(failed)} {failed}, open jobs {n_open}")
     print(f"skipped by robots.txt {len(skipped)} {skipped}")
     save_descriptions(texts, crawled)
-    print(f"robots.txt: closed {closed_jobs} jobs of {closed_companies} companies skipped for {ROBOTS_CLOSE_DAYS} days")
+    print(f"robots.txt: {dropped} jobs of skipped companies deleted from the history")
     if not common.ROBOTS_ENFORCED:
         print(
             f"robots.txt would have refused {len(common.ROBOTS_WOULD_BLOCK)} hosts {sorted(common.ROBOTS_WOULD_BLOCK)}"

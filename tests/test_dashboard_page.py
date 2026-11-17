@@ -42,7 +42,6 @@ USER_ID = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
 EMAIL = "ann@test.example"
 NAME = "Ann Example"
 PHOTO = "https://photos.test/ann.png"
-GUARDED_NOTE = "robots.txt does not allow it; skipped for 2 days, its roles are kept for up to 7 days and then closed"
 # What the card shows: two coarse parts, never the eight internal reasons.
 SITES = {
     "Walled": "https://walled.test/jobs",  # blocked: the careers page itself
@@ -83,7 +82,7 @@ def build_site(db: sqlite3.Connection, workdir: Path, fill: Callable[[sqlite3.Co
         "Parked,parked.test,,deeptech,site_unusable,Domain parked at GoDaddy\r\n"
         f'LongName,long.test,https://long.test/careers,deeptech,needs_reader,"{LONG_NOTE}"\r\n'
         "Walled,walled.test,https://walled.test/jobs,multinational,bot_protection,\r\n"
-        f'Guarded,guarded.test,https://guarded.test/careers,deeptech,robots_disallowed,"{GUARDED_NOTE}"\r\n',
+        f"Guarded,guarded.test,https://guarded.test/careers,deeptech,robots_disallowed,\r\n",
         encoding="utf-8",
     )
     if fill is not None:
@@ -711,7 +710,7 @@ async def test_the_coverage_gap_card_has_two_parts_and_no_internal_reasons(page:
     # the reason stays in the page for agents
     assert await page.locator("li[data-company=Parked]").get_attribute("data-reason") == "site_unusable"
     assert await page.locator("li[data-company=Walled]").text_content() == "Walled (opens in a new tab)"
-    assert await page.locator("[data-part=cannot-read] .gap-why").count() == 0
+    assert await page.locator("#gaps .gap-why").count() == 0
     # the cards are in alphabetical order inside a part
     names = await page.locator("[data-part=cannot-read] li").evaluate_all("els => els.map(e => e.dataset.company)")
     assert names == ["LongName", "Nowhere", "Parked", "Walled"]
@@ -725,12 +724,11 @@ async def test_the_coverage_gap_card_says_in_plain_words_which_sites_we_choose_n
     skipped = page.locator("[data-part=skipped]")
     assert await skipped.locator("h3 span").first.inner_text() == "We choose not to read these"
     note = await skipped.locator(".gap-part-note").inner_text()
-    assert "robots.txt does not allow automated access" in note
-    assert "kept for up to 7 days and then closed" in note
+    assert note == "Their policy does not allow automated access, so we respect it."
     card = skipped.locator("li")
     assert await card.get_attribute("data-company") == "Guarded"
     assert await card.get_attribute("data-reason") == "robots_disallowed"
-    assert await card.locator(".gap-why").text_content() == GUARDED_NOTE
+    assert await card.text_content() == "Guarded (opens in a new tab)"  # the name and its link, nothing else
     assert await skipped.locator("a").get_attribute("href") == "https://guarded.test/careers"
     unread = await page.locator("[data-part=cannot-read] .gap-part-note").inner_text()
     assert unread == "Their roles may be missing or old."
@@ -798,15 +796,13 @@ async def test_the_coverage_gap_card_opens_and_closes_and_says_so(page: Page, si
     assert await details.evaluate("d => d.open") is False
 
 
-async def test_report_a_site_stays_in_view_while_the_coverage_gap_card_is_closed(page: Page, site: Path) -> None:
+async def test_add_a_company_stays_in_view_while_the_coverage_gap_card_is_closed(page: Page, site: Path) -> None:
     await serve(page, site)
     assert await page.locator("#gaps").evaluate("d => d.open") is False
     button = page.locator("#gapsCard #reportOpen")
     await expect(button).to_be_visible()
-    assert (
-        await page.locator("#gapReportText").inner_text()
-        == "Is a company missing from this list? Tell us where it hires."
-    )
+    assert await button.inner_text() == "Add a company"
+    assert await page.locator("#gapReport p").count() == 0  # the button stands alone, with no sentence
     assert await page.locator("#gaps .gap-part").first.is_hidden()  # the list is closed, the report row is not
 
 
@@ -819,7 +815,7 @@ async def test_the_coverage_gap_card_reads_well_on_a_phone(page: Page, site: Pat
     summary = await page.locator("#gaps summary").bounding_box()
     assert summary is not None
     assert summary["height"] >= TAP
-    for note in await page.locator("#gaps .gap-why, #gaps .gap-part-note").all():
+    for note in await page.locator("#gaps .gap-part-note").all():
         box = await note.bounding_box()
         assert box is not None
         assert box["x"] >= 0

@@ -542,7 +542,7 @@ html:has(.sheet:modal) {
 }
 
 /* The coverage card: a closed list of companies (two coarse parts, each company a small card with a link) and, always in
-   view under it, the "Report a site" row. */
+   view under it, the "Add a company" row. */
 .gaps {
   margin-top: var(--space-5);
   margin-bottom: var(--space-5);
@@ -580,10 +580,6 @@ html:has(.sheet:modal) {
   gap: var(--space-3);
   margin-top: var(--space-2);
   font-weight: 400;
-}
-
-.gap-report p {
-  margin: 0;
 }
 
 .gap-parts {
@@ -661,12 +657,6 @@ html:has(.sheet:modal) {
   .gap-link:hover {
     color: var(--accent);
   }
-}
-
-.gap-why {
-  display: block;
-  padding-bottom: var(--space-2);
-  font-size: var(--text-sm);
 }
 
 .feed {
