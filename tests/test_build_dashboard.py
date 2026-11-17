@@ -253,6 +253,7 @@ def test_site_files_are_written_next_to_the_page(db: sqlite3.Connection, workdir
     docs = workdir / "docs"
     assert sorted(p.name for p in docs.iterdir()) == [
         "apple-touch-icon.png",
+        "assistant.html",
         "auth.js",
         "dashboard.css",
         "dashboard.js",

@@ -4,6 +4,12 @@ All notable changes are documented here. Format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
+## [0.54.0] - 2026-11-17
+
+### Added
+
+- The assistant connection is on. The page "Connect your assistant" (`assistant.html`, from `ASSISTANT.md`, with the lawyer's wording) is built and linked from the footer and from `llms.txt` (`ASSISTANT_PAGE_ENABLED = True`), after the lawyer approved it and the migration, the function `mcp` and the secret `ASSISTANT_ENDPOINT_ENABLED` went live (limits: 100 searches and 15 job reads per caller per day, 500 job reads a day for everyone).
+
 ## [0.53.1] - 2026-11-17
 
 ### Fixed

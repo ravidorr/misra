@@ -164,12 +164,13 @@ def test_the_words_of_the_markdown_are_never_read_as_a_placeholder_of_the_templa
 # ---- The build ----
 
 
-def test_the_build_writes_the_three_pages_from_the_markdown_files(workdir: Path, db: sqlite3.Connection) -> None:
+def test_the_build_writes_the_pages_from_the_markdown_files(workdir: Path, db: sqlite3.Connection) -> None:
     prepare(workdir)
     (workdir / "TERMS.md").write_text("# Terms\n\nSee the [privacy notice](./PRIVACY.md).\n", encoding="utf-8")
     db.close()
     build_dashboard.main()
     assert sorted(p.name for p in (workdir / "docs").glob("*.html")) == [
+        "assistant.html",
         "email.html",
         "index.html",
         "privacy.html",

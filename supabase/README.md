@@ -825,11 +825,11 @@ PLAN.md step 8.1, PRD FR-6. A public, read-only MCP server (Model Context Protoc
 sessions) so anyone's AI assistant can search the jobs on the dashboard and read one job in full. No sign-in, no key, no
 user data: it cannot see anyone's stars, discards or preferences.
 
-**It is built and off.** The lawyer asked on 2026-11-17 to review it before it goes live, because `get_job` returns the full
-text of a posting. Until he confirms, the function is not deployed, and even a deployed copy answers `404 {"error":"not_found"}`
-to every request (no CORS headers, no sign that an endpoint is there) unless the function secret `ASSISTANT_ENDPOINT_ENABLED`
-is exactly `true` (the same pattern as `DIGEST_SIGNUP_ENABLED`). The dashboard page "Connect your assistant" (step 8.2) is behind
-its own build constant, `ASSISTANT_PAGE_ENABLED` in `build_dashboard.py`, `False` until then.
+**It is on.** The lawyer reviewed it and `ASSISTANT.md` and approved them on 2026-11-17, because `get_job` returns the full
+text of a posting. It was applied, deployed and switched on the same day. With the function secret `ASSISTANT_ENDPOINT_ENABLED` unset
+(or anything but exactly `true`, the same pattern as `DIGEST_SIGNUP_ENABLED`) it answers `404 {"error":"not_found"}` to every
+request (no CORS headers, no sign that an endpoint is there). The dashboard page "Connect your assistant" (step 8.2) is behind
+its own build constant, `ASSISTANT_PAGE_ENABLED` in `build_dashboard.py`, `True` now.
 
 Files: `supabase/functions/mcp/` (`index.ts` starts the server and is the only file that knows Deno, `handler.ts` is the protocol,
 the switch and the limits, `tools.ts` what the two tools say and how their arguments are read), the shared
@@ -894,7 +894,7 @@ service role, `search_jobs` is closed to the public roles and never names `descr
 finished it was also run once with the official MCP TypeScript client (`@modelcontextprotocol/sdk` 1.32) through `fetch`:
 connect, list the tools, call both.
 
-### Turn it on (the maintainer, after the lawyer has confirmed; nothing here is done by the pull request)
+### Turn it on (done on 2026-11-17 after the lawyer approved; the steps and the check, for a restore or a new project)
 
 1. Apply the migration `supabase/migrations/20261125100000_assistant_endpoint.sql` (it is harmless while the function is off). It also replaces `report_site_cleanup`.
 2. Deploy: `supabase functions deploy mcp --project-ref dncodqeqpoqwcxdctzco` (`config.toml` sets `verify_jwt = false`). `IP_HASH_SECRET`,
