@@ -8,6 +8,12 @@ All notable changes are documented here. Format follows [Keep a Changelog](https
 
 - A Copy button under every code block of the legal pages (the address on "Connect your assistant", the command for Claude Code), in `templates/theme.js`.
 
+## [0.64.1] - 2026-11-17
+
+### Changed
+
+- The Python tests run in parallel (`pytest-xdist`, `-n auto` in the pytest options): the full run with the 100% coverage gate takes about 2 minutes instead of about 10.
+
 ## [0.64.0] - 2026-11-17
 
 ### Added
