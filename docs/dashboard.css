@@ -299,6 +299,12 @@
  *     <p class="dialog-actions"><button type="button" class="btn btn-pill">Cancel</button>
  *     <button type="button" class="btn btn-pill btn-danger">Delete</button></p>
  *   </dialog>
+ * A dialog that needs no Cancel button has the corner (x) as its first child, `.dialog-close`
+ * (a 44px round button; the dialog needs no other change):
+ *   <button type="button" class="dialog-close" aria-label="Close"><svg aria-hidden="true" ...>x</svg></button>
+ * A link that opens in a new tab carries the `.icon-ext` arrow and the words "(opens in a new tab)":
+ *   <a href="terms.html" target="_blank" rel="noopener">Terms<svg class="icon-ext" aria-hidden="true" ...></svg>
+ *   <span class="sr-only"> (opens in a new tab)</span></a>
  */
 .dialog {
   box-sizing: border-box;
@@ -346,6 +352,49 @@
 .dialog-actions .btn[aria-disabled="true"] {
   opacity: 0.6;
   cursor: progress;
+}
+
+.dialog-close {
+  position: absolute;
+  inset-block-start: var(--space-3);
+  inset-inline-end: var(--space-3);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--tap);
+  height: var(--tap);
+  padding: 0;
+  border: var(--border-width) solid var(--line);
+  border-radius: 50%;
+  background: var(--panel);
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.dialog-close:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.dialog-close[aria-disabled="true"] {
+  opacity: 0.6;
+  cursor: progress;
+}
+
+/* The title leaves room for the corner button, so a long one never runs under it. */
+.dialog:has(.dialog-close) .dialog-title {
+  padding-inline-end: calc(var(--tap) + var(--space-3));
+}
+
+.icon-ext {
+  width: 0.85em;
+  height: 0.85em;
+  margin-inline-start: 0.2em;
+  vertical-align: -0.1em;
+}
+
+.icon-ext:dir(rtl) {
+  transform: scaleX(-1);
 }
 /*
  * Field (input / select) and notice. Always pair a field with a <label>.
@@ -854,7 +903,6 @@ a {
   padding: var(--space-2) var(--space-3);
   border-bottom: var(--border-width) solid var(--line);
   color: var(--muted);
-  font-size: 0.875rem;
   overflow-wrap: anywhere;
 }
 
@@ -885,11 +933,12 @@ a {
   outline-offset: -3px;
 }
 
-/* The destructive item keeps the dialog's warning colour, and the dialog still asks before anything is deleted. */
-.account-danger,
-.account-danger:hover {
-  margin-top: var(--space-2); /* set apart from the safe items, not by colour alone */
-  background: var(--warn-bg);
+/* The destructive item is set apart by a rule and a gap, not by colour alone, and the dialog still asks before anything is
+   deleted. */
+.account-danger {
+  margin-top: var(--space-2);
+  border-top: var(--border-width) solid var(--line);
+  border-radius: 0 0 var(--radius-control) var(--radius-control);
 }
 
 /* The sign-in notice is the text of a dialog now. Inline links keep the line height and still get a 44px hit area: padding
@@ -899,7 +948,7 @@ a {
   padding: 14px 4px;
 }
 
-/* The agreement line beside "Turn the email on": same 44px link targets as the sign-in notice. */
+/* The agreement line beside "Start job alerts": same 44px link targets as the sign-in notice. */
 .digest-consent {
   margin: 0 0 var(--space-3);
   color: var(--muted);
@@ -987,18 +1036,7 @@ a {
   gap: var(--space-3);
 }
 
-/* The daily email settings dialog (digest.js): the outcome of an action, the frequency choice and the filters it will use. */
-.digest-note {
-  padding: var(--space-3) var(--space-4);
-  border: var(--border-width) solid var(--line);
-  border-radius: var(--radius-card);
-  background: var(--accent-bg);
-  color: var(--ink);
-  font-size: var(--text-sm);
-  font-weight: 600;
-}
-
-.digest-note[hidden],
+/* The daily email settings dialog (digest.js): the frequency choice and the filters it will use. */
 .dialog-actions[hidden] {
   display: none;
 }
@@ -1036,11 +1074,6 @@ a {
   font-size: inherit;
 }
 
-.digest-filters {
-  margin: 0;
-  padding-inline-start: var(--space-5);
-  font-weight: 400;
-}
 
 /* The row under the search: "Filters" (a phone only) and the switch to the starred list. */
 .toolbar {
