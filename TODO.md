@@ -331,3 +331,10 @@ could not prove: a real PostgREST, a real Supabase project and a real Actions ru
 - [ ] **Rehearse a restore into a scratch Supabase project.** Trigger: the first `backup` commit with `jobs` and
   `crawl_log` exists. How: `CONTRIBUTING.md`, "Restore", into a new free project, with `--create-auth-users`; then the
   pull and a daily run against it. Done when: counts match the backup commit and the run is green.
+- [ ] **Keep the browser crawl's results when the browser crawl itself dies.** Added with the step 9.1 leftovers (v0.53.1).
+  `run.py` now commits each company as it is recorded and records the API companies before the browser crawl, so a crash
+  while recording loses one company and a crash in the browser crawl keeps the API companies. The browser crawl
+  (`browser_crawl.crawl_many`) still returns all its results at the end, so a crash or the 20-minute step timeout inside
+  it loses the browser companies of that day. Trigger: it happens in a real run (the alert shows `crawl=failure` and the
+  log stops in the browser crawl). How: let `crawl_many` hand over each company as it finishes (a callback or a
+  generator) and record it then. Done when a timeout in the browser crawl keeps the companies already crawled.

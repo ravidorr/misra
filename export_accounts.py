@@ -34,6 +34,14 @@ HTTP_OK, HTTP_REDIRECT = 200, 300
 ATTEMPTS = 3  # reads of one table before giving up when it keeps changing underneath the read
 REPO_ROOT = Path(__file__).resolve().parent
 FILE_MODE, DIR_MODE = 0o600, 0o700
+ALLOW_SHRINK = "--allow-shrink"  # the flag of the backup and of the pull that accepts a real loss
+SHRINK_FROM = 5  # a count that was at least this many and is now under half of it is a loss, not a change
+
+
+def fell_by_half(before: int, after: int) -> bool:
+    """Did a row count fall by more than half? One rule for the backup guard and the pull guard (a wrong key or a
+    change of policy sees nothing, or only part, of a table)."""
+    return before >= SHRINK_FROM and after * 2 < before
 
 
 @dataclass(frozen=True)

@@ -591,3 +591,45 @@ def test_main_without_companies_as_script(workdir: Path, capsys: pytest.CaptureF
     write_json(workdir / "data" / "companies.json", [])
     runpy.run_module("run", run_name="__main__")
     assert "crawled 0 companies, failed 0 [], open jobs 0" in capsys.readouterr().out
+
+
+def test_a_crash_in_the_browser_crawl_keeps_the_api_companies_already_recorded(
+    workdir: Path, adapter: dict[str, Any], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The browser crawl is the slow, late part. When it dies, the API companies are in the history (the workflow's
+    sync runs after a failed crawl) and the run is still red."""
+    write_json(workdir / "data" / "companies.json", [co("Good"), co("Br", ats="browser", slug="https://br")])
+    adapter["good"] = [[job("g1")]]
+
+    def crash(_urls: list[str]) -> Any:
+        raise RuntimeError("browser died")
+
+    monkeypatch.setattr(run, "crawl_many", crash)
+    with pytest.raises(RuntimeError, match="browser died"):
+        run.main()
+    check = sqlite3.connect(run.DB)
+    assert check.execute("SELECT company, job_id FROM jobs").fetchall() == [("Good", "g1")]
+    assert check.execute("SELECT company, ok FROM crawl_log").fetchall() == [("Good", 1)]
+    check.close()
+
+
+def test_a_crash_while_recording_a_company_keeps_the_ones_before_it_and_rolls_back_its_own_rows(
+    workdir: Path, adapter: dict[str, Any], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    write_json(workdir / "data" / "companies.json", [co("Aaa"), co("Bbb")])
+    adapter["aaa"] = [[job("a1")]]
+    adapter["bbb"] = [[job("b1")]]
+    real = run.close_unseen
+
+    def boom(c: sqlite3.Connection, name: str, seen: set[str]) -> None:
+        if name == "Bbb":
+            raise KeyError("bad page")
+        real(c, name, seen)
+
+    monkeypatch.setattr(run, "close_unseen", boom)
+    with pytest.raises(KeyError):
+        run.main()
+    check = sqlite3.connect(run.DB)
+    assert check.execute("SELECT company FROM jobs").fetchall() == [("Aaa",)]  # Bbb's rows were not committed
+    assert check.execute("SELECT company FROM crawl_log").fetchall() == [("Aaa",)]
+    check.close()

@@ -24,7 +24,7 @@ from collections.abc import Sequence
 from datetime import UTC, datetime
 from pathlib import Path
 
-from export_accounts import ALL_TABLES, ExportError, outside_repository
+from export_accounts import ALL_TABLES, ALLOW_SHRINK, ExportError, Table, fell_by_half, outside_repository
 
 MAX_AGE_DAYS = 28  # the first commit is replaced at this age; PRIVACY.md promises 30 days
 SECONDS_PER_DAY = 86400
@@ -34,8 +34,6 @@ SECRET_ENV = ("SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY", "BACKUP_DEPLOY_KEY")
 # Variables a git hook (or a caller) sets to point git at some other repository: the clone is the only one used.
 LOCAL_REPO_ENV = ("GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "GIT_OBJECT_DIRECTORY", "GIT_PREFIX", "GIT_COMMON_DIR")
 STDERR_SHOWN = 300
-SHRINK_FROM = 5  # a table that held at least this many rows and now holds under half of them is not published
-ALLOW_SHRINK = "--allow-shrink"
 
 
 class BackupError(Exception):
@@ -60,10 +58,10 @@ def git(directory: Path, *args: str) -> str:
     return done.stdout
 
 
-def counts(source: Path) -> dict[str, int]:
+def counts(source: Path, tables: Sequence[Table] = ALL_TABLES) -> dict[str, int]:
     """Rows per table of the export (the only thing the commit message and the log say about the data)."""
     out: dict[str, int] = {}
-    for table in ALL_TABLES:
+    for table in tables:
         try:
             rows = json.loads((source / f"{table.name}.json").read_text(encoding="utf-8"))
         except (OSError, ValueError):
@@ -107,17 +105,22 @@ def place_files(work: Path, source: Path) -> None:
 
 
 def previous_counts(work: Path) -> dict[str, int]:
-    """Rows per table of the files at the tip of the clone (a missing or odd file counts as none)."""
-    try:
-        return counts(work)
-    except BackupError:
-        return {}
+    """Rows per table of the files at the tip of the clone. A table whose file is missing or odd has no entry, so only
+    that table goes unjudged: the first backup after a table joins the export (the move of the history, step 9.1,
+    added `jobs` and `crawl_log`) still guards the others, and the day after it guards that one too."""
+    out: dict[str, int] = {}
+    for table in ALL_TABLES:
+        try:
+            out.update(counts(work, (table,)))
+        except BackupError:
+            continue
+    return out
 
 
 def shrunk(before: dict[str, int], after: dict[str, int]) -> list[str]:
     """The tables whose row count fell by more than half. A wrong key sees nothing through row-level security, and a
     change of policy can hide rows: neither may replace the good copy, least of all its history."""
-    return [name for name, old in before.items() if old >= SHRINK_FROM and after.get(name, 0) * 2 < old]
+    return [name for name, old in before.items() if fell_by_half(old, after.get(name, 0))]
 
 
 def publish(source: Path, remote: str, work: Path, now: datetime | None = None, allow_shrink: bool = False) -> str:
