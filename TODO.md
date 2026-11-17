@@ -48,10 +48,15 @@ waits for him. Do not write the maintainer's email address in this repository (i
   were signed out are not affected. This action cannot be undone." in the delete dialog (the writer would say "What this
   browser saved while you were signed out stays until you clear your browser's data. This cannot be undone.").
 
+- [ ] **`PRIVACY.md` still lists "places" among the saved filters** (line 33). The "Places" and "Location" filters are gone
+  (the page keeps regions, levels, role types, search words, company, sort order and the show or hide options). Ask the
+  lawyer to drop the word. Also tell him the "Read full description & apply on `<Company>`" link he asked for is now under the
+  snippet of every card (the "Details" button and its dialog are gone).
+
 ### Other modals and the profile menu
 
 - [ ] **Follow-ups from the modals review** (the experts' reasons are in the PR that closed the rest of this section).
-  The report dialog, the role detail dialog and the filters sheet keep their "Close" buttons: move them to the corner (x)
+  The report dialog and the filters sheet keep their "Close" buttons: move them to the corner (x)
   (`.dialog-close`, `design-system/components/dialog.css`) so all dialogs match. Ask the lawyer, with the next review of
   `templates/email.js`, whether "Send the confirmation again" (named in an approved sentence there) may become "Resend
   confirmation", and whether the agreement links in the job alerts dialog (pinned as raw HTML in
@@ -59,27 +64,6 @@ waits for him. Do not write the maintainer's email address in this repository (i
 - [ ] **Google's account chooser says "to continue to `<project>.supabase.co`"** (![google account chooser](todo-images/google-account-chooser.webp)). Find how
   to show "Misra" or our own domain instead: the usual ways are the OAuth consent screen branding in Google Cloud and
   a Supabase custom domain (check whether it needs a paid plan and what it costs before doing anything).
-
-### Filters card
-
-- [ ] **"Places" is not clearly clickable and duplicates "Region"** (![filters places](todo-images/filters-places.webp)). Users do not see the
-  difference between "Region" and "Places". Remove "Places"; if users ask for finer places later, consider a more specific
-  option then.
-- [ ] **"Location" duplicates "Region".** Remove the "Location" dropdown and add "Abroad" to "Region".
-- [ ] **Smaller questions** (answer each, then build or drop): should the "Company" dropdown sit under an `<h3>`? Should it
-  be a multiple select? Can "Hide possibly old" show a count like "Show discarded (x)"? Rename "Reset filters" to
-  "Reset".
-
-### Cards and the "New this week" strip
-
-- [ ] **Truncated company names in "New this week"** (![new this week truncated](todo-images/new-this-week-truncated.png)). An ellipsis name needs a tooltip
-  on hover with the full name (and keyboard focus and touch: a hover tooltip alone fails WCAG). Ask Claude Design and the
-  UI/UX expert how it should look.
-- [ ] **"Details" button** (![card details button](todo-images/card-details-button.png)). Why do some cards have it? What does the modal show that the card does
-  not? If nothing, remove it.
-- [ ] **"Not for me" is a link, not a button.** Ask Claude Design and the UI/UX expert whether it should be a button and how.
-- [ ] **Dark mode: the purple "Apply" button with a purple border and shadow looks muddy** (![card dark mode](todo-images/card-dark-mode.png)). Ask
-  Claude Design and the UI/UX expert.
 
 ### Coverage gaps card (![coverage gaps](todo-images/coverage-gaps.png))
 

@@ -45,12 +45,10 @@ IMPORTED = "misra-imported-v1"
 DEFAULTS: dict[str, Any] = {
     "q": "",
     "company": "",
-    "loc": "il",
     "sort": "new",
     "levels": [],
     "types": [],
     "regions": [],
-    "places": [],
     "remote": False,
     "onlyNew": False,
     "showGone": False,
@@ -406,7 +404,7 @@ async def test_fr2_ac5_the_filters_of_the_account_appear_on_another_device(page:
         **DEFAULTS,
         "q": "manager",
         "company": "Acme",
-        "loc": "all",
+        "loc": "all",  # the removed Location and Places: an older save is read, never written back
         "sort": "co",
         "levels": ["Junior", "Intern"],
         "types": ["Product"],
@@ -425,7 +423,6 @@ async def test_fr2_ac5_the_filters_of_the_account_appear_on_another_device(page:
     assert await page.locator(BOX).is_hidden()
     assert await page.input_value("#q") == "manager"
     assert await page.input_value("#company") == "Acme"
-    assert await page.input_value("#loc") == "all"
     assert await page.input_value("#sort") == "co"
     assert sorted(await chosen(page, "levels")) == ["Intern", "Junior"]
     assert await chosen(page, "types") == ["Product"]
@@ -435,7 +432,6 @@ async def test_fr2_ac5_the_filters_of_the_account_appear_on_another_device(page:
     assert await page.get_attribute("#onlyNew", "aria-pressed") == "true"
     assert await page.get_attribute("#remote", "aria-pressed") == "true"
     assert await page.input_value("#size") == "25"
-    assert await page.is_checked("#places input[value='Tel Aviv, Israel']")
     assert await filters_state(page) == "synced"
     assert await sync_note(page) == "Your filters were restored from your account."
     assert prefs.writes == []  # reading the account's filters never writes them back
@@ -749,3 +745,10 @@ async def test_bringing_filters_over_keeps_a_change_made_while_the_offer_waited(
     await until(lambda: prefs.writes)
     assert saved_filters(prefs)["q"] == "Analyst"
     assert await page.input_value("#q") == "Analyst"
+
+
+async def test_a_browser_that_only_saved_the_removed_location_and_places_offers_nothing(page: Page, site: Path) -> None:
+    old = {"loc": "all", "places": ["Tel Aviv, Israel"]}  # an older save: both filters are gone, so nothing is left
+    await page.add_init_script(f"localStorage.setItem({FILTERS!r}, {json.dumps(json.dumps(old))})")
+    await sign_in(page, site, ChoicesBackend(), PrefsBackend(None))
+    assert await page.locator(BOX).is_hidden()
