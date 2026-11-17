@@ -1801,3 +1801,23 @@ def test_the_window_of_job_pages_moves_each_day_so_none_starves(monkeypatch: pyt
     monkeypatch.setattr(adapters, "DETAIL_CAP", 2)
     adapters.add_descriptions("workday", WD_SLUG, "Acme", jobs_n(5), set(), day=1)
     assert [u.rsplit("/", 1)[1] for u in urls] == ["J2", "J3"]
+
+
+def test_a_hit_resets_the_miss_streak_so_only_misses_in_a_row_stop_the_company(monkeypatch: pytest.MonkeyPatch) -> None:
+    pattern = [False] * 4 + [True] + [False] * 4 + [True]  # never five misses in a row
+
+    def sometimes(slug: str, job: dict[str, Any]) -> tuple[str, dict[str, Any]] | None:
+        return ("text", {}) if pattern[int(job["job_id"].rsplit("J", 1)[1])] else None
+
+    monkeypatch.setitem(adapters.DETAILS, "workday", sometimes)
+    assert adapters.add_descriptions("workday", WD_SLUG, "Acme", jobs_n(10), set()) == (10, 2, 0)
+
+
+def test_the_window_wraps_and_a_short_list_keeps_its_order(monkeypatch: pytest.MonkeyPatch) -> None:
+    urls = fake_get(monkeypatch, wd_detail())
+    monkeypatch.setattr(adapters, "DETAIL_CAP", 2)
+    adapters.add_descriptions("workday", WD_SLUG, "Acme", jobs_n(5), set(), day=2)
+    assert [u.rsplit("/", 1)[1] for u in urls] == ["J4", "J0"]
+    urls.clear()
+    adapters.add_descriptions("workday", WD_SLUG, "Acme", jobs_n(2), set(), day=7)
+    assert [u.rsplit("/", 1)[1] for u in urls] == ["J0", "J1"]  # nothing is left over, so nothing rotates
