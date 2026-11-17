@@ -5,8 +5,9 @@ service-role key (PostgREST over HTTPS, all columns, including the token hash co
 the directory: one row per line, keys sorted, rows sorted by primary key, so a day's diff holds only what changed. The
 job history goes with them: `jobs` (open and closed, every column but the text of the posting) and `crawl_log`. Supabase
 is their only home since step 9.1 (the crawl rebuilds a scratch SQLite file from it each run), so the export is their
-backup. The text (`description`, `details`, `snippet`) is left out on purpose: it lives in Supabase only, it is trimmed
-30 days after a job closes and a backup would outlive that, and the next crawl writes it again for every open job.
+backup. The text (`description`, `details`, `snippet`, and `snippet_cut`, a flag about the snippet) is left out on
+purpose: it lives in Supabase only, it is trimmed 30 days after a job closes and a backup would outlive that, and the
+next crawl writes it again for every open job.
 The short-lived abuse counters are not exported either.
 
 Env: SUPABASE_URL (https://<ref>.supabase.co) and SUPABASE_SERVICE_ROLE_KEY. Unlike the sync, an empty value is an

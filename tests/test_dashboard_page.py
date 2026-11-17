@@ -1374,8 +1374,8 @@ HTML = "<script>window.pwned = 1</script><b>bold</b> text"
 
 async def test_a_card_shows_its_snippet_as_text_and_none_when_there_is_none(page: Page, site: Path) -> None:
     rows = [
-        job("cut", "Cut", "Haifa, Israel", snippet=CUT.strip()),
-        job("whole", "Whole", "Haifa, Israel", snippet=WHOLE),
+        job("cut", "Cut", "Haifa, Israel", snippet=CUT.strip(), snippet_cut=True),
+        job("whole", "Whole", "Haifa, Israel", snippet=WHOLE, snippet_cut=False),
         job("html", "Html", "Haifa, Israel", snippet=HTML),
         job("none", "None", "Haifa, Israel", snippet=None),
         job("blank", "Blank", "Haifa, Israel", snippet="  "),
@@ -1409,16 +1409,27 @@ async def test_an_assistant_gets_the_snippet_and_null_when_a_role_has_none(page:
     assert jobs["Acme|b"]["snippet"] is None
 
 
-async def test_the_ellipsis_starts_at_200_characters_and_never_follows_a_sentence_end(page: Page, site: Path) -> None:
-    unpunctuated = {"s199": "a" * 199, "s200": "a" * 200}
-    sentences = {f"end{ch}": "a" * 199 + ch for ch in ".!?"}
+async def test_the_ellipsis_follows_the_stored_cut_flag_and_nothing_else(page: Page, site: Path) -> None:
+    cases = {
+        "cut-short": ("a" * 50, True),  # a cut under 200 characters (a very long word follows): the flag decides
+        "whole-long-bracket": ("a" * 254 + ")", False),  # a whole text of 200 or more that ends in a bracket
+        "whole-long-no-end": ("a" * 230, False),
+        "cut-sentence": ("a" * 199 + ".", True),  # a cut can end a sentence too
+        "missing": ("a" * 230, None),  # a row from before the column: nothing, not a guess
+    }
     rows = [
-        job(job_id, job_id, "Haifa, Israel", snippet=text) for job_id, text in {**unpunctuated, **sentences}.items()
+        job(job_id, job_id, "Haifa, Israel", snippet=text, **({} if flag is None else {"snippet_cut": flag}))
+        for job_id, (text, flag) in cases.items()
     ]
     assert await serve(page, site, backend=Backend(rows)) == []
 
     async def ellipses(job_id: str) -> int:
         return await page.locator(f"article[data-job-id='Acme|{job_id}'] .card-snippet [aria-hidden=true]").count()
 
-    assert [await ellipses(j) for j in unpunctuated] == [0, 1]  # a short text is whole; 200 or more was cut
-    assert [await ellipses(j) for j in sentences] == [0, 0, 0]  # a cut never ends a sentence, so this one is whole
+    assert [await ellipses(j) for j in cases] == [1, 0, 0, 1, 0]
+
+
+async def test_the_page_asks_for_the_cut_flag_with_the_other_public_columns(page: Page, site: Path) -> None:
+    backend = Backend([job("a", "A", "Haifa, Israel", snippet="Some text", snippet_cut=True)])
+    await serve(page, site, backend=backend)
+    assert "snippet_cut" in parse_qs(urlparse(backend.requests[0].url).query)["select"][0].split(",")

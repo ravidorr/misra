@@ -64,7 +64,7 @@ const SUPABASE_URL = 'https://dncodqeqpoqwcxdctzco.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_9gvh4YdsfErlFsgJfmNexQ_yHF-XwnA';
 const FETCH_TIMEOUT_MS = 20000;
 const REST_PAGE = 1000; /* PostgREST answers at most 1,000 rows at a time */
-const JOB_COLUMNS = 'company,job_id,title,team,location,url,first_seen,level,role_types,regions,locations,snippet';
+const JOB_COLUMNS = 'company,job_id,title,team,location,url,first_seen,level,role_types,regions,locations,snippet,snippet_cut';
 
 async function fetchJson(url, headers = {}) {
   const response = await fetch(url, { headers, signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) });
@@ -99,7 +99,8 @@ function remoteNotSaid(location) {
 /* A row of the jobs table as the page uses it: c company, i id, t title, m team, l location as written, u url,
    f first seen, lv level, rt role types, rg regions, lo places in Israel without a region, il in Israel, ru remote
    with no country given, n not on the company's first day of listings, s company's crawl is failing, sn the snippet:
-   the start of the posting as written, up to 255 characters ('' when the job has no text). */
+   the start of the posting as written, up to 255 characters ('' when the job has no text), sc whether
+   that snippet is shorter than the full text (the stored flag snippet_cut; false when it is null). */
 function toJob(row, failing, firstDay) {
   /* A row without the classification columns is a backend fault (sync lag, a missing migration), not a role that is
      "Not specified" and "Other": fail loudly instead of showing every role as unclassified. */
@@ -127,6 +128,7 @@ function toJob(row, failing, firstDay) {
     n: f !== '' && f > (firstDay[row.company] ?? f),
     s: failing.has(row.company),
     sn: typeof row.snippet === 'string' ? row.snippet.trim() : '',
+    sc: row.snippet_cut === true,
   };
 }
 
@@ -1366,14 +1368,9 @@ const tagsEl = (j) =>
     j.f && h('time', { class: 'card-seen', datetime: j.f, text: ago(j.f) }),
   ]);
 
-/* A heuristic, and no exact rule exists on the page: the snippet is the first 255 characters of the text cut at a word
-   boundary, and the data holds no flag or length of the full text, so a whole text of up to 255 characters and a cut one
-   look the same. A cut never ends in `.`, `!` or `?` (the sync trims them) and is nearly always close to 255, so a text
-   of 200 or more characters that does not end so is treated as cut and gets the ellipsis, hidden from screen readers.
-   Wrong in two rare cases: a whole text of that length that ends in a quote, a bracket or no punctuation gets a false
-   one, and a cut that is shorter than 200 (a very long word) gets none. An exact rule
-   needs a stored flag (see TODO.md, "Snippet ellipsis"). */
-const cutMark = (text) => text.length >= 200 && !/[.!?]$/.test(text) && h('span', { 'aria-hidden': 'true', text: '…' });
+/* The ellipsis after a snippet that is shorter than the full text: exactly when the stored flag `snippet_cut` is true (the
+   sync sets it, see descriptions.snippet_cut). A row without the flag (null) shows nothing. Hidden from screen readers. */
+const cutMark = (j) => j.sc && h('span', { 'aria-hidden': 'true', text: '…' });
 
 function cardEl(j) {
   const k = key(j);
@@ -1417,7 +1414,7 @@ function cardEl(j) {
       ]),
     ]),
     /* Third-party text, so text and never markup; dir="auto" lets a Hebrew posting run right to left. */
-    j.sn && h('p', { class: 'card-snippet', dir: 'auto' }, [j.sn, cutMark(j.sn)]),
+    j.sn && h('p', { class: 'card-snippet', dir: 'auto' }, [j.sn, cutMark(j)]),
     tagsEl(j),
     h('p', { class: 'card-actions' }, [
       h('a', { class: 'btn btn-primary', href: url, target: '_blank', rel: 'noopener noreferrer' }, [
@@ -1723,7 +1720,7 @@ function openDetail(j) {
   $('detailCompany').textContent = j.c;
   $('detailTitle').textContent = j.t;
   $('detailTags').replaceChildren(...tagsEl(j).childNodes);
-  $('detailText').replaceChildren(j.sn, cutMark(j.sn) || '');
+  $('detailText').replaceChildren(j.sn, cutMark(j) || '');
   $('detailLink').replaceChildren(
     'Read full description & apply on ',
     j.c,
