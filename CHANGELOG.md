@@ -4,6 +4,12 @@ All notable changes are documented here. Format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
+## [0.61.0] - 2026-11-17
+
+### Changed
+
+- The coverage gap card: a larger round chevron shows that the list can be opened; the two lists are "We choose not to include these companies" and "We miss roles at these companies" with the one-line note "We cannot find or read open roles in Israel at these companies."; each company says under its name where its link goes ("Israel careers", "Careers page" or "Website"). `build_dashboard.py` adds `to` (`israel`, `careers`, `site`) to every site of the coverage gaps, and `read_career_links` returns the address with it. A "1 company" summary is no longer "1 companies".
+
 ## [0.60.0] - 2026-11-17
 
 ### Added

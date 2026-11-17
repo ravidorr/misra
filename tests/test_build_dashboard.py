@@ -366,22 +366,23 @@ def test_gap_groups_follow_the_reasons_in_order_and_count_each_site_once() -> No
         ("Down", "https://down.test"),  # no careers address known: the company's own site
         ("Page", "https://page.test/jobs"),
     ]
-    assert (
-        by_reason["bot_protection"]
-        == [
-            {"c": "Nowhere", "why": "researched: wins over the bare status", "url": ""},  # the row has no address
-            {
-                "c": "Walled",
-                "why": f"Its {build_dashboard.BLOCKED_WHY[4:]}; its roles may be old (last good crawl 2026-01-02)",
-                "url": "https://walled.test/careers",  # blocked: the careers page itself
-            },
-        ]
-    )
-    assert by_reason["needs_reader"] == [  # any case
-        {"c": "alef", "why": "", "url": "https://alef.test"},
-        {"c": "Zeta", "why": "Avature board", "url": "https://zeta.test/jobs"},
+    assert by_reason["bot_protection"] == [
+        # the row has no address
+        {"c": "Nowhere", "why": "researched: wins over the bare status", "url": "", "to": ""},
+        {
+            "c": "Walled",
+            "why": f"Its {build_dashboard.BLOCKED_WHY[4:]}; its roles may be old (last good crawl 2026-01-02)",
+            "url": "https://walled.test/careers",  # blocked: the careers page itself
+            "to": "careers",
+        },
     ]
-    assert by_reason["no_feed_found"] == [{"c": "Odd", "why": "", "url": "https://jobs.ashbyhq.com/odd"}]
+    assert by_reason["needs_reader"] == [  # any case
+        {"c": "alef", "why": "", "url": "https://alef.test", "to": "site"},
+        {"c": "Zeta", "why": "Avature board", "url": "https://zeta.test/jobs", "to": "careers"},
+    ]
+    assert by_reason["no_feed_found"] == [
+        {"c": "Odd", "why": "", "url": "https://jobs.ashbyhq.com/odd", "to": "careers"}
+    ]
 
 
 def test_gap_groups_leave_out_a_reason_with_no_site() -> None:
@@ -696,7 +697,8 @@ def test_every_site_on_the_real_coverage_gap_card_has_an_https_address(monkeypat
     groups = build_dashboard.gap_groups(blocked, unfed, build_dashboard.read_unresolved(excluded), companies, links)
     sites = [site for group in groups for site in group["sites"]]
     assert sites
-    assert all(site["url"] == links[site["c"]] for site in sites if site["c"] in links)
+    assert all((site["url"], site["to"]) == links[site["c"]] for site in sites if site["c"] in links)
+    assert {site["to"] for site in sites} <= {"israel", "careers", "site"}
     assert [s["c"] for s in sites if not build_dashboard.https_only(s["url"])] == []
 
 
@@ -745,12 +747,34 @@ def test_a_career_link_wins_over_the_address_the_data_gives() -> None:
         {"name": "Beta", "reason": "needs_reader", "note": "", "domain": "beta.test", "careers_url": "https://b.test"}
     ]
     everyone = [{"name": "Walled", "status": "ok", "domain": "walled.test", "careers_url": "https://walled.test/jobs"}]
-    links = {"Walled": "https://walled.test/israel", "Beta": "https://beta.test/careers", "Other": "https://o.test"}
-    groups = build_dashboard.gap_groups(blocked, [], rows, everyone, links)
-    assert {s["c"]: s["url"] for g in groups for s in g["sites"]} == {
-        "Walled": "https://walled.test/israel",
-        "Beta": "https://beta.test/careers",
+    links = {
+        "Walled": ("https://walled.test/israel", "israel"),
+        "Beta": ("https://beta.test/careers", "careers"),
+        "Other": ("https://o.test", "careers"),
     }
+    groups = build_dashboard.gap_groups(blocked, [], rows, everyone, links)
+    assert {s["c"]: (s["url"], s["to"]) for g in groups for s in g["sites"]} == {
+        "Walled": ("https://walled.test/israel", "israel"),
+        "Beta": ("https://beta.test/careers", "careers"),
+    }
+
+
+def test_a_link_says_where_it_goes() -> None:
+    """israel: the Israeli page; careers: any other careers page or board, even one at the root of its host; site: the
+    company's own site, which is all we know when the address is a bare host."""
+    rows = [
+        {"name": "Root", "reason": "needs_reader", "note": "", "domain": "r.test", "careers_url": "https://r.test/"},
+        {"name": "Bare", "reason": "needs_reader", "note": "", "domain": "b.test", "careers_url": "https://b.test"},
+        {
+            "name": "Deep",
+            "reason": "needs_reader",
+            "note": "",
+            "domain": "d.test",
+            "careers_url": "https://d.test/jobs",
+        },
+    ]
+    (group,) = build_dashboard.gap_groups([], [], rows)
+    assert {s["c"]: s["to"] for s in group["sites"]} == {"Root": "careers", "Bare": "site", "Deep": "careers"}
 
 
 def test_read_career_links_takes_the_israeli_page_then_the_global_one(workdir: Path) -> None:
@@ -766,9 +790,10 @@ def test_read_career_links_takes_the_israeli_page_then_the_global_one(workdir: P
         },
     )
     assert build_dashboard.read_career_links() == {
-        "Both": "https://a.test/il",
-        "OnlyGlobal": "https://b.test/jobs",
-        "OnlyIsrael": "https://c.test/il",
+        "Both": ("https://a.test/il", "israel"),
+        "OnlyGlobal": ("https://b.test/jobs", "careers"),
+        "OnlyIsrael": ("https://c.test/il", "israel"),
+        "Unsafe": ("https://d.test", "careers"),  # an unsafe Israeli address falls back to the global page
     }
 
 

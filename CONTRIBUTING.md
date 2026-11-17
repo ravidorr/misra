@@ -116,7 +116,7 @@ All of these hold after the run:
   means allowed (a 5xx or a timeout is logged). An ATS's public API (Greenhouse, Lever, Ashby, Workable,
   Workday, Oracle, Phenom) counts as published for programs: a blanket `Disallow: /` does not stop it, a rule naming its
   path does. A company whose host forbids the address is skipped, not failed: it is not retried, does not count as a
-  failure, sends no alert and shows on the coverage gap card under "We choose not to read these".
+  failure, sends no alert and shows on the coverage gap card under "We choose not to include these companies".
 - The switch is `ROBOTS_ENFORCED` in `common.py`. Set to `False`, the crawl ignores the rules but logs which hosts it would
   have refused. Every run prints which state it is in.
 - Audit on 2026-11-15 (read-only: only each host's `/robots.txt` was fetched, once, politely): 234 companies on 75
@@ -131,7 +131,7 @@ All of these hold after the run:
   allow us to read it. `run.py` deletes its rows from the scratch history (so the dashboard build and the upsert no longer
   see them) and the sync deletes its `jobs` rows in Supabase, open and closed, with the stored text, snippet and details
   (`delete_robots_skipped` in `sync_supabase.py`). Only `jobs` is touched, by exact company name: the crawl log stays (it
-  is what puts the company on the coverage card, under "We choose not to read these"), and so do the stars and emailed
+  is what puts the company on the coverage card, under "We choose not to include these companies"), and so do the stars and emailed
   keys of users (a star keeps its own title, company and link and shows as no longer listed). A company counts as skipped
   only when every crawl of that name in the run was a `robots.txt` skip, so a second board of the same name that crawled
   or failed protects it, and a failure of any other kind (a timeout, a 403, bot protection) never deletes anything. A

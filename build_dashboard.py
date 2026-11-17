@@ -210,13 +210,18 @@ def read_unresolved(excluded: list[str] | None = None) -> list[dict[str, str]]:
     return rows
 
 
-def read_career_links() -> dict[str, str]:
-    """The address of each company in CAREER_LINKS: its Israeli career page, else its global one (https only; a company
-    with neither has no entry)."""
+def read_career_links() -> dict[str, tuple[str, str]]:
+    """The address of each company in CAREER_LINKS and where it goes: its Israeli career page ("israel"), else its
+    global one ("careers"); https only, and a company with neither has no entry."""
     with open(CAREER_LINKS, encoding="utf-8") as fh:
         pages = json.load(fh)
-    links = {name: https_only(page.get("israel") or page.get("global")) for name, page in pages.items()}
-    return {name: url for name, url in links.items() if url}
+    links = {}
+    for name, page in pages.items():
+        if url := https_only(page.get("israel")):
+            links[name] = (url, "israel")
+        elif url := https_only(page.get("global")):
+            links[name] = (url, "careers")
+    return links
 
 
 def gap_groups(
@@ -224,13 +229,14 @@ def gap_groups(
     untracked: list[dict[str, Any]],
     unresolved: list[dict[str, str]],
     companies: list[dict[str, Any]] | None = None,
-    links: dict[str, str] | None = None,
+    links: dict[str, tuple[str, str]] | None = None,
 ) -> list[dict[str, Any]]:
     """Every site that is not crawled, grouped by why, in REASONS order. A site named twice is counted once. Each site
-    has the `url` its name links to (https only): the career page from `links` (Israeli, else global), else the one
-    the data gives, or the company's own site when it has no careers page (`no_careers_url`) or when no careers
-    address is known. `companies` is every company of companies.json; it gives the address of the failing and
-    robots.txt sites."""
+    has the `url` its name links to (https only) and `to`, what the link opens: "israel" (the Israeli career page),
+    "careers" (any other career page or job board) or "site" (the company's own site). The page is the one from
+    `links` (Israeli, else global), else the one the data gives, or the company's own site when it has no careers page
+    (`no_careers_url`) or when no careers address is known. `companies` is every company of companies.json; it gives
+    the address of the failing and robots.txt sites."""
     known = {c["name"]: c for c in [*untracked, *(companies or [])]}
     # a company that left companies.json for the CSV can still be in the crawl log: its row gives the address
     rows = {r["name"]: https_only(r.get("careers_url")) or own_site(r.get("domain")) for r in unresolved}
@@ -252,11 +258,13 @@ def gap_groups(
         sites.setdefault(company["name"], (code, "", careers_address(company)))
     groups = []
     for code, label in REASONS.items():
-        members = [
-            {"c": name, "why": why, "url": (links or {}).get(name) or url}
-            for name, (c, why, url) in sorted(sites.items(), key=lambda site: site[0].lower())
-            if c == code
-        ]
+        members = []
+        for name, (c, why, found) in sorted(sites.items(), key=lambda site: site[0].lower()):
+            if c != code:
+                continue
+            url, to = (links or {}).get(name) or (found, "")
+            to = to or ("site" if url == own_site(urlsplit(url).netloc) else "careers")
+            members.append({"c": name, "why": why, "url": url, "to": to if url else ""})
         if members:
             groups.append({"reason": code, "label": label, "count": len(members), "sites": members})
     return groups

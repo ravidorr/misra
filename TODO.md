@@ -65,15 +65,6 @@ waits for him. Do not write the maintainer's email address in this repository (i
   to show "Misra" or our own domain instead: the usual ways are the OAuth consent screen branding in Google Cloud and
   a Supabase custom domain (check whether it needs a paid plan and what it costs before doing anything).
 
-### Coverage gaps card (![coverage gaps](todo-images/coverage-gaps.png))
-
-- [ ] **The caret is too small to show that the card is collapsed.** Ask Claude Design and the UI/UX expert for a better sign.
-- [ ] **Copy.** "We choose not to read these" becomes "We choose not to include these companies"; "Our crawl misses these"
-  becomes "We missed these companies"; the long paragraph under it becomes "We cannot find or read the open roles in
-  these companies." (the card's copy is also in `build_dashboard.REASONS`, and tests may quote it).
-- [ ] **Company links land in different places** (homepage, general careers page, Israel careers page). Give the user a
-  hint of where a link goes. Ask Claude Design and the UI/UX expert.
-
 ### Footer and pages (![footer](todo-images/footer.png))
 
 - [ ] **One header and one footer for every page.** `index.html` has no link to `security.html`, the other pages do.

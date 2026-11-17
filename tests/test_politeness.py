@@ -558,7 +558,7 @@ def test_the_robots_card_has_no_text_per_company_and_no_days(db: sqlite3.Connect
     gaps = read_payload(workdir)["gaps"]
     groups = {g["reason"]: g for g in gaps["groups"]}
     (site,) = groups["robots_disallowed"]["sites"]
-    assert set(site) == {"c", "why", "url"}
+    assert set(site) == {"c", "why", "url", "to"}
     assert site["why"] == ""
     assert "closeDays" not in gaps
     assert all("days" not in gap for gap in gaps["blocked"])

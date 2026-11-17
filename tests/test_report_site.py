@@ -508,7 +508,7 @@ async def test_the_honeypot_goes_empty_for_a_person_and_is_sent_as_filled_by_a_b
 
 async def test_the_keyboard_alone_opens_fills_sends_and_closes(page: Page, site: Path) -> None:
     backend = await ready(page, site)
-    await page.locator("#gaps-title").focus()
+    await page.locator("#gaps summary").focus()
     await page.keyboard.press("Enter")  # opens the card
     await page.focus("#reportOpen")
     await page.keyboard.press("Enter")
