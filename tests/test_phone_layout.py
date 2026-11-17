@@ -420,6 +420,36 @@ async def test_the_sheet_closes_and_gives_the_focus_back(page: Page, crowd: Path
     assert await page.evaluate(NO_SIDEWAYS)
 
 
+@pytest.mark.parametrize("width", [320, 375])
+async def test_the_sheets_corner_close_is_named_big_and_stays_in_view_while_the_filters_scroll(
+    page: Page, crowd: Path, width: int
+) -> None:
+    await open_page(page, crowd, width, height=480)
+    await open_sheet(page)
+    close = page.locator("#filtersClose")
+    assert await close.get_attribute("aria-label") == "Close"
+    assert await close.inner_text() == ""  # a drawn (x), no text button
+    await page.locator(".sheet-body").evaluate("e => e.parentElement.scrollTo(0, e.parentElement.scrollHeight)")
+    assert (
+        await page.locator(SHEET).evaluate("e => e.scrollTop") > 0
+    )  # it did scroll: the sheet is taller than the screen
+    box = await close.bounding_box()
+    assert box is not None
+    assert box["height"] >= TAP_MIN
+    assert box["width"] >= TAP_MIN
+    assert box["y"] >= 0
+    assert box["x"] + box["width"] <= width
+    sheet_box = await page.locator(SHEET).bounding_box()
+    assert sheet_box is not None
+    assert box["y"] >= sheet_box["y"]  # inside the sheet, at the top of it, though the body is scrolled to its end
+    title = await page.locator("#sheetTitle").bounding_box()
+    assert title is not None
+    assert title["x"] + title["width"] <= box["x"]
+    await close.focus()
+    await page.keyboard.press("Enter")
+    await expect(page.locator("#filtersOpen")).to_be_focused()
+
+
 async def test_the_sheet_filters_the_roles_behind_it(page: Page, crowd: Path) -> None:
     await open_page(page, crowd, 375)
     await open_sheet(page)

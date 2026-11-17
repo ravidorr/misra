@@ -45,13 +45,13 @@ DIGEST_SCRIPT = "templates/digest.js"
 DIGEST_REGION = re.compile(r"<!--digest-->(.*?)<!--/digest-->", re.DOTALL)
 # The same region with its own line (indent and line break), so removing it leaves no whitespace-only line.
 DIGEST_LINE = re.compile(r"^[ \t]*<!--digest-->.*?<!--/digest-->[ \t]*\n", re.DOTALL | re.MULTILINE)
-# The form of the Contact page (TODO.md "Dashboard and site review"). While False, docs/contact.html has only the
-# static contact information (GitHub issues, the security note, the privacy notice), docs/contact.js is not built (an
-# old one is deleted) and the page's CSP has no connect-src: everything between `<!--contactform-->` and
-# `<!--/contactform-->` in templates/contact.html is cut out. It stays False until the lawyer has agreed (his wording
-# for PRIVACY.md is a TODO.md item), together with the function secret CONTACT_FORM_ENABLED=true (the Edge Function
-# `contact` answers 404 without it). Nobody flips either before he says so.
-CONTACT_FORM_ENABLED = False
+# The form of the Contact page. While False, docs/contact.html has only the static contact information (GitHub
+# issues, the security note, the privacy notice), docs/contact.js is not built (an old one is deleted) and the page's
+# CSP has no connect-src: everything between `<!--contactform-->` and `<!--/contactform-->` in templates/contact.html
+# is cut out. It is True since the lawyer's PRIVACY.md wording of 2026-11-18 (round 12), together with the function
+# secret CONTACT_FORM_ENABLED=true (supabase/README.md), which the Edge Function `contact` checks again on its own.
+# To close the form unset that secret (the function answers 404), then set this back to False.
+CONTACT_FORM_ENABLED = True
 CONTACT_SCRIPT = "templates/contact.js"
 CONTACT_REGION = re.compile(r"<!--contactform-->(.*?)<!--/contactform-->", re.DOTALL)
 CONTACT_LINE = re.compile(r"^[ \t]*<!--contactform-->.*?<!--/contactform-->[ \t]*\n", re.DOTALL | re.MULTILINE)

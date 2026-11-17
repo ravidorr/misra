@@ -107,7 +107,7 @@ if (open && dialog) {
 
   function setSending(on) {
     sending = on;
-    for (const button of [send, cancel]) button.setAttribute('aria-disabled', String(on)); /* not "disabled": focus stays */
+    for (const button of [send, cancel, $('reportClose')]) button.setAttribute('aria-disabled', String(on)); /* not "disabled": focus stays */
     send.setAttribute('aria-busy', String(on));
     send.textContent = on ? 'Sending…' : SEND_TEXT;
     setState(on ? 'sending' : 'idle');
@@ -202,7 +202,9 @@ if (open && dialog) {
   cancel.addEventListener('click', () => {
     if (!sending) dialog.close();
   });
-  $('reportClose').addEventListener('click', () => dialog.close());
+  $('reportClose').addEventListener('click', () => {
+    if (!sending) dialog.close();
+  });
   dialog.addEventListener('cancel', (event) => {
     if (sending) event.preventDefault(); /* Esc does not abandon a request in flight */
   });

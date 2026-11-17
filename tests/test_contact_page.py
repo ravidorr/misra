@@ -1,9 +1,9 @@
-"""The Contact page (TODO.md "Dashboard and site review"), in a real browser against the built page.
+"""The Contact page, in a real browser against the built page.
 
-The form is off in the repository (build_dashboard.CONTACT_FORM_ENABLED), so two builds are checked: the one that ships
-(static contact information only) and one with the switch on, run against a fake `contact` Edge Function. The function
-itself is tested in test/contact.test.ts. Locally the tests skip when Chromium is missing; in CI a missing browser
-fails."""
+The form is on in the repository (build_dashboard.CONTACT_FORM_ENABLED), so two builds are checked: one with the switch
+on, run against a fake `contact` Edge Function, and one with it forced off (static contact information only). The
+function itself is tested in test/contact.test.ts. Locally the tests skip when Chromium is missing; in CI a missing
+browser fails."""
 
 import json
 import sqlite3
@@ -35,6 +35,7 @@ def contact_site(db: sqlite3.Connection, workdir: Path, monkeypatch: pytest.Monk
 @pytest.fixture
 def off_site(db: sqlite3.Connection, workdir: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     monkeypatch.setattr(build_dashboard, "DIGEST_SIGNUP_ENABLED", False)
+    monkeypatch.setattr(build_dashboard, "CONTACT_FORM_ENABLED", False)
     return build_site(db, workdir)
 
 
@@ -129,9 +130,20 @@ async def test_every_field_has_a_label_a_hint_and_a_tap_target_and_the_trap_is_o
     assert await page.locator("#contactWebsite").get_attribute("tabindex") == "-1"
     assert await page.locator(".field-trap").get_attribute("aria-hidden") == "true"
     assert await page.locator("#contactSend").get_attribute("aria-describedby") == "contactPrivacy"
-    assert "daily non-reversible hash of your network address that is deleted in the next daily cleanup" in (
-        await page.locator("#contactPrivacy").inner_text()
+    line = page.locator("#contactPrivacy")
+    assert await line.text_content() == (  # the lawyer's line (round 11, A4), then the link to the privacy notice
+        "Your message (and your name and email address, if given) is emailed to the maintainer. To prevent spam, we "
+        "store a daily non-reversible hash of your network address that is deleted in the next daily cleanup. "
+        "Privacy notice (opens in a new tab)"
     )
+    link = line.get_by_role("link", name="Privacy notice")
+    assert await link.get_attribute("href") == "privacy.html"
+    assert await link.get_attribute("target") == "_blank"
+    assert await link.get_attribute("rel") == "noopener noreferrer"
+    assert await link.locator("svg.icon-ext").count() == 1
+    box = await link.bounding_box()
+    assert box
+    assert box["height"] >= TAP_MIN
 
 
 async def test_sending_posts_the_fields_the_trap_and_the_time_and_then_confirms_with_focus_on_the_heading(
@@ -315,4 +327,4 @@ async def test_the_form_has_the_keyboard_order_name_email_message_privacy_send(p
         await page.keyboard.press("Tab")
         order.append(await page.evaluate("document.activeElement.id || document.activeElement.textContent"))
     # the trap is skipped; the privacy link sits between the message and the button
-    assert order == ["contactEmail", "contactMessage", "Privacy notice", "contactSend"]
+    assert order == ["contactEmail", "contactMessage", "Privacy notice (opens in a new tab)", "contactSend"]

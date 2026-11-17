@@ -81,9 +81,15 @@ def test_the_privacy_notice_names_the_providers_and_where_they_are() -> None:
         "and Google, in the United States, handles the sign-in."
     ) in body
     assert (
-        "**Resend** (Ireland): sends the site-report email to the maintainer and, if you turn on job alerts, "
-        "processes your email address and the matched job links to deliver your confirmation and job alert emails."
+        "**Resend** (Ireland): sends the site-report and contact-form emails to the maintainer and, if you turn on "
+        "job alerts, processes your email address and the matched job links to deliver your confirmation and job "
+        "alert emails."
     ) in body
+    assert (  # the lawyer's answer of 2026-11-17, word for word (A1)
+        "- **Gmail** (Google, United States): receives failure alerts about the daily run, as well as the emails sent "
+        "from the site-report and contact forms to the maintainer's own mailbox.\n"
+    ) in read("PRIVACY.md")
+    assert "Google SMTP" not in body
 
 
 def test_the_privacy_notice_gives_the_rights_to_inspect_correct_and_delete_with_a_time_limit() -> None:
@@ -133,13 +139,62 @@ def test_the_privacy_notice_contact_is_a_direct_address_not_only_a_public_issue(
     body = sections(read("PRIVACY.md"))["Contact"]
     assert CONTACT in body
     assert "do not put personal details" in body
+    assert body.strip() == (  # his text of 2026-11-17 (A3), with the address and the two links kept as they were
+        f"Raanan Avidor, <{CONTACT}>, for any question, a request to see, correct or delete your data, or a "
+        "complaint. The Contact page <https://ravidorr.github.io/misra/contact.html> lists every way to reach us. Its "
+        "form emails your message, and your name and email address if you give them, to the maintainer's mailbox "
+        f"through Resend. We do not store them. {SPAM_GUARD} General questions can also go in a "
+        "[GitHub issue](https://github.com/ravidorr/misra/issues); do not put personal details in it. To report a "
+        "security problem, use the private route in [the security note](./SECURITY.md)."
+    )
+
+
+def test_the_privacy_notice_covers_the_contact_form_with_the_lawyers_words_of_2026_11_17() -> None:
+    text = read("PRIVACY.md")
+    parts = sections(text)
+    assert (
+        "we store nothing about you. The one exception is the short-lived spam counter described below, "
+        "if you report a site or use the contact form."
+    ) in parts["What we store"]
+    assert (  # A: his bullet of round 12, word for word
+        "- **Contact form** needs no sign-in. Your message, and your name and email address if you give them, are "
+        "emailed to the maintainer's mailbox through Resend and not stored by us anywhere else. To prevent spam, we "
+        "store a daily non-reversible hash of your network address that is deleted in the next daily cleanup.\n"
+    ) in text
+    assert (
+        text.index("- **Reporting a missing career site**")
+        < text.index("- **Contact form**")
+        < text.index("- **AI assistant connection**")
+    )
+    assert (  # B1, his sentences of round 12
+        "- Signing in is optional and voluntary. Without it the dashboard works the same, and nothing about you is "
+        "kept by us, apart from the short-lived spam counter described below if you report a site or use the contact "
+        "form.\n"
+    ) in parts["The short version"]
+    assert (  # A2
+        "Emails sent through the contact form (and the site-report form) are not stored in our database. They remain "
+        "in the maintainer's mailbox until the conversation is resolved or you ask us to delete them, and in "
+        "Resend's delivery logs for the short retention period set by Resend."
+    ) in parts["How long we keep it"]
+    assert "places" not in text.split("Your **filters**")[1].split("\n")[0]  # B5
+    assert "regions, levels, role types" in text
+
+
+def test_the_privacy_notice_and_the_assistant_page_have_no_em_dash_and_the_assistant_heading_is_not_repeated() -> None:
+    for name in ("PRIVACY.md", "ASSISTANT.md"):
+        assert "\u2014" not in read(name), name  # commas, colons or parentheses instead (his answer of 2026-11-17, C2)
+    assert read("ASSISTANT.md").count("What your assistant can see") == 1
 
 
 def test_the_privacy_notice_says_where_full_job_descriptions_are_stored() -> None:
     text = read("PRIVACY.md")
-    assert "Full job descriptions (which may include business contact details published by the employer" in text
-    assert "such as a recruiter's name or work email" in text
-    assert "are stored in our Supabase database in the EU and contain only public job postings" in text
+    assert (  # his text of 2026-11-17 (C1), word for word; `data/jobs.db` is no longer in the public repository
+        "- **The jobs data is public.** Every visitor's browser loads the open roles from Supabase (so Supabase and "
+        "GitHub see the request, as above). The job listings, job history, and full job descriptions (which may "
+        "include business contact details published by the employer, such as a recruiter's name or work email) are "
+        "stored in our Supabase database in the EU and contain only public job postings.\n"
+    ) in text
+    assert "data/jobs.db" not in text
 
 
 def test_the_privacy_notice_has_no_draft_marks_and_a_date() -> None:
@@ -206,9 +261,18 @@ def test_the_agreement_line_sits_next_to_the_email_control_and_is_in_the_dialog_
     tests/test_digest_settings.py checks that it is visible and its links are big enough."""
     page = read("templates/dashboard.html")
     region = "".join(build_dashboard.DIGEST_REGION.findall(page))
+    new_tab = 'target="_blank" rel="noopener noreferrer"'  # his answer of 2026-11-17 (B4), like the sign-in dialog
+    shown = '<svg class="icon-ext" aria-hidden="true"'
     assert (
-        'By turning this on you agree to the <a href="https://ravidorr.github.io/misra/terms.html">Terms</a> and the '
-        '<a href="https://ravidorr.github.io/misra/privacy.html">privacy notice</a>.'
+        f'By turning this on you agree to the <a href="https://ravidorr.github.io/misra/terms.html" {new_tab}>Terms'
+        f"{shown}"
+    ) in region
+    assert f'and the <a href="https://ravidorr.github.io/misra/privacy.html" {new_tab}>privacy notice{shown}' in region
+    assert region.count('<span class="sr-only"> (opens in a new tab)</span></a>') == len(("Terms", "privacy notice"))
+    assert "Email me new matching roles" not in region  # B1: the heading is cut; the helper text stays whole
+    assert (
+        'We first send a confirmation link to <span id="digestConsentTo"></span>. Nothing is sent until you '
+        "confirm, and you get an email only when there are new matches. One-click unsubscribe is in every email."
     ) in region
     assert 'id="digestConsent"' in region
     assert not re.search(r'id="digestConsent"[^>]*hidden', region)
@@ -340,24 +404,23 @@ def test_the_lawyers_round_of_2026_11_16_editorial_wording_is_in_the_notice_the_
     assert '"we" and "the maintainer" both mean Raanan Avidor' in parts["Who is responsible"]
     assert (
         "we store nothing about you. The one exception is the short-lived spam counter described below, "
-        "if you report a site."
+        "if you report a site or use the contact form."
     ) in parts["What we store"]
     assert 'mark "Not for me" (the dashboard also calls them discards)' in parts["The short version"]
     assert "Supabase's free plan keeps no backups for us." in parts["How long we keep it"]
-    assert "apart from the short-lived spam counter described below if you report a site" in parts["The short version"]
-    assert "the job history (`data/jobs.db`)" in privacy
+    assert (
+        "apart from the short-lived spam counter described below if you report a site or use the contact form."
+        in parts["The short version"]
+    )
     assert "which signs the link (a keyed signature)" in privacy
     assert "The signed sign-in pass (token) your browser holds" in privacy
     assert "one-way codes (keyed hashes, made with a secret that changes every day;" in privacy
     assert "Supabase may keep database backups" not in privacy
     assert (
-        "the small programs (Edge Functions) behind the report form, account deletion, job alerts, the confirmation and"
-        in privacy
+        "the small programs (Edge Functions) behind the report form, the contact form, account deletion, job alerts, "
+        "the confirmation and" in privacy
     )
-    assert (
-        "- **Gmail (Google SMTP)**: failure alerts about the daily run go to the maintainer's own address."
-        " They hold no account data."
-    ) in privacy
+    assert "Gmail (Google SMTP)" not in privacy
     assert "daily summary email" not in privacy
     assert "use the private route in [the security note](./SECURITY.md)." in privacy
     assert "[SECURITY.md]" not in privacy  # a file name is not link text
@@ -403,7 +466,7 @@ def test_the_screens_carry_the_lawyers_round_of_2026_11_16_editorial_wording() -
     assert (
         "If you got more than one confirmation email, use the link in the newest one. To manage your job alerts or "
         "delete your account, sign in on the Misra dashboard. If your job alerts are waiting for confirmation, press "
-        '"Send the confirmation again" there to get a new link.'
+        '"Resend confirmation" there to get a new link.'
     ) in email
     assert "This unsubscribe link no longer works" in email
     assert (
@@ -434,8 +497,10 @@ def test_the_lawyers_assistant_wording_of_2026_11_17_is_in_the_notice_and_the_te
         "next daily cleanup."
     ) in privacy
     assert (
-        "behind the report form, account deletion, job alerts, the confirmation and unsubscribe links, and the AI "
-        "assistant connection: the caller's IP address, approximate location, user agent, and the request path."
+        "- **Provider logs.** Supabase's own platform logs record each request to its services, including the small "
+        "programs (Edge Functions) behind the report form, the contact form, account deletion, job alerts, the "
+        "confirmation and unsubscribe links, and the AI assistant connection: the caller's IP address, approximate "
+        "location, user agent, and the request path."
     ) in privacy
     assert (
         "- **AI assistant connection:** You may connect an AI assistant to Misra solely for your own personal, "
@@ -446,10 +511,11 @@ def test_the_lawyers_assistant_wording_of_2026_11_17_is_in_the_notice_and_the_te
     ) in read("TERMS.md")
 
 
-def test_the_contact_form_stays_off_until_the_lawyer_agrees_and_his_questions_are_listed() -> None:
-    """The form of the Contact page and its Edge Function go live only with the lawyer's agreement (the TODO.md item).
-    Whoever turns them on updates PRIVACY.md first and this test with it. The page never writes the address."""
-    assert build_dashboard.CONTACT_FORM_ENABLED is False
+def test_the_contact_form_is_on_with_the_lawyers_wording_and_the_page_never_writes_the_address() -> None:
+    """The lawyer agreed on 2026-11-17 (round 11) to the form and gave his PRIVACY.md bullet on 2026-11-18
+    (round 12): both are in, so the build constant is on. The function answers 404 until its secret is true.
+    Closing the form later means unsetting that secret, and then setting the constant back to False."""
+    assert build_dashboard.CONTACT_FORM_ENABLED is True
     function = (REPO / "supabase" / "functions" / "contact" / "handler.ts").read_text(encoding="utf-8")
     assert "CONTACT_FORM_ENABLED" in function
     assert "deps.enabled" in function
@@ -457,19 +523,11 @@ def test_the_contact_form_stays_off_until_the_lawyer_agrees_and_his_questions_ar
     page = (REPO / "templates" / "contact.html").read_text(encoding="utf-8")
     script = (REPO / "templates" / "contact.js").read_text(encoding="utf-8")
     assert CONTACT not in page + script
-    assert "daily non-reversible hash of your network address that is deleted in the next daily cleanup" in page
+    assert (  # his line above the Send button (A4), word for word; the link is the privacy notice in a new tab
+        'id="contactPrivacy">Your message (and your name and email address, if given) is emailed to the maintainer. '
+        f'{SPAM_GUARD} <a href="privacy.html" target="_blank" rel="noopener noreferrer">Privacy notice<svg'
+    ) in page
+    assert page.index('id="contactPrivacy"') < page.index('id="contactSend"')
     todo = (REPO / "TODO.md").read_text(encoding="utf-8")
-    item = todo[todo.index("Ask the lawyer about the Contact page and its form") :]
-    item = item[: item.index("\n- [ ]")]
-    for asked in (
-        "What the form collects",
-        "Purpose",
-        "Where it goes",
-        "Retention",
-        "Logs",
-        "Spam limits",
-        "His wording for `PRIVACY.md`",
-    ):
-        assert asked in item, asked
-    privacy = (REPO / "PRIVACY.md").read_text(encoding="utf-8")
-    assert "contact form" not in privacy.lower()  # the lawyer's file is untouched until he words it
+    assert "Turn the contact form on" not in todo
+    assert "Ask the lawyer to confirm one bullet" not in todo

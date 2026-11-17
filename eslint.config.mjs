@@ -33,11 +33,15 @@ export default tseslint.config(
     plugins: { 'no-emoji': noEmoji, 'no-em-dash': noEmDash },
     rules: { 'no-emoji/no-emoji': 'error', 'no-em-dash/no-em-dash': 'error' },
   },
-  {
-    // The lawyer's approved wording is not ours to change (see LAWYER_FILES); the emoji rule still applies.
-    files: LAWYER_FILES.filter((file) => file.endsWith('.js')),
-    rules: { 'no-em-dash/no-em-dash': 'off' },
-  },
+  ...(LAWYER_FILES.length > 0
+    ? [
+        {
+          // The lawyer's approved wording is not ours to change (see LAWYER_FILES); the emoji rule still applies.
+          files: LAWYER_FILES.filter((file) => file.endsWith('.js')),
+          rules: { 'no-em-dash/no-em-dash': 'off' },
+        },
+      ]
+    : []),
   {
     files: ['**/*.{js,mjs,cjs}'],
     languageOptions: { globals: globals.node },

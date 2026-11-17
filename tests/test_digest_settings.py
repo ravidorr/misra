@@ -325,7 +325,7 @@ async def test_fr8_ac1_turning_it_on_sends_the_choices_and_waits_for_the_confirm
     assert await page.locator("#digestOpen").get_attribute("data-digest-state") == "waiting"
     text = await page.locator("#digestState").inner_text()
     assert text.startswith(f"Check {EMAIL} for a confirmation link.")  # the result takes the place of the state's words
-    assert await page.locator("#digestSend").inner_text() == "Send the confirmation again"
+    assert await page.locator("#digestSend").inner_text() == "Resend confirmation"
     assert await page.locator("#digestOff").is_visible()
     assert await page.locator("#digestError").is_hidden()
 
@@ -590,7 +590,7 @@ async def test_a_frequency_that_could_not_be_saved_is_not_called_saved(
     assert await page.locator("input[name=digestFrequency][value=daily]").is_checked()  # what the account still holds
 
 
-# ---- The states, and "send the confirmation again" ----
+# ---- The states, and "Resend confirmation" ----
 
 
 async def test_waiting_offers_to_send_the_confirmation_again_and_says_when_the_limit_is_reached(
@@ -925,26 +925,30 @@ async def test_the_dialog_reads_well_on_a_phone_and_every_control_is_big_enough(
 
 
 async def test_the_lawyers_wording_is_on_the_control_with_big_links(page: Page, digest_site: Path) -> None:
-    """The lawyer's microcopy: the toggle label, the helper text with the address and both links, Daily and Weekly."""
+    """The lawyer's microcopy: the helper text with the address and both links, Daily and Weekly. The heading "Email me
+    new matching roles" is gone (his answer of 2026-11-17); the helper text stays whole because the state line does not
+    say, in every state, that a confirmation link comes first."""
     world = World()
     await page.set_viewport_size(PHONE)
     await signed_in(page, digest_site, world)
     await open_dialog(page)
-    await expect(page.locator("#digestToggleLabel")).to_have_text("Email me new matching roles")
+    await expect(page.get_by_text("Email me new matching roles")).to_have_count(0)
     line = page.locator("#digestConsent")
     await expect(line).to_be_visible()
     text = await line.evaluate("el => el.textContent")
     assert text == (
         f"We first send a confirmation link to {EMAIL}. Nothing is sent until you confirm, and you get an email "
         "only when there are new matches. One-click unsubscribe is in every email. By turning this on you agree to "
-        "the Terms and the privacy notice."
+        "the Terms (opens in a new tab) and the privacy notice (opens in a new tab)."
     )
     base = "https://ravidorr.github.io/misra"
     assert await line.get_by_role("link", name="Terms").get_attribute("href") == f"{base}/terms.html"
     assert await line.get_by_role("link", name="privacy notice").get_attribute("href") == f"{base}/privacy.html"
-    for link in await line.locator("a").all():  # same tab: pages of the site
-        assert await link.get_attribute("target") is None
-        assert await link.get_attribute("rel") is None
+    for link in await line.locator("a").all():  # a new tab, like the sign-in dialog, so the dialog stays as it is
+        assert await link.get_attribute("target") == "_blank"
+        assert await link.get_attribute("rel") == "noopener noreferrer"
+        assert await link.locator("svg.icon-ext").count() == 1
+        assert await link.locator(".sr-only").text_content() == " (opens in a new tab)"
         size = await link.bounding_box()
         assert size is not None
         assert size["height"] >= TAP_MIN

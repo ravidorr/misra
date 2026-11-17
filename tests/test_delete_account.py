@@ -113,7 +113,7 @@ async def test_the_dialog_says_exactly_what_is_removed_and_that_it_cannot_be_und
         'filters, your stars, your "Not for me" choices, and any job alert settings and the record of your consent to '
         "them from our database. A copy remains in the daily backup until the backup is replaced, within 30 days; it "
         "is never put back into the live service.",
-        "Choices saved locally in this browser while you were signed out are not affected. This action cannot be "
+        "What this browser saved while you were signed out stays until you clear your browser's data. This cannot be "
         "undone.",
     ]
     assert await page.locator("#deleteCancel").inner_text() == "Cancel"

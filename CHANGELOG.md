@@ -8,7 +8,7 @@ All notable changes are documented here. Format follows [Keep a Changelog](https
 
 - A Copy button under every code block of the legal pages (the address on "Connect your assistant", the command for Claude Code), in `templates/theme.js`.
 
-## [0.65.1] - 2026-11-18
+## [0.66.1] - 2026-11-18
 
 ### Changed
 
@@ -17,6 +17,13 @@ All notable changes are documented here. Format follows [Keep a Changelog](https
 ### Fixed
 
 - The report form no longer loses its "Report sent" answer when the dialog's `close` event arrives late, after the answer has reopened the dialog (`templates/report.js`). It showed up as a flaky test on a busy machine.
+
+## [0.66.0] - 2026-11-18
+
+### Changed
+
+- The contact form is on: `CONTACT_FORM_ENABLED` in `build_dashboard.py` is `True`, so the Contact page has the form, `contact.js` and the `connect-src` for the `contact` function. The function still answers 404 unless its secret `CONTACT_FORM_ENABLED` is `true`.
+- `PRIVACY.md` carries the lawyer's wording of round 12, as he gave it: the "Contact form" bullet under "Technical records", the contact form in the spam-counter sentence of "The short version", and in the "Provider logs" bullet. `tests/test_legal_wording.py` pins all three, and the pin that the bullet is absent is gone.
 
 ## [0.65.0] - 2026-11-17
 

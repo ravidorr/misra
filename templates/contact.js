@@ -1,6 +1,6 @@
 /* The form of the Contact page (templates/contact.html). A visitor, signed in or not, writes to the maintainer; the
    `contact` Edge Function (supabase/functions/contact/) emails the message. The page is built with this script only
-   while CONTACT_FORM_ENABLED in build_dashboard.py is on (it stays off until the lawyer agrees), and the function
+   while CONTACT_FORM_ENABLED in build_dashboard.py is on, and the function
    answers 404 until its own secret is on.
 
    The call carries no key and no token: the function is public (verify_jwt = false) and checks the page's origin itself.
