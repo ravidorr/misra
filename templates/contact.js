@@ -28,8 +28,8 @@ const MESSAGES = {
   paused: 'Messages are paused until tomorrow: we have received as many as we can read today, so this one was not sent. Try again tomorrow.',
   refused: 'We could not confirm that your message was passed on to us. Try again later, or open an issue on GitHub (see below).',
   server: 'Something went wrong on our side, so nothing was sent. Try again later.',
-  fast: 'That was sent too fast, so nothing was sent. Wait a few seconds and send it again.',
-  closed: 'The contact form is not available right now, so nothing was sent. Open an issue on GitHub instead (see below).',
+  fast: 'Your message came too soon, so it was not sent. Wait a few seconds and try again.',
+  closed: 'The contact form is not available right now, so your message was not sent. Open an issue on GitHub (see below).',
 };
 const BY_CODE = {
   invalid_input: 'invalid',

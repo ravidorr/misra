@@ -140,7 +140,7 @@ export function renderEmail(contact: Contact, now: Date): { subject: string; tex
   return {
     subject: SUBJECT,
     text: [
-      'A visitor wrote to you through the Contact page of Misra.',
+      'A visitor wrote to you through the Misra Contact page.',
       '',
       `Name: ${contact.name || '(not given)'}`,
       `Email: ${contact.email || '(not given, so you cannot reply)'}`,
@@ -229,7 +229,7 @@ async function route(request: Request, deps: Deps, origin: string | null): Promi
   }
   if (filledTrap(body)) return reply(origin, 200, { ok: true }); // a fake success: a bot learns nothing
   // A real error, not a fake success: autofill or a restored page can make a person this fast, and they must not think it was sent.
-  if (tooFast(body)) return fail(origin, 400, 'too_fast', 'That was sent too fast. Wait a few seconds and send it again.');
+  if (tooFast(body)) return fail(origin, 400, 'too_fast', 'The message came too soon. Wait a few seconds and try again.');
 
   const validation = validateContact(body);
   if (!validation.ok) {

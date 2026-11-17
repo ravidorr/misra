@@ -199,7 +199,7 @@ FAILURES = [
         "Some details were not accepted",
     ),
     (400, {"code": "invalid_request", "message": "x"}, "could not be read, so nothing was sent"),
-    (400, {"code": "too_fast", "message": "x"}, "sent too fast, so nothing was sent"),
+    (400, {"code": "too_fast", "message": "x"}, "came too soon, so it was not sent"),
     (403, {"code": "origin_not_allowed", "message": "x"}, "only be sent from the live page"),
     (413, {"code": "payload_too_large", "message": "x"}, "too large, so nothing was sent"),
     (429, {"code": "rate_limited", "message": "x"}, "as many messages as are allowed today"),
@@ -209,7 +209,7 @@ FAILURES = [
     # no code of the function (the platform in front of it answered): the page cannot say whether anything was sent
     (503, {"code": "something_new", "message": "x"}, "could not confirm that your message was sent"),
     (429, {"code": "something_new", "message": "x"}, "could not confirm that your message was sent"),
-    (404, {"code": "something_new", "message": "x"}, "contact form is not available right now, so nothing was sent"),
+    (404, {"code": "something_new", "message": "x"}, "form is not available right now, so your message was not sent"),
     (418, {"code": "something_new", "message": "x"}, "could not confirm that your message was sent"),
 ]
 
