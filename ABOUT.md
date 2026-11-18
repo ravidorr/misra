@@ -54,7 +54,7 @@ You can connect your own AI assistant, such as Claude or ChatGPT. It can search 
 
 Misra is free. Its code is open source under the [MIT License](https://github.com/ravidorr/misra/blob/main/LICENSE), and you can read it on [GitHub](https://github.com/ravidorr/misra). The postings belong to their employers (see the [terms](./TERMS.md)).
 
-For a question, open an [issue on GitHub](https://github.com/ravidorr/misra/issues). Issues are public, so leave personal details out.
+For a question, use the [Contact page](https://ravidorr.github.io/misra/contact.html).
 
 ## More
 
