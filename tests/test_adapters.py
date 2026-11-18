@@ -8,7 +8,7 @@ import pytest
 import adapters
 import descriptions
 import discover
-from tests.conftest import COMEET_FEEDS
+from tests.conftest import COMEET_FEEDS, FROZEN_COMPANIES
 from tests.fakes import FakeHttpResponse
 
 
@@ -1901,7 +1901,7 @@ def test_a_browser_company_is_asked_only_for_jobs_with_a_page_worth_a_request(mo
 
 
 def test_the_pages_known_to_carry_a_job_posting_are_career_pages_of_the_list() -> None:
-    companies = json.loads((Path(__file__).parent.parent / "data" / "companies.json").read_text(encoding="utf-8"))
+    companies = json.loads(FROZEN_COMPANIES.read_text(encoding="utf-8"))
     browser = {c["slug"] for c in companies if c["ats"] == "browser"}
     assert browser >= adapters.JSONLD_PAGES
 

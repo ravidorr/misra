@@ -1,82 +1,34 @@
-"""data/companies.json is the one list of every company. These tests read the real file: a record that breaks a rule
-here would crawl a site nobody chose, or drop a note from the coverage card."""
+"""The company list is a table in Supabase (PLAN_2.md step 3.2); the rules of a record are its database checks
+(supabase/migrations, tested in supabase/tests). The pipeline reads a pulled scratch copy, data/companies.json. Here the
+Python side only checks that a pulled file loads, who is crawled, and that a file nobody can trust stops the run. The
+tests that want realistic records read the frozen copy, tests/fixtures/companies.json, never a live list."""
 
 import json
 import sqlite3
 from pathlib import Path
-from typing import Any
 
 import pytest
 
-import build_dashboard
 import common
 import run
-from adapters import ADAPTERS
-from common import COMPANIES, RECORD_KEYS, crawled_companies, load_companies
-from tests.conftest import write_json
+from common import COMPANIES, ExclusionError, crawled_companies, load_companies, load_excluded
+from tests.conftest import FROZEN_COMPANIES, excluded_record, write_json
 
-REPO = Path(__file__).resolve().parents[1]
-KEYS = list(RECORD_KEYS)
-STATUSES = {"ok", "careers_page_only", "not_found", "ats_failed"}
+MANY = 300  # the frozen list holds 347
 
 
-@pytest.fixture(scope="module")
-def records() -> list[dict[str, Any]]:
-    return json.loads((REPO / COMPANIES).read_text(encoding="utf-8"))
+def test_the_frozen_list_loads_and_is_a_list_of_records_with_names() -> None:
+    records = load_companies(str(FROZEN_COMPANIES))
+    assert len(records) > MANY
+    assert all(isinstance(r["name"], str) for r in records)
+    assert load_excluded(str(FROZEN_COMPANIES)) == []  # the list had no exclusion when it was frozen
+    assert 0 < len(crawled_companies(records)) < len(records)  # some are only on the coverage card
 
 
-def test_the_file_is_written_the_way_discover_writes_it(records: list[dict[str, Any]]) -> None:
-    """A hand edit in another format would make the next discover.py run a diff of the whole file."""
-    text = (REPO / COMPANIES).read_text(encoding="utf-8")
-    assert text == json.dumps(records, indent=1, ensure_ascii=False) + "\n"
-
-
-def test_the_file_is_sorted_by_name(records: list[dict[str, Any]]) -> None:
-    assert [r["name"] for r in records] == sorted((r["name"] for r in records), key=str.casefold)
-
-
-def test_a_name_and_a_domain_name_one_company_only(records: list[dict[str, Any]]) -> None:
-    for key in ("name", "domain"):
-        values = [r[key].casefold() for r in records]
-        assert sorted({v for v in values if values.count(v) > 1}) == [], key
-
-
-def test_every_record_has_only_known_keys_in_order(records: list[dict[str, Any]]) -> None:
-    for r in records:
-        assert set(r) <= set(KEYS), r["name"]
-        assert list(r) == [k for k in KEYS if k in r], r["name"]
-        assert {"name", "domain", "crawl", "careers_url", "ats", "slug", "source", "status"} <= set(r), r["name"]
-        assert isinstance(r["crawl"], bool), r["name"]  # a missing flag must not decide who is crawled
-        assert r["status"] in STATUSES, r["name"]
-
-
-def test_a_company_is_crawled_or_has_a_gap_never_both(records: list[dict[str, Any]]) -> None:
-    for r in records:
-        assert r["crawl"] != ("gap" in r), r["name"]
-        if r["crawl"]:
-            assert "segment" not in r, r["name"]
-        else:
-            assert r["gap"]["reason"] in build_dashboard.REASONS, r["name"]
-
-
-def test_a_pinned_record_names_its_ats_and_slug(records: list[dict[str, Any]]) -> None:
-    for r in records:
-        if r["source"] == "override":
-            assert r["ats"] and r["slug"], r["name"]
-            assert r.get("verify") is not True, r["name"]  # `verify` only ever says false
-        else:
-            assert "verify" not in r, r["name"]  # only a pin is trusted without a check
-
-
-def test_a_crawled_feed_names_an_ats_the_crawl_has_an_adapter_for(records: list[dict[str, Any]]) -> None:
-    for r in records:
-        if r["crawl"] and r["status"] == "ok":
-            assert r["slug"], r["name"]
-            assert r["ats"] in ADAPTERS or r["ats"] == "browser", r["name"]  # a typo in a pin fails here, not at 04:30
-        assert r["source"] in {"override", "guess", "page", ""}, r["name"]
-        assert r.get("israel_only", True) is True, r["name"]  # the flag is there or it is not
-        if r["gap"]["reason"] == "no_careers_url" if "gap" in r else False:
-            assert r["status"] == "not_found", r["name"]
+def test_the_keys_of_a_record_are_the_columns_a_pull_writes() -> None:
+    keys = {k for r in load_companies(str(FROZEN_COMPANIES)) for k in r}
+    assert keys <= set(common.RECORD_KEYS)
+    assert "excluded" in common.RECORD_KEYS
 
 
 def test_a_company_that_is_not_crawled_is_never_requested(workdir: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -88,6 +40,7 @@ def test_a_company_that_is_not_crawled_is_never_requested(workdir: Path, monkeyp
         [
             {**row, "name": "In", "slug": "in", "crawl": True},
             {**row, "name": "Out", "slug": "out", "crawl": False, "gap": {"reason": "needs_reader", "note": ""}},
+            {**excluded_record("Gone"), **row, "slug": "gone"},  # an excluded record is never requested either
         ],
     )
     run.main()
@@ -102,3 +55,15 @@ def test_the_loaders(workdir: Path) -> None:
     write_json(workdir / COMPANIES, rows)
     assert load_companies() == rows
     assert [c["name"] for c in crawled_companies(rows)] == ["A"]  # only a true `crawl` is consent to request a site
+
+
+def test_a_pulled_file_that_does_not_load_stops_the_run(workdir: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    asked: list[str] = []
+    monkeypatch.setitem(run.ADAPTERS, "fake", lambda slug: asked.append(slug) or [])
+    (workdir / COMPANIES).write_text(json.dumps([{"name": "In", "crawl": True}])[:-3], encoding="utf-8")  # cut short
+    with pytest.raises(ExclusionError, match="cannot be read"):
+        run.main()
+    (workdir / COMPANIES).unlink()  # a pull that did not run
+    with pytest.raises(ExclusionError, match="cannot be read"):
+        run.main()
+    assert asked == []

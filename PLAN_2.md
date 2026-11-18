@@ -160,7 +160,9 @@ Steps:
     trigger writes `admin_log`. The same migration loads the records of the file at that commit.
   - SQL tests for each denial and each check. The editor (3.3) asks for a gap reason and a
     note when a record goes on the card, and for a gap reason or crawling when an excluded record is included again.
-- [ ] 3.2 Before the switch, reload the table from the file of that day (edits to `companies.json` between 3.1 and 3.2
+- [x] 3.2 (done: v0.69.0; the table matched the file when it was checked, 347 records, 267 crawled and 80 on the card,
+  so no reload was needed; `--pull-companies` was added for the workflow, which has no use for the history; the
+  key-exposure rule of `AGENTS.md` names the workflow's steps here, and 3.4 keeps only the docs it lists.) Before the switch, reload the table from the file of that day (edits to `companies.json` between 3.1 and 3.2
   would be lost). Then `sync_supabase.py --pull` also writes `data/companies.json` from the table (sorted by name, the
   format of `discover.py`, refusing an empty table as it refuses an empty `jobs`); `--push-companies` writes back the
   discovered fields of crawled records. The pulled file carries the excluded records, and `load_excluded` reads them

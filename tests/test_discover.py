@@ -8,7 +8,7 @@ import pytest
 
 import common
 import discover
-from tests.conftest import write_json
+from tests.conftest import exclude, write_json
 from tests.fakes import FakeHttpResponse
 
 IL_JOB = {"location": "Tel Aviv"}
@@ -275,22 +275,21 @@ def test_main_keeps_a_pin_and_everything_written_by_a_person(
     assert (out[1]["ats"], out[1]["slug"], out[1]["source"]) == ("", "", "")
 
 
-def test_main_puts_a_key_added_by_discovery_in_its_place_and_drops_the_excluded(
+def test_main_puts_a_key_added_by_discovery_in_its_place_and_leaves_the_excluded_as_they_are(
     workdir: Path, env: Env, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     env.pages["https://www.acme.com/"] = ("lever", "acme")
     env.jobs[("lever", "acme")] = [IL_JOB]
+    gone = {"name": "Gone", "crawl": False, "excluded": {"reason": "asked to be removed", "date_added": "2026-01-01"}}
     write_json(
         workdir / "data" / "companies.json",
         [
             {"name": "Acme Co", "domain": "acme.com", "crawl": True, "israel_only": True, "links": {"global": "g"}},
-            {"name": "Gone", "domain": "gone.com", "crawl": False, "gap": {"reason": "needs_reader", "note": ""}},
+            gone,
         ],
     )
-    (workdir / "data" / "excluded_companies.csv").write_text(
-        "company,reason,date_added\nGone,asked to be removed,2026-01-01\n", encoding="utf-8"
-    )
-    (out,) = run_main(workdir, monkeypatch)
+    (out, kept) = run_main(workdir, monkeypatch)
+    assert kept == gone  # its record is not looked at and not changed: the table holds it, the next pull has it
     assert list(out) == [
         "name",
         "domain",
@@ -303,6 +302,31 @@ def test_main_puts_a_key_added_by_discovery_in_its_place_and_drops_the_excluded(
         "israel_only",
         "links",
     ]
+
+
+def test_main_writes_a_careers_address_that_came_out_as_http_as_https(
+    workdir: Path, env: Env, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A page that redirects to http:// gave the address that the table's https check would refuse (Verbit)."""
+    write_json(workdir / "data" / "companies.json", [{"name": "Acme Co", "domain": "acme.com", "crawl": True}])
+    found = {"careers_url": "HTTP://acme.com/jobs", "ats": "", "slug": "", "source": "", "status": "careers_page_only"}
+    monkeypatch.setattr(discover, "discover", lambda row: found)
+    (out,) = run_main(workdir, monkeypatch)
+    assert out["careers_url"] == "https://acme.com/jobs"
+
+
+def test_main_never_looks_at_a_crawled_record_of_a_company_on_the_exclusion_list(
+    workdir: Path, env: Env, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The table cannot hold both, but a file that does (an old scratch copy) must not make us request that site."""
+    asked: list[str] = []
+    monkeypatch.setattr(
+        discover, "discover", lambda row: asked.append(row["name"]) or dict.fromkeys(discover.DISCOVERED, "")
+    )
+    write_json(workdir / "data" / "companies.json", [{"name": "Acme Co", "domain": "acme.com", "crawl": True}])
+    exclude(workdir, "Acme Co")
+    run_main(workdir, monkeypatch)
+    assert asked == []
 
 
 def many(n: int, ok: bool) -> list[dict[str, Any]]:

@@ -14,6 +14,23 @@ All notable changes are documented here. Format follows [Keep a Changelog](https
 - The Crawl area of the admin page (PLAN_2.md step 2.2): it calls `admin_crawl_health()` when first shown and lists one card per company, worst first, with a headline, chips with counts (Needs attention, Failing, Robots.txt, Held, All), the values of the crawl and a status pill. Loading, empty, error and 401 states. Templates and tests only.
 - A Copy button under every code block of the legal pages (the address on "Connect your assistant", the command for Claude Code), in `templates/theme.js`.
 
+## [0.69.0] - 2026-11-18
+
+### Changed
+
+- The company list now lives in the Supabase table `companies` (PLAN_2.md step 3.2). `sync_supabase.py --pull` writes the git-ignored scratch file `data/companies.json` from it (every row, the excluded ones included, sorted by name, the format of `discover.py`) and refuses an empty table; `run.py`, `build_dashboard.py` and the surveys read that file as before. A pull that cannot reach Supabase stops the run.
+- `common.RECORD_KEYS` gains `excluded`, and `load_excluded` reads the excluded records of the pulled file (`excluded: {reason, date_added}`) with every guard it had; `ExclusionError` still stops a run on a file that does not load. `discover.py` leaves excluded records as they are instead of dropping them, and writes a careers address that came out as `http://` as `https://`.
+- The tests that read the real list read a frozen copy, `tests/fixtures/companies.json`; `tests/test_companies_data.py` no longer checks the rules of a record (the database checks are the rules).
+
+### Added
+
+- `sync_supabase.py --pull-companies` (the list only) and `--push-companies`, which sends the discovered fields (`discover.DISCOVERED`) of the crawled records that discovery changed, by exact name, and never a field a person owns (`crawl`, `gap`, `excluded`, `links`).
+- The manual-dispatch workflow `discover-companies.yml`: it pulls the list, runs `discover.py` without the service-role key, and only its last step holds the key to push.
+
+### Removed
+
+- `data/excluded_companies.csv`, `common.EXCLUDED`, `common.EXCLUDED_COLUMNS` and `data/companies.json` from the repository (it is git-ignored now), and `tests/test_todo_counts.py`.
+
 ## [0.68.0] - 2026-11-18
 
 ### Added

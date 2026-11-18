@@ -2,6 +2,9 @@ __pycache__/
 *.pyc
 data/jobs.db
 data/jobs.db.part
+data/companies.json
+data/companies.json.part
+data/companies.json.tmp
 data/survey.json
 data/catchup.html
 data/survey2.json

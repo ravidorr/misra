@@ -16,7 +16,7 @@ import send_digests
 import sync_supabase
 from descriptions import HASH_KEY, fingerprint, read_work_file, write_work_file
 from sync_supabase import SyncError, push_texts, sync
-from tests.conftest import add_job, write_json
+from tests.conftest import add_job, excluded_record, write_json
 from tests.fakes import FakeHttpResponse, FakeSupabase
 from tests.test_sync_supabase import URL, client
 
@@ -117,11 +117,8 @@ def test_a_work_file_that_cannot_be_written_is_a_warning_and_the_jobs_are_stored
 
 
 def test_a_company_that_failed_or_is_on_the_exclusion_list_leaves_no_text(workdir: Path, crawl: Any) -> None:
-    (workdir / "data" / "excluded_companies.csv").write_text(
-        "company,reason,date_added\nAsked,asked,2026-11-16\n", encoding="utf-8"
-    )
     crawl(
-        [co("Asked", "asked"), co("Down", "down"), co("Acme", "acme")],
+        [co("Asked", "asked"), co("Down", "down"), co("Acme", "acme"), excluded_record("Asked", "asked", "2026-11-16")],
         {"asked": [posting("1")], "down": None, "acme": [posting("2")]},
     )
     assert list(read_work_file()) == [("Acme", "2")]

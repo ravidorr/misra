@@ -74,13 +74,25 @@ To add one, see [Adding a company](./CONTRIBUTING.md#adding-a-company).
 ## Quickstart
 
 ```bash
-python3 discover.py               # fills in data/companies.json (careers URL + ATS of each crawled company)
-python3 sync_supabase.py --pull   # rebuild data/jobs.db from Supabase; needs SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY
+python3 sync_supabase.py --pull   # rebuild data/jobs.db and data/companies.json from Supabase; needs SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY
 python3 run.py                    # crawl, diff into data/jobs.db
 ```
 
-To try the crawl without Supabase, run `touch data/jobs.db` instead of the pull: it gives an empty history.
-The sync refuses such a file: only a pulled one may be written back.
+To try the crawl without Supabase, run `mkdir -p data && touch data/jobs.db && cp tests/fixtures/companies.json data/companies.json`
+instead of the pull: an empty history and a frozen copy of the list.
+The sync refuses such a history: only a pulled one may be written back.
+
+## The company list
+
+The list of companies lives in the Supabase table `companies`, not in the repository: the companies we crawl, the ones
+we only researched and the ones that asked to be removed. Everybody can read the records that are not excluded through
+the public API; only the maintainer changes them. `sync_supabase.py --pull` writes the git-ignored scratch file
+`data/companies.json` from the table, as it writes `data/jobs.db`, and `run.py`, `build_dashboard.py` and the surveys
+read that file. The tests read a frozen copy, `tests/fixtures/companies.json`.
+
+`discover.py` fills in the career page and the job feed of the crawled companies. It runs from the manual
+`discover-companies` workflow, without the service-role key, and only its last step sends the result back to the table
+(`sync_supabase.py --push-companies`). See [Adding a company](./CONTRIBUTING.md#adding-a-company).
 
 ## Dashboard
 

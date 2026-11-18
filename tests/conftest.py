@@ -12,6 +12,10 @@ import browser_crawl
 import common
 import run
 
+# A frozen copy of the company list (the records of data/companies.json when the list moved to Supabase, PLAN_2.md
+# step 3.2). Tests that want realistic records read this; none reads the live list, which is pulled and git-ignored.
+FROZEN_COMPANIES = Path(__file__).parent / "fixtures" / "companies.json"
+
 # real shapes of Comeet feeds (the fields the adapter reads): see test_adapters.py
 COMEET_FEEDS: dict[str, Any] = json.loads(
     (Path(__file__).parent / "fixtures" / "comeet_positions.json").read_text(encoding="utf-8")
@@ -76,7 +80,7 @@ def workdir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     (tmp_path / "data").mkdir()
     (tmp_path / "docs").mkdir()
     (tmp_path / "templates").mkdir()
-    (tmp_path / "data" / "excluded_companies.csv").write_text("company,reason,date_added\n", encoding="utf-8")
+    (tmp_path / "data" / "companies.json").write_text("[]", encoding="utf-8")  # the pull's other output: the list
     monkeypatch.chdir(tmp_path)
     conn = run.init()  # the pull's output: a daily run never starts without a history file
     conn.execute(f"PRAGMA user_version = {common.PULLED}")
@@ -108,6 +112,19 @@ def add_crawls(
 
 def write_json(path: Path, data: object) -> None:
     path.write_text(json.dumps(data), encoding="utf-8")
+
+
+def excluded_record(name: str, reason: str = "asked to be removed", date_added: str = "2026-11-20") -> dict[str, Any]:
+    """The record of a company on the exclusion list, as the admin page writes it: the name, `crawl` false and the
+    exclusion, nothing else."""
+    return {"name": name, "crawl": False, "excluded": {"reason": reason, "date_added": date_added}}
+
+
+def exclude(workdir: Path, *names: str, **kw: str) -> None:
+    """Put companies on the exclusion list: an excluded record each, added to the list that is already in
+    data/companies.json, whatever else it holds."""
+    path = workdir / "data" / "companies.json"
+    write_json(path, [*json.loads(path.read_text(encoding="utf-8")), *(excluded_record(n, **kw) for n in names)])
 
 
 def add_job(conn: sqlite3.Connection, company: str, job_id: str, title: str, **kw: Any) -> None:

@@ -1,7 +1,7 @@
 """The company list migration (PLAN_2.md step 3.1): the lint of tests/test_migrations.py applied to it, and the places
 where the SQL keeps a copy of something the code owns (the gap reasons, the feeds, the limits, the columns, the records
-of data/companies.json). A copy that drifts fails here, so the editor of step 3.3 can trust the database checks as the
-one set of rules. The behaviour is tested against a database in supabase/tests/companies.sql."""
+of the list at the commit). A copy that drifts fails here, so the editor of step 3.3 can trust the database checks as
+the one set of rules. The behaviour is tested against a database in supabase/tests/companies.sql."""
 
 import json
 import re
@@ -61,9 +61,7 @@ def test_the_lint_accepts_the_migration_as_it_is() -> None:
 
 def test_the_columns_are_the_record_keys_then_excluded_with_the_two_of_the_table() -> None:
     body = columns_of(CREATE_TABLE.fullmatch(create_table())["body"])  # type: ignore[index]
-    assert list(body) == ["id", *common.RECORD_KEYS, "excluded", "updated_at"], (
-        "a key of common.RECORD_KEYS is not a column (step 3.2 adds `excluded` to the keys)"
-    )
+    assert list(body) == ["id", *common.RECORD_KEYS, "updated_at"], "a key of common.RECORD_KEYS is not a column"
     for key in ("links", "gap", "excluded"):
         assert body[key].startswith(f"{key} jsonb"), key
     for key in ("crawl", "israel_only", "verify"):
@@ -90,10 +88,9 @@ def test_the_limits_are_the_ones_of_load_excluded() -> None:
 
 def test_the_migration_loads_the_records_it_says() -> None:
     """The literal of the load is well formed: 347 records, 267 crawled and 80 on the card at the commit of the
-    migration, keys of common.RECORD_KEYS only, no http address. It is NOT compared with data/companies.json: the file
-    stays the live source until step 3.2, so an added company or a new row in data/excluded_companies.csv (a legal
-    removal, which must never be blocked) must not fail a test. The table loads no exclusion; step 3.2 reloads it from
-    the file of that day and the file then carries the exclusions."""
+    migration, keys of common.RECORD_KEYS only, no http address. It is NOT compared with anything else: since step 3.2
+    the table is the source (the pulled data/companies.json is its copy), so an added company or an exclusion (a legal
+    removal, which must never be blocked) must not fail a test. The table loads no exclusion."""
     raw = re.search(r"jsonb_to_recordset\(\$companies\$(.*?)\$companies\$::jsonb", SQL, flags=re.DOTALL)[1]  # type: ignore[index]
     loaded = json.loads(raw)
     assert (len(loaded), sum(r["crawl"] is True for r in loaded), sum("gap" in r for r in loaded)) == COUNTS

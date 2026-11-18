@@ -184,11 +184,10 @@ and each column on seeded logs (`all admin crawl health checks passed`); the mig
 ## The company list
 
 Migration `20261130100000_companies.sql` (PLAN_2.md step 3.1) adds `public.companies` and loads the 347 records of
-`data/companies.json` as they were at that commit (267 crawled, 80 on the coverage card, none excluded). **The file is
-still the source until step 3.2**: nothing in the pipeline reads the table yet, and no test compares the file with the
-loaded records, so an edit of the file, an added company or a row in `data/excluded_companies.csv` (a removal on request
-is never blocked) is fine. The table loads no exclusion; step 3.2 reloads it from the file of that day, exclusions
-included. Apply it once, as in "Apply the migrations" (applying it twice fails at `create table`).
+`data/companies.json` as they were at that commit (267 crawled, 80 on the coverage card, none excluded). Since step 3.2
+the table is the source: `sync_supabase.py --pull` writes the git-ignored scratch file `data/companies.json` from it
+(the file is not in the repository any more), and a removal on request is an excluded record of the table, not a row
+of `data/excluded_companies.csv`. Apply it once, as in "Apply the migrations" (applying it twice fails at `create table`).
 
 Columns: `id` (identity, the row's key, so a rename never changes it), then one per key of `common.RECORD_KEYS` (`name`,
 `domain`, `segment`, `crawl`, `careers_url`, `ats`, `slug`, `source`, `status`, `israel_only`, `verify`, `links`, `gap`;
@@ -1024,7 +1023,7 @@ changes every day and no address is stored or logged:
 - `get_job` returns `details` through an allowlist (`DETAIL_KEYS` in `handler.ts`: employment type, department, workplace
   type, experience, country, offices and the like). The sync's own fingerprint and any key not listed never leave.
 - A job is read live from the `jobs` table by its exact `company` and `job_id` on every call, with no cache, so a company that
-  asks to be removed (`data/excluded_companies.csv`, deleted by the sync) is gone from the assistant the same day.
+  asks to be removed (an excluded record of `companies`, deleted by the sync) is gone from the assistant the same day.
 - The `job_id` is the employer's own posting id (the id in its public career-page link), not an internal counter. A caller needs
   both `company` and `job_id`, can only reach jobs that are in the table (open, or closed for less than 30 days), and is
   limited to 15 reads a day, so guessing ids gives nothing that `search_jobs` does not already show.

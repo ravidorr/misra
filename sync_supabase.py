@@ -9,6 +9,15 @@ partly hidden table would look like jobs that closed; `--allow-shrink` for a rea
 read fails the pull too). An empty `crawl_log` is a warning (a new project has none). The file is written beside and
 renamed over, so there is never a half-built one, and the crawl and the dashboard build refuse a missing file.
 
+The pull also writes the company list (PLAN_2.md step 3.2): every row of the `companies` table, the excluded ones
+included (the service-role key reads them), into the git-ignored scratch file data/companies.json, sorted by name and
+written the way discover.py writes it, without the keys a record does not have. An empty table is refused, as an empty
+`jobs` is: a run without the list would crawl nobody and, worse, without the exclusions. `--pull-companies` does only
+this (the discover-companies workflow has no use for the history). `python sync_supabase.py --push-companies` runs after
+discover.py: it sends back the discovered fields (discover.DISCOVERED) of the crawled records that discovery changed,
+by exact name, and never a field a person owns (`crawl`, `gap`, `excluded`, `links`, `domain`, `segment`, `israel_only`,
+`verify`); a record that is no longer crawled or is excluded in the table is left alone.
+
 `python sync_supabase.py` runs after the crawl: it copies the open jobs of data/jobs.db into the Supabase `jobs` table
 (PostgREST over HTTPS), closes the jobs that are no longer open, writes the crawl log rows of this run (the ones with
 no Supabase id yet) and deletes the log older than CRAWL_LOG_DAYS days.
@@ -25,9 +34,9 @@ role may run, delete the rows of every day before today, so a daily non-reversib
 cleanup after its day ends, not only when a later request happens to be handled. A failed cleanup exits non-zero
 like a failed sync, so the privacy notice's promise cannot silently stop being kept.
 
-A company on the exclusion list (`data/excluded_companies.csv`) is deleted before anything is sent: its rows in `jobs`
-and `crawl_log`, and the rows that keep its title and link or its job keys in `user_jobs` (a user's stars and
-discards) and `emailed`.
+A company on the exclusion list (the excluded records of data/companies.json) is deleted before anything is
+sent: its rows in `jobs` and `crawl_log`, and the rows that keep its title and link or its job keys in
+`user_jobs` (a user's stars and discards) and `emailed`.
 Only by exact company name, nothing when the list is empty, nothing at all when the list is bad or names more than
 MAX_PURGE_COMPANIES companies that still have rows. Counts are logged, never the rows.
 
@@ -62,20 +71,25 @@ import classify
 import descriptions
 import regions
 from common import (
+    COMPANIES,
     CRAWL_LOG_DAYS,
     DB,
     EXCLUDED_MIN_NAME,
     MAX_PURGE_COMPANIES,
     PULLED,
+    RECORD_KEYS,
     ROBOTS_MAX_PURGE_COMPANIES,
     ROBOTS_NOTE,
     SCHEMA,
     ExclusionError,
+    https_only,
     is_excluded,
+    load_companies,
     load_excluded,
     open_history,
 )
-from export_accounts import ALLOW_SHRINK, CRAWL_LOG, JOBS, ExportError, Source, fell_by_half
+from discover import DISCOVERED
+from export_accounts import ALLOW_SHRINK, CRAWL_LOG, JOBS, ExportError, Source, Table, fell_by_half
 from export_accounts import HttpSession as ExportSession
 
 BATCH = 500  # rows per upsert request
@@ -88,6 +102,8 @@ OPEN_JOBS = f"SELECT {', '.join(COLUMNS)} FROM jobs WHERE status='open' ORDER BY
 HISTORY_COLUMNS = (*COLUMNS, "status")  # the columns of `jobs` that the scratch history keeps
 LOG_COLUMNS = ("ts", "company", "ats", "ok", "n_jobs", "note")
 PURGE_TABLES = ("user_jobs", "emailed", "jobs", "crawl_log")  # where a company's rows live: stars, emailed keys, jobs
+# The company list, every column of the record, read through the export's Source (exact count, the key's whole view)
+COMPANY_TABLE = Table("companies", ("name",), RECORD_KEYS, account=False)
 PUBLISHED = "docs/jobs.json"  # the dashboard's last published jobs: the pull's yardstick for a partial read
 EMPTY_SECRETS = "SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY is empty: the history lives in Supabase, so nothing can run"
 
@@ -324,6 +340,7 @@ def pull(source: Source, path: str = DB, allow_shrink: bool = False) -> tuple[in
             f"with {ALLOW_SHRINK}"
         )
     part = Path(path + ".part")
+    part.parent.mkdir(parents=True, exist_ok=True)  # data/ holds nothing else in a fresh checkout
     part.unlink(missing_ok=True)
     conn = sqlite3.connect(part)
     try:
@@ -342,6 +359,70 @@ def pull(source: Source, path: str = DB, allow_shrink: bool = False) -> tuple[in
         conn.close()
     part.replace(path)
     return len(jobs), len(log)
+
+
+def pull_companies(source: Source, path: str = COMPANIES) -> int:
+    """Write the company list of Supabase to `path` and return how many records it holds. Every row is read before the
+    file is touched; an empty table is refused. A record carries the keys that have a value (a null is a key it does not
+    have), in the order of common.RECORD_KEYS, sorted by name ignoring case, written as discover.py writes it, and the
+    file is built beside and renamed over the old one."""
+    rows = source.read(COMPANY_TABLE)
+    if not rows:
+        raise SyncError(
+            "Supabase holds no companies: refusing to start a run without the list "
+            "(restore the backup first, CONTRIBUTING.md, 'Backups')"
+        )
+    records = [{k: row[k] for k in RECORD_KEYS if row[k] is not None} for row in rows]
+    records.sort(key=lambda record: str(record["name"]).casefold())
+    part = Path(path + ".part")
+    part.parent.mkdir(parents=True, exist_ok=True)  # data/ holds nothing else in a fresh checkout
+    part.write_text(json.dumps(records, indent=1, ensure_ascii=False) + "\n", encoding="utf-8")
+    part.replace(path)
+    return len(records)
+
+
+def push_companies(source: Source, client: Client, path: str = COMPANIES) -> tuple[int, int, int]:
+    """Send the discovered fields that discover.py changed back to the table and return (companies changed, left
+    alone, failed). Only the crawled records of the file are considered, and each is compared with the table as it is
+    now: a field goes only where it differs (an empty string and a null are the same), a careers address starts with
+    https://, and the request names the company, `crawl` true and no exclusion, so a company that an editor took off
+    the crawl or excluded since the pull is never written. Nothing but the five DISCOVERED fields is ever sent. A
+    record the table does not have is left alone (a company is added on the admin page). A request that fails
+    is counted and the next one still goes; the log holds the status, never the row."""
+    current = {str(row["name"]): row for row in source.read(COMPANY_TABLE)}
+    if not current:
+        raise SyncError("Supabase holds no companies: nothing to compare with, nothing written")
+    changed = alone = failed = 0
+    for record in load_companies(path):
+        if record.get("crawl") is not True:
+            continue
+        row = current.get(str(record.get("name")))
+        if row is None or row["crawl"] is not True or row["excluded"] is not None:
+            alone += 1
+            continue
+        found = {k: record.get(k) or "" for k in DISCOVERED}
+        found["careers_url"] = https_only(found["careers_url"])
+        fields = {k: v for k, v in found.items() if v != (row[k] or "")}
+        if not fields:
+            continue
+        try:
+            done = client.call(
+                "PATCH",
+                {"name": f"eq.{row['name']}", "crawl": "eq.true", "excluded": "is.null", "select": "name"},
+                fields,
+                table="companies",
+                prefer="return=representation",
+                quiet=True,
+            ).json()
+        except SyncError as exc:
+            failed += 1
+            print(f"::warning::a company could not be updated: {exc}")
+            continue
+        if done:
+            changed += 1
+        else:  # an editor changed the record between the read and the write
+            alone += 1
+    return changed, alone, failed
 
 
 def push_crawl_log(conn: sqlite3.Connection, client: Client) -> int:
@@ -528,13 +609,21 @@ def leave_held(client: Client) -> int | None:
         return None
 
 
-def pull_main(url: str, key: str, allow_shrink: bool = False) -> None:
+def pull_main(url: str, key: str, allow_shrink: bool = False, history: bool = True) -> None:
+    """The pull step: the company list, and the job history unless `history` is False. A failure stops the run."""
     session = requests.Session()
+    source = Source(cast("ExportSession", session), url, key)
     try:
-        jobs, log = pull(Source(cast("ExportSession", session), url, key), allow_shrink=allow_shrink)
+        if history:
+            jobs, log = pull(source, allow_shrink=allow_shrink)
+        companies = pull_companies(source)
     except (SyncError, ExportError) as exc:
         sys.exit(f"Supabase pull failed: {exc}")
-    print(f"Supabase: pulled {jobs} jobs and {log} crawl log rows into {DB}")
+    if history:
+        print(f"Supabase: pulled {jobs} jobs and {log} crawl log rows into {DB}")
+    print(f"Supabase: pulled {companies} companies into {COMPANIES}")
+    if not history:
+        return
     held = leave_held(Client(cast("HttpSession", session), url, key))
     if held is not None:
         print(f"Supabase: {held} open jobs already hold a description")
@@ -542,11 +631,30 @@ def pull_main(url: str, key: str, allow_shrink: bool = False) -> None:
         print("::warning::the crawl log is empty: held drops start again")
 
 
+def push_companies_main(url: str, key: str) -> None:
+    """The last step of the discover-companies workflow: send the discovered fields back (see `push_companies`)."""
+    session = requests.Session()
+    try:
+        changed, alone, failed = push_companies(
+            Source(cast("ExportSession", session), url, key), Client(cast("HttpSession", session), url, key)
+        )
+    except (SyncError, ExportError) as exc:
+        sys.exit(f"Supabase push of the companies failed: {exc}")
+    except (OSError, ValueError) as exc:  # the file that discover.py wrote cannot be read
+        sys.exit(f"Supabase push of the companies failed: {COMPANIES} cannot be read ({type(exc).__name__})")
+    print(f"Supabase: {changed} companies updated, {alone} left alone (changed or removed since the pull)")
+    if failed:
+        sys.exit(f"Supabase push of the companies failed for {failed} companies (see the warnings above)")
+
+
 def main(argv: Sequence[str] | None = None) -> None:
     url, key = credentials()
     args = sys.argv[1:] if argv is None else argv
-    if "--pull" in args:
-        pull_main(url, key, ALLOW_SHRINK in args)
+    if "--pull" in args or "--pull-companies" in args:
+        pull_main(url, key, ALLOW_SHRINK in args, history="--pull" in args)
+        return
+    if "--push-companies" in args:
+        push_companies_main(url, key)
         return
     conn = open_history()
     if conn.execute("PRAGMA user_version").fetchone()[0] != PULLED:
