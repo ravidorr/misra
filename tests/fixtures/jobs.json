@@ -1,0 +1,37 @@
+{
+ "jobs": [
+  {
+   "c": "AI21 Labs",
+   "i": "1",
+   "il": true
+  },
+  {
+   "c": "AI21 Labs",
+   "i": "2",
+   "il": true
+  },
+  {
+   "c": "AI21 Labs",
+   "i": "3",
+   "il": false
+  },
+  {
+   "c": "Adobe",
+   "i": "4",
+   "il": true
+  },
+  {
+   "c": "Aidoc",
+   "i": "5",
+   "il": false
+  },
+  {
+   "c": "Ghost Co",
+   "i": "6",
+   "il": true
+  }
+ ],
+ "gaps": {},
+ "covered": 3,
+ "generated": "2026-11-18 16:29 UTC"
+}

@@ -77,23 +77,53 @@ count query with the service role, never printing rows.
 
 ### Budgets (set in A1, checked before every batch)
 
-- **Crawl time.** Record the current duration of the `Crawl and diff` step. Ceiling proposal: 15 of the 20 minutes. A
-  browser record is the most expensive kind; prefer a JSON feed.
-- **Failure budget.** More than 3 new failing companies after a batch blocks the next batch until they are fixed or
-  parked.
-- **Size.** `jobs.json` page weight and `crawl_log` rows a day. 100 more companies is roughly two times the log rows
-  and a larger `jobs.json`; estimate after the first batch and set a ceiling (for example 4 MB for `jobs.json`).
+Measured 2026-11-18 with the A1 report and read-only `gh` commands (counts and times only).
+
+- **Crawl time.** The `Crawl and diff` step took 235 s, 229 s, 212 s, 211 s, 211 s and 216 s (3.5 to 3.9 minutes) in
+  the six full daily runs of 2026-11-16 to 2026-11-18 (run ids 44347723718, 44237849843, 44017802979, 44017712839,
+  44017112557, 43957726843; the step runs inside a job of 5 to 11 minutes). Ceiling: 15 of the 20 minutes (900 s of
+  the `timeout-minutes: 20`). That is about 4 times today's step, so the 267 crawled companies could grow to roughly
+  1000 at the same mix; a browser record costs more than a JSON feed, so check the step before every batch. To
+  re-measure: `gh run list --workflow=daily.yml --limit 10`, then `gh run view <id> --json jobs`, and take the
+  `Crawl and diff` step's `completedAt` minus `startedAt`.
+- **Failure budget.** At the last build the coverage card held 28 blocked companies (22 "request failed", 5 where
+  `robots.txt` does not allow SmartRecruiters, 1 whose site blocks the runner) and 14 with no feed yet, 122 gaps in all
+  with the researched records. These are the known baseline. More than 3 new failing companies after a batch (not in
+  that list) blocks the next batch until they are fixed or parked.
+- **Size.** `docs/jobs.json` is 2,131,197 bytes (2.0 MiB, about 237 KB gzipped) for 6,764 jobs. The history is about
+  9.7k jobs and about 250 `crawl_log` rows a day (about one per crawled company). Estimate: 100 more companies is
+  about 2 times the log rows a day and, at about 25 jobs per company, about 40 percent more `jobs.json`. Ceiling
+  proposal: 4 MB for `jobs.json` and 500 `crawl_log` rows a day (the log keeps 90 days, so about 45k rows). The maintainer confirms.
 
 ## Step A: measure first
 
-- **A1. Coverage report and budgets.** Extend `survey.py` (with tests) to print: crawled count, companies with at least
+- [x] **A1. Coverage report and budgets.** Extend `survey.py` (with tests) to print: crawled count, companies with at least
   one Israel job in the last run, the Israel job count, researched-only by reason and segment, crawled by `ats`, and the
   crawl step duration from the last daily runs. Record the three budgets above. Done when: one command prints the
   baseline and the budgets are written into this file.
-- **A2. Startup versus multinational.** `segment` stays research-only (the test and `AGENTS.md` say so, and no code
+
+  Status (2026-11-18): done. `python survey.py --baseline` prints the report from the pulled `data/companies.json`
+  (`sync_supabase.py --pull-companies`; it stops with that instruction when the file is missing) and the public
+  `docs/jobs.json`; it prints counts only, never a name of an excluded company, and for the crawl step duration it
+  prints the `gh` commands (it calls no network). The budgets above are measured. The baseline check below was run on
+  the frozen copy of the list (`tests/fixtures/companies.json`) with the committed `docs/jobs.json`, because no
+  service-role key was available; the maintainer reruns it on the real pulled list.
+
+  Baseline check (frozen list, `docs/jobs.json` generated 2026-11-18 16:29 UTC):
+
+  - Crawled 267, researched only 80, excluded 0.
+  - Crawled companies with at least one Israel job: 201 of 267. Israel jobs: 2,747 (of 6,764 open jobs).
+  - Researched only by `gap.reason` and `segment`: the same as the Baseline section above (23, 20, 14, 10, 7, 6 and
+    36, 22, 11, 11).
+  - Crawled by `ats`: as in the Baseline section, which left out `bamboohr` 1 and `greenhouse_url` 1 (`jazzhr` 1 and
+    none 14 are there); total 267.
+  - Crawled split from `israel_only`: 73 multinational, 194 startup.
+- [x] **A2. Startup versus multinational.** `segment` stays research-only (the test and `AGENTS.md` say so, and no code
   reads it for crawled companies). A1 reports the split from `israel_only` (a global company is pinned `israel_only`; an
   Israeli startup is not). Done when: A1 prints the split. If the maintainer wants `segment` on crawled records for a
   dashboard filter, that is a separate change with its own test and `AGENTS.md` edit.
+
+  Status (2026-11-18): done. The A1 report prints the split: 73 multinational (`israel_only`) and 194 startup.
 - **A3. Targets.** Fix numeric targets from the A1 output. Proposal: +60 startups crawled, +40 multinationals that
   return jobs from the runner, 30 of the 80 researched records unlocked.
 - **A4. Success metrics.** Per batch and per month: reports received (`CONTRIBUTING.md` has the command), share of

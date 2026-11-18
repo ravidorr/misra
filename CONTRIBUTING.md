@@ -81,7 +81,7 @@ The slug for the systems where it is not obvious:
 | Phenom | `host/country/lang`. Read from the search widget, filtered to Israel. |
 | Eightfold | `"ats": "browser"` with the `...careers?location=Israel` URL. |
 
-`survey.py` is a dev tool, not part of the daily run: it finds which ATS a custom career page uses.
+`survey.py` is a dev tool, not part of the daily run: it finds which ATS a custom career page uses. `python survey.py --baseline` prints the coverage report (counts only, no network) from the pulled `data/companies.json` (`sync_supabase.py --pull-companies` first) and `docs/jobs.json`.
 
 A company seen for the first time is baselined silently: its current jobs are recorded but not sent, so adding companies
 never floods the job alerts.
