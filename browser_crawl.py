@@ -84,11 +84,18 @@ CARD_JS = r"""(els, cfg) => {
     const text = n => (n.innerText || '').trim();
     const jobLink = a => job.test(href(a)) && !skip.test(href(a));
     const titled = a => jobLink(a) && text(a) && !button.test(text(a));
-    const many = (n, bare) => {  // two or more jobs in n? An icon-only link counts when e is one
-        const seen = new Set();
+    const nav = /^(view|read|learn|see|more|details)\b/i;  // not "Apply": that link only accompanies a job
+    const label = a => !text(a) || !/\w/.test(text(a)) || nav.test(text(a));  // an icon, an arrow, "Details"
+    const near = (x, y) => x.startsWith(y) || y.startsWith(x);  // "/jobs/x/apply" belongs to "/jobs/x"
+    const many = (n, e) => {  // two or more jobs in n? A label link e is one job, and other label links count too
+        const mine = key(href(e)), seen = new Set(label(e) ? [mine] : []);
+        const titles = [...n.querySelectorAll('a[href]')].filter(titled).map(a => key(href(a)));
         for (const a of n.querySelectorAll('a[href]')) {
-            if (jobLink(a) && ((bare && !text(a)) || titled(a))) {
-                seen.add(key(href(a)));
+            const k = key(href(a));
+            const other = label(e) && jobLink(a) && label(a) && !near(k, mine) && !titles.some(t => near(k, t));
+            const own = label(e) && near(k, mine);  // the title link of e's own job is no second job
+            if ((titled(a) && !own) || other) {
+                seen.add(k);
                 if (seen.size > 1) return true;
             }
         }
@@ -99,7 +106,7 @@ CARD_JS = r"""(els, cfg) => {
         let n = e;
         for (let i = 0; i < 4 && n.parentElement; i++) {
             const up = n.parentElement;
-            if ((up.innerText || '').length > cfg.max || many(up, !text(e))) break;
+            if ((up.innerText || '').length > cfg.max || many(up, e)) break;
             n = up;
         }
         const own = e.querySelector('h1, h2, h3, h4, h5, h6');  // a title heading inside the link

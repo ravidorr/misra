@@ -184,3 +184,26 @@ async def test_an_icon_link_to_another_address_does_not_shrink_the_card_of_a_tit
         f'<div><a href="{BASE}/jobs/x-role/apply"><svg></svg></a></div></div>'
     )
     assert (await row_for(page, html, "/jobs/x-role"))[2].startswith("X Role\nHaifa")
+
+
+def label_card(path: str, title: str, place: str, label: str = "Details") -> str:
+    return f'<div class="c"><span>{title}</span><span>{place}</span><a href="{BASE}{path}">{label}</a></div>'
+
+
+async def test_adjacent_cards_that_link_through_a_label_each_keep_their_own_card(page: Page) -> None:
+    html = (
+        "<div>"
+        + label_card("/jobs/backend-engineer", "Backend Engineer", "Haifa")
+        + label_card("/jobs/product-designer", "Product Designer", "Berlin, Germany", "→")
+        + "</div>"
+    )
+    assert "Berlin" not in (await row_for(page, html, "/jobs/backend-engineer"))[2]
+    assert "Haifa" not in (await row_for(page, html, "/jobs/product-designer"))[2]
+
+
+async def test_an_apply_link_that_accompanies_a_titled_link_does_not_split_its_card(page: Page) -> None:
+    html = (
+        f'<div><div><a href="{BASE}/jobs/x-role">X Role</a></div><div>Haifa</div>'
+        f'<div><a href="{BASE}/jobs/x-role/apply">Apply</a><a href="{BASE}/jobs/x-role/details">Details</a></div></div>'
+    )
+    assert (await row_for(page, html, "/jobs/x-role/apply"))[2].startswith("X Role")

@@ -6,6 +6,7 @@ import pytest
 
 import browser_crawl
 from browser_crawl import WHY, crawl_one
+from common import ISRAEL
 from tests.fakes import FakeCtx, FakeEl, FakeLoc, FakePage, FakePlaywright, FakeResp, Status
 
 URL = "https://x.test/careers"
@@ -950,3 +951,25 @@ def test_a_location_label_before_the_title_does_not_make_the_title_a_place() -> 
         *browser_crawl._card_extras("Location\nBackend Engineer\nHaifa, Israel", "Backend Engineer"),
     ]
     assert browser_crawl._parse_card(lines) == ("Backend Engineer", "Haifa, Israel", "")
+
+
+async def test_two_adjacent_label_cards_are_two_jobs_with_their_own_places() -> None:
+    """Codex: both links used to inherit the whole list, so Berlin was read as the first job's Haifa."""
+    haifa = link(
+        "/jobs/backend-engineer",
+        "Details",
+        "Backend Engineer\nHaifa\nDetails",
+        leaves="Backend Engineer\nHaifa\nDetails",
+    )
+    berlin = link(
+        "/jobs/product-designer",
+        "Details",
+        "Product Designer\nBerlin, Germany\nDetails",
+        leaves="Product Designer\nBerlin, Germany\nDetails",
+    )
+    jobs = await run(FakePage(link_fn=lambda i: [haifa, berlin] if i == 1 else []))
+    assert jobs is not None
+    assert [(j["title"], j["location"], bool(ISRAEL.search(j["location"]))) for j in jobs] == [
+        ("Backend Engineer", "Haifa", True),
+        ("Product Designer", "Berlin, Germany", False),
+    ]
