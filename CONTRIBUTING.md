@@ -79,6 +79,7 @@ The slug for the systems where it is not obvious:
 | Oracle Fusion HCM | `host/site`. Read from the public requisition search. Israel only. |
 | Amazon | `ISR`. Read from the amazon.jobs search JSON for that one country. |
 | Phenom | `host/country/lang`. Read from the search widget, filtered to Israel. |
+| Avature | `host/portal?field=value`: the board's host, its portal path and the Country facet set to Israel, for example `synopsys.avature.net/careers?2001=21374` or `jobs.siemens.com/en_US/externaljobs?42386=811993`. Read from the public RSS feed `<host>/<portal>/SearchJobs/feed/`. Israel only. The feed has no paging and gives at most 20 jobs, so a feed of 20 is a failure, not a list. Read the Israel value once from the board's own Country search (an Avature board loads the options by script, from its `_wizardPortalDatasetSingleColumnOptionsSearchApi`; look it up only where `robots.txt` allows it). |
 | Eightfold | `"ats": "browser"` with the `...careers?location=Israel` URL. |
 
 `survey.py` is a dev tool, not part of the daily run: it finds which ATS a custom career page uses. `python survey.py --baseline` prints the coverage report (counts only, no network) from the pulled `data/companies.json` (`sync_supabase.py --pull-companies` first) and `docs/jobs.json`.

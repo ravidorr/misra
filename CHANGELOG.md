@@ -19,6 +19,12 @@ All notable changes are documented here. Format follows [Keep a Changelog](https
 - The Crawl area of the admin page (PLAN_2.md step 2.2): it calls `admin_crawl_health()` when first shown and lists one card per company, worst first, with a headline, chips with counts (Needs attention, Failing, Robots.txt, Held, All), the values of the crawl and a status pill. Loading, empty, error and 401 states. Templates and tests only.
 - A Copy button under every code block of the legal pages (the address on "Connect your assistant", the command for Claude Code), in `templates/theme.js`.
 
+## [0.74.0] - 2026-11-19
+
+### Added
+
+- The `avature` job feed (PLAN_3.md steps C3 and E3), for the two companies on Avature, Synopsys and Siemens: `adapters.avature(slug)` reads the board's public RSS feed (`<host>/<portal>/SearchJobs/feed/`, allowed by both `robots.txt` files) filtered to the Country facet of Israel. The slug is `host/portal?field=value` (`synopsys.avature.net/careers?2001=21374`, `jobs.siemens.com/en_US/externaljobs?42386=811993`; the Israel value of Siemens was read once from the board's own Country search API). The feed has no place, so the place is the feed's description when it names Israel and else Israel. Its paging parameters are ignored and it gives at most 20 jobs, so one request is made and a list of 20 is a failure (it may be cut short, and it is what an ignored facet gives): Synopsys has 12 Israel jobs and Siemens 17. A job outside the board's host, a feed that is not RSS and a job twice are failures too. A new migration, `20261203100000_companies_ats_avature.sql`, adds the name to the check `companies_ats_known` (not applied by the pull request; the migration lint allows only that one drop and add), the admin page's feed list and slug hint have it, and `tests/test_migrations_companies.py` and `tests/test_admin_companies.py` now read the newest migration that sets the check. The test fixtures are two frozen minimal feeds (`tests/fixtures/avature_*.xml`) with job-title strings only, including postings whose description names another country. No company is pinned yet.
+
 ## [0.73.0] - 2026-11-19
 
 ### Added

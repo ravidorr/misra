@@ -221,6 +221,10 @@ Target: 30. Read the "Prior findings" first; do not repeat a checked path.
 - **C3. `needs_reader` (20).** Group by platform and check `robots.txt` first. An adapter only for a platform with two
   or more companies that `robots.txt` allows (none qualifies today; the count may change after C1 and C2). The rest use
   `browser` or `comeet_page`, within the crawl-time budget. One adapter per PR, with fixtures and 100% coverage.
+  Status (2026-11-19): the Avature adapter is built (Synopsys and Siemens, `robots.txt` allows the filtered RSS feed): slug
+  `host/portal?field=value`, Israel facet `2001=21374` (Synopsys) and `42386=811993` (Siemens). The feed cannot be paged and
+  gives 20 jobs at most, so a feed of 20 is a failure (Synopsys 12, Siemens 17 today). Not applied or pinned yet: the
+  migration `20261203100000_companies_ats_avature.sql` is applied after the merge, then the two pins.
 - **C4. `site_unusable` (10) and `no_openings` (6).** Recheck once; a site that is back or a board that reopened moves
   to the crawl. Repeat each quarter (step G).
 - **C5. `bot_protection` (7).** No change. Record the decision once so nobody retries.
@@ -271,6 +275,9 @@ Israeli R&D centres of global companies. Target: +40 crawled with `israel_only: 
   SmartRecruiters (blocked by `robots.txt` for the five current companies; keep skipping).
 - **E3. Adapters by count.** An adapter only for a platform with two or more allowed companies. Each needs an Israel
   filter, a per-company cap, and fixtures that include non-Israel jobs. One adapter per PR.
+  Status (2026-11-19): Avature is the first adapter from this step (see C3). Its Israel filter is the Country facet; the cap is
+  the feed's 20 jobs. The fixtures hold postings whose description names another country: a Siemens posting for several
+  countries lists Israel among them and is kept, as the board's own Israel filter does.
 - **E4. Runner test.** Before counting a Workday or Oracle pin, confirm it returns jobs from a daily run (the runner
   block above). A pin that fails from the runner is parked with a `gap` note, not counted.
 - **E5. Single companies.** `browser` crawl only inside the crawl-time budget; otherwise park with a `gap` reason.
