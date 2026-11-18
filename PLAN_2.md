@@ -207,7 +207,9 @@ Steps:
     until `discover.py` runs. A new company is therefore crawled after the next discover-and-push run (D2); every other
     change takes effect at the next daily run. The page says which of the two applies.
 - [ ] 3.4 One source of truth for the company rules: the SQL checks of 3.1 are the rules.
-  - `companies` is backed up with the `Table(..., account=False)` pattern of `JOBS` and `CRAWL_LOG` in
+  - Status: the backup and restore of `companies` are done (v0.71.0, the item below). The step stays open for the
+    documentation that waits for the editor of 3.3 ("Adding a company", "Reported sites" on the admin page).
+  - [x] `companies` is backed up with the `Table(..., account=False)` pattern of `JOBS` and `CRAWL_LOG` in
     `export_accounts.py`, and `restore_accounts.py` restores it.
   - Docs: `AGENTS.md` (the exclusion paragraph and one line in the backup paragraph; the single-list rule and the key-exposure rule
     were done in 3.2); `CONTRIBUTING.md` ("Adding a company" now says how a visitor or contributor suggests

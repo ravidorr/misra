@@ -1,16 +1,19 @@
 """Turn the account export (`export_accounts.py`) back into SQL for Supabase (PLAN.md step 9.1, the restore path).
 
-`python restore_accounts.py <export directory> <output .sql file> [--create-auth-users]` reads the seven `<table>.json`
-files (the five account tables, then `jobs` and `crawl_log`, the job history) and writes ONE SQL script. Nothing is
+`python restore_accounts.py <export directory> <output .sql file> [--create-auth-users]` reads the eight `<table>.json`
+files (the five account tables, then `jobs`, `crawl_log` and `companies`) and writes ONE SQL script. Nothing is
 sent anywhere: the maintainer reads the script and runs it in the Supabase SQL editor (or with `psql`) of the project
 to restore into. `CONTRIBUTING.md`, "Backups of the account tables", has the
 steps and the rehearsal.
 
 The script
 - runs in one transaction, so a failure leaves nothing half restored;
-- inserts the tables in foreign-key order (profiles, user_prefs, user_jobs, subscriptions, emailed), then `jobs` and
-  `crawl_log` (which point at no user, so every row goes in; a crawl log row keeps its `id` and the id sequence is moved
-  past the largest one). The job text is not in the export: the next crawl writes it again for the open jobs;
+- inserts the tables in foreign-key order (profiles, user_prefs, user_jobs, subscriptions, emailed), then `jobs`,
+  `crawl_log` and `companies` (which point at no user, so every row goes in; a crawl log or company row keeps its `id`
+  and the id sequence is moved past the largest one; a company keeps its `updated_at` and its `excluded` record). The
+  company list is the one table the script refuses to merge: it stops, rolling everything back, unless `companies` is
+  empty, so a seeded row can never win over the backup and bring back an excluded company;
+  The job text is not in the export: the next crawl writes it again for the open jobs;
 - uses `insert ... on conflict do nothing`: running it twice, or into a project that already holds some rows, changes
   nothing that is already there, and it never deletes anything;
 - switches the tables' own triggers off for its length and back on at the end, so that the restored rows keep their
@@ -38,7 +41,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from export_accounts import ALL_TABLES, CRAWL_LOG, FILE_MODE, JOB_TABLES, TABLES, ExportError, Table, outside_repository
+from export_accounts import ALL_TABLES, COMPANIES, FILE_MODE, JOB_TABLES, TABLES, ExportError, Table, outside_repository
 
 CREATE_AUTH_USERS = "--create-auth-users"
 PAUSE = "--pause-subscriptions"
@@ -116,10 +119,10 @@ def insert(table: Table, rows: Sequence[Mapping[str, Any]], only_existing_users:
 
 
 def insert_all(table: Table, rows: Sequence[Mapping[str, Any]]) -> str:
-    """One job table's insert: every row, none overwritten. A crawl log id is `generated always`, so it is given
-    explicitly (that is what makes a second run a no-op), and the sequence moves past it afterwards."""
+    """One no-user table's insert: every row, none overwritten. A crawl log or company id is `generated always`, so it
+    is given explicitly (that is what makes a second run a no-op), and the sequence moves past it afterwards."""
     columns = ", ".join(table.columns)
-    override = " overriding system value" if table.name == CRAWL_LOG.name else ""
+    override = " overriding system value" if table.key == ("id",) else ""
     text = (
         f"insert into public.{table.name} ({columns}){override}\n"
         f"select {columns} from json_populate_recordset(null::public.{table.name}, {literal(rows)}::json) r\n"
@@ -131,6 +134,16 @@ def insert_all(table: Table, rows: Sequence[Mapping[str, Any]]) -> str:
             f"(select max(id) from public.{table.name}));\n"
         )
     return text
+
+
+EMPTY_COMPANIES = (
+    "do $$ begin\n"
+    "  if exists (select 1 from public.companies) then\n"
+    "    raise exception 'companies is not empty: the backup replaces the list, so empty the table first "
+    "(CONTRIBUTING.md, Backups, Restore step 3)';\n"
+    "  end if;\n"
+    "end $$;\n"
+)
 
 
 def auth_users(profiles: Sequence[Mapping[str, Any]]) -> str:
@@ -156,7 +169,12 @@ def script(data: Mapping[str, Sequence[Mapping[str, Any]]], with_auth_users: boo
     if with_auth_users:
         parts.append(auth_users(data[TABLES[0].name]))
     parts.extend(insert(table, data[table.name], not with_auth_users) for table in TABLES)
-    parts.extend(insert_all(table, data[table.name]) for table in JOB_TABLES)
+    for table in JOB_TABLES:
+        if (
+            table.name == COMPANIES.name
+        ):  # the backup is the list: a row already there (a seed) could win and hide an exclusion
+            parts.append(EMPTY_COMPANIES)
+        parts.append(insert_all(table, data[table.name]))
     parts.extend(f"alter table {name} enable trigger user;\n" for name in names)
     parts.append("commit;\n")
     return "".join(parts)

@@ -227,7 +227,7 @@ removed', target = the company name, never a reason). The trigger function is `s
 insert for any public role), pins its search path and is executable by nobody, and it logs only when the caller is an
 admin: the load, the pipeline (service role, step 3.2) and the SQL editor write no row. `supabase/tests/companies.sql`
 checks all of it (`all company checks passed`); the migration lint pins the grants, the policies and both trigger
-functions. `companies` is not in the daily backup until step 3.4 (it holds no personal data).
+functions. `companies` is in the daily backup since step 3.4 (it holds no personal data, but the excluded records are legal opt-outs, so the backup repository stays private).
 
 ## Stars and discards
 

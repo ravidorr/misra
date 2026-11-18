@@ -17,6 +17,7 @@ from restore_accounts import RestoreError, literal, load, script
 
 U1 = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
 U2 = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"
+OVERRIDDEN = ("crawl_log", "companies")
 EMAILS = ("ann@test.example", "bob.o'brien@test.example")
 
 
@@ -38,6 +39,22 @@ def data() -> dict[str, list[dict[str, Any]]]:
             }
         ],
         "crawl_log": [{"id": 7, "ts": "2026-11-16T04:30:00", "company": "Acme", "ats": "lever", "ok": 1, "n_jobs": 3}],
+        "companies": [
+            {
+                "id": 3,
+                "name": "Acme",
+                "domain": "acme.example",
+                "crawl": True,
+                "updated_at": "2026-11-18T10:00:00+00:00",
+            },
+            {
+                "id": 9,
+                "name": "Opted Out",
+                "crawl": False,
+                "excluded": {"reason": "asked to be removed", "date_added": "2026-11-17"},
+                "updated_at": "2026-11-17T08:00:00+00:00",
+            },
+        ],
     }
 
 
@@ -58,7 +75,16 @@ def test_the_script_is_one_transaction_that_inserts_in_foreign_key_order_and_nev
     assert text.count("begin;") == text.count("commit;") == 1
     assert text.index("begin;") < text.index("insert into") < text.rindex("insert into") < text.index("commit;")
     inserted = re.findall(r"insert into public\.(\w+) ", text)
-    assert inserted == ["profiles", "user_prefs", "user_jobs", "subscriptions", "emailed", "jobs", "crawl_log"]
+    assert inserted == [
+        "profiles",
+        "user_prefs",
+        "user_jobs",
+        "subscriptions",
+        "emailed",
+        "jobs",
+        "crawl_log",
+        "companies",
+    ]
     assert text.count("on conflict do nothing;") == len(ALL_TABLES)
     lowered = text.lower()
     for forbidden in ("delete ", "truncate", "drop ", "do update", "update public"):
@@ -70,7 +96,7 @@ def test_the_tables_own_triggers_are_off_for_the_inserts_and_on_again_before_the
     off = [m.start() for m in re.finditer(r"disable trigger user;", text)]
     on = [m.start() for m in re.finditer(r"enable trigger user;", text)]
     assert len(off) == len(on) == len(ALL_TABLES)
-    assert max(off) < text.index("insert into") and min(on) > text.rindex("insert into public.crawl_log")
+    assert max(off) < text.index("insert into") and min(on) > text.rindex("insert into public.companies")
     assert max(on) < text.index("commit;")
     for table in ALL_TABLES:
         assert f"alter table public.{table.name} disable trigger user;" in text
@@ -187,7 +213,8 @@ def test_main_writes_a_private_script_and_prints_counts_only(
     assert "insert into auth.users" in target.read_text(encoding="utf-8")
     shown = capsys.readouterr().out
     assert shown.strip() == (
-        "restore script: profiles 2, user_prefs 1, user_jobs 1, subscriptions 1, emailed 1, jobs 1, crawl_log 1"
+        "restore script: profiles 2, user_prefs 1, user_jobs 1, subscriptions 1, emailed 1, "
+        "jobs 1, crawl_log 1, companies 2"
     )
     assert not [path for path in tmp_path.iterdir() if path.name.endswith(".tmp")]
     for private in (*EMAILS, U1, "Acme"):
@@ -244,8 +271,8 @@ def test_people_who_left_after_the_backup_are_left_out_of_every_table(tmp_path: 
 def test_leave_out_filters_all_tables() -> None:
     kept = restore_accounts.leave_out(data(), {U1})
     assert [row["user_id"] for row in kept["profiles"]] == [U2]
-    assert not any(kept[name] for name in kept if name not in {"profiles", "jobs", "crawl_log"})
-    assert (len(kept["jobs"]), len(kept["crawl_log"])) == (1, 1)  # the job history has no user: it stays whole
+    assert not any(kept[name] for name in kept if name not in {"profiles", "jobs", "crawl_log", "companies"})
+    assert (len(kept["jobs"]), len(kept["crawl_log"]), len(kept["companies"])) == (1, 1, 2)  # no user: stays whole
 
 
 def test_an_unreadable_id_file_is_an_error(tmp_path: Path) -> None:
@@ -294,5 +321,83 @@ def test_a_crawl_log_row_keeps_its_id_and_the_sequence_moves_past_it(tmp_path: P
     assert insert.index("on conflict do nothing;") < insert.index(
         "select setval(pg_get_serial_sequence('public.crawl_log'"
     )
-    assert text.count("overriding system value") == 1  # `jobs` has no generated id
+    assert text.count("overriding system value") == len(OVERRIDDEN)  # `jobs` has no generated id
     assert "setval(pg_get_serial_sequence('public.jobs'" not in text
+
+
+def test_the_company_list_keeps_its_ids_and_the_sequence_moves_past_the_largest(tmp_path: Path) -> None:
+    """`companies.id` is `generated always`: the restore gives it explicitly, so a second run is a no-op, and the
+    editor's later inserts do not collide with a restored row."""
+    text = script(loaded(write_export(tmp_path / "e")))
+    assert (
+        "insert into public.companies (" + ", ".join(export_accounts.COMPANIES.columns) + ") overriding system value\n"
+        in text
+    )
+    assert (
+        "select setval(pg_get_serial_sequence('public.companies', 'id'), (select max(id) from public.companies));"
+        in text
+    )
+    assert (
+        "overriding system value"
+        not in text.split("insert into public.jobs")[1].split("insert into public.crawl_log")[0]
+    )
+    assert text.count("overriding system value") == len(OVERRIDDEN)  # crawl_log and companies, no other table
+
+
+def test_an_excluded_company_is_restored_whole_and_the_checks_and_triggers_are_not_in_the_way(tmp_path: Path) -> None:
+    """The record of a legal opt-out survives a restore with its reason and date, and the restore writes it with the
+    table's triggers off (the 200-excluded limit, `updated_at` forced to now, the admin log) and its checks intact."""
+    text = script(loaded(write_export(tmp_path / "e")))
+    body = re.search(r"into public\.companies .*?(\$restore\w*\$)(.*?)\1::json", text, flags=re.DOTALL)
+    assert body
+    rows = {row["id"]: row for row in json.loads(body[2])}
+    assert rows[9]["excluded"] == {"reason": "asked to be removed", "date_added": "2026-11-17"}
+    assert rows[9]["updated_at"] == "2026-11-17T08:00:00+00:00"
+    assert text.index("alter table public.companies disable trigger user;") < text.index("insert into public.companies")
+    assert "alter table public.companies disable trigger all" not in text  # the checks are never switched off
+    assert "excluded" not in text.split("insert into public.companies")[0]
+
+
+def test_the_frozen_company_list_survives_export_and_restore(tmp_path: Path) -> None:
+    """Round trip: every record of the frozen list, as the table holds it, goes through the export files and into the
+    restore script unchanged (a null is a key the file leaves out, so it comes back as null)."""
+    frozen = json.loads((Path(__file__).parent / "fixtures" / "companies.json").read_text(encoding="utf-8"))
+    columns = export_accounts.COMPANIES.columns
+    rows = [
+        {column: record.get(column) for column in columns if column != "id"}
+        | {"id": n, "updated_at": "2026-11-18T00:00:00+00:00"}
+        for n, record in enumerate(frozen, start=1)
+    ]
+    rows.append(
+        dict.fromkeys(columns)
+        | {
+            "id": 999,
+            "name": "Opted Out",
+            "crawl": False,
+            "excluded": {"reason": "asked", "date_added": "2026-11-17"},
+            "updated_at": "2026-11-18T00:00:00+00:00",
+        }
+    )
+    empty = {table.name: [] for table in ALL_TABLES}
+    directory = write_export(tmp_path / "e", empty | {"companies": rows})
+    restored = load(directory, export_accounts.COMPANIES)
+    assert restored == rows
+    assert len(restored) == len(frozen) + 1
+    text = script(loaded(directory))
+    body = re.search(r"into public\.companies .*?(\$restore\w*\$)(.*?)\1::json", text, flags=re.DOTALL)
+    assert body
+    assert json.loads(body[2]) == rows
+
+
+def test_the_script_refuses_a_company_list_that_is_not_empty_so_a_seed_cannot_hide_an_exclusion(tmp_path: Path) -> None:
+    """A new project's migration seeds the first list; `on conflict do nothing` would keep a seeded, crawled row over
+    the backup's excluded one. The script stops (one transaction, so nothing is restored) before it inserts."""
+    text = script(loaded(write_export(tmp_path / "e")))
+    guard = restore_accounts.EMPTY_COMPANIES
+    assert text.count(guard) == 1
+    assert "raise exception 'companies is not empty" in guard
+    assert text.index(guard) < text.index("insert into public.companies")
+    assert text.index(guard) > text.index("insert into public.crawl_log")
+    assert text.index("disable trigger user") < text.index(guard) < text.index("commit;")
+    for forbidden in ("delete ", "truncate", "drop "):
+        assert forbidden not in guard.lower()

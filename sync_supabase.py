@@ -385,7 +385,7 @@ def pull_companies(source: Source, path: str = COMPANIES) -> int:
     if not rows:
         raise SyncError(
             "Supabase holds no companies: refusing to start a run without the list "
-            "(the table has no backup until PLAN_2.md step 3.4)"
+            "(restore the backup first: restore_accounts.py, CONTRIBUTING.md, 'Backups')"
         )
     before = list_yardstick(path)
     if fell_by_half(before, len(rows)):

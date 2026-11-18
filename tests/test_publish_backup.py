@@ -22,7 +22,9 @@ TWO_COMMITS, PROMISED_DAYS = 2, 30
 ANN, BOB = "ann@test.example", "bob@test.example"
 
 
-COUNTS_LINE = "profiles 2, user_prefs 0, user_jobs 0, subscriptions 0, emailed 0, jobs 0, crawl_log 0 (2 rows)"
+COUNTS_LINE = (
+    "profiles 2, user_prefs 0, user_jobs 0, subscriptions 0, emailed 0, jobs 0, crawl_log 0, companies 0 (2 rows)"
+)
 
 
 def run(directory: Path, *args: str) -> str:
@@ -73,9 +75,7 @@ def test_the_first_publish_into_an_empty_remote_commits_the_files_with_a_counts_
 ) -> None:
     line = publish(make_export(tmp_path / "x"), str(remote), tmp_path / "w", NOW)
     assert line == f"backup committed: {COUNTS_LINE}"
-    assert history(remote) == [
-        f"backup {DAY}: profiles 2, user_prefs 0, user_jobs 0, subscriptions 0, emailed 0, jobs 0, crawl_log 0 (2 rows)"
-    ]
+    assert history(remote) == [f"backup {DAY}: {COUNTS_LINE}"]
     files = run(remote, "ls-tree", "--name-only", "main").split()
     assert files == sorted(f"{table.name}.json" for table in ALL_TABLES)
     shown = run(remote, "show", "main:profiles.json")
@@ -268,6 +268,7 @@ def test_counts_are_rows_per_table(tmp_path: Path) -> None:
         "emailed": 0,
         "jobs": 0,
         "crawl_log": 0,
+        "companies": 0,
     }
 
 

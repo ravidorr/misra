@@ -3,11 +3,12 @@
 `python export_accounts.py <directory>` reads every row of the tables that hold personal data or choices with the
 service-role key (PostgREST over HTTPS, all columns, including the token hash columns) and writes `<table>.json` into
 the directory: one row per line, keys sorted, rows sorted by primary key, so a day's diff holds only what changed. The
-job history goes with them: `jobs` (open and closed, every column but the text of the posting) and `crawl_log`. Supabase
-is their only home since step 9.1 (the crawl rebuilds a scratch SQLite file from it each run), so the export is their
-backup. The text (`description`, `details`, `snippet`, and `snippet_cut`, a flag about the snippet) is left out on
-purpose: it lives in Supabase only, it is trimmed 30 days after a job closes and a backup would outlive that, and the
-next crawl writes it again for every open job.
+job history goes with them: `jobs` (open and closed, every column but the text of the posting) and `crawl_log`, and the
+company list, `companies` (PLAN_2.md step 3.4: every column and every record, the excluded ones too, which are the only
+record of who asked to be removed). Supabase is the only home of the three (the crawl rebuilds its scratch files from
+it each run), so the export is their backup. The text (`description`, `details`, `snippet`, and `snippet_cut`, a flag
+about the snippet) is left out on purpose: it lives in Supabase only, it is trimmed 30 days after a job closes and a
+backup would outlive that, and the next crawl writes it again for every open job.
 The short-lived abuse counters are not exported either.
 
 Env: SUPABASE_URL (https://<ref>.supabase.co) and SUPABASE_SERVICE_ROLE_KEY. Unlike the sync, an empty value is an
@@ -50,7 +51,7 @@ class Table:
     name: str
     key: tuple[str, ...]  # the primary key, in the order the rows are sorted
     columns: tuple[str, ...]  # every column of the table (of `jobs`: every one but the text), in the migrations' order
-    account: bool = True  # personal data of a user (read whole, `select=*`); False is the public job history
+    account: bool = True  # personal data of a user (read whole, `select=*`); False: the job history and the companies
 
 
 # In foreign-key order (all of them point at auth.users only). Keep the columns equal to the migrations: a test reads
@@ -107,7 +108,32 @@ JOBS = Table(
     account=False,
 )
 CRAWL_LOG = Table("crawl_log", ("id",), ("id", "ts", "company", "ats", "ok", "n_jobs", "note"), account=False)
-JOB_TABLES = (JOBS, CRAWL_LOG)
+# The company list (PLAN_2.md step 3.4), every column, the excluded records too (the service role reads them through
+# row-level security). It holds no personal data, but an exclusion is a legal record, so the backup is private.
+COMPANIES = Table(
+    "companies",
+    ("id",),
+    (
+        "id",
+        "name",
+        "domain",
+        "segment",
+        "crawl",
+        "careers_url",
+        "ats",
+        "slug",
+        "source",
+        "status",
+        "israel_only",
+        "verify",
+        "links",
+        "gap",
+        "excluded",
+        "updated_at",
+    ),
+    account=False,
+)
+JOB_TABLES = (JOBS, CRAWL_LOG, COMPANIES)  # the tables that point at no user
 ALL_TABLES = (*TABLES, *JOB_TABLES)
 DIRECTORY_REFUSED = "refusing to write personal data inside the repository checkout; use a directory outside it"
 

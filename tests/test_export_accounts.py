@@ -14,7 +14,18 @@ import pytest
 import requests
 
 import export_accounts
-from export_accounts import ALL_TABLES, CRAWL_LOG, JOB_TABLES, JOBS, TABLES, ExportError, Source, export, render
+from export_accounts import (
+    ALL_TABLES,
+    COMPANIES,
+    CRAWL_LOG,
+    JOB_TABLES,
+    JOBS,
+    TABLES,
+    ExportError,
+    Source,
+    export,
+    render,
+)
 
 URL = "https://abc.supabase.co"
 KEY = "service-role-key-xyz"
@@ -75,6 +86,16 @@ def fixture() -> dict[str, list[dict[str, Any]]]:
             {"id": 2, "ts": "2026-11-16T04:30:00", "company": "Acme", "ats": "greenhouse", "ok": 1, "n_jobs": 3},
             {"id": 1, "ts": "2026-11-15T04:30:00", "company": "Acme", "ats": "greenhouse", "ok": 0, "note": "boom"},
         ],
+        "companies": [
+            {"id": 8, "name": "Opted Out", "crawl": False, "excluded": {"reason": "asked", "date_added": "2026-11-17"}},
+            {
+                "id": 2,
+                "name": "Acme",
+                "domain": "acme.example",
+                "crawl": True,
+                "links": {"global": "https://a.example"},
+            },
+        ],
     }
     return {
         name: [{column: row.get(column) for column in table.columns} for row in partial[name]]
@@ -97,6 +118,7 @@ def test_every_table_is_written_sorted_by_primary_key_with_stable_keys(tmp_path:
         "emailed": 0,
         "jobs": 2,
         "crawl_log": 2,
+        "companies": 2,
     }
     out = tmp_path / "out"
     assert sorted(path.name for path in out.iterdir()) == sorted(f"{table.name}.json" for table in ALL_TABLES)
@@ -107,6 +129,9 @@ def test_every_table_is_written_sorted_by_primary_key_with_stable_keys(tmp_path:
     assert (out / "emailed.json").read_text(encoding="utf-8") == "[]\n"
     assert [row["company"] for row in json.loads((out / "jobs.json").read_text(encoding="utf-8"))] == ["Acme", "Beta"]
     assert [row["id"] for row in json.loads((out / "crawl_log.json").read_text(encoding="utf-8"))] == [1, 2]
+    companies = json.loads((out / "companies.json").read_text(encoding="utf-8"))
+    assert [row["id"] for row in companies] == [2, 8]
+    assert companies[1]["excluded"] == {"reason": "asked", "date_added": "2026-11-17"}  # the opt-outs are in the backup
     prefs = (out / "user_prefs.json").read_text(encoding="utf-8")
     assert '"filters": {"a": [1], "b": 1}' in prefs  # keys sorted at every depth
     assert "é" in (out / "user_jobs.json").read_text(encoding="utf-8")  # not \u-escaped: readable diffs
@@ -281,10 +306,11 @@ def test_the_columns_match_the_migrations() -> None:
 
 
 def test_the_job_history_is_exported_without_the_text_of_the_postings() -> None:
-    """`jobs` and `crawl_log` columns match the migrations, except the text, which never leaves Supabase."""
+    """`jobs`, `crawl_log` and `companies` columns match the migrations (a new column of `companies` must be added to
+    COMPANIES), except the text of the postings, which never leaves Supabase."""
     sql = "\n".join(path.read_text(encoding="utf-8") for path in sorted(MIGRATIONS.glob("*.sql")))
     text = {"description", "details", "snippet", "snippet_cut"}
-    for table, hidden in ((JOBS, text), (CRAWL_LOG, set())):
+    for table, hidden in ((JOBS, text), (CRAWL_LOG, set()), (COMPANIES, set())):
         block = re.search(rf"create table public\.{table.name} \(\n(.*?)\n\);", sql, flags=re.DOTALL)
         assert block, table.name
         declared = re.findall(r"(?m)^  ([a-z_]+)\s+\S", block[1])
@@ -299,8 +325,10 @@ def test_the_job_history_is_exported_without_the_text_of_the_postings() -> None:
 
 def test_the_job_tables_are_read_by_named_columns_never_by_star() -> None:
     fake = FakeAccounts(fixture())
+    source(fake).read(COMPANIES)
+    assert fake.calls[-1]["params"]["select"] == ",".join(COMPANIES.columns)
     source(fake).read(JOBS)
-    select = fake.calls[0]["params"]["select"]
+    select = fake.calls[-1]["params"]["select"]
     assert select == ",".join(JOBS.columns)
     assert not {"description", "details", "snippet", "snippet_cut"} & set(select.split(","))
     source(fake).read(TABLES[0])
@@ -335,7 +363,8 @@ def test_main_prints_counts_only(
     export_accounts.main([str(tmp_path / "out")])
     shown = capsys.readouterr()
     assert shown.out.strip() == (
-        "export: profiles 2, user_prefs 1, user_jobs 3, subscriptions 1, emailed 0, jobs 2, crawl_log 2 (11 rows)"
+        "export: profiles 2, user_prefs 1, user_jobs 3, subscriptions 1, emailed 0, "
+        "jobs 2, crawl_log 2, companies 2 (13 rows)"
     )
     for secret in (KEY, "ann@test.example", U1, "Acme"):
         assert secret not in shown.out + shown.err
