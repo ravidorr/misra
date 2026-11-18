@@ -12,6 +12,9 @@ from pathlib import Path
 
 import pytest
 
+import common
+import run
+
 MIGRATION_DIR = Path(__file__).resolve().parent.parent / "supabase" / "migrations"
 PUBLIC_ROLES = {"anon", "authenticated", "public"}
 ALL_WRITES = {"insert", "update", "delete", "truncate"}
@@ -25,6 +28,7 @@ AUTHENTICATED_MAY = {
     "user_jobs": CRUD,
     "subscriptions": {"select", "update"},
     "admin_log": {"select"},  # PLAN_2.md step 1.3: read by an admin, written by the service role and a trigger only
+    "crawl_log": {"select"},  # PLAN_2.md step 2.1: read by an admin (the policy), written by the service role only
 }
 # `emailed` belongs to the service role alone: no grant, no policy. `subscriptions` is granted column by column only
 # (see COLUMN_GRANTS), never as a whole table, because a table-level select would include the two token hashes.
@@ -234,6 +238,19 @@ ADMIN_FUNCTION = re.compile(
 )
 ADMIN_BODY = " select exists (select 1 from public.admins where user_id = (select auth.uid())); "
 GRANT_IS_ADMIN = "grant execute on function public.is_admin() to anon, authenticated"
+# PLAN_2.md step 2.2: the crawl health of the admin page. NOT definer: it runs as the caller, so the admin policies on
+# `crawl_log` and `jobs` are its gate (a non-admin gets no row, `anon` no execute). It reads those two tables only,
+# writes nothing and never names a text column; its output columns are what the page reads, so they are pinned too.
+ADMIN_HEALTH_NAME = "admin_crawl_health"
+ADMIN_HEALTH_FUNCTION = re.compile(
+    r"create function public\.admin_crawl_health\(\) returns table \((?P<columns>[^)]*)\) "
+    r"language sql stable security invoker set search_path = '' as \$\$(?P<body>.*)\$\$"
+)
+ADMIN_HEALTH_COLUMNS = (
+    "company text, last_crawl text, last_good text, last_ok boolean, last_note text, streak integer, failing boolean, "
+    "held boolean, robots_skipped boolean, open_jobs integer, fetched_30d_ago integer"
+)
+GRANT_ADMIN_HEALTH = "grant execute on function public.admin_crawl_health() to authenticated"
 # The tables of the admin page (PLAN_2.md steps 1.3 to 3.1). A policy on one of them is for the signed-in role and its
 # only accepted `using` and `with check` is `public.is_admin()`. Two tables also keep a public read policy, which is
 # matched whole: `jobs` (open jobs) and `companies` (the records that are not excluded, decision D1).
@@ -485,7 +502,7 @@ def problems(stmts: list[str]) -> list[str]:
             or COLUMN_GRANT.fullmatch(s)
             or GRANT_REPORT_FUNCTION.fullmatch(s)
             or GRANT_JOBS_TRIM_FUNCTION.fullmatch(s)
-            or s in {SEARCH_INDEX, GRANT_SEARCH_FUNCTION, GRANT_SEARCH_JOBS, GRANT_IS_ADMIN}
+            or s in {SEARCH_INDEX, GRANT_SEARCH_FUNCTION, GRANT_SEARCH_JOBS, GRANT_IS_ADMIN, GRANT_ADMIN_HEALTH}
             or ADD_JOBS_COLUMN.fullmatch(s)
             or GRANT_SUBSCRIPTION_FUNCTION.fullmatch(s)
             or GRANT_SUBSCRIBE_FUNCTION.fullmatch(s)
@@ -587,11 +604,29 @@ def pinned_function(s: str) -> tuple[str, bool, list[str]] | None:
     if m := ADMIN_FUNCTION.fullmatch(s):
         bad = [] if m["body"] == ADMIN_BODY else [f"is_admin may only ask whether the caller is listed: {s}"]
         return "is_admin", True, bad
+    if m := ADMIN_HEALTH_FUNCTION.fullmatch(s):
+        return ADMIN_HEALTH_NAME, False, admin_health_problems(m)
     if m := SEARCH_FUNCTION.fullmatch(s):
         return SEARCH_NAME, True, search_problems(m)
     if m := SEARCH_JOBS_FUNCTION.fullmatch(s):
         return SEARCH_JOBS_NAME, False, search_jobs_problems(m)
     return None
+
+
+def admin_health_problems(m: re.Match[str]) -> list[str]:
+    """The crawl health runs as the caller, has the pinned columns, reads only `crawl_log` and `jobs`, writes nothing
+    and never names the columns that hold the text of a posting."""
+    body = " ".join(m["body"].split())
+    touched = set(re.findall(r"public\.(\w+)", body)) - {"crawl_log", "jobs"}
+    name = ADMIN_HEALTH_NAME
+    found = [] if " ".join(m["columns"].split()) == ADMIN_HEALTH_COLUMNS else [f"function {name} has other columns"]
+    found += [f"function {name} may touch only crawl_log and jobs, not {sorted(touched)}"] * bool(touched)
+    found += [f"function {name} reaches outside public"] * bool(re.search(r"\b(?:auth|storage|vault)\.", body))
+    found += [f"function {name} may only read"] * bool(re.search(r"\b(?:insert|update|delete|truncate)\b", body))
+    found += [f"function {name} must not name the text of a posting"] * bool(
+        re.search(r"description|details|snippet", body)
+    )
+    return found
 
 
 def search_jobs_problems(m: re.Match[str]) -> list[str]:
@@ -660,8 +695,13 @@ def test_migrations_are_safe() -> None:
     assert problems(stmts) == []
 
 
-def test_crawl_log_has_no_policy_and_no_grant() -> None:
-    assert not [s for s in statements() if s.startswith(("create policy", "grant")) and "crawl_log" in s]
+def test_crawl_log_is_read_by_an_admin_only() -> None:
+    mentioned = [s for s in statements() if s.startswith(("create policy", "grant")) and "crawl_log" in s]
+    assert mentioned == [
+        "grant select on public.crawl_log to authenticated",
+        'create policy "an admin reads the crawl log" on public.crawl_log for select to authenticated '
+        "using (public.is_admin())",
+    ]
 
 
 def test_the_anonymous_role_gets_nothing_but_the_open_jobs() -> None:
@@ -1118,7 +1158,7 @@ def test_the_report_counters_have_no_policy_and_no_grant_for_anyone_but_the_serv
         and not GRANT_SUBSCRIPTION_FUNCTION.fullmatch(s)
         and not GRANT_SUBSCRIBE_FUNCTION.fullmatch(s)
         and not GRANT_JOBS_TRIM_FUNCTION.fullmatch(s)
-        and s not in {GRANT_SEARCH_FUNCTION, GRANT_SEARCH_JOBS, GRANT_IS_ADMIN}
+        and s not in {GRANT_SEARCH_FUNCTION, GRANT_SEARCH_JOBS, GRANT_IS_ADMIN, GRANT_ADMIN_HEALTH}
         and s not in HOOK_GRANTS
     ]
 
@@ -1428,3 +1468,98 @@ def test_a_weakened_assistant_migration_is_refused(old: str, new: str) -> None:
     earlier = "\n".join(p.read_text(encoding="utf-8") for p in others)
     assert problems(statements_of(earlier + "\n" + text)) == []
     assert problems(statements_of(earlier + "\n" + text.replace(old, new)))
+
+
+# ---- Crawl health (PLAN_2.md steps 2.1 and 2.2) ----
+
+CRAWL_HEALTH_FILE = MIGRATION_DIR / "20261129100000_admin_crawl_health.sql"
+CRAWL_HEALTH_SQL = CRAWL_HEALTH_FILE.read_text(encoding="utf-8")
+
+
+def test_the_crawl_health_literals_are_the_python_constants() -> None:
+    """The function copies four constants of the crawl: this fails when either side moves (one source of truth, a test
+    guards the copy)."""
+    const = re.search(r"with const as \(\s*select(?P<body>.*?)\)", CRAWL_HEALTH_SQL, re.DOTALL)
+    assert const
+    found = {name: value.strip("'") for value, name in re.findall(r"('[^']*'|\d+)(?:::text)? as (\w+)", const["body"])}
+    assert found["drop_note"] == common.DROP_NOTE
+    assert found["robots_note"] == common.ROBOTS_NOTE
+    assert int(found["failing_runs"]) == run.FAILING_RUNS
+    assert int(found["stale_days"]) == run.GAP_STALE_DAYS
+    assert {"back_days", "back_slack"} <= set(found)
+
+
+def test_the_crawl_health_migration_is_the_lint_s_pinned_function_and_two_read_policies() -> None:
+    stmts = statements_of(CRAWL_HEALTH_SQL)
+    assert sum(1 for s in stmts if ADMIN_HEALTH_FUNCTION.fullmatch(s)) == 1
+    assert GRANT_ADMIN_HEALTH in stmts
+    assert "revoke all on function public.admin_crawl_health() from public, anon, authenticated" in stmts
+    assert [s for s in stmts if s.startswith("create policy")] == [
+        'create policy "an admin reads the crawl log" on public.crawl_log for select to authenticated '
+        "using (public.is_admin())",
+        'create policy "an admin reads all jobs" on public.jobs for select to authenticated using (public.is_admin())',
+    ]
+    assert not any("grant" in s and "public.jobs" in s for s in stmts)  # the column grants of jobs are not touched
+    assert problems(statements()) == []
+
+
+@pytest.mark.parametrize(
+    ("old", "new"),
+    [
+        (
+            "grant select on public.crawl_log to authenticated;",
+            "grant select on public.crawl_log to anon, authenticated;",
+        ),
+        (
+            "grant select on public.crawl_log to authenticated;",
+            "grant select, insert on public.crawl_log to authenticated;",
+        ),
+        (
+            'for select to authenticated using (public.is_admin());\n\ncreate policy "an admin reads all jobs"',
+            'for select to authenticated using (true);\n\ncreate policy "an admin reads all jobs"',
+        ),
+        (
+            "on public.jobs\n  for select to authenticated using (public.is_admin())",
+            "on public.jobs\n  for select to authenticated using (true)",
+        ),
+        ("\nsecurity invoker\n", "\nsecurity definer\n"),
+        ("set search_path = ''\nas $$", "set search_path = public\nas $$"),
+        (
+            "grant execute on function public.admin_crawl_health() to authenticated;",
+            "grant execute on function public.admin_crawl_health() to anon, authenticated;",
+        ),
+        (
+            "revoke all on function public.admin_crawl_health() from public, anon, authenticated;",
+            "revoke all on function public.admin_crawl_health() from public, anon;",
+        ),
+        ("  open_jobs integer,\n", "  open_jobs integer,\n  description text,\n"),  # other columns
+        (
+            "from public.crawl_log l cross join const c",
+            "from public.crawl_log l cross join public.admins a cross join const c",
+        ),
+        (
+            "where status = 'open' group by company",
+            "where status = 'open' and description is not null group by company",
+        ),
+        ("select company, count(*) as n from public.jobs", "select company, count(details) as n from public.jobs"),
+        ("select max(day) as day from runs)", "select max(day) as day from runs); delete from public.crawl_log"),
+    ],
+)
+def test_the_lint_rejects_a_weakened_crawl_health_migration(old: str, new: str) -> None:
+    assert old in CRAWL_HEALTH_SQL, old
+    assert problems(statements_of(REAL.replace(old, new)))
+
+
+@pytest.mark.parametrize(
+    "extra",
+    [
+        "grant select on public.crawl_log to anon",
+        "grant update on public.crawl_log to authenticated",
+        "grant select (description) on public.jobs to authenticated",
+        "grant select (details) on public.jobs to anon, authenticated",
+        'create policy "p" on public.crawl_log for insert to authenticated with check (public.is_admin())',
+        'create policy "p" on public.crawl_log for select to anon using (public.is_admin())',
+    ],
+)
+def test_the_lint_rejects_anything_that_opens_the_log_or_the_posting_text(extra: str) -> None:
+    assert problems(statements_of(f"{REAL}\n{extra};"))
