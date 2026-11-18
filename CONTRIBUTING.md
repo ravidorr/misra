@@ -100,8 +100,8 @@ tool: it reads a CSV, writes nothing to Supabase, and prints to stdout only.
 
 A name or domain already in the list is skipped, and so is an excluded company (by name or domain): both are only
 counted at the end, and an excluded name is never printed. The rest are probed with the crawler's own rules:
-`robots.txt` is honoured, a host sees one request a second, and a refusal (`robots.txt`, 403, 429) is recorded as
-`blocked` and never worked around. The tool looks for a job board link on the career pages, then guesses the board in
+`robots.txt` is honoured, a host sees one request a second, and a refusal (`robots.txt`, 403, 429) of the company's own site ends
+its probe at once with the verdict `blocked` (no board is guessed) and is never worked around. The tool looks for a job board link on the career pages, then guesses the board in
 the order `discover.py` uses, checks that the board's own company name matches the candidate, and counts the Israel
 jobs. The verdicts:
 
@@ -109,8 +109,9 @@ jobs. The verdicts:
 - `needs-yes`: a career page with no feed of its own (a browser crawl, which counts against the crawl-time budget) or a
   Workday or Oracle board (`runner_risk` yes: it may fail from the GitHub runner). Not added without the maintainer's
   yes.
+- `blocked`: the company's site refused us. Never in the keep file.
 - `skip`: anything else; the `why` column says `no_israel_jobs`, `name_mismatch`, `name_unknown`, `feed_failed`,
-  `blocked` or `not_found`. Read `board_name` before trusting a `keep` (a board that adds words to the name still
+  or `not_found`. Read `board_name` before trusting a `keep` (a board that adds words to the name still
   matches).
 
 A batch has at most 25 companies (PLAN_3.md, "Batches"); then add them on the admin page as in "Adding a company".

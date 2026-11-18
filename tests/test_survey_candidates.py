@@ -7,6 +7,7 @@ from typing import Any
 
 import pytest
 
+import common
 import survey
 from survey import Candidate, PageScan, Row
 from tests.conftest import excluded_record, write_json
@@ -324,27 +325,47 @@ def test_probe_needs_a_yes_for_a_workday_hint_and_a_page_only(monkeypatch: pytes
     assert (row.ats, row.verdict, row.runner_risk) == ("browser", "needs-yes", "no")
 
 
-def test_probe_records_a_blocked_host(monkeypatch: pytest.MonkeyPatch) -> None:
-    serve(monkeypatch, {"https://www.acme.com/": FakeHttpResponse(status_code=403)})
+@pytest.mark.parametrize("status", [403, 429])
+def test_a_refusal_ends_the_probe_and_nothing_else_is_asked(monkeypatch: pytest.MonkeyPatch, status: int) -> None:
+    net = serve(monkeypatch, {"https://www.acme.com/": FakeHttpResponse(status_code=status)})
+    feeds(monkeypatch, greenhouse={"acme": [IL]})  # a board that guessing would find
+    row = survey.probe(ACME)
+    assert (row.verdict, row.ats, row.israel_jobs) == ("blocked", "", None)
+    assert net.asked == ["https://www.acme.com/"]  # no other path, no other host, no board
+
+
+class RobotsSite:
+    """The session of a site whose robots.txt disallows everything; any page request would be a bug."""
+
+    def __init__(self) -> None:
+        self.asked: list[str] = []
+
+    def get(self, url: str, **_kw: Any) -> FakeHttpResponse:
+        self.asked.append(url)
+        return FakeHttpResponse(text="https://boards.greenhouse.io/acme")
+
+
+def test_a_robots_refusal_ends_the_probe_and_nothing_else_is_asked(monkeypatch: pytest.MonkeyPatch) -> None:
+    site = RobotsSite()
+    monkeypatch.setattr(common, "_s", site)
+    monkeypatch.setattr(common, "_load_robots", lambda _origin: [(False, "/")])
+    monkeypatch.setattr(survey, "get", common.get)
+    feeds(monkeypatch, greenhouse={"acme": [IL]})
+    row = survey.probe(ACME)
+    assert (row.verdict, row.ats) == ("blocked", "")
+    assert site.asked == []  # robots.txt itself is faked: not one page was requested
+
+
+def test_a_failed_request_is_not_a_refusal(monkeypatch: pytest.MonkeyPatch) -> None:
+    serve(monkeypatch, {"https://www.acme.com/": None})
     feeds(monkeypatch)
-    assert survey.probe(ACME) == Row(ACME, why="blocked")
-    serve(monkeypatch, {})
-    monkeypatch.setattr(survey, "robots_blocked", lambda: "www.acme.com")
-    assert survey.probe(ACME) == Row(ACME, why="blocked")
-    monkeypatch.setattr(survey, "robots_blocked", lambda: "")
     assert survey.probe(ACME) == Row(ACME, why="not_found")
 
 
 def test_a_refusal_of_a_board_host_is_not_a_blocked_company(monkeypatch: pytest.MonkeyPatch) -> None:
     serve(monkeypatch, {})
     feeds(monkeypatch)
-    state = {"calls": 0}
-
-    def refused_after_the_scan() -> str:
-        state["calls"] += 1
-        return "" if state["calls"] == 1 else "api.smartrecruiters.com"
-
-    monkeypatch.setattr(survey, "robots_blocked", refused_after_the_scan)
+    monkeypatch.setattr(survey, "robots_blocked", lambda: "")
     assert survey.probe(ACME).why == "not_found"
 
 
@@ -482,6 +503,18 @@ def test_candidates_main_needs_the_file_argument() -> None:
     with pytest.raises(SystemExit) as stop:
         survey.candidates_main([])
     assert stop.value.code == int("2")  # argparse's exit code for a usage error
+
+
+@pytest.mark.parametrize("form", [["--candidates", "{csv}"], ["--candidates={csv}"]])
+def test_candidates_as_script_in_both_forms(
+    workdir: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], form: list[str]
+) -> None:
+    _, csv_path = setup_run(workdir, "name,domain,kind\nKnown,known.com,x\n")
+    monkeypatch.setattr("sys.argv", ["survey.py", *(a.format(csv=csv_path) for a in form)])
+    with pytest.raises(SystemExit) as stop:
+        runpy.run_module("survey", run_name="__main__")  # the browser survey would not exit this way
+    assert stop.value.code == 0
+    assert "Probed: 0" in capsys.readouterr().out
 
 
 def test_candidates_as_script(

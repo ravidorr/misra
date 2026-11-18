@@ -336,13 +336,15 @@ def split_candidates(
 
 def scan_career_pages(domain: str) -> PageScan:
     """The career page link scan of discover.py: the home page and the usual career paths, with and without `www.`,
-    for a link to a job board. A refused request (robots.txt) shows in `common.robots_blocked`; a 403 or 429 is
-    recorded here and ends the scan at once. Nothing is retried or worked around."""
+    for a link to a job board. A refusal by robots.txt (`common.robots_blocked`) or a 403 or 429 ends the scan at once,
+    and `probe` ends there too. Nothing is retried or worked around."""
     careers_url = hint = ""
     for path in ["/", *CAREER_PATHS]:
         for host in (f"https://www.{domain}", f"https://{domain}"):
             r = get(host + path)
             if r is None:
+                if robots_blocked():
+                    return PageScan(blocked=True)  # robots.txt refuses us: not one more request to the site
                 continue
             if r.status_code in BOT_STATUSES:
                 return PageScan(blocked=True)  # the site refuses us: not one more request to it
@@ -419,7 +421,8 @@ def probe(candidate: Candidate) -> Row:
     Only a location is ever read from a posting, and only to count the Israel ones."""
     reset_robots_block()
     scan = scan_career_pages(candidate.domain)
-    blocked = scan.blocked or bool(robots_blocked())  # of the company's own site, before any board is asked
+    if scan.blocked:  # the company's site refused us: no board is guessed, nothing else is asked
+        return Row(candidate, verdict="blocked", why="site refused: robots.txt, 403 or 429")
     if scan.ats:
         ats, slug, jobs, board, match = scan.ats, scan.slug, _feed(scan.ats, scan.slug), "", "page"
     elif scan.hint:
@@ -429,7 +432,7 @@ def probe(candidate: Candidate) -> Row:
     if not ats:
         if scan.careers_url:
             return Row(candidate, "browser", verdict="needs-yes", why="career page only: browser crawl, time budget")
-        return Row(candidate, why="blocked" if blocked else "not_found")
+        return Row(candidate, why="not_found")
     return _judge(Row(candidate, ats, slug, None, board, match, _risk(ats)), jobs)
 
 
@@ -551,6 +554,6 @@ async def main() -> None:
 if __name__ == "__main__":
     if "--baseline" in sys.argv[1:]:
         sys.exit(baseline_main())
-    if "--candidates" in sys.argv[1:]:
+    if any(a == "--candidates" or a.startswith("--candidates=") for a in sys.argv[1:]):
         sys.exit(candidates_main(sys.argv[1:]))
     asyncio.run(main())
