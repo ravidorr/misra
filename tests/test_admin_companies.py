@@ -537,6 +537,7 @@ async def test_excluding_a_listed_company_previews_the_deletion_and_the_waiting_
     await expect(count).to_contain_text("5 jobs will be deleted at the next daily run.")  # open and closed
     await expect(count).to_contain_text("4 companies wait to be purged at that run.")  # 3 others, and this one
     await expect(count).to_contain_text("stops when more than 3 wait")
+    await expect(page.locator("#confirmText")).to_contain_text("never deletes the record")
     assert page.locator("#confirmGo").get_by_text("Exclude")
     await page.get_by_role("button", name="Exclude", exact=True).click()
     await expect(page.locator("#xReasonError")).to_have_text("Write the reason.")  # the database's rule, in its words
@@ -601,10 +602,20 @@ async def test_an_excluded_record_cannot_be_removed_and_can_only_be_included_aga
     await expect(page.locator("#editorMore")).to_be_hidden()
     assert await page.get_by_role("button", name=re.compile("Remove|Delete")).count() == 0
     await expect(page.locator("#discovered")).to_contain_text("2026-09-14")
-    await page.get_by_role("button", name="Include again", exact=True).click()
+    await page.locator("#editorSave").click()
+    await expect(page.get_by_role("dialog", name="Include Old Example Ltd again?")).to_contain_text(
+        "erases the exclusion"
+    )
+    await expect(page.locator("#confirmCancel")).to_be_focused()  # one click does not undo the opt-out
+    await page.locator("#confirmGo").click()
     await expect(page.locator("#cDomainError")).to_have_text("A domain is required.")  # the record has none
     await field(page, "Domain").fill("old-example.test")
-    await page.get_by_role("button", name="Include again", exact=True).click()
+    await page.locator("#editorSave").click()
+    before = len(writes(backend))
+    await page.locator("#confirmCancel").click()
+    assert len(writes(backend)) == before
+    await page.locator("#editorSave").click()
+    await page.locator("#confirmGo").click()
     await expect(editor(page)).to_be_hidden()
     body = writes(backend)[-1][1]
     assert body is not None

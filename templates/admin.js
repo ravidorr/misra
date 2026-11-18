@@ -316,6 +316,7 @@ async function loadCrawl(box) {
 const COMPANY_COLUMNS =
   'id,name,domain,segment,crawl,careers_url,ats,slug,source,status,israel_only,verify,links,gap,excluded,updated_at';
 const DISCOVER_URL = 'https://github.com/ravidorr/misra/actions/workflows/discover-companies.yml';
+const JOB_ROWS_MAX = 1000;
 const MAX_PURGE_COMPANIES = 3; /* common.MAX_PURGE_COMPANIES: the daily run stops when more companies wait to be purged */
 /* The keys of REASONS in build_dashboard.py, with the words the visitor reads; tests/test_admin_companies.py keeps them equal. */
 const GAP_REASONS = {
@@ -393,9 +394,15 @@ function explain(error, status) {
 
 /* Runs one query that selects the written rows back. Resolves with { rows } or { problem: { field, text } }. */
 async function write(query) {
-  const { data, error, status } = await query;
+  let answer;
+  try {
+    answer = await query;
+  } catch {
+    return { problem: { field: '', text: ERROR_GENERIC } }; /* the request itself failed */
+  }
+  const { data, error, status } = answer;
   if (error) return { problem: explain(error, status) };
-  if (data.length === 0) return { problem: { field: '', text: ERROR_CHANGED } }; /* the row moved or is gone */
+  if (!data?.length) return { problem: { field: '', text: ERROR_CHANGED } }; /* the row moved or is gone */
   return { rows: data };
 }
 
@@ -413,12 +420,13 @@ async function countJobs(name, openOnly) {
   return error || typeof count !== 'number' ? null : count;
 }
 
-/* How many excluded companies still have jobs that the daily run has not purged yet, or null. A thousand rows is the
-   most one answer holds: a count that reaches it is "at least". */
+/* How many excluded companies still have jobs that the daily run has not purged yet, or null (also when the answer is
+   full at a thousand rows, which may hide some). */
 async function waitingToPurge(excluded) {
   if (excluded.length === 0) return 0;
-  const { data, error } = await client.from('jobs').select('company').in('company', excluded).limit(1000);
-  return error ? null : new Set(data.map((job) => job.company)).size;
+  const { data, error } = await client.from('jobs').select('company').in('company', excluded).limit(JOB_ROWS_MAX);
+  if (error || data.length >= JOB_ROWS_MAX) return null; /* a full answer may hide more companies: say nothing */
+  return new Set(data.map((job) => job.company)).size;
 }
 
 /* The list on screen. `render` and `say` are set when the area is built, and nothing opens a dialog before that. */
@@ -714,7 +722,7 @@ function readEditor() {
   /* A company that starts crawling (new, included again or moved back from the card) has no job feed yet: an empty
      status puts it in the queue of the discover-companies workflow. */
   if (mode === 'edit') {
-    if ($('cRequeue').checked || (crawl && !row.crawl)) record.status = '';
+    if (crawl && ($('cRequeue').checked || !row.crawl)) record.status = '';
     return record;
   }
   const fresh = { ...record, careers_url: '', ats: '', slug: '', source: '', status: '' };
@@ -726,9 +734,9 @@ async function saveEditor(event) {
   if (editor.busy) return;
   const record = readEditor();
   const { mode, row } = editor;
-  if (mode === 'edit' && row.crawl && !record.crawl) {
+  if ((mode === 'edit' && row.crawl && !record.crawl) || mode === 'include') {
     editor.values = record;
-    openConfirm('leave', row);
+    openConfirm(mode === 'include' ? 'include' : 'leave', row);
     return;
   }
   await persistEditor(record, 'editor');
@@ -743,8 +751,7 @@ async function persistEditor(record, scope) {
       ? table.insert(record).select(COMPANY_COLUMNS)
       : table.update(record).eq('id', row.id).eq('updated_at', row.updated_at).select(COMPANY_COLUMNS);
   setBusy(editor, $('editorSave'), true);
-  const { rows, problem } = await write(query);
-  setBusy(editor, $('editorSave'), false);
+  const { rows, problem } = await write(query).finally(() => setBusy(editor, $('editorSave'), false));
   if (problem) {
     if (scope === 'confirm' && !FIELD_IDS.editor[problem.field]) showProblem('confirm', problem);
     else {
@@ -788,7 +795,12 @@ function finish(...words) {
   focusBack();
 }
 
-const today = () => new Intl.DateTimeFormat('en-CA').format(new Date()); /* year-month-day */
+const DIGITS = 2;
+function today() {
+  const now = new Date();
+  const part = (n) => String(n).padStart(DIGITS, '0');
+  return `${now.getFullYear()}-${part(now.getMonth() + 1)}-${part(now.getDate())}`;
+}
 
 /* One confirmation dialog for the three actions that need one: leaving the crawl ('leave'), removing a company from
    the list ('remove') and excluding one ('exclude', of a listed company, or of a name that is not in the list when
@@ -804,6 +816,11 @@ function openConfirm(kind, row) {
       text: 'It moves to the coverage card and nothing crawls it any more. At the next daily run its open jobs are closed. The rows stay as history.',
       go: 'Move to the card',
     },
+    include: {
+      title: `Include ${name} again?`,
+      text: 'This erases the exclusion: its reason and date are gone, and the company is crawled again. Do this only when the company has asked to be included again.',
+      go: 'Include again',
+    },
     remove: {
       title: `Remove ${name} from the list?`,
       text: 'The company is deleted from the list. After that nothing crawls it and no run closes its open jobs: they stay in the history. To close them first, move the company to the coverage card.',
@@ -811,7 +828,7 @@ function openConfirm(kind, row) {
     },
     exclude: {
       title: row ? `Exclude ${name}?` : 'Exclude a company',
-      text: 'The record keeps only the name, the reason and the date. At the next daily run every job of the company, open or closed, and its crawl log rows are deleted, and it is never crawled again. This page never removes the record, so the request is remembered.',
+      text: 'The record keeps only the name, the reason and the date. At the next daily run every job of the company, open or closed, and its crawl log rows are deleted, and it is never crawled again. This page never deletes the record, and including the company again is a separate step that asks first.',
       go: 'Exclude',
     },
   }[kind];
@@ -834,21 +851,28 @@ async function recount() {
   const name = row?.name ?? $('xName').value.trim();
   const line = $('confirmCount');
   const token = ++asking.token;
-  if (!name) {
+  if (!name || kind === 'include') {
     line.textContent = '';
     return;
   }
   line.textContent = 'Counting jobs…';
-  const [n, others] = await Promise.all([
-    countJobs(name, kind !== 'exclude'),
-    kind === 'exclude' ? waitingToPurge(board.rows.filter((r) => r.excluded && r.name !== name).map((r) => r.name)) : 0,
-  ]);
+  let n = null;
+  let others = null;
+  try {
+    [n, others] = await Promise.all([
+      countJobs(name, kind !== 'exclude'),
+      kind === 'exclude' ? waitingToPurge(board.rows.filter((r) => r.excluded && r.name !== name).map((r) => r.name)) : 0,
+    ]);
+  } catch {
+    /* counted nothing: n stays null */
+  }
   if (token !== asking.token) return; /* a newer count is on its way */
   if (n === null) {
     line.textContent = 'Could not count the jobs. You can still continue.';
     return;
   }
   const lines = {
+    include: '',
     leave: `${plural(n, 'open job', 'open jobs')} will be closed at the next daily run.`,
     remove: `${plural(n, 'open job', 'open jobs')} stay${n === 1 ? 's' : ''} in the history.`,
     exclude: `${plural(n, 'job', 'jobs')} will be deleted at the next daily run.`,
@@ -866,10 +890,9 @@ async function runConfirmed(event) {
   event.preventDefault();
   if (asking.busy) return;
   const { kind, row } = asking;
-  if (kind === 'leave') {
+  if (kind === 'leave' || kind === 'include') {
     setBusy(asking, $('confirmGo'), true);
-    await persistEditor(editor.values, 'confirm');
-    setBusy(asking, $('confirmGo'), false);
+    await persistEditor(editor.values, 'confirm').finally(() => setBusy(asking, $('confirmGo'), false));
     return;
   }
   const table = client.from('companies');
@@ -883,8 +906,7 @@ async function runConfirmed(event) {
       : table.insert({ name: $('xName').value.trim(), crawl: false, excluded }).select(COMPANY_COLUMNS);
   }
   setBusy(asking, $('confirmGo'), true);
-  const { rows, problem } = await write(query);
-  setBusy(asking, $('confirmGo'), false);
+  const { rows, problem } = await write(query).finally(() => setBusy(asking, $('confirmGo'), false));
   if (problem) {
     showProblem('confirm', problem);
     return;
@@ -914,15 +936,18 @@ function wireCompanyDialogs() {
     for (const id of ids) $(id).addEventListener('click', () => !state.busy && dialog.close());
     dialog.addEventListener('cancel', (event) => state.busy && event.preventDefault());
     dialog.addEventListener('close', () => {
+      if (dialog === confirmDialog) asking.token += 1; /* a count still on its way writes nothing */
       if (!editorDialog.open && !confirmDialog.open) focusBack();
     });
   }
   $('editorExclude').addEventListener('click', () => {
+    if (editor.busy) return;
     const { row } = editor;
     editorDialog.close();
     openExclude(row, { id: row.id });
   });
   $('editorRemove').addEventListener('click', () => {
+    if (editor.busy) return;
     const { row } = editor;
     editorDialog.close();
     openConfirm('remove', row);
