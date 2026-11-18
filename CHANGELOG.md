@@ -18,7 +18,7 @@ All notable changes are documented here. Format follows [Keep a Changelog](https
 
 ### Added
 
-- The company list is in the daily backup (PLAN_2.md step 3.4): `export_accounts.py` exports `companies` (every column, the excluded records too, no personal data) next to `jobs` and `crawl_log` with `COMPANIES`, and `restore_accounts.py` restores it with its ids (the id sequence moved past the largest), its `updated_at` and its `excluded` records, with the table's own triggers off. `publish_backup.py` and the workflow are unchanged (no new key, no new `ssh-key:`); the history replacement keeps every current record, so no exclusion is lost. Until now the table, the only copy of who asked to be removed, had no backup.
+- The company list is in the daily backup (PLAN_2.md step 3.4): `export_accounts.py` exports `companies` (every column, the excluded records too, no personal data) next to `jobs` and `crawl_log` with `COMPANIES`, and `restore_accounts.py` restores it with its ids (the id sequence moved past the largest), its `updated_at` and its `excluded` records, with the table's own triggers off; it stops unless `companies` is empty, so a row seeded by the migration of a new project cannot win over the backup and bring back an excluded company. `publish_backup.py` and the workflow are unchanged (no new key, no new `ssh-key:`); the history replacement keeps every current record, so no exclusion is lost. Until now the table, the only copy of who asked to be removed, had no backup.
 
 ### Changed
 

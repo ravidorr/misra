@@ -387,3 +387,17 @@ def test_the_frozen_company_list_survives_export_and_restore(tmp_path: Path) -> 
     body = re.search(r"into public\.companies .*?(\$restore\w*\$)(.*?)\1::json", text, flags=re.DOTALL)
     assert body
     assert json.loads(body[2]) == rows
+
+
+def test_the_script_refuses_a_company_list_that_is_not_empty_so_a_seed_cannot_hide_an_exclusion(tmp_path: Path) -> None:
+    """A new project's migration seeds the first list; `on conflict do nothing` would keep a seeded, crawled row over
+    the backup's excluded one. The script stops (one transaction, so nothing is restored) before it inserts."""
+    text = script(loaded(write_export(tmp_path / "e")))
+    guard = restore_accounts.EMPTY_COMPANIES
+    assert text.count(guard) == 1
+    assert "raise exception 'companies is not empty" in guard
+    assert text.index(guard) < text.index("insert into public.companies")
+    assert text.index(guard) > text.index("insert into public.crawl_log")
+    assert text.index("disable trigger user") < text.index(guard) < text.index("commit;")
+    for forbidden in ("delete ", "truncate", "drop "):
+        assert forbidden not in guard.lower()

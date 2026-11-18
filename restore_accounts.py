@@ -10,7 +10,9 @@ The script
 - runs in one transaction, so a failure leaves nothing half restored;
 - inserts the tables in foreign-key order (profiles, user_prefs, user_jobs, subscriptions, emailed), then `jobs`,
   `crawl_log` and `companies` (which point at no user, so every row goes in; a crawl log or company row keeps its `id`
-  and the id sequence is moved past the largest one; a company keeps its `updated_at` and its `excluded` record).
+  and the id sequence is moved past the largest one; a company keeps its `updated_at` and its `excluded` record). The
+  company list is the one table the script refuses to merge: it stops, rolling everything back, unless `companies` is
+  empty, so a seeded row can never win over the backup and bring back an excluded company;
   The job text is not in the export: the next crawl writes it again for the open jobs;
 - uses `insert ... on conflict do nothing`: running it twice, or into a project that already holds some rows, changes
   nothing that is already there, and it never deletes anything;
@@ -39,7 +41,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from export_accounts import ALL_TABLES, FILE_MODE, JOB_TABLES, TABLES, ExportError, Table, outside_repository
+from export_accounts import ALL_TABLES, COMPANIES, FILE_MODE, JOB_TABLES, TABLES, ExportError, Table, outside_repository
 
 CREATE_AUTH_USERS = "--create-auth-users"
 PAUSE = "--pause-subscriptions"
@@ -134,6 +136,16 @@ def insert_all(table: Table, rows: Sequence[Mapping[str, Any]]) -> str:
     return text
 
 
+EMPTY_COMPANIES = (
+    "do $$ begin\n"
+    "  if exists (select 1 from public.companies) then\n"
+    "    raise exception 'companies is not empty: the backup replaces the list, so empty the table first "
+    "(CONTRIBUTING.md, Backups, Restore step 3)';\n"
+    "  end if;\n"
+    "end $$;\n"
+)
+
+
 def auth_users(profiles: Sequence[Mapping[str, Any]]) -> str:
     """Create the bare sign-in rows the tables point at, for a project that lost them. Skips the ones that exist."""
     table = TABLES[0]
@@ -157,7 +169,12 @@ def script(data: Mapping[str, Sequence[Mapping[str, Any]]], with_auth_users: boo
     if with_auth_users:
         parts.append(auth_users(data[TABLES[0].name]))
     parts.extend(insert(table, data[table.name], not with_auth_users) for table in TABLES)
-    parts.extend(insert_all(table, data[table.name]) for table in JOB_TABLES)
+    for table in JOB_TABLES:
+        if (
+            table.name == COMPANIES.name
+        ):  # the backup is the list: a row already there (a seed) could win and hide an exclusion
+            parts.append(EMPTY_COMPANIES)
+        parts.append(insert_all(table, data[table.name]))
     parts.extend(f"alter table {name} enable trigger user;\n" for name in names)
     parts.append("commit;\n")
     return "".join(parts)
