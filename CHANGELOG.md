@@ -12,6 +12,16 @@ All notable changes are documented here. Format follows [Keep a Changelog](https
 
 - A Copy button under every code block of the legal pages (the address on "Connect your assistant", the command for Claude Code), in `templates/theme.js`.
 
+## [0.68.0] - 2026-11-18
+
+### Added
+
+- The admin page (`templates/admin.html` and `templates/admin.js`, built to `docs/admin.html` and `docs/admin.js`; PLAN_2.md step 1.2). It has no sign-in of its own: the page reads the session the dashboard saved, asks the database `is_admin()` and shows one of five states in `data-state` (checking, signed out, not an admin, check failed, ready). Ready shows four areas (Crawl, Companies, Alerts, Log) as hash sections with plain links, each empty for now. It is `noindex`, linked from nowhere and left out of `jobs.jsonld` and the WebMCP tools, and its wide wrapper (`.admin-*`) is at the end of `templates/dashboard.css`.
+
+### Changed
+
+- The saved-session storage of `templates/auth.js` (the storage key and the wrapper that strips the provider's name and photo) moved to `templates/session.js`, which the admin page shares, built to `docs/session.js`. The dashboard behaves as before.
+
 ## [0.67.4] - 2026-11-18
 
 ### Fixed

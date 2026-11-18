@@ -29,11 +29,14 @@ STATIC_FILES = (
     "templates/dashboard.html",
     "templates/dashboard.js",
     "templates/auth.js",
+    "templates/session.js",
     "templates/report.js",
     "templates/theme.js",
     "templates/email.html",
     "templates/email.js",
     "templates/contact.html",
+    "templates/admin.html",
+    "templates/admin.js",
 )
 # The daily-email signup (PLAN.md steps 6.2 and 6.6). While False the page has no "Job alerts" button, no settings
 # dialog and no script for them, and docs/digest.js is not built: everything between `<!--digest-->` and
@@ -65,7 +68,7 @@ ASSISTANT_PAGE_ENABLED = True
 ASSISTANT_REGION = re.compile(r"<!--assistant-->(.*?)<!--/assistant-->", re.DOTALL)
 ASSISTANT_LINE = re.compile(r"^[ \t]*<!--assistant-->.*?<!--/assistant-->[ \t]*\n", re.DOTALL | re.MULTILINE)
 # The built pages that carry __SRI_*__ placeholders.
-PAGES = ("index.html", "email.html", "contact.html")
+PAGES = ("index.html", "email.html", "contact.html", "admin.html")
 OUTPUT_NAMES = {"templates/dashboard.html": "index.html"}
 # Third-party scripts copied byte for byte to docs/ (vendor/README.md says where each one comes from). The page loads
 # them from its own origin, so the Content-Security-Policy needs no CDN.
