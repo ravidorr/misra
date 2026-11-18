@@ -135,7 +135,7 @@ def test_baseline_counts_the_frozen_list() -> None:
 
 
 def test_baseline_never_prints_an_excluded_name_or_a_job() -> None:
-    companies = [
+    companies: list[dict[str, Any]] = [
         {"name": "Alpha", "crawl": True, "ats": "comeet"},
         {"name": "Hidden Corp", "crawl": True, "excluded": {"reason": "asked", "date_added": "2026-11-01"}},
         {"name": "Beta", "crawl": False, "excluded": {"reason": "asked", "date_added": "2026-11-01"}},
@@ -185,3 +185,14 @@ def test_baseline_as_script(workdir: Path, monkeypatch: pytest.MonkeyPatch, caps
         runpy.run_module("survey", run_name="__main__")
     assert stop.value.code == 0
     assert "Crawled companies: 267" in capsys.readouterr().out
+
+
+def test_baseline_ranks_ties_by_label() -> None:
+    companies = [
+        {"name": n, "crawl": True, "ats": a} for n, a in (("A", "zed"), ("B", "alpha"), ("C", "alpha"), ("D", "zed"))
+    ]
+    companies.append({"name": "E", "crawl": True, "ats": "mid", "israel_only": "true"})
+    report = survey.baseline(companies, {"jobs": [{"c": "A", "il": "true"}, {"il": True}]})
+    assert "Crawled by ats (5):\n  alpha: 2\n  zed: 2\n  mid: 1\n" in report
+    assert "multinational (israel_only): 0\n  startup (not israel_only): 5" in report
+    assert "Crawled companies with at least one Israel job: 0\n" in report

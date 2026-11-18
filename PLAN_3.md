@@ -1,7 +1,7 @@
 # Plan 3: more companies
 
 Step plan to close the coverage gap users reported: too few startups and too few large multinationals. Drafted
-2026-11-18, revised the same day after two reviews; nothing here is built yet. Targets are proposals for the
+2026-11-18, revised the same day after two reviews; A1 and A2 are done; the rest is not built yet. Targets are proposals for the
 maintainer to confirm.
 
 Conventions are those of `PLAN.md`: a change to a listed Python module bumps `package.json` and `pyproject.toml`
@@ -92,7 +92,7 @@ Measured 2026-11-18 with the A1 report and read-only `gh` commands (counts and t
   that list) blocks the next batch until they are fixed or parked.
 - **Size.** `docs/jobs.json` is 2,131,197 bytes (2.0 MiB, about 237 KB gzipped) for 6,764 jobs. The history is about
   9.7k jobs and about 250 `crawl_log` rows a day (about one per crawled company). Estimate: 100 more companies is
-  about 2 times the log rows a day and, at about 25 jobs per company, about 40 percent more `jobs.json`. Ceiling
+  about 1.4 times the log rows a day (about 350) and, at about 25 jobs per company, about 40 percent more `jobs.json`. Ceiling
   proposal: 4 MB for `jobs.json` and 500 `crawl_log` rows a day (the log keeps 90 days, so about 45k rows). The maintainer confirms.
 
 ## Step A: measure first
