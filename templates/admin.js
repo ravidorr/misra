@@ -283,7 +283,6 @@ async function crawlRows() {
 }
 
 async function loadCrawl(box) {
-  box.removeAttribute('role'); /* the loading line was a status; the rows that replace it are not */
   let rows = await crawlRows();
   if (rows === null) {
     /* A 401: run the admin check again, as the page does, which renews the token or ends the session. */
@@ -296,6 +295,7 @@ async function loadCrawl(box) {
     if (rows === null) throw new Error('admin_crawl_health was refused twice');
   }
   if (rows.length === 0) return false;
+  box.removeAttribute('role'); /* the loading line was a status; the rows that replace it are not */
   box.replaceChildren(crawlView(rows));
   return true;
 }
