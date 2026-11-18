@@ -10,6 +10,9 @@ const $ = (id) => document.getElementById(id);
 const SUPABASE_URL = '__SUPABASE_URL__';
 const SUPABASE_ANON_KEY = '__SUPABASE_ANON_KEY__';
 const HTTP_UNAUTHORIZED = 401;
+const CHECK_TIMEOUT_MS = 15000; /* the library retries a failing renewal for minutes: the page does not wait that long */
+const HTTP_CLIENT_ERROR = 400;
+const HTTP_SERVER_ERROR = 500;
 const MESSAGES = {
   expired: 'Your sign-in expired.',
   loading: 'Loading…',
@@ -109,6 +112,11 @@ function showArea(name, moveFocus) {
   }
 }
 
+/* The service answered and said no (a 4xx): the session is over. No answer, or a 5xx, says nothing about it. */
+function refused(error) {
+  return error.status >= HTTP_CLIENT_ERROR && error.status < HTTP_SERVER_ERROR;
+}
+
 /* Whether this account is an admin. Resolves with the state to show: 'ready', 'not-admin', 'check-failed', or
    'signed-out' (with the reason in `expired` when the service refused the session). */
 async function check(again) {
@@ -129,7 +137,8 @@ async function check(again) {
     if (status === HTTP_UNAUTHORIZED) {
       /* The token was refused: renew it once and ask again, then give up and say so. */
       if (!again) return 'expired';
-      await client.auth.refreshSession();
+      const { error: renewal } = await client.auth.refreshSession();
+      if (renewal) return refused(renewal) ? 'expired' : 'check-failed'; /* a failed renewal is not a refused one */
       return await check(false);
     }
     if (error) throw error;
@@ -168,7 +177,10 @@ async function start() {
     /* Only a link to an area changes the area: the skip link ("#main") leaves the page where it is. */
     if (main.dataset.state === 'ready' && isArea(location.hash.slice(1))) showArea(areaName(), true);
   });
-  const result = await check(true);
+  const silence = new Promise((resolve) => {
+    setTimeout(resolve, CHECK_TIMEOUT_MS, 'check-failed');
+  });
+  const result = await Promise.race([check(true), silence]);
   if (result !== 'expired') {
     setState(result);
     return;

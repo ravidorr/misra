@@ -35,8 +35,19 @@ STATES = ["signed-out", "not-admin", "check-failed", "ready"]
 WIDE_MIN = 761  # wider than the 760px reading width of the other pages
 WIDE_MAX = 1000
 POLL_SECONDS = 0.05
+CHECK_TIMEOUT_MS = 15000
 CHECKS_WITH_RENEWAL = 2  # the check, then one renewal of the token and the check again
 FOOTER_LINKS = 7
+
+
+class FailingAuth(AuthBackend):
+    """The sign-in service answering a token request with a 500, which the library does not retry."""
+
+    async def handle(self, route: Route) -> None:
+        if route.request.method != "OPTIONS" and urlparse(route.request.url).path.endswith("/token"):
+            await route.fulfill(status=500, headers=CORS, body='{"message":"boom"}', content_type="application/json")
+            return
+        await super().handle(route)
 
 
 class Backend:
@@ -259,6 +270,30 @@ async def test_an_unauthorized_answer_renews_the_token_once_and_asks_again(page:
     assert await state(page) == "ready"
     assert backend.asked == CHECKS_WITH_RENEWAL
     assert any(path.endswith("/token") for path in backend.paths())
+
+
+async def test_a_failed_renewal_is_not_a_refused_one_and_keeps_the_session(page: Page, site: Path) -> None:
+    """The check is refused (401), then the service keeps failing the renewal (500s, which the library retries for
+    minutes): nothing says the sign-in ended, so after 15 seconds the page says the check failed and leaves the saved
+    session alone. It never asks again with the token that was refused."""
+    await page.clock.install()
+    backend = Backend("unauthorized", auth=FailingAuth())
+    await open_admin(page, site, backend=backend, wait=False)
+    while backend.asked == 0:
+        await asyncio.sleep(POLL_SECONDS)
+    await page.clock.run_for(CHECK_TIMEOUT_MS + 1000)
+    await expect(page.locator("main")).to_have_attribute("data-state", "check-failed")
+    assert await page.evaluate("localStorage.getItem('misra-auth')") is not None
+    assert backend.asked == 1
+    await expect(page.locator("#adminExpired")).to_have_text("")
+
+
+async def test_a_renewal_the_service_refuses_says_the_sign_in_expired(page: Page, site: Path) -> None:
+    backend = Backend("unauthorized", auth=AuthBackend("bad_code"))
+    await open_admin(page, site, backend=backend)
+    assert await state(page) == "signed-out"
+    await expect(page.locator("#adminExpired")).to_have_text("Your sign-in expired.")
+    assert await page.evaluate("localStorage.getItem('misra-auth')") is None
 
 
 async def test_an_unauthorized_answer_twice_says_the_sign_in_expired(page: Page, site: Path) -> None:
