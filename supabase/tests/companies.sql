@@ -271,6 +271,7 @@ begin
   assert pg_temp.violated('insert into public.companies (name, domain, crawl) values (''A'', ''a.test'', true)') = 'companies_name_min_length';
   assert pg_temp.violated('insert into public.companies (name, domain, crawl) values ('' Ab'', ''a.test'', true)') = 'companies_name_min_length';
   assert pg_temp.violated('insert into public.companies (name, domain, crawl) values (''Ab '', ''a.test'', true)') = 'companies_name_min_length';
+  assert pg_temp.violated('insert into public.companies (name, domain, crawl) values (E''\tAb'', ''a.test'', true)') = 'companies_name_min_length';
   assert pg_temp.violated('insert into public.companies (name, domain, crawl) values (''Ab'', ''ab.test'', true)') = 'accepted';
   -- the domain
   assert pg_temp.violated('insert into public.companies (name, crawl) values (''NoDomain'', true)') = 'companies_domain_required';

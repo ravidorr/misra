@@ -13,7 +13,7 @@
 -- The checks, each with a name the editor maps to one plain sentence (supabase/README.md, "The company list"):
 --   companies_name_unique        the name, ignoring case (unique index)
 --   companies_domain_unique      the domain, ignoring case (unique index; excluded records have none)
---   companies_name_min_length    a name of 2 characters or more with no space at either end (common.EXCLUDED_MIN_NAME)
+--   companies_name_min_length    a name of 2 characters or more with no white space at either end (common.EXCLUDED_MIN_NAME)
 --   companies_domain_required    a domain, except on an excluded record
 --   companies_exactly_one_status exactly one of: crawl is true, gap is not null, excluded is not null
 --   companies_gap_reason         a gap is {reason, note} and the reason is a key of REASONS in build_dashboard.py
@@ -57,7 +57,7 @@ create table public.companies (
   gap jsonb,
   excluded jsonb,
   updated_at timestamptz not null default now(),
-  constraint companies_name_min_length check (name = btrim(name) and char_length(name) >= 2),
+  constraint companies_name_min_length check (name !~ '^\s|\s$' and char_length(name) >= 2),
   constraint companies_domain_required check (excluded is not null or coalesce(btrim(domain), '') <> ''),
   constraint companies_exactly_one_status check (crawl::int + (gap is not null)::int + (excluded is not null)::int = 1),
   constraint companies_gap_reason check (

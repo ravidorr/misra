@@ -200,7 +200,7 @@ database refuses the write, the page does not re-implement the rules):
 | --- | --- |
 | `companies_name_unique` | a name that exists already, ignoring case |
 | `companies_domain_unique` | a domain that exists already, ignoring case |
-| `companies_name_min_length` | a name shorter than 2 characters, or with a space at either end |
+| `companies_name_min_length` | a name shorter than 2 characters, or with white space at either end |
 | `companies_domain_required` | a missing or blank domain, except on an excluded record |
 | `companies_exactly_one_status` | none or more than one of: crawl is true, a gap, an exclusion |
 | `companies_gap_reason` | a gap that is not `{reason, note}` or whose reason is not a key of `REASONS` in `build_dashboard.py` |

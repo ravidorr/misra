@@ -8,6 +8,7 @@ the email is the only personal detail kept).
 File names follow the Supabase CLI format. The policies themselves are tested against a real database with
 supabase/tests/accounts_rls.sql (see supabase/README.md)."""
 
+import json
 import re
 from pathlib import Path
 
@@ -264,7 +265,8 @@ COMPANIES_INDEXES = {
 }
 COMPANIES_LOAD = re.compile(
     r"insert into public\.companies \(\s*(?P<columns>[a-z_, ]+?)\s*\) select (?P<select>[a-z_, ]+) "
-    r"from jsonb_to_recordset\(\$companies\$.*\$companies\$::jsonb\) as r \(\s*(?P<types>[a-z_, ]+?)\s*\)"
+    r"from jsonb_to_recordset\(\$companies\$(?P<data>(?:(?!\$companies\$).)*)\$companies\$::jsonb\) "
+    r"as r \(\s*(?P<types>[a-z_, ]+?)\s*\)"
 )
 COMPANY_FUNCTION = re.compile(
     r"create function public\.(?P<name>companies_\w+)\(\) returns trigger language plpgsql "
@@ -698,6 +700,12 @@ def companies_load_problem(s: str) -> str | None:
         return None
     columns = [w.strip() for w in m["columns"].split(",")]
     found = []
+    try:
+        records = json.loads(m["data"])
+    except ValueError:
+        records = None
+    if not (isinstance(records, list) and all(isinstance(r, dict) for r in records)):
+        found.append("the data is not a json array of objects")
     if set(columns) - set(common.RECORD_KEYS):
         found.append(f"not record keys: {sorted(set(columns) - set(common.RECORD_KEYS))}")
     if columns != [w.strip() for w in m["select"].split(",")]:

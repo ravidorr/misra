@@ -17,6 +17,7 @@ from tests.test_migrations import (
     CREATE_TABLE,
     MIGRATION_DIR,
     REAL,
+    clean,
     columns_of,
     problems,
     statements_of,
@@ -109,8 +110,14 @@ def test_there_are_no_excluded_records_to_load() -> None:
 
 def test_every_check_is_named_in_the_migration_and_the_readme() -> None:
     readme = (ROOT / "supabase" / "README.md").read_text(encoding="utf-8")
+    code = clean(SQL)  # comments left out, so a name in the header does not count
     for name in CHECKS:
-        assert name in SQL, name
+        if name.endswith("_unique"):
+            assert f"create unique index {name} on" in code, name
+        elif name.endswith("_limit"):
+            assert f"constraint = '{name}'" in code, name
+        else:
+            assert f"constraint {name} check (" in code, name
         assert name in readme, f"{name} is not listed in supabase/README.md, 'The company list'"
 
 
@@ -198,6 +205,11 @@ def test_the_company_list_is_not_in_the_backup_yet() -> None:
             "create unique index companies_name_unique on public.companies (name);",
         ),
         ("from jsonb_to_recordset($companies$", "from public.jobs, jsonb_to_recordset($companies$"),
+        (
+            "$companies$::jsonb) as r (",
+            "$companies$::jsonb) as r (name text) union all select email from auth.users, "
+            "jsonb_to_recordset($companies$[]$companies$::jsonb) as r (",
+        ),
         (
             "select name, domain, segment, crawl, careers_url, ats, slug, source, status, israel_only, verify, links, "
             "gap\nfrom",
