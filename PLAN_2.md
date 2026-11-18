@@ -1,168 +1,256 @@
-# Plan 2: the back office
+# Plan 2: the admin page
 
 Step plan for an admin page for the maintainer. Drafted 2026-11-18; nothing here is built yet.
 
-Each step is one PR. Strike a step through (`~~text~~`) when it is done. Conventions for every step are those of
-`PLAN.md`: a change to a listed Python module bumps `package.json` and `pyproject.toml` together and adds a
-`CHANGELOG.md` entry; a new Python module is added to `RELEASE_TRIGGER_PATHS` (`ci.yml`, `.husky/pre-push`),
-`py-modules` and mypy `files`; coverage stays at 100%; browser work edits `templates/`, follows
-`design-system/README.md`, and adds `connect-src` and `script-src` entries to the page CSP only for the Supabase host.
+Each numbered step is one or more PRs; the sub-steps (3.1, 3.2 and so on) are the PRs, and step 4 is part of 3.3. Strike a step through
+(`~~text~~`) when it is done. Conventions for every step are those of `PLAN.md`: a change to a listed Python module
+bumps `package.json` and `pyproject.toml` together and adds a `CHANGELOG.md` entry; a new Python module is added to
+`RELEASE_TRIGGER_PATHS` (`ci.yml`, `.husky/pre-push`), `py-modules` and mypy `files`; coverage stays at 100%; browser
+work edits `templates/`, follows `design-system/README.md`, and allows only the Supabase host in the page CSP. A new
+workflow follows the secret rules of `daily.yml` (see D2).
 
-## What the back office is
+## What the admin page is
 
-One page, `admin.html`, for one person (the maintainer). It does five jobs, built in this order: sign in, crawl health
-and the coverage gaps, company list editing, adding the sites visitors report, and looking after accounts and job
-alerts.
+One page, `admin.html`, for one person (the maintainer). After the sign in it has four areas: Crawl, Companies,
+Alerts and Log. Adding a site a visitor reported is the Add button of the Companies editor.
 
 ## Rules for the whole plan
 
-- **Nothing lawyer-dependent.** The back office stays inside what `PRIVACY.md` and `TERMS.md` already say: the
+- **Nothing lawyer-dependent.** The admin page stays inside what `PRIVACY.md` and `TERMS.md` already say: the
   maintainer has access to the database, and a reported site is emailed and not stored. A step that would store or show
-  personal data in a way those pages do not describe is cut, not reworded. Steps 4 and 5 are written to fit.
-- **No new personal data.** The office never lists email addresses, never writes an address to a log, an audit row or a
-  database column that does not already hold it, and never emails anyone.
+  personal data in a way those pages do not describe is cut, not reworded.
+- **No new personal data.** The admin page never lists email addresses, never writes an address to a log, an audit row
+  or a database column that does not already hold it, and never emails anyone.
 - **One list.** Every fact about a company, an exclusion included, is a field of its one record. No second list, no
-  second file, no copy kept in step by hand.
+  second file, no copy kept in step by hand. The list is public to read (D1), so an excluded record is never readable by
+  anyone but the admin, and nothing about who asked is stored.
 - **The page has no power of its own.** `admin.html` is static and public, like the rest of `docs/`, and the anon key is
   public. Security is row-level security (RLS) plus a server-side admin check. The service-role key never reaches a
-  browser or the crawl (see `AGENTS.md`); anything that needs it runs in an Edge Function that checks the caller first.
-- **One admin.** A single row in `admins`, inserted by hand as in 1.1; the first sign in never claims it. No roles, no invitations.
+  browser or the crawl (see `AGENTS.md`); anything that needs it runs in an Edge Function that checks the caller first,
+  or in a named workflow step (D2).
+- **One admin.** A single row in `admins`, inserted by hand as in 1.1; the first sign in never claims it. No roles, no
+  invitations.
 - **Not discoverable.** `noindex`, no link from any public page or from `llms.txt`, left out of `jobs.jsonld` and the
   WebMCP tools. It is not a secret (it is in the repository); it is only never advertised.
-- **Every step tests the denial first.** A signed-out user and a signed-in non-admin get a permission error on every
-  new table and function, proved by an SQL test in `supabase/tests/` (the pattern of `accounts_rls.sql`) or a vitest
-  test of the function.
+- **Every step tests the denial first.** A signed-out user and a signed-in non-admin are refused on every new table and
+  function (a permission error from the database, a 404 from a function), proved by an SQL test in `supabase/tests/`
+  (the pattern of `accounts_rls.sql`) or a vitest test of the function.
+- **Status is text.** A status is always words, styled with the existing tokens; there is no new colour and colour is
+  never the only signal.
+- **Accessibility, per area.** Each area has an `h2`, a labelled search where there is one, a live count, focus that
+  returns to the control that opened a dialog, and 44px targets.
+- **One name.** Say "admin page" everywhere, never "office" or "back office".
 
 ## Step 1: Foundation (sign in and the admin check)
 
-- [ ] 1.1 Migration: `public.admins(user_id uuid primary key references auth.users on delete cascade)`; the function
-  `public.is_admin()` (`security definer`, `stable`, true when `auth.uid()` is in `admins`); revoke all on `admins` from
-  `anon` and `authenticated`. SQL test: no role but the owner reads or writes `admins`; `is_admin()` is false for anon
-  and for a signed-in user who is not listed. The maintainer inserts their own row by hand in the SQL editor (one
-  statement, in `supabase/README.md`); there is no way to become an admin from the page.
-- [ ] 1.2 `templates/admin.html`, `templates/admin.js`: built into `docs/admin.html` and `docs/admin.js` by
-  `build_dashboard.py`, with the shared header and footer parts, SRI and the same CSP rules as the dashboard. Sign in
-  with the existing Google sign-in of `auth.js`. After sign in the page calls `is_admin()`; a non-admin sees one line
-  ("This account is not an admin.") and nothing else loads. `<meta name="robots" content="noindex">`. Tests: the page
-  is built, is not linked from any other page, and is not in `jobs.jsonld`; a browser test of the signed-out and the
-  non-admin states.
-- [ ] 1.3 An audit log: `public.admin_log(id, ts, action text, target text)`, written only by the admin policies and the
-  functions below; `target` is a company name, a table name or a user id, never an address. Readable and insertable
-  only when `is_admin()`. The page shows the last 50 rows.
-- Done when: the maintainer signs in and sees an empty office; a second Google account sees only the refusal.
+- [ ] 1.1 Migration: `public.admins(user_id uuid primary key references auth.users on delete cascade)`, and
+  `public.is_admin()` (`security definer`, `stable`, `set search_path = ''`; true when `auth.uid()` is in `admins`),
+  with `revoke ... from public` and `grant execute ... to anon, authenticated`. Revoke all on `admins` from `anon` and
+  `authenticated`. SQL test: no role but the owner reads or writes `admins` ("the owner" is `postgres`; the service role
+  bypasses RLS); `is_admin()` is false for anon and for a signed-in user who is not listed.
+  - The existing lint `policy_problem` in `tests/test_migrations.py` refuses any policy on a table outside
+    `USER_TABLES`, and accepts on `jobs` only `using (status = 'open')`. Extend it with a list of admin tables (`jobs`, `crawl_log`, `admins`, `admin_log`, `companies`) whose
+    only accepted `using` is `public.is_admin()`; keep the open-jobs policy of `jobs`, and accept the public read policy
+    of `companies` (D1, `excluded is null`) as its one other policy. Never loosen the existing checks. Steps 1.3, 2.1 and 3.1 cite this.
+  - The `admins` row has a foreign key to `auth.users`, so the maintainer signs in once on the dashboard first, then
+    runs one statement in the SQL editor: `insert into public.admins select id from auth.users where email = '...'`
+    (the exact text goes in `supabase/README.md`). There is no way to become an admin from the page.
+- [ ] 1.2 `templates/admin.html`, `templates/admin.js`, built into `docs/admin.html` and `docs/admin.js` by
+  `build_dashboard.py`, with SRI and the CSP rules of the dashboard. The page lives at `/misra/admin.html`. Add both
+  files to the generated-files list in `AGENTS.md`, to the SRI placeholder and page lists in `build_dashboard.py`, and
+  to the source paths of `publish-docs.yml`.
+  - **Sign in.** `templates/auth.js` is bound to dashboard ids, and the design README requires the Sign in button to
+    open the approved notice word for word, so the admin page builds no sign-in UI. `admin.js` makes its own Supabase
+    client with the same storage key and storage wrapper as `auth.js`; the session is shared on the origin. Signed out,
+    the page says "Sign in on the dashboard first." with a link to `./`. A Sign out button sits in the page body in
+    every signed-in state. The page never starts a redirect, so the Supabase Auth redirect allow-list is unchanged; any
+    change to the production Auth config needs the maintainer's consent.
+  - **Page states** (`data-state` on the page): `checking` (the default; all content hidden), `signed-out`,
+    `not-admin` ("This account is not an admin."), `check-failed` ("Could not check your account. Reload the page.";
+    a network or backend error, not the same as not admin) and `ready`. A 401 shows "Your sign-in expired" and runs the
+    check again. Nothing but the check loads for a non-admin.
+  - **Areas.** One page with hash sections and plain links: `nav aria-label="Admin"` with `aria-current`, each
+    section hidden with an `h2`, focus moved to the `h2` and `document.title` updated on a change. No ARIA tabs. A
+    section loads on its first show. Area states: loading (plain text in `role="status"`), empty, error (a `notice`
+    with `role="alert"` and "Try again") and ready. The page title is "Admin".
+  - **Layout.** `.page` is 760px wide at most; add an `.admin-*` wide wrapper (about 1000px) at the end of
+    `templates/dashboard.css`. One CSS bundle, no CSP change.
+  - **Tests.** The page is built, is not linked from any other page, and is not in `jobs.jsonld`; a browser test of
+    the signed-out, not-admin and check-failed states.
+- [ ] 1.3 The log: `public.admin_log(id bigint generated always as identity primary key, ts timestamptz not null default
+  now(), action text not null, target text)`. It is written only by the trigger of 3.1 and by `admin-account` (5.2),
+  and readable when `is_admin()`; no public role has insert, update or delete (the function writes with the service
+  role). `target` is a company name or a table name,
+  never an address and never a user id. The Log area (a `ul` of time, a plain-English action and the target, the last
+  50 rows, empty text "No changes yet.") ships in step 3, when the first rows appear.
+- Done when: the maintainer signs in on the dashboard, opens `admin.html` and sees the empty areas; a second Google
+  account sees "This account is not an admin." and no request but the check.
 
-## Step 2: Crawl health and the coverage gaps (read-only)
+## Step 2: Crawl health (read-only)
 
 The data is already in Supabase, so this step adds no table and no pipeline change.
 
-- [ ] 2.1 Read access for `is_admin()` only: a row policy `using (is_admin())` on `crawl_log` and `jobs`, and a column
-  grant on `jobs` that leaves out `description` and `details` (row-level security cannot hide columns; the pattern is
-  that of `20261122100000_jobs_snippet.sql`, and the lint in `tests/test_migrations.py` still refuses a grant of
-  either). The lawyer's rule of 2026-11-16 stays: the office never shows posting text.
-- [ ] 2.2 "Crawl health": per company, the last good crawl, the last result and note, and a streak of failures; sorted
-  with the worst first; filters for failing, skipped for robots.txt, and held (a sharp drop). Counts of open jobs per
-  company over 30 days. Reads `crawl_log` and `jobs` with the admin session; no function.
-- [ ] 2.3 "Coverage gaps": the groups of the public card (`REASONS` in `build_dashboard.py`), with the reason, note and
-  career link of each company. Until step 3 the list comes from the same `jobs.json` the card uses, so it needs no new
-  data; from step 3 it reads the `companies` table and also shows the excluded companies, marked as such.
-- Done when: the page answers "what failed last night and which companies are we blind to?" without opening Actions.
+- [ ] 2.1 Read access for `is_admin()` only (see the lint of 1.1). On `jobs`, add a select policy
+  `using (public.is_admin())`. The column grant that hides `description` and `details` already exists
+  (`20261121100000_jobs_text_not_public.sql`) and stays, and `tests/test_migrations.py` still refuses any grant of
+  either. The grants of the short `snippet` columns (`20261122100000_jobs_snippet.sql` and later) stay as they are. On `crawl_log`, which has `revoke all` and no grant, add
+  a `grant select` to `authenticated` and the same policy. The lawyer's rule of 2026-11-16 stays: the admin page never
+  shows posting text.
+- [ ] 2.2 The Crawl area. PostgREST returns 1000 rows at most by default and `crawl_log` holds about 24,000 (90 days of
+  267 companies), so a count made in the browser would stop at 1000 rows. Use a view or a `security invoker` function
+  `admin_crawl_health()` gated by `is_admin()`, with one row per company. Terms, from `run.py` and `common.py`:
+  - failing: the last two crawls have `ok = 0` (`FAILING_RUNS`), not counting robots.txt skips; last good crawl: the last row with `ok = 1`;
+  - streak: the number of consecutive days whose last run has `ok = 0`, robots.txt skips left out;
+  - held: the day's last note starts with `DROP_NOTE` (`run.sharp_drop`);
+  - skipped for robots.txt: the note carries `ROBOTS_NOTE`;
+  - open jobs now: counted in `jobs`. Fetched jobs 30 days ago: `crawl_log.n_jobs`, labelled "fetched", since it is
+    zero after a failed fetch and the fetched count in a held crawl. Two numbers, no chart.
+
+  Layout: a `ul` of `li` in the `.gap-card` look, the name as a heading (`dir="auto"`, `overflow-wrap: anywhere`), a
+  `dl` of the values and a `.pill` for the status. The order is fixed, worst first; no column sort and no data table.
+  Filters are `.chip` toggles with counts (Failing, Robots.txt, Held); the default view is "needs attention" and the
+  healthy companies sit behind "All". The page notes that `crawl_log` may read short until about 2026-11-20, after the
+  move of step 9.1 of `PLAN.md`.
+- Done when: the Crawl area lists the failing, held and robots.txt-skipped companies of the last run, worst first, and
+  its counts match a query of `crawl_log` in the SQL editor.
 
 ## Step 3: Company list editing
 
-This moves the home of the list from `data/companies.json` to Supabase, as the jobs moved in `PLAN.md` step 1. It is the
-one step that changes the pipeline. Today `data/companies.json` holds 347 records: 267 crawled and 80 gap records, none
-both.
+This moves the home of the list from `data/companies.json` to Supabase, as the job history moved in `PLAN.md` step 9.1.
+It is the one step that changes the pipeline. The records of the file at the 3.1 commit are the start (347 on
+2026-11-18: 267 crawled and 80 gap records, none both).
 
 Decisions made before 3.1:
 
-- **D1. `companies.json` leaves the repository (decided by the maintainer, 2026-11-18).** The sync step pulls the table into a git-ignored scratch
-  `data/companies.json`, as it does for `data/jobs.db`; `run.py`, `build_dashboard.py` and the surveys read that file
-  and are unchanged. The tests that read the real file move to a fixture (`tests/fixtures/companies.json`, a frozen
-  copy of today's file). Reason: two homes for the list is the state `PLAN.md` was written to remove. Cost: no git diff
-  of edits; the daily backup to `ravidorr/misra-backups` is the history (a `TABLES` entry in `export_accounts.py`). The
-  same holds for exclusions, which makes the backup the only record of who asked to be removed and when.
-- **D2. `discover.py` stays offline of the key.** No workflow runs it today: the maintainer runs it by hand and commits
-  the file (`CONTRIBUTING.md`, "Adding a company"). It makes requests to career sites, so it never holds the
-  service-role key. It reads and rewrites only the scratch file. After a hand run, `sync_supabase.py --push-companies`,
-  a separate command run with the key in the maintainer's shell, pushes the five discovered fields back to the table
-  and nothing else. No new workflow step.
-- **D3. Exclusions are a field of the company record, edited in the office.** `data/excluded_companies.csv` and its
-  second loader go away. An excluded company is a record with `excluded: {reason, date_added}` and `crawl: false`; a
-  company that asked to be removed and was never in the list gets a minimal record (name and `excluded`). Excluding a
-  company clears its `careers_url`, `links`, `gap` and `segment` in the same write (a database check: an excluded
-  record holds nothing else), so the public data keeps only what the asker needs to be honoured. The guards of
-  `load_excluded` all stay, in two places: the database refuses a blank or one-character name, a repeated name (case
-  insensitive), a blank reason, a date that is not a date, and a 201st exclusion; and `load_excluded` still raises
-  `ExclusionError` on a pulled file that does not load, so a record nobody can trust still stops the run. The purge limit
-  (`MAX_PURGE_COMPANIES`) and the spelling check (`check_spelling`) are unchanged.
+- **D1. `companies.json` leaves the repository, and the list stays public to read (decided by the maintainer,
+  2026-11-18).** The table is readable by `anon` and `authenticated` through the public API, on the records that are not
+  excluded only (a policy `excluded is null`); only `is_admin()` writes, and reads excluded ones. The sync step pulls the
+  table into a git-ignored scratch `data/companies.json`, as it does for `data/jobs.db`; `run.py`, `build_dashboard.py`
+  and the surveys read that file and are unchanged. The tests that read the real file move to a fixture
+  (`tests/fixtures/companies.json`, a frozen copy of the file). Reason: two homes for the list is the state `PLAN.md`
+  was written to remove. Cost: no git diff of edits; the daily backup to `ravidorr/misra-backups` is the history. That
+  backup is also the only record of which companies asked to be removed, and when.
+- **D2. `discover.py` runs without the key, in a workflow.** It makes requests to career sites, so it never holds the
+  service-role key. A new manual-dispatch workflow (`workflow_dispatch`) lands in step 3.2. It follows `daily.yml`: the
+  pull step reads the list; `discover.py` runs in its own step without the key; only a final separate step holds the
+  service-role key and runs `sync_supabase.py --push-companies`, which pushes the discovered fields
+  (`discover.DISCOVERED`) and nothing else. No checkout gets an `ssh-key:`. The key-exposure rule in `AGENTS.md` names
+  the steps that hold the key; 3.4 adds this one.
+- **D3. Exclusions are a field of the company record, edited on the admin page.** `data/excluded_companies.csv` and its
+  second loader go away. An excluded record holds `name`, `crawl: false` and `excluded: {reason, date_added}` and
+  nothing else, `domain` included. Excluding sets every other field to null in the same write, and `domain` may be null
+  only on an excluded record. A company that asked to be removed and was never in the list gets this minimal record.
+  The checks of D3 are: a name of 2 characters or more, a name unique ignoring case, a reason that is not blank, a date
+  in ISO form, at most 200 excluded records, and the shape above. The database refuses a record that breaks them (the limit of 200 needs a trigger).
+  `load_excluded` keeps every guard it has today and still raises `ExclusionError` on a pulled file that does not
+  load, so a record nobody can trust stops the run. `MAX_PURGE_COMPANIES` and `check_spelling` are unchanged.
 - **D4. A pull that cannot reach Supabase stops the run (the same as today).** `sync_supabase.py --pull` already does
-  so for the jobs history, so pulling the list adds no new stop, and a run must not crawl without the exclusions.
+  so for the job history, so pulling the list adds no new stop, and a run must not crawl without the exclusions.
+
+Steps:
 
 - [ ] 3.1 Migration, alone: it lands before any sync or pipeline change, so the table exists and holds the list while
-  `companies.json` is still the source. `public.companies` with the columns of `common.RECORD_KEYS`, which gains `excluded` (`links`, `gap`
-  and `excluded` as `jsonb`, a unique case-insensitive `name` and `domain`, a check that at most one of `crawl`, `gap`
-  and `excluded` is set, the checks of D3 for an excluded record, the gap reasons checked against a list kept in step
-  with `REASONS`); RLS: no access for anon and authenticated except `is_admin()`, which gets
-  `select, insert, update, delete`; a trigger writes `admin_log`. The same migration loads the 347 records of today's
-  file. SQL tests for each denial and for the checks.
-- [ ] 3.2 `sync_supabase.py --pull` also writes `data/companies.json` from the table (sorted by name, the format of
-  `discover.py`, refusing an empty table as it refuses an empty `jobs`); `--push-companies` (run by hand after `discover.py`, see D2)
-  writes back the discovered fields of crawled records. The pulled file carries the `excluded` records, and `load_excluded` reads them from it
-  (the CSV and `EXCLUDED_COLUMNS` are removed); `run.py`, `discover.py`, `build_dashboard.py` and the sync keep
-  calling it as they do today. `.gitignore` lists the file. `export_accounts.py` backs the table up; `restore_accounts.py`
-  restores it. Tests, including the refusal of an empty table.
-- [ ] 3.3 The editor: a searchable list, one form per company with the fields of `CONTRIBUTING.md` ("Adding a
-  company"), a "Pin" action (sets `source: override`, `ats`, `slug`), a "Move to gaps" and a "Start crawling" action
-  (the `crawl` flip; the database checks are the only rules, and the page shows their error), and the
-  `israel_only` and `verify` switches. Since v0.67.4 `run.py` closes the open jobs of every record that is not crawled
-  (`close_uncrawled`, the rows stay as history), so "Move to gaps", like any flip of `crawl` to false, closes that
-  company's jobs at the next run, and "Exclude" deletes them. The page shows the number of jobs the next run will close
-  or delete for both (a run can be started by hand from Actions when it must be done today). An "Exclude" action asks
-  for the reason (with the line "no personal data in the reason") and the date, and clears the other fields as D3 says.
-  "Include again" removes the exclusion. A change takes effect at the next daily run; the page says so.
-- [ ] 3.4 One source of truth for the company rules: the SQL checks of 3.1 are the rules, and
-  `tests/test_companies_data.py` stops duplicating them. The Python side only checks that the pulled file loads and
-  that `load_excluded` still raises `ExclusionError`. Port the `load_excluded` and purge tests (`tests/test_politeness.py`, `tests/conftest.py`) from the CSV to excluded
-  records, keeping every case; update `AGENTS.md` (the exclusion paragraph and the single-list rule),
-  `CONTRIBUTING.md` ("Removing a company") and `README.md` (the quickstart now starts with `sync_supabase.py --pull`).
-- Done when: a company is added, pinned, put on the card or excluded from the page, and the next daily run crawls it,
-  lists it, or deletes its jobs.
+  `companies.json` is still the source. `public.companies` has the columns of `common.RECORD_KEYS`; `links`, `gap` and
+  `excluded` are `jsonb`.
+  - Checks, each with a stable name: `name` and `domain` unique ignoring case; exactly one of `crawl` is true, `gap`
+    is not null, `excluded` is not null; the checks of D3; a gap reason in the migration's list, with a test that fails
+    when that list differs from the keys of `REASONS` in `build_dashboard.py`; a careers link that is empty or
+    starts with `https://` (the 3.1 PR also corrects the one `http://` record in `data/companies.json`, Verbit, so the file and the table agree).
+  - RLS (see the lint of 1.1): the policy of D1 for reading; `select, insert, update, delete` for `is_admin()`; a
+    trigger writes `admin_log`. The same migration loads the records of the file at that commit.
+  - SQL tests for each denial and each check. The editor (3.3) asks for a gap reason and a
+    note when a record goes on the card, and for a gap reason or crawling when an excluded record is included again.
+- [ ] 3.2 Before the switch, reload the table from the file of that day (edits to `companies.json` between 3.1 and 3.2
+  would be lost). Then `sync_supabase.py --pull` also writes `data/companies.json` from the table (sorted by name, the
+  format of `discover.py`, refusing an empty table as it refuses an empty `jobs`); `--push-companies` writes back the
+  discovered fields of crawled records. The pulled file carries the excluded records, and `load_excluded` reads them
+  from it (the CSV and `EXCLUDED_COLUMNS` are removed). `common.RECORD_KEYS` gains `excluded`; this is a change to
+  `common.py` (version bump), and until then `discover.py` drops an excluded record's key. `run.py`, `discover.py`,
+  `build_dashboard.py` and the sync keep calling `load_excluded` as they do today. `.gitignore` lists the file. The
+  discover-and-push workflow of D2 is added here. Tests, including the refusal of an empty table. The test changes land
+  in this same PR, since the suite cannot pass without them once the file and the CSV are gone:
+  - `tests/test_companies_data.py` stops checking the rules; the Python side only checks that the pulled file loads
+    and that `load_excluded` still raises `ExclusionError`. The tests of `load_excluded` and the purge
+    (`tests/test_politeness.py`, `tests/conftest.py`, and the other tests that write `data/excluded_companies.csv`: `test_companies_covered`, `test_descriptions_flow`, `test_discover`, `test_sync_supabase`, `test_build_dashboard`) are ported case for case from the CSV to excluded records.
+  - The tests that read the real file move to the frozen fixture: `test_build_dashboard`, `test_companies_covered`,
+    `test_dashboard_page`, `test_report_site` and `test_companies_data`. `test_todo_counts` would no longer check
+    `TODO.md` against reality; drop it or rethink it in this PR.
+- [ ] 3.3 The editor.
+  - **List.** A searchable `ul` with "Showing n of 347" in `role="status"`, chips Crawled, On the card (a company with a
+    gap, shown with its reason, note and career link) and Excluded, and an Edit button
+    on each row. Rows edited since the last crawl say "applies at the next run".
+  - **Editor.** One shared modal `dialog` (`dialog.css`, corner x, Cancel, Save; a sticky action bar on a phone with
+    the `sheet-head` and `sheet-foot` styles; focus returns to the row's Edit button). Status is a fieldset of
+    radios (Crawling, On the coverage card, Excluded) that shows the fields of the choice: a gap reason select from
+    `REASONS` and a note. A checkbox "Choose the job feed by hand" shows `ats` and `slug`. One Save.
+    "Include again" shows only on an excluded record. A small `components/choice.css` is needed (add it to
+    `design-system/index.html` and `CHANGELOG.md` as the design README says).
+  - **Fields.** Name; domain; two URL inputs for `links`, Israel and global (not JSON); a segment select; checkboxes
+    `israel_only` and `verify`; the five discovered fields (careers URL included) read-only; an `ats` list from a database check (the keys of `adapters.ADAPTERS` plus `browser`, which `run.py` routes to
+    `browser_crawl`, and empty for an undiscovered record) that a test
+    keeps equal to `adapters.py`.
+  - **Exclude.** A separate button opens its own confirm dialog (focus on Cancel, `btn-danger`, `role="alert"`
+    errors). The date defaults to today. The reason hint is "Write why, not who asked. No names or email addresses."
+  - **Errors.** A map from each constraint name to one plain sentence, shown as a `.field-error` with `aria-invalid`
+    where a field is named, else in a `role="alert"` notice.
+  - **Preview.** A confirm dialog opens when a save takes a crawled company off the crawl or excludes it, and runs a count query and has three states (counting, a number, "Could not count",
+    with the action still allowed). Off the crawl: "N open jobs will be closed at the next daily run" (`run.py` closes
+    them with `close_uncrawled`; the rows stay as history). Exclude: "N jobs will be deleted at the next daily run"
+    (every job, open and closed, and the company's crawl log rows). The run stops when more than `MAX_PURGE_COMPANIES`
+    (3) companies wait to be purged, so the page shows how many wait.
+  - **Saved.** "Saved. Takes effect at the next daily run." in a status region. Optional and cheap: `updated_at` on
+    `companies`, with conditional updates so two tabs cannot overwrite each other.
+  - **Add.** The Add button opens the same editor, empty. For a site a visitor reported, the maintainer reads the report
+    email and types the company, the domain and a career link. The link goes into `links.israel`; `careers_url` stays
+    empty for `discover.py`. The database checks are the rules: the browser does not re-implement them.
+  - **Timing.** `run.py` crawls only records with `status == "ok"`, and a new company has no `ats`, `slug` or status
+    until `discover.py` runs. A new company is therefore crawled after the next discover-and-push run (D2); every other
+    change takes effect at the next daily run. The page says which of the two applies.
+- [ ] 3.4 One source of truth for the company rules: the SQL checks of 3.1 are the rules.
+  - `companies` is backed up with the `Table(..., account=False)` pattern of `JOBS` and `CRAWL_LOG` in
+    `export_accounts.py`, and `restore_accounts.py` restores it.
+  - Docs: `AGENTS.md` (the exclusion paragraph, the single-list rule, the key-exposure rule with the D2 step, and one
+    line in the backup paragraph); `CONTRIBUTING.md` ("Adding a company" now says how a visitor or contributor suggests
+    one, through the report form or the contact page, and that the maintainer adds it on the admin page; "Removing a
+    company on request"; "Reported sites": the three outcomes of accept, keep on the card and decline now start on the
+    admin page); `README.md` (the quickstart starts with `sync_supabase.py --pull`).
+- Done when: a company is added, put on the card or excluded from the page; an added company is crawled after the next
+  discover-and-push run, and the other changes take effect at the next daily run (its jobs closed, kept or deleted as
+  the page said).
 
 ## Step 4: Adding the sites visitors report
 
 A report today is an email, and `PRIVACY.md` says it is not stored. This step keeps that true: no table of reports.
+The work is the Add button of step 3.3 and its `CONTRIBUTING.md` text; nothing more is built here, and the report
+daily cap is not shown (it is not actionable for one person).
 
-- [ ] 4.1 "Add a site" in the office: the maintainer reads the report email and types the company, domain and career
-  link into the form of step 3. The form validates the way `discover.py` does (https only, a host, no tracking
-  parameters, no duplicate domain) and offers "Accept for the crawl" (`crawl: true`, then the next discover run fills
-  the feed) or "Keep on the card" (`crawl: false` with a `reason` and `note`). It is the editor of step 3 with a shorter
-  form, not a new store.
-- [ ] 4.2 Show the existing report counters (`report_ip_limits` is not shown: it holds hashed addresses; only the
-  `report_daily_cap` count of today), so the maintainer sees whether the daily cap is near.
-- [ ] 4.3 `CONTRIBUTING.md`, "Reported sites": the three outcomes (accept, keep on the card, decline) now start in the
-  office.
-- Done when: a report email becomes a company record in under a minute, and nothing about the report is stored.
+- Done when: a report email becomes a company record through the Add button, and nothing about the report is stored.
 
-## Step 5: Accounts and job alerts
+## Step 5: Alerts and accounts
 
 The maintainer already has database access (`PRIVACY.md`); this step puts a narrow, audited front on what the
 maintainer would do by hand. It shows counts, never lists.
 
-- [ ] 5.1 "Alerts" counts, from tables the office may read with an `is_admin()` policy that exposes counts only (a view
-  or a `security definer` function returning numbers): subscriptions by state (pending, confirmed, off), digests
-  emailed per day for 30 days from `emailed`, the confirm and report daily caps. No address, no user id in the result.
+- [ ] 5.1 The Alerts counts, from a view or a `security definer` function gated by `is_admin()` that returns numbers
+  only: subscriptions by state (pending, confirmed, off), and the number of distinct users emailed in each of the last 7
+  days (from `emailed`; not the number of jobs). No address and no user id in the result.
 - [ ] 5.2 The Edge Function `admin-account`, which first checks `is_admin()` with the caller's token and answers 404
-  otherwise. It takes an address the maintainer types (from a support email) and does one of: end that person's job
-  alerts, delete that person's account (the same code path as `delete-account`, shared in `_shared/`). It answers
-  "done" or "no such account", the same text for both a missing and a deleted one, and it writes `admin_log` with the
-  action and a hash of the address, never the address. It never logs the address (the rule of `AGENTS.md`), never
-  returns a row, and never emails the person.
-- [ ] 5.3 The page: two forms and the counts of 5.1. There is no list of accounts and no search by partial text.
-- [ ] 5.4 `PRIVACY.md` is not touched. A test (`tests/test_legal_wording.py`, the pattern already there) pins that the
-  office adds no address to any table, log or response by grepping the new migrations and functions, and checks the
-  function's 404 for a non-admin.
-- Done when: a request by email to stop alerts or delete an account is done in the office in one minute, audited, and
-  no address is stored or shown anywhere.
+  otherwise. It takes an address the maintainer types (from a support email) and does one of two things.
+  - End job alerts: the same as the unsubscribe link (`PRIVACY.md`, "Email settings"). `unsubscribe_subscription` takes
+    a token hash, so this is a new path by address, not a reuse.
+  - Delete the account: the deletion code moves from `delete-account/handler.ts` into `_shared/` (it is not there
+    yet) and both functions call it.
+
+  For the admin caller only, it answers "Done." when it acted and "No account uses that address." when none matches.
+  `admin_log` records the action and the time only: no hash of the address and no user id. When no account matches,
+  nothing is written to the log. It never logs the address (the rule of `AGENTS.md`), never returns a row, and never
+  emails the person.
+- [ ] 5.3 The Alerts area: two forms and the counts of 5.1. There is no list of accounts and no search by partial text.
+- [ ] 5.4 `PRIVACY.md` is not touched. `tests/test_migrations.py` pins that the new migrations add no personal column
+  (the `PERSONAL_COLUMN_ALLOWED` pattern), and a vitest test in `test/` checks the 404 of the function for a non-admin
+  and that the function never logs the address.
+- Done when: a request to stop alerts or delete an account is done on the admin page with the two answers above, the
+  log shows the action and the time, and no address is stored or shown anywhere.
 
 ## Out of scope
 
