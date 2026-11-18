@@ -587,6 +587,7 @@ match and no list or search of accounts. Every answer but the 404 is JSON with `
 - 404, no body: the caller is not an admin, has no token or a malformed one, the method is not POST, or the origin is not the
   dashboard's. It is the same answer for all of them, so the function does not say that it exists.
 - 500 `server_error`: a missing secret or a failed database call (including the log write, in which case nothing was done).
+- 409 `ambiguous`: `delete_account` found more than one account with that sign-in email; nothing was done or logged.
 - 502 `delete_failed` (the Admin API refused; the account is still there) or `delete_unconfirmed` (a timeout or a 5xx; it
   may or may not be gone). Never "Done.".
 - 503 `service_unavailable`: the admin check could not be made. It is the same for an admin and for anyone else, so it
@@ -611,7 +612,7 @@ The CORS preflight (OPTIONS) answers 204 for `https://ravidorr.github.io` only; 
    two plain answers.
 3. When something matches it writes one `admin_log` row, `action` = `alerts ended` or `account deleted`, `target` empty, the
    time by the column default: no address, no hash of it, no user id. The row is written before the action, so an action is
-   never done without a record. Then `end_alerts` calls `unsubscribe_user` (the clean-up of the unsubscribe link) for each id
+   never done without a record (so a row means "attempted", and a failed deletion still has its row). Then `end_alerts` calls `unsubscribe_user` (the clean-up of the unsubscribe link) for each id
    and `delete_account` calls `deleteAuthUser` of `_shared/delete-user.ts`, the same code `delete-account` uses.
 4. It never logs the address (only function names and status codes), never returns a row, and never emails the person.
 

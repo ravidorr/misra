@@ -47,6 +47,15 @@ begin
   reset role;
 end $$;
 
+-- The log write of the Edge Function: the service role inserts a row; no browser role can.
+do $$
+begin
+  set local role service_role;
+  insert into public.admin_log (action) values ('alerts ended'), ('account deleted');
+  reset role;
+  assert (select count(*) from public.admin_log where target is null) = 2, 'the service role could not write the log';
+end $$;
+
 -- The result is uuids only: a single column of type uuid.
 do $$
 begin

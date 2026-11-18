@@ -18,6 +18,7 @@ const BOB_ID = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
 const ANN_ADDRESS = 'ann.private@example.test';
 const BOB_LOGIN = 'bob.private@example.test';
 const BOB_DIGEST = 'bob.digest@example.test';
+const TWIN = 'twin@example.test';
 
 type Fault = 'none' | 'admin-down' | 'admin-5xx' | 'admin-garbage' | 'ids-fail' | 'ids-garbage' | 'log-fail' | 'unsubscribe-fail' | 'delete-down' | 'delete-5xx' | 'delete-4xx';
 
@@ -47,6 +48,7 @@ function world(fault: Fault = 'none'): World {
     [BOB_LOGIN, [BOB_ID]],
   ]);
   const digests = new Map([[BOB_DIGEST, [BOB_ID]]]);
+  logins.set(TWIN, [ANN_ID, BOB_ID]);
   const fakeFetch = vi.fn<Fetch>((url, init) => {
     const headers = init.headers as Record<string, string>;
     const body = typeof init.body === 'string' ? init.body : '';
@@ -156,6 +158,7 @@ describe('who may call it: everyone else gets a bare 404', () => {
     expect(await response.text()).toBe('');
     expect(w.unsubscribed).toEqual([]);
     expect(w.log).toEqual([]);
+    expect(w.calls.length).toBe(_name === 'a token the database does not accept' ? 1 : 0); // a bad token never reaches the database
   });
 
   it('answers 404 to anything but a POST, and to another origin, with no database call', async () => {
@@ -272,6 +275,28 @@ describe('the two answers for the admin', () => {
     expect(JSON.parse(lookup?.body ?? '{}')).toEqual({ p_address: BOB_DIGEST, p_login_only: true });
     expect((await answer(await handleAdminAccount(ask({ address: BOB_LOGIN, action: 'delete_account' }), w2.deps))).result).toBe('done');
     expect(w2.deleted).toEqual([BOB_ID]);
+  });
+
+  it('ends the alerts of every account that matches, but refuses to delete more than one account', async () => {
+    const w = world();
+    expect((await answer(await handleAdminAccount(ask({ address: TWIN, action: 'end_alerts' }), w.deps))).result).toBe('done');
+    expect(w.unsubscribed).toEqual([ANN_ID, BOB_ID]);
+    const d = world();
+    const response = await handleAdminAccount(ask({ address: TWIN, action: 'delete_account' }), d.deps);
+    expect(response.status).toBe(409);
+    expect((await answer(response)).error?.code).toBe('ambiguous');
+    expect(d.deleted).toEqual([]);
+    expect(d.log).toEqual([]);
+  });
+
+  it('makes exactly these calls, in this order, and no others (no email is sent)', async () => {
+    const steps = (w: World): string[] => w.calls.map((c) => `${c.method} ${c.url.replace(config.supabaseUrl, '')}`);
+    const a = world();
+    await handleAdminAccount(ask({ address: ANN_ADDRESS, action: 'end_alerts' }), a.deps);
+    expect(steps(a)).toEqual(['POST /rest/v1/rpc/is_admin', 'POST /rest/v1/rpc/admin_account_ids', 'POST /rest/v1/admin_log', 'POST /rest/v1/rpc/unsubscribe_user']);
+    const d = world();
+    await handleAdminAccount(ask({ address: ANN_ADDRESS, action: 'delete_account' }), d.deps);
+    expect(steps(d)).toEqual(['POST /rest/v1/rpc/is_admin', 'POST /rest/v1/rpc/admin_account_ids', 'POST /rest/v1/admin_log', `DELETE /auth/v1/admin/users/${ANN_ID}`]);
   });
 
   it('trims the address it is given', async () => {

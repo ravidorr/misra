@@ -20,6 +20,7 @@
 //   404 (no body)                                                               not an admin, or not a POST, or no token (a
 //                                                                               401 of the check, an expired session, is a 404 too)
 //   500 { ok: false, error: { code: "server_error", message } }                 a missing secret, or a database call failed
+//   409 { ok: false, error: { code: "ambiguous", message } }                   more than one account has that sign-in email (delete only); nothing was done
 //   502 { ok: false, error: { code: "delete_failed" | "delete_unconfirmed", message } }   the Admin API refused, or did not answer
 //   503 { ok: false, error: { code: "service_unavailable", message } }         the admin check could not be made; nothing was done
 //
@@ -30,7 +31,7 @@
 //
 // The log. One `admin_log` row per action, `action` = "alerts ended" or "account deleted", `target` empty, and the time:
 // no address, no hash of it, no user id. It is written BEFORE the action, so an action is never done without a record
-// (if the log cannot be written, nothing is done and the answer is 500). When no account matches, nothing is written.
+// (if the log cannot be written, nothing is done and the answer is 500). So a row means "attempted": a failed action still has its row. When no account matches, nothing is written.
 //
 // What it never does: log the address (nothing is logged but function names and status codes), return a row or an id,
 // or email the person.
@@ -131,7 +132,9 @@ async function isAdmin(deps: Deps, config: Config, token: string): Promise<boole
     console.error(`${NAME}: the admin check refused the request with ${String(response.status)}`);
     return false;
   }
-  return (await response.json().catch(() => null)) === true;
+  const answer: unknown = await response.json().catch(() => null);
+  if (answer !== true && answer !== false) console.error(`${NAME}: the admin check answered something that is not true or false`);
+  return answer === true;
 }
 
 /** The request body as an address and an action, or undefined when it is anything else. */
@@ -198,12 +201,15 @@ export async function handleAdminAccount(request: Request, deps: Deps): Promise<
   if (admin === 'down') return fail(origin, 503, 'service_unavailable', 'The admin check did not answer. Nothing was done.');
   if (!admin) return notFound(origin);
 
-  const asked = await readRequest(request);
-  if (!asked) return fail(origin, 400, 'bad_request', 'Send an address and one action: end_alerts or delete_account.');
-
   try {
+    const asked = await readRequest(request);
+    if (!asked) return fail(origin, 400, 'bad_request', 'Send an address and one action: end_alerts or delete_account.');
     const ids = await findAccounts(deps, config, asked.address, asked.action);
     if (ids.length === 0) return json(origin, 200, { ok: true, result: 'no_account', message: 'No account uses that address.' });
+    if (asked.action === 'delete_account' && ids.length > 1) {
+      // Never delete more than one account on one request: the maintainer looks at that case by hand.
+      return fail(origin, 409, 'ambiguous', 'More than one account uses that address. Nothing was done.');
+    }
     await writeLog(deps, config, asked.action);
     for (const id of ids) {
       if (asked.action === 'end_alerts') {
