@@ -709,6 +709,7 @@ def test_short_reason_strips_url_queries_and_trims() -> None:
     out = run.short_reason(why)
     assert "SECRET" not in out
     assert "k=v" not in out
-    assert "https://x.example/a/b and 'https://y.example/p'" in out
+    assert "https://x.example/a/b and 'https://y.example/p" in out
+    assert "TOKEN" not in run.short_reason("HTTPS://a.com/x?q=a)b&t=TOKEN")
     assert "\n" not in out
     assert len(out) == run.REASON_MAX

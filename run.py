@@ -114,7 +114,7 @@ REASON_MAX = 150
 
 def short_reason(why: str) -> str:
     """A failure reason fit for the public log: no URL query strings, one line, 150 characters at most."""
-    return " ".join(re.sub(r"(https?://[^\s?#'\")]*)[?#][^\s'\")]*", r"\1", why).split())[:REASON_MAX]
+    return " ".join(re.sub(r"(https?://[^\s?#]*)[?#]\S*", r"\1", why, flags=re.IGNORECASE).split())[:REASON_MAX]
 
 
 def fetch(co: dict[str, Any]) -> list[dict[str, Any]] | None:
