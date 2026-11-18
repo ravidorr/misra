@@ -1165,12 +1165,13 @@ function newRoles() {
   return { counts, total: jobs.length };
 }
 
-/* One circle per company with new roles, 15 at most, most first; the chosen company always stays, so it can be turned off. */
+/* One circle per company with new roles, 15 at most, most first. The chosen company is always there and always first, so
+   its circle is on the line while the strip is closed and it can be turned off. */
 function renderStories(counts) {
-  const names = Object.keys(counts)
+  let names = Object.keys(counts)
     .sort((a, b) => counts[b] - counts[a] || a.localeCompare(b))
     .slice(0, 15);
-  if (F.company && !names.includes(F.company)) names.push(F.company);
+  if (F.company) names = [F.company, ...names.filter((company) => company !== F.company)];
   const focused = document.activeElement?.closest('#stories .story')?.dataset.company; /* replaceChildren drops the focus */
   $('hiring').hidden = names.length === 0;
   $('stories').replaceChildren(
@@ -1197,9 +1198,12 @@ function renderStories(counts) {
   );
   layoutStories();
   if (focused !== undefined) {
-    /* the circle can be gone (a chosen company without new roles, turned off): the focus goes to the list heading, never to the page */
+    /* the circle can be gone (a chosen company without new roles, turned off) or put away behind "Show all" (a company
+       that is not on the first line goes back to its place): the focus goes to the button, or else to the list heading,
+       never to the page and never to a hidden circle */
     const same = [...$('stories').children].find((li) => li.firstChild.dataset.company === focused);
-    (same?.firstChild ?? $('list-h')).focus();
+    const toggle = $('hiringToggle');
+    (same && !same.hidden ? same.firstChild : toggle.hidden ? $('list-h') : toggle).focus();
   }
 }
 
