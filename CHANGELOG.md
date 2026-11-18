@@ -12,6 +12,12 @@ All notable changes are documented here. Format follows [Keep a Changelog](https
 
 - A Copy button under every code block of the legal pages (the address on "Connect your assistant", the command for Claude Code), in `templates/theme.js`.
 
+## [0.67.2] - 2026-11-18
+
+### Changed
+
+- The crawl summary in the daily log now prints one line for every failing company, not only the browser ones: the adapter and a short reason (the crawler's own note, the adapter's exception or "request failed"), cut to 150 characters and without URL query strings.
+
 ## [0.67.1] - 2026-11-18
 
 ### Changed
