@@ -26,7 +26,7 @@ alerts.
 - **The page has no power of its own.** `admin.html` is static and public, like the rest of `docs/`, and the anon key is
   public. Security is row-level security (RLS) plus a server-side admin check. The service-role key never reaches a
   browser or the crawl (see `AGENTS.md`); anything that needs it runs in an Edge Function that checks the caller first.
-- **One admin.** A single row in `admins`. No roles, no invitations.
+- **One admin.** A single row in `admins`, inserted by hand as in 1.1; the first sign in never claims it. No roles, no invitations.
 - **Not discoverable.** `noindex`, no link from any public page or from `llms.txt`, left out of `jobs.jsonld` and the
   WebMCP tools. It is not a secret (it is in the repository); it is only never advertised.
 - **Every step tests the denial first.** A signed-out user and a signed-in non-admin get a permission error on every
@@ -55,8 +55,10 @@ alerts.
 
 The data is already in Supabase, so this step adds no table and no pipeline change.
 
-- [ ] 2.1 Policies: `select` on `crawl_log` and on all `jobs` columns except `description` and `details` (the lawyer's
-  rule of 2026-11-16 stays; the office never shows posting text) for `is_admin()` only.
+- [ ] 2.1 Read access for `is_admin()` only: a row policy `using (is_admin())` on `crawl_log` and `jobs`, and a column
+  grant on `jobs` that leaves out `description` and `details` (row-level security cannot hide columns; the pattern is
+  that of `20261122100000_jobs_snippet.sql`, and the lint in `tests/test_migrations.py` still refuses a grant of
+  either). The lawyer's rule of 2026-11-16 stays: the office never shows posting text.
 - [ ] 2.2 "Crawl health": per company, the last good crawl, the last result and note, and a streak of failures; sorted
   with the worst first; filters for failing, skipped for robots.txt, and held (a sharp drop). Counts of open jobs per
   company over 30 days. Reads `crawl_log` and `jobs` with the admin session; no function.
@@ -68,7 +70,8 @@ The data is already in Supabase, so this step adds no table and no pipeline chan
 ## Step 3: Company list editing
 
 This moves the home of the list from `data/companies.json` to Supabase, as the jobs moved in `PLAN.md` step 1. It is the
-one step that changes the pipeline.
+one step that changes the pipeline. Today `data/companies.json` holds 347 records: 267 crawled and 80 gap records, none
+both.
 
 Decisions made before 3.1:
 
@@ -78,39 +81,48 @@ Decisions made before 3.1:
   copy of today's file). Reason: two homes for the list is the state `PLAN.md` was written to remove. Cost: no git diff
   of edits; the daily backup to `ravidorr/misra-backups` is the history (a `TABLES` entry in `export_accounts.py`). The
   same holds for exclusions, which makes the backup the only record of who asked to be removed and when.
-- **D2. `discover.py` stays offline of the key.** It makes requests to career sites, so it never holds the service-role
-  key. It reads and rewrites only the scratch file; a later step of the same job (the one that holds the key) pushes
-  the five discovered fields back to the table, and nothing else.
+- **D2. `discover.py` stays offline of the key.** No workflow runs it today: the maintainer runs it by hand and commits
+  the file (`CONTRIBUTING.md`, "Adding a company"). It makes requests to career sites, so it never holds the
+  service-role key. It reads and rewrites only the scratch file. After a hand run, `sync_supabase.py --push-companies`,
+  a separate command run with the key in the maintainer's shell, pushes the five discovered fields back to the table
+  and nothing else. No new workflow step.
 - **D3. Exclusions are a field of the company record, edited in the office.** `data/excluded_companies.csv` and its
   second loader go away. An excluded company is a record with `excluded: {reason, date_added}` and `crawl: false`; a
   company that asked to be removed and was never in the list gets a minimal record (name and `excluded`). Excluding a
   company clears its `careers_url`, `links`, `gap` and `segment` in the same write (a database check: an excluded
   record holds nothing else), so the public data keeps only what the asker needs to be honoured. The guards of
   `load_excluded` all stay, in two places: the database refuses a blank or one-character name, a repeated name (case
-  insensitive), a blank reason, a date that is not a date, and a 201st exclusion; and `load_excluded` still checks the
-  pulled file and raises `ExclusionError`, so a record nobody can trust still stops the run. The purge limit
+  insensitive), a blank reason, a date that is not a date, and a 201st exclusion; and `load_excluded` still raises
+  `ExclusionError` on a pulled file that does not load, so a record nobody can trust still stops the run. The purge limit
   (`MAX_PURGE_COMPANIES`) and the spelling check (`check_spelling`) are unchanged.
+- **D4. A pull that cannot reach Supabase stops the run (the same as today).** `sync_supabase.py --pull` already does
+  so for the jobs history, so pulling the list adds no new stop, and a run must not crawl without the exclusions.
 
-- [ ] 3.1 Migration: `public.companies` with the columns of `common.RECORD_KEYS`, which gains `excluded` (`links`, `gap`
+- [ ] 3.1 Migration, alone: it lands before any sync or pipeline change, so the table exists and holds the list while
+  `companies.json` is still the source. `public.companies` with the columns of `common.RECORD_KEYS`, which gains `excluded` (`links`, `gap`
   and `excluded` as `jsonb`, a unique case-insensitive `name` and `domain`, a check that at most one of `crawl`, `gap`
   and `excluded` is set, the checks of D3 for an excluded record, the gap reasons checked against a list kept in step
   with `REASONS`); RLS: no access for anon and authenticated except `is_admin()`, which gets
-  `select, insert, update, delete`; a trigger writes `admin_log`. SQL tests for each denial and for the checks. One
-  migration also loads the 347 records of today's file.
+  `select, insert, update, delete`; a trigger writes `admin_log`. The same migration loads the 347 records of today's
+  file. SQL tests for each denial and for the checks.
 - [ ] 3.2 `sync_supabase.py --pull` also writes `data/companies.json` from the table (sorted by name, the format of
-  `discover.py`, refusing an empty table as it refuses an empty `jobs`); `--push-companies` writes back the discovered
-  fields of crawled records. The pulled file carries the `excluded` records, and `load_excluded` reads them from it
+  `discover.py`, refusing an empty table as it refuses an empty `jobs`); `--push-companies` (run by hand after `discover.py`, see D2)
+  writes back the discovered fields of crawled records. The pulled file carries the `excluded` records, and `load_excluded` reads them from it
   (the CSV and `EXCLUDED_COLUMNS` are removed); `run.py`, `discover.py`, `build_dashboard.py` and the sync keep
   calling it as they do today. `.gitignore` lists the file. `export_accounts.py` backs the table up; `restore_accounts.py`
   restores it. Tests, including the refusal of an empty table.
 - [ ] 3.3 The editor: a searchable list, one form per company with the fields of `CONTRIBUTING.md` ("Adding a
   company"), a "Pin" action (sets `source: override`, `ats`, `slug`), a "Move to gaps" and a "Start crawling" action
-  (the `crawl` flip, with the checks of `tests/test_companies_data.py` run in the page before the write), and the
-  `israel_only` and `verify` switches. An "Exclude" action asks for the reason (with the line "no personal data in the
-  reason") and the date, clears the other fields as D3 says, and shows the number of jobs the next run will delete (it
-  can be run by hand from Actions when it must be done today). "Include again" removes the exclusion. A change takes effect at the next daily run; the page says so.
-- [ ] 3.4 Move the rules of `tests/test_companies_data.py` into a SQL check plus a Python check of the pulled file;
-  port the `load_excluded` and purge tests (`tests/test_politeness.py`, `tests/conftest.py`) from the CSV to excluded
+  (the `crawl` flip; the database checks are the only rules, and the page shows their error), and the
+  `israel_only` and `verify` switches. Since v0.67.4 `run.py` closes the open jobs of every record that is not crawled
+  (`close_uncrawled`, the rows stay as history), so "Move to gaps", like any flip of `crawl` to false, closes that
+  company's jobs at the next run, and "Exclude" deletes them. The page shows the number of jobs the next run will close
+  or delete for both (a run can be started by hand from Actions when it must be done today). An "Exclude" action asks
+  for the reason (with the line "no personal data in the reason") and the date, and clears the other fields as D3 says.
+  "Include again" removes the exclusion. A change takes effect at the next daily run; the page says so.
+- [ ] 3.4 One source of truth for the company rules: the SQL checks of 3.1 are the rules, and
+  `tests/test_companies_data.py` stops duplicating them. The Python side only checks that the pulled file loads and
+  that `load_excluded` still raises `ExclusionError`. Port the `load_excluded` and purge tests (`tests/test_politeness.py`, `tests/conftest.py`) from the CSV to excluded
   records, keeping every case; update `AGENTS.md` (the exclusion paragraph and the single-list rule),
   `CONTRIBUTING.md` ("Removing a company") and `README.md` (the quickstart now starts with `sync_supabase.py --pull`).
 - Done when: a company is added, pinned, put on the card or excluded from the page, and the next daily run crawls it,
@@ -159,11 +171,3 @@ maintainer would do by hand. It shows counts, never lists.
 - More than one admin, roles, or an admin invitation flow.
 - Changing the privacy, terms or security pages, the digest or contact switches, or the assistant endpoint (all lawyer
   matters or maintainer secrets).
-
-## Open questions
-
-1. If the pull step cannot reach Supabase, the run stops (it must not crawl without the exclusions). Is a stopped
-   morning acceptable, or should the last good pulled file be kept as a fallback? Default: stop, as the CSV rule does
-   today for a list nobody can read.
-2. Does the maintainer's Google account that signs in match the one in `admins`, or should the first sign in claim the
-   row? Default: insert by hand, as in 1.1.
