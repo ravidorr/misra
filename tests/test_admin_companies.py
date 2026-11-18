@@ -98,10 +98,14 @@ def quoted_names(block: str) -> list[str]:
 def test_the_feeds_a_pin_can_name_are_the_adapters_plus_browser_and_the_migrations_check() -> None:
     block = ADMIN_JS[ADMIN_JS.index("const PIN_ATS = [") : ADMIN_JS.index("/* The form of the slug")]
     page_list = quoted_names(block[block.index("[") : block.index("];")])
-    sql = MIGRATION.read_text(encoding="utf-8")
-    check = sql[sql.index("ats = '' or ats in (") : sql.index("constraint companies_excluded_keys")]
+    newest = [
+        f.read_text(encoding="utf-8")
+        for f in sorted(MIGRATION.parent.glob("*.sql"))
+        if "constraint companies_ats_known check" in f.read_text(encoding="utf-8")
+    ][-1]  # a new feed is a new migration that sets the check again
+    check = newest[newest.index("ats = '' or ats in (") :]
     assert page_list == [*adapters.ADAPTERS, "browser"]
-    assert page_list == quoted_names(check.split("ats in (", 1)[1])
+    assert page_list == quoted_names(check.split("ats in (", 1)[1].split("))", 1)[0])
 
 
 def test_a_slug_hint_exists_only_for_a_feed_the_page_lists() -> None:

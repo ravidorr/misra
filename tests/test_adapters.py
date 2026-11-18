@@ -1,4 +1,5 @@
 import json
+import re
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
@@ -1945,3 +1946,178 @@ def test_no_request_goes_to_another_host_than_the_career_page(monkeypatch: pytes
     urls = fake_get(monkeypatch, FakeHttpResponse(text=ld_html({"@type": "JobPosting", "description": "Text"})))
     assert adapters.add_descriptions("browser", LD_PAGE, "Weka", [{"job_id": "1", "url": url}], set()) == (0, 0, 0)
     assert urls == []
+
+
+FIXTURES = Path(__file__).parent / "fixtures"
+SYNOPSYS_SLUG = "synopsys.avature.net/careers?2001=21374"
+SIEMENS_SLUG = "jobs.siemens.com/en_US/externaljobs?42386=811993"
+
+
+def fake_avature(monkeypatch: pytest.MonkeyPatch, answer: FakeHttpResponse | None) -> list[dict[str, Any]]:
+    calls: list[dict[str, Any]] = []
+
+    def _get(url: str, **kw: Any) -> FakeHttpResponse | None:
+        calls.append({"url": url, **kw})
+        return answer
+
+    monkeypatch.setattr(adapters, "get", _get)
+    return calls
+
+
+def feed(*items: str, root: str = "rss") -> FakeHttpResponse:
+    return FakeHttpResponse(text=f"<{root}><channel><title>t</title>{''.join(items)}</channel></{root}>")
+
+
+def feed_item(
+    job_id: Any = "7",
+    title: str = "Engineer",
+    place: str = "",
+    host: str = "careers.acme.test",
+    link: str | None = None,
+) -> str:
+    url = link if link is not None else f"https://{host}/p/JobDetail/Engineer-{job_id}/{job_id}"
+    return (
+        f"<item><title>{title}</title><description>{place}</description><link>{url}</link>"
+        "<pubDate>Mon, 14 Sep 2026 00:00:00 +0000</pubDate></item>"
+    )
+
+
+def test_avature_reads_the_synopsys_feed_and_sets_israel_from_the_facet(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls = fake_avature(monkeypatch, FakeHttpResponse(text=(FIXTURES / "avature_synopsys.xml").read_text("utf-8")))
+    jobs = adapters.avature(SYNOPSYS_SLUG)
+    assert calls == [{"url": "https://synopsys.avature.net/careers/SearchJobs/feed/", "params": {"2001": "21374"}}]
+    base = "https://synopsys.avature.net/careers/JobDetail"
+    assert jobs == [
+        {
+            "job_id": "18752",
+            "title": "Applications Engineering, Principal Engineer",  # the ` - 18752` the feed adds is dropped
+            "location": "Israel",  # the feed has no place, its description is only a requisition number
+            "url": f"{base}/Applications-Engineering-Principal-Engineer-18752/18752",
+            "team": "",
+            "posted": "2026-09-14",
+        },
+        {
+            "job_id": "18822",
+            "title": "Applications Engineering, Architect",
+            "location": "Israel",
+            "url": f"{base}/Applications-Engineering-Architect-18822/18822",
+            "team": "",
+            "posted": "2026-09-15",
+        },
+    ]
+
+
+def test_avature_keeps_every_job_the_israel_facet_returns_including_multi_country_postings(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A Siemens posting for several countries lists Israel among them (checked on a job page) and appears in the
+    filtered feed with another country as its description: it is kept, with Israel as its place."""
+    calls = fake_avature(monkeypatch, FakeHttpResponse(text=(FIXTURES / "avature_siemens.xml").read_text("utf-8")))
+    jobs = adapters.avature(SIEMENS_SLUG)
+    assert calls[0]["url"] == "https://jobs.siemens.com/en_US/externaljobs/SearchJobs/feed/"
+    assert calls[0]["params"] == {"42386": "811993"}
+    assert jobs is not None
+    assert [(j["job_id"], j["title"], j["location"]) for j in jobs] == [
+        ("498470", "PLM Expert (Teamcenter) (m/f/d)", "Israel"),
+        ("498931", "Sales Manager (all genders)", "Israel"),  # the description says Germany
+        ("508055", "Senior Engineer", "Israel"),  # the description says the United Kingdom
+        ("510794", "Quality Professional", "Israel"),  # no description
+        ("521540", "C++ Software Engineer with Qt Expertise", "Israel Tel Aviv"),  # the description names the place
+    ]
+    assert all(discover.ISRAEL.search(j["location"]) for j in jobs)  # an israel_only company keeps every one
+
+
+def test_avature_a_title_keeps_a_dash_number_that_is_not_its_own(monkeypatch: pytest.MonkeyPatch) -> None:
+    fake_avature(monkeypatch, feed(feed_item("7", title="Team 99 - 12")))
+    jobs = adapters.avature("careers.acme.test/p?1=2")
+    assert jobs is not None
+    assert jobs[0]["title"] == "Team 99 - 12"
+
+
+def test_avature_a_date_that_is_not_a_date_gives_no_date(monkeypatch: pytest.MonkeyPatch) -> None:
+    item = feed_item().replace("Mon, 14 Sep 2026 00:00:00 +0000", "soon")
+    no_date = feed_item("8").replace("<pubDate>", "<x>").replace("</pubDate>", "</x>")
+    fake_avature(monkeypatch, feed(item, no_date))
+    jobs = adapters.avature("careers.acme.test/p?1=2")
+    assert jobs is not None
+    assert [j["posted"] for j in jobs] == ["", ""]
+
+
+def test_avature_no_job_is_an_empty_board(monkeypatch: pytest.MonkeyPatch) -> None:
+    fake_avature(monkeypatch, feed())
+    assert adapters.avature("careers.acme.test/p?1=2") == []
+
+
+def test_avature_the_largest_list_that_can_be_trusted_is_one_below_the_cap(monkeypatch: pytest.MonkeyPatch) -> None:
+    fake_avature(monkeypatch, feed(*(feed_item(i) for i in range(adapters.AVATURE_MAX - 1))))
+    jobs = adapters.avature("careers.acme.test/p?1=2")
+    assert jobs is not None
+    assert len(jobs) == adapters.AVATURE_MAX - 1
+
+
+def test_avature_a_list_as_long_as_the_cap_is_a_failure(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The feed cannot be paged: this long a list may be cut short, and is what an ignored facet gives."""
+    fake_avature(monkeypatch, feed(*(feed_item(i) for i in range(adapters.AVATURE_MAX))))
+    assert adapters.avature("careers.acme.test/p?1=2") is None
+
+
+@pytest.mark.parametrize(
+    "slug",
+    [
+        "",
+        "synopsys.avature.net",
+        "synopsys.avature.net/careers",
+        "synopsys.avature.net/careers?",
+        "synopsys.avature.net/careers?2001",
+        "synopsys.avature.net/careers?2001=",
+        "synopsys.avature.net/careers?2001=abc",
+        "synopsys.avature.net/careers?2001=1&3=4",
+        "synopsys.avature.net/?2001=21374",
+        "nohost/careers?2001=21374",
+    ],
+)
+def test_avature_a_slug_that_is_not_host_portal_and_one_facet_is_a_failure_without_a_request(
+    monkeypatch: pytest.MonkeyPatch, slug: str
+) -> None:
+    calls = fake_avature(monkeypatch, feed())
+    assert adapters.avature(slug) is None
+    assert calls == []
+
+
+@pytest.mark.parametrize(
+    "answer",
+    [
+        None,
+        FakeHttpResponse(status_code=403),
+        FakeHttpResponse(text="<html><body>Sign in</body></html>"),
+        FakeHttpResponse(text="not xml at all"),
+        feed(root="html"),
+        feed("<item><title></title><link>https://careers.acme.test/p/JobDetail/E/1</link></item>"),
+        feed("<item><title>Engineer</title></item>"),
+        feed("<item><title>Engineer</title><link>https://careers.acme.test/p/JobDetail/Engineer</link></item>"),
+        feed(feed_item(host="other.test")),
+        feed(feed_item(link="http://careers.acme.test/p/JobDetail/Engineer-7/7")),
+        feed(feed_item("1"), feed_item("2", host="other.test")),  # one unreadable job fails the list
+        feed(feed_item("1"), feed_item("1")),  # a job twice
+    ],
+)
+def test_avature_an_answer_that_is_not_a_clean_feed_is_a_failure(
+    monkeypatch: pytest.MonkeyPatch, answer: FakeHttpResponse | None
+) -> None:
+    fake_avature(monkeypatch, answer)
+    assert adapters.avature("careers.acme.test/p?1=2") is None
+
+
+def test_avature_the_slugs_of_the_two_companies_are_accepted_by_the_admin_editor() -> None:
+    admin = (Path(__file__).parent.parent / "templates" / "admin.js").read_text("utf-8")
+    chars = re.search(r"const PIN_SLUG_CHARS = /(.*)/;", admin)
+    longest = re.search(r"const PIN_SLUG_MAX = (\d+);", admin)
+    assert chars
+    assert longest
+    for slug in (SYNOPSYS_SLUG, SIEMENS_SLUG):
+        assert re.fullmatch(chars[1], slug)
+        assert len(slug) <= int(longest[1])
+
+
+def test_avature_is_registered() -> None:
+    assert adapters.ADAPTERS["avature"] is adapters.avature

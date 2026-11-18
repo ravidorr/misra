@@ -74,9 +74,21 @@ def test_the_gap_reasons_are_the_keys_of_REASONS() -> None:
     )
 
 
+def newest_ats_check() -> str:
+    """The text of the newest migration that sets the check `companies_ats_known` (a new feed is a new migration)."""
+    files = [
+        f for f in sorted(MIGRATION_DIR.glob("*.sql")) if "constraint companies_ats_known check" in f.read_text("utf-8")
+    ]
+    return files[-1].read_text("utf-8")
+
+
 def test_the_feeds_are_the_adapters_and_the_browser() -> None:
-    assert quoted_list_after("ats = '' or ats in (") == [*adapters.ADAPTERS, "browser"], (
-        "the ats list of the migration differs from adapters.ADAPTERS plus `browser` (run.py sends it to the browser)"
+    text = newest_ats_check()
+    start = text.index("ats = '' or ats in (") + len("ats = '' or ats in (")
+    listed = re.findall(r"'([a-z_]+)'", text[start : text.index(")", start)])
+    assert listed == [*adapters.ADAPTERS, "browser"], (
+        "the ats list of the newest migration that sets companies_ats_known differs from adapters.ADAPTERS plus "
+        "`browser` (run.py sends it to the browser): a new feed needs a new migration that drops and adds the check"
     )
 
 

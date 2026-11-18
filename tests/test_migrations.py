@@ -291,6 +291,14 @@ COMPANIES_LOAD = re.compile(
     r"from jsonb_to_recordset\(\$companies\$(?P<data>(?:(?!\$companies\$).)*)\$companies\$::jsonb\) "
     r"as r \(\s*(?P<types>[a-z_, ]+?)\s*\)"
 )
+# PLAN_3.md steps C3 and E3: a new job feed is a new key of the check `companies_ats_known`: a migration drops that one
+# constraint and adds it again with a list of names. Only those two statements are allowed, matched whole: no other
+# constraint, column or table of `companies` can be altered this way.
+COMPANIES_ATS_DROP = "alter table public.companies drop constraint companies_ats_known"
+COMPANIES_ATS_ADD = re.compile(
+    r"alter table public\.companies add constraint companies_ats_known check \( "
+    r"ats is null or ats = '' or ats in \( '[a-z_]+'(?:, '[a-z_]+')* \)\)"
+)
 COMPANY_FUNCTION = re.compile(
     r"create function public\.(?P<name>companies_\w+)\(\) returns trigger language plpgsql "
     r"(?P<definer>security definer )?set search_path = '' as \$\$(?P<body>.*)\$\$"
@@ -571,9 +579,10 @@ def problems(stmts: list[str]) -> list[str]:
                 GRANT_ADMIN_HEALTH,
                 GRANT_ADMIN_ALERTS,
             }
-            or s == GRANT_ADMIN_ACCOUNT
+            or s in (GRANT_ADMIN_ACCOUNT, COMPANIES_ATS_DROP)
             or s in COMPANIES_INDEXES
             or COMPANIES_LOAD.fullmatch(s)
+            or COMPANIES_ATS_ADD.fullmatch(s)
             or ADD_JOBS_COLUMN.fullmatch(s)
             or GRANT_SUBSCRIPTION_FUNCTION.fullmatch(s)
             or GRANT_SUBSCRIBE_FUNCTION.fullmatch(s)
@@ -1176,6 +1185,37 @@ def test_the_admin_account_lookup_is_one_closed_read_only_function_and_adds_no_c
 def test_the_lint_rejects_a_weakened_admin_account_migration(old: str, new: str) -> None:
     assert old in ADMIN_ACCOUNT_SQL, old
     assert problems(statements_of(ADMIN_ACCOUNT_SQL.replace(old, new)))
+
+
+ATS_SQL = (MIGRATION_DIR / "20261203100000_companies_ats_avature.sql").read_text(encoding="utf-8")
+
+
+def test_the_ats_check_migration_passes_the_lint_and_changes_nothing_else() -> None:
+    assert problems(statements_of(ATS_SQL)) == []
+    assert [s.split(" check")[0] for s in statements_of(ATS_SQL)] == [
+        "alter table public.companies drop constraint companies_ats_known",
+        "alter table public.companies add constraint companies_ats_known",
+    ]
+
+
+ATS_CHECK = "check ( ats is null or ats = '' or ats in ( 'a' ))"
+
+
+@pytest.mark.parametrize(
+    "extra",
+    [
+        "alter table public.companies drop constraint companies_name_unique",  # no other constraint
+        "alter table public.companies drop constraint companies_excluded_shape",
+        "alter table public.companies drop column slug",
+        "alter table public.companies disable trigger all",
+        "alter table public.jobs drop constraint companies_ats_known",  # no other table
+        "alter table public.companies add constraint companies_ats_known check (true)",  # the whole check, not any
+        "alter table public.companies add constraint companies_name_min_length " + ATS_CHECK,
+        "alter table public.companies add constraint companies_ats_known " + ATS_CHECK + " not valid",
+    ],
+)
+def test_the_lint_allows_no_other_alter_of_the_companies_table(extra: str) -> None:
+    assert problems(statements_of(f"{ATS_SQL}\n{extra};"))
 
 
 ADMIN_POLICY = 'create policy "p" on public.{table} for {command} to {roles} {clauses}'
