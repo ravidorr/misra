@@ -199,6 +199,12 @@ Observations about live sites below come from checks made on 2026-11-14 and may 
       roles "may be missing or old", until a tenant lets the runner in or the crawl moves to a network it accepts.
       Their old jobs stay listed until a good crawl or the failure rules close them. The Workday pins of 2026-11-17
       (Intel, Autodesk, Ex Libris, Unity) may hit the same block on the runner.
+      Rechecked on 2026-11-18 (PLAN_3 B2): all 25 pinned Workday tenants were in the failing list of the last two days
+      (runs of 2026-11-17 04:23 UTC to 2026-11-18 16:28 UTC; Motorola Solutions, Ex Libris, Proofpoint, Samsung and
+      CrowdStrike answered on some runs), and every one of the 25 answered from a normal network the same day with a
+      list (6 of them an empty one: Adobe, Criteo, Integral Ad Science, Proofpoint, Visa, Zoom), so they are all
+      runner-blocked, none a wrong slug. Not worked around, no change made. The five Oracle HCM tenants did not fail
+      in those runs. Next look: when a tenant starts answering from the runner, or when the crawl can move.
     - Checked on 2026-11-17 (third batch, do not repeat): Ormat and Stratasys are SuccessFactors career sites whose
       `/search/?q=&locationsearch=Israel` page the generic browser crawl reads without an adapter (3 and 18 Israeli
       jobs, the same on two runs); robots.txt of `careers.ormat.com` and `careers.stratasys.com` only blocks
