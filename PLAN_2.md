@@ -249,7 +249,7 @@ maintainer would do by hand. It shows counts, never lists.
 - [x] 5.1 (done: `20261201100000_admin_alert_counts.sql`, `public.admin_alert_counts()`, rows of kind, day and n; `supabase/tests/admin_alert_counts.sql`; the Alerts area shows the counts, read-only. The maintainer applies the migration after merge.) The Alerts counts, from a view or a `security definer` function gated by `is_admin()` that returns numbers
   only: subscriptions by state (pending, confirmed, off), and the number of distinct users emailed in each of the last 7
   days (from `emailed`; not the number of jobs). No address and no user id in the result.
-- [ ] 5.2 The Edge Function `admin-account`, which first checks `is_admin()` with the caller's token and answers 404
+- [x] 5.2 (done: PR #220, `supabase/functions/admin-account/`, migration `20261202100000_admin_account_ids.sql`, not yet deployed or applied; request and answers in `supabase/README.md`.) The Edge Function `admin-account`, which first checks `is_admin()` with the caller's token and answers 404
   otherwise. It takes an address the maintainer types (from a support email) and does one of two things.
   - End job alerts: the same as the unsubscribe link (`PRIVACY.md`, "Email settings"). `unsubscribe_subscription` takes
     a token hash, so this is a new path by address, not a reuse.
@@ -261,7 +261,7 @@ maintainer would do by hand. It shows counts, never lists.
   nothing is written to the log. It never logs the address (the rule of `AGENTS.md`), never returns a row, and never
   emails the person.
 - [ ] 5.3 The Alerts area: two forms and the counts of 5.1. There is no list of accounts and no search by partial text.
-- [ ] 5.4 `PRIVACY.md` is not touched. `tests/test_migrations.py` pins that the new migrations add no personal column
+- [x] 5.4 (done with 5.2: `test/admin-account.test.ts` and the pinned lookup in `tests/test_migrations.py`.) `PRIVACY.md` is not touched. `tests/test_migrations.py` pins that the new migrations add no personal column
   (the `PERSONAL_COLUMN_ALLOWED` pattern), and a vitest test in `test/` checks the 404 of the function for a non-admin
   and that the function never logs the address.
 - Done when: a request to stop alerts or delete an account is done on the admin page with the two answers above, the

@@ -18,6 +18,8 @@ a request to `crawl_log`, and any `POST`, `PATCH` or `DELETE` with the anon key,
 
 - Anon key (public): safe in the dashboard page. It can only read open jobs, because row-level security allows nothing
   else. The key is not a secret and may appear in `docs/`.
+- Anon key in a function: `admin-account` sends it (`SUPABASE_ANON_KEY`, supplied to every function) as the `apikey` with the
+  caller's own token to ask `is_admin()`; it carries no rights of its own.
 - Service-role key: bypasses row-level security, so it is a secret. It exists only as a GitHub Actions secret and is
   exposed only to the sync step of the daily workflow, never during the crawl. Never put it in the repository, the
   dashboard, a log or an issue. If it leaks, rotate it in the Supabase dashboard (Project Settings, API).
@@ -142,7 +144,7 @@ run the statement again.
 Migration `20261128100000_admin_log.sql` (PLAN_2.md step 1.3) adds `public.admin_log(id, ts, action, target)`: one row per
 change made on the admin page, with the time, a plain action and the company or table it touched. `target` is never an
 address and never a user id (and may be empty), so the table holds no personal data. Two writers: the trigger of
-`companies` (step 3.1, see "The company list") and, later, the `admin-account` function of step 5.2 (service role). No public role has insert, update, delete or
+`companies` (step 3.1, see "The company list") and the `admin-account` function of step 5.2 (service role). No public role has insert, update, delete or
 truncate, a listed admin included; a signed-in admin reads it through one select policy, `using (public.is_admin())`, and
 everyone else gets a permission error (`anon`) or no rows. It is not in the daily account backup (no auth user to restore,
 and the plan names the backup of `companies` as the history of edits). `supabase/tests/admin_log.sql` checks all of it
@@ -564,6 +566,89 @@ redirect URLs set). Signed in on the dashboard with the throwaway account, star 
    function with `-H "Authorization: Bearer <token>"` answers 200 with `"alreadyDeleted": true` (Auth: `user_not_found`)
    or, if the token was also revoked, 401. Either way nothing else is deleted. Note which one you get.
 4. Signing in again with the same Google account makes a new, empty account.
+
+## Admin: end alerts or delete an account (Edge Function `admin-account`)
+
+PLAN_2.md step 5.2. The maintainer, signed in on the admin page, types the address from a support email and either ends
+that person's job alerts (what the unsubscribe link does) or deletes their account (what "Delete my account" does). Files:
+`supabase/functions/admin-account/` (`index.ts` starts the server, `handler.ts` holds the logic), `supabase/functions/_shared/delete-user.ts`
+(the Admin API call, now shared with `delete-account`), the migration `supabase/migrations/20261202100000_admin_account_ids.sql`
+and `supabase/config.toml` (`verify_jwt = false`: a CORS preflight carries no token; the function checks the caller itself).
+No new secret: `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` and `SUPABASE_ANON_KEY` are supplied to every function.
+
+### The admin-account request and the answers
+
+`POST <project url>/functions/v1/admin-account`, `Content-Type: application/json`, `Authorization: Bearer <the admin's access token>`,
+body at most 2 KB:
+
+```json
+{ "address": "person@example.com", "action": "end_alerts" }
+```
+
+`action` is `end_alerts` or `delete_account`. The address is trimmed and compared whole, ignoring case; there is no partial
+match and no list or search of accounts. Every answer but the 404 is JSON with `ok`:
+
+- 200 `{"ok": true, "result": "done", "message": "Done."}`: the action was done. For `end_alerts` this is also true when the
+  person never had alerts or had turned them off (the goal is reached); for `delete_account`, also when the account was
+  already gone.
+- 200 `{"ok": true, "result": "no_account", "message": "No account uses that address."}`: nothing matched, nothing was
+  done, nothing was logged. (Both answers are 200; the page reads `result` and shows `message`.)
+- 400 `bad_request`: the body is not an address and one of the two actions. Nothing was looked up.
+- 404, no body: the caller is not an admin, has no token or a malformed one, the method is not POST, or the origin is not the
+  dashboard's. It is the same answer for all of them, so the function does not say that it exists.
+- 500 `server_error`: a missing secret or a failed database call (including the log write, in which case nothing was done).
+- 409 `ambiguous`: `delete_account` found more than one account with that sign-in email; nothing was done or logged.
+- 502 `delete_failed` (the Admin API refused; the account is still there) or `delete_unconfirmed` (a timeout or a 5xx; it
+  may or may not be gone). Never "Done.".
+- 503 `service_unavailable`: the admin check or the session check could not be made. It is the same for an admin and for anyone else, so it
+  tells nothing about who is an admin; nothing was done.
+
+A 404 for a real admin can also mean an expired session (the database answers 401 to the check, and that is read as "not an
+admin", with a status line in the function's log). A page that calls this function should refresh the session and retry
+once before it shows anything. The check uses `SUPABASE_ANON_KEY` as the `apikey`; if the gateway does not accept the key
+the runtime supplies, every admin call is a 404 and the log line says 401 (see the live check below).
+
+The CORS preflight (OPTIONS) answers 204 for `https://ravidorr.github.io` only; nothing in it depends on the caller.
+
+### How it decides, what it writes, what it never does
+
+1. It asks `public.is_admin()` through PostgREST with the caller's token and the public key. Then it asks Supabase Auth
+   (`GET /auth/v1/user`, the same check as `delete-account`) whether the session is still live, because PostgREST checks only
+   the token's signature and expiry; a signed-out or revoked session is a bare 404, and an Auth that cannot be reached is a 503.
+   The order is token, `is_admin()`, live session; the service-role key does no work (lookup, log, action) before all three pass.
+2. It finds the accounts with `public.admin_account_ids(p_address, p_login_only)`, called with the service role (the
+   address travels in a request body, never in a URL, which the platform's request log would keep). An account uses an
+   address when it is the email the person signs in with (`profiles.email`) or, for `end_alerts` only, the address the digest
+   goes to (`subscriptions.address`). `delete_account` goes by the sign-in email only, so a digest address typed by someone else
+   cannot delete another person's account. The function returns ids only and nothing is ever returned to the page but the
+   two plain answers.
+3. When something matches it writes one `admin_log` row, `action` = `alerts ended` or `account deleted`, `target` empty, the
+   time by the column default: no address, no hash of it, no user id. The row is written before the action, so an action is
+   never done without a record (so a row means "attempted", and a failed deletion still has its row). Then `end_alerts` calls `unsubscribe_user` (the clean-up of the unsubscribe link) for each id
+   and `delete_account` calls `deleteAuthUser` of `_shared/delete-user.ts`, the same code `delete-account` uses.
+4. It never logs the address (only function names and status codes), never returns a row, and never emails the person.
+
+### How admin-account is tested
+
+`test/admin-account.test.ts` (vitest, part of `npm run test`) runs the handler against a fake database and Auth: a signed-in
+non-admin, a missing, malformed or forged token, other methods and origins all get the bare 404 and cause no write; the
+check uses the caller's token and the public key, never the service-role key; the two answers; the digest address finds an
+account to end alerts but never to delete it; the log row holds the action and nothing else, and is written first; the
+address reaches only the lookup, in a body; every failure is logged as a status code with no address, token, key or id.
+`supabase/tests/admin_account_ids.sql` checks the lookup (case, whole address, `p_login_only`, ids only, service role only),
+and the migration lint in `tests/test_migrations.py` pins it whole and checks that the migration adds no column.
+
+### Apply and deploy admin-account (the maintainer; nothing here is done by the pull request)
+
+1. Apply `20261202100000_admin_account_ids.sql` once, as in "Apply the migrations".
+2. `supabase functions deploy admin-account --project-ref dncodqeqpoqwcxdctzco` (`config.toml` sets `verify_jwt = false`), and
+   redeploy `delete-account`, which now imports the shared deletion. Logs:
+   [Edge Functions, admin-account](https://supabase.com/dashboard/project/dncodqeqpoqwcxdctzco/functions/admin-account/logs).
+3. Check from any shell (no token, nothing is changed): `curl -s -i -X POST https://dncodqeqpoqwcxdctzco.supabase.co/functions/v1/admin-account`
+   must answer 404 with no body, and so must the same call with `-H 'Authorization: Bearer not.a.token'`.
+4. Signed in as the admin on the admin page (or with the admin's access token), POST
+   `{"address": "nobody@example.test", "action": "end_alerts"}`: it must answer 200 "No account uses that address." and write no
+   `admin_log` row. A 404 here means the key or the token was not accepted: read the function log for the status.
 
 ## Subscribers: confirm and unsubscribe (Edge Functions `confirm-email` and `unsubscribe`)
 
