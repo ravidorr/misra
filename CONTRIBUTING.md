@@ -42,15 +42,21 @@ lost at the next pull. A record has these fields:
 
 The database checks are the rules of a record (a name and a domain unique ignoring case, exactly one of crawling, a
 gap or an exclusion, a known gap reason and ATS, `https://` addresses): the table refuses a record that breaks one,
-and says which. Until the admin page has its editor (PLAN_2.md step 3.3) the maintainer edits the table in the
-Supabase dashboard (Table Editor, `companies`).
+and says which. The maintainer edits the list on the Companies area of the admin page (`admin.html`, not linked from
+any page; sign in on the dashboard first), which writes through the same session and shows each refusal as one plain
+sentence. Everything below can also be done in the Supabase dashboard (Table Editor, `companies`) or the SQL editor,
+which is the fallback when the page is not available. A visitor or contributor who wants a company added suggests it
+through the report form on the coverage gap card or the Contact page; the maintainer reads the email and adds it.
 
-1. Insert a row with `name`, `domain` and `crawl` true.
+1. Choose "Add a company" on the Companies area (name, domain, optionally a career page, and crawl). The page says that
+   a new company is crawled only after the `discover-companies` workflow has run, and links to its run page. In the
+   table, insert a row with `name`, `domain` and `crawl` true instead.
 2. Run the `discover-companies` workflow from `main` (Actions, Run workflow). It pulls the list, runs
    `discover.py --new-only`, which fills in the careers URL and job feed of the crawled companies that have no `status`
    yet (every other record is left as pulled, since a runner cannot rebuild the whole list), and sends back only those
    five fields. A new company is crawled by the daily run after that.
-3. If `discover.py` finds the wrong feed or none, pin the company: set `source` to `override` and its `ats` and `slug`
+3. If `discover.py` finds the wrong feed or none, pin the company (the page edits no feed by hand: use the table
+   editor for this step; the page's "Find its job feed again" only empties the `status`): set `source` to `override` and its `ats` and `slug`
    (or `ats` `browser` and a career page URL as the `slug`), empty its `status`, then run the `discover-companies` workflow
    again so the `status` becomes `ok` (`run.py` crawls only `status` `ok`). `discover.py` keeps a pinned `ats` and `slug` and only
    checks them. Clear `source` to let it search again. A company that has `status` `ok` is never downgraded by the
@@ -85,9 +91,12 @@ and it is excluded, so it is never crawled again. `TERMS.md` promises "removed p
 
 1. Find the exact name the crawl uses: the `name` of the company in the `companies` table (for example `Acme`). A
    company that appears under two names needs a record for each.
-2. Exclude it in the Supabase SQL editor (until the admin page has its editor, step 3.3), in one statement. An excluded
-   record holds the name, `crawl` false and the exclusion, and nothing else, so every other field is set to null in the
-   same write (the table refuses anything else):
+2. On the Companies area of the admin page, open the company, choose "Exclude…" and write the reason and the date
+   (today by default); for a company that was never in the list choose "Exclude a company" and type the name exactly.
+   The dialog says how many jobs the next daily run will delete and how many excluded companies wait to be purged
+   (the run stops when more than 3 wait). The page offers no way to remove an excluded record. The fallback is the
+   Supabase SQL editor, in one statement. An excluded record holds the name, `crawl` false and the exclusion, and
+   nothing else, so every other field is set to null in the same write (the table refuses anything else):
 
    ```sql
    update public.companies set crawl = false, domain = null, segment = null, careers_url = null, ats = null,
@@ -589,8 +598,8 @@ Not covered, and said plainly: a real PostgREST and a real Supabase project (the
 
 Visitors report a missing company with "Add a company" on the dashboard's coverage gap card (PLAN.md step 5.2). Each report reaches the maintainer by email (company, career page link and why it matters). Nothing is stored about it, so the email is the record: act on it or answer it, then do one of these in the `companies` table (no PR: the table is not in git):
 
-1. **Accept it for the crawl.** Check that the link is the company's own career page and that it lists roles in Israel, then add it to the `companies` table as in "Adding a company" (`name`, `domain`, `crawl` true) and run the `discover-companies` workflow (it fills in the careers URL and job feed); the daily crawl then reads the company. If `discover.py` finds no feed for it, the next step applies.
-2. **Keep it on the gap card, with a reason.** Add a record to the `companies` table with `crawl` false, its `name`, `domain` and `careers_url`, `ats`, `slug` and `source` as empty strings, a `status` (`careers_page_only`, or `not_found` when there is no address) and a `gap` of `reason` and `note`. `reason` must be one of the keys of `REASONS` in `build_dashboard.py` (for example `no_feed_found` or `needs_reader`) and `note` says in a few words why we cannot read the site; the dashboard shows both on the coverage gap card. `careers_url` is the company's career page over `https` (leave it empty only for `no_careers_url`, which has none); the card links every site, to the career page, or to `https://<domain>` when there is none, and `tests/test_build_dashboard.py` fails when a record has no usable address.
+1. **Accept it for the crawl.** Check that the link is the company's own career page and that it lists roles in Israel, then add it with "Add a company" on the Companies area of the admin page, as in "Adding a company" (`name`, `domain`, the link as the Israel career page, crawl) and run the `discover-companies` workflow (it fills in the careers URL and job feed); the daily crawl then reads the company. If `discover.py` finds no feed for it, the next step applies.
+2. **Keep it on the gap card, with a reason.** Add the company on the same page and choose "Show it on the coverage card, not crawled" with a reason and a note; the career page you type becomes the link the card opens. By hand, add a record to the `companies` table with `crawl` false, its `name`, `domain` and `careers_url`, `ats`, `slug` and `source` as empty strings, a `status` (`careers_page_only`, or `not_found` when there is no address) and a `gap` of `reason` and `note`. `reason` must be one of the keys of `REASONS` in `build_dashboard.py` (for example `no_feed_found` or `needs_reader`) and `note` says in a few words why we cannot read the site; the dashboard shows both on the coverage gap card. `careers_url` is the company's career page over `https` (leave it empty only for `no_careers_url`, which has none); the card links every site, to the career page, or to `https://<domain>` when there is none, and `tests/test_build_dashboard.py` fails when a record has no usable address.
 3. **Decline it** when the link is not a career page, the company has no roles in Israel, or the report looks like spam. Nothing needs to be recorded.
 
 Records of the `companies` table that are not excluded are public (anyone can read them), so never copy anything from a report beyond the company and its public site.

@@ -175,7 +175,18 @@ Steps:
   PR: `tests/test_companies_data.py` only checks that the pulled file loads and that `load_excluded` raises
   `ExclusionError`; the `load_excluded` and purge tests were ported from the CSV to excluded records; the tests that
   read the real file read the frozen `tests/fixtures/companies.json`; `test_todo_counts` was dropped.
-- [ ] 3.3 The editor.
+- [x] 3.3 The editor. (done: PR for step 3.3. Templates, a small `components/choice.css` and tests only: no Python module
+  changed, so no version bump. Built as `templates/admin.js` and the dialogs of `templates/admin.html`; the tests run
+  against a fake of the `companies` and `jobs` tables, `tests/fake_companies.py`, which refuses a write as the
+  migration's checks do. Differences from the text below, all on purpose: the name of a listed company is read-only
+  (`jobs` and `crawl_log` are keyed by it, so a rename would orphan the history); the page chooses between "Crawl it" and
+  "Show it on the coverage card" and never sets `excluded` except through "Exclude…" and "Exclude a company"; the hand
+  choice of `ats` and `slug` is left to the table editor, and "Find its job feed again" empties the `status`; rows do not
+  say "applies at the next run" (the saved line does, for the change just made); no `updated_at` conflict banner,
+  but every update and delete carries `updated_at`, and one that finds the row changed says so; removing a company
+  says its open jobs stay in the history, because no run closes the jobs of a company that is not in the list (move it
+  to the card first to close them). The count of excluded companies waiting to be purged reads the jobs of the
+  excluded names (a thousand rows at most) and is shown in the Exclude dialog.)
   - **List.** A searchable `ul` with "Showing n of 347" in `role="status"`, chips Crawled, On the card (a company with a
     gap, shown with its reason, note and career link) and Excluded, and an Edit button
     on each row. Rows edited since the last crawl say "applies at the next run".
@@ -206,9 +217,10 @@ Steps:
   - **Timing.** `run.py` crawls only records with `status == "ok"`, and a new company has no `ats`, `slug` or status
     until `discover.py` runs. A new company is therefore crawled after the next discover-and-push run (D2); every other
     change takes effect at the next daily run. The page says which of the two applies.
-- [ ] 3.4 One source of truth for the company rules: the SQL checks of 3.1 are the rules.
-  - Status: the backup and restore of `companies` are done (v0.71.0, the item below). The step stays open for the
-    documentation that waits for the editor of 3.3 ("Adding a company", "Reported sites" on the admin page).
+- [x] 3.4 One source of truth for the company rules: the SQL checks of 3.1 are the rules.
+  - Status: done. The backup and restore of `companies` landed in v0.71.0; the documentation that waited for the editor
+    ("Adding a company", "Removing a company on request" and "Reported sites" now start on the admin page, with the SQL
+    path kept as the fallback; the exclusion paragraph of `AGENTS.md`) landed with step 3.3.
   - [x] `companies` is backed up with the `Table(..., account=False)` pattern of `JOBS` and `CRAWL_LOG` in
     `export_accounts.py`, and `restore_accounts.py` restores it.
   - Docs: `AGENTS.md` (the exclusion paragraph and one line in the backup paragraph; the single-list rule and the key-exposure rule

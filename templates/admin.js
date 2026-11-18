@@ -19,11 +19,11 @@ const MESSAGES = {
   failed: 'Could not load this area.',
   retry: 'Try again',
 };
-/* The page title of each area, and what loads it. A loader resolves to true when it showed something. Only the Crawl
-   area asks the database for anything yet; the others are empty until their steps land. */
+/* The page title of each area, and what loads it. A loader resolves to true when it showed something. Crawl and
+   Companies ask the database for something; the others are empty until their steps land. */
 const AREAS = {
   crawl: { title: 'Crawl', load: loadCrawl },
-  companies: { title: 'Companies', load: async () => false },
+  companies: { title: 'Companies', load: loadCompanies },
   alerts: { title: 'Alerts', load: async () => false },
   log: { title: 'Log', load: async () => false },
 };
@@ -282,22 +282,651 @@ async function crawlRows() {
   return data ?? [];
 }
 
-async function loadCrawl(box) {
-  let rows = await crawlRows();
+/* The rows of one call that may be refused with a 401 (`fetchRows` resolves with null then): run the admin check again,
+   as the page does, which renews the token or ends the session, and ask once more. Resolves with the rows, or with
+   undefined when the page is no longer ready and has said so. */
+async function renewing(fetchRows, what) {
+  let rows = await fetchRows();
   if (rows === null) {
-    /* A 401: run the admin check again, as the page does, which renews the token or ends the session. */
     const result = await verdict();
     if (result !== 'ready') {
       settle(result);
-      return true; /* the page is no longer ready: nothing to say in this area */
+      return undefined;
     }
-    rows = await crawlRows();
-    if (rows === null) throw new Error('admin_crawl_health was refused twice');
+    rows = await fetchRows();
+    if (rows === null) throw new Error(`${what} was refused twice`);
   }
+  return rows;
+}
+
+async function loadCrawl(box) {
+  const rows = await renewing(crawlRows, 'admin_crawl_health');
+  if (rows === undefined) return true; /* the page is no longer ready: nothing to say in this area */
   if (rows.length === 0) return false;
   box.removeAttribute('role'); /* the loading line was a status; the rows that replace it are not */
   box.replaceChildren(crawlView(rows));
   return true;
+}
+
+/* ---- Companies: the list and its editor (PLAN_2.md step 3.3) ----
+   Every write goes through the signed-in client: row-level security and the check constraints of the table decide what
+   is allowed, never this script. The page only turns a refusal into one plain sentence (CONSTRAINTS), and never shows
+   the text of the database's error, which can quote a row. */
+
+const COMPANY_COLUMNS =
+  'id,name,domain,segment,crawl,careers_url,ats,slug,source,status,israel_only,verify,links,gap,excluded,updated_at';
+const DISCOVER_URL = 'https://github.com/ravidorr/misra/actions/workflows/discover-companies.yml';
+const MAX_PURGE_COMPANIES = 3; /* common.MAX_PURGE_COMPANIES: the daily run stops when more companies wait to be purged */
+/* The keys of REASONS in build_dashboard.py, with the words the visitor reads; tests/test_admin_companies.py keeps them equal. */
+const GAP_REASONS = {
+  crawl_failing: 'Failing in the latest crawl',
+  bot_protection: 'Blocks automated access',
+  no_careers_url: 'No career page found',
+  site_unusable: 'Site down, parked or unreachable',
+  no_openings: 'No open roles in Israel, or the board is closed',
+  needs_reader: 'Roles are listed, but we cannot read them yet',
+  robots_disallowed: 'robots.txt does not allow it',
+  no_feed_found: 'No job feed found yet',
+};
+const SEGMENTS = {
+  deeptech: 'Deep tech',
+  multinational: 'Multinational',
+  biz_software: 'Business software',
+  cyber_infra: 'Cyber and infrastructure',
+};
+const COMPANY_STATES = { crawled: 'Crawled', card: 'On the card', pending: 'Not crawled yet', excluded: 'Excluded' };
+const COMPANY_VIEWS = [{ id: 'all', label: 'All' }, ...Object.entries(COMPANY_STATES).map(([id, label]) => ({ id, label }))];
+const EXCLUDED_BLANKS = {
+  domain: null,
+  segment: null,
+  careers_url: null,
+  ats: null,
+  slug: null,
+  source: null,
+  status: null,
+  israel_only: null,
+  verify: null,
+  links: null,
+  gap: null,
+};
+const ERROR_GENERIC = 'Could not save. Try again, or reload the page.';
+const ERROR_EXPIRED = 'Your sign-in expired. Reload the page, and sign in again on the dashboard if asked.';
+const ERROR_DENIED = 'This account may not change the company list.';
+const ERROR_CHANGED = 'This company was changed somewhere else. Reload the page and try again.';
+/* One plain sentence for each check constraint and unique index of the `companies` table (supabase/migrations/
+   20261130100000_companies.sql), and the field it names ('' when it names none). A test keeps the keys equal to the
+   migration's, so a new check cannot ship without its sentence. Anything not here gets ERROR_GENERIC. */
+const CONSTRAINTS = {
+  companies_name_unique: ['name', 'A company with this name already exists.'],
+  companies_domain_unique: ['domain', 'A company with this domain already exists.'],
+  companies_name_min_length: ['name', 'The name needs at least 2 characters, with no space at either end.'],
+  companies_domain_required: ['domain', 'A domain is required.'],
+  companies_exactly_one_status: ['', 'A company is crawled, on the coverage card or excluded, and only one of the three.'],
+  companies_gap_reason: ['gapReason', 'Choose why it is not crawled.'],
+  companies_careers_https: ['', 'The career page address must start with https://.'],
+  companies_links_https: ['', 'A career page address must start with https://.'],
+  companies_ats_known: ['', 'The job feed is not one the crawler knows.'],
+  companies_excluded_keys: ['', 'An exclusion holds a reason and a date, and nothing else.'],
+  companies_excluded_reason: ['reason', 'Write the reason.'],
+  companies_excluded_date: ['date', 'Enter the date as year-month-day, for example 2026-11-18.'],
+  companies_excluded_shape: ['', 'An excluded company keeps only its name, the reason and the date.'],
+  companies_excluded_limit: ['', 'The list already holds 200 excluded companies, the most it can.'],
+};
+/* The inputs each dialog can mark, by the field names of CONSTRAINTS. */
+const FIELD_IDS = {
+  editor: { name: 'cName', domain: 'cDomain', gapReason: 'cReason' },
+  confirm: { name: 'xName', reason: 'xReason', date: 'xDate' },
+};
+
+/* The sentence for a refused write: { field, text }. `status` is the HTTP status of the answer. */
+function explain(error, status) {
+  const message = String(error?.message ?? '');
+  const known = Object.keys(CONSTRAINTS).find((name) => message.includes(name));
+  if (known) {
+    const [field, text] = CONSTRAINTS[known];
+    return { field, text };
+  }
+  if (status === HTTP_UNAUTHORIZED || error?.code === 'PGRST301') return { field: '', text: ERROR_EXPIRED };
+  if (error?.code === '42501') return { field: '', text: ERROR_DENIED };
+  return { field: '', text: ERROR_GENERIC };
+}
+
+/* Runs one query that selects the written rows back. Resolves with { rows } or { problem: { field, text } }. */
+async function write(query) {
+  const { data, error, status } = await query;
+  if (error) return { problem: explain(error, status) };
+  if (data.length === 0) return { problem: { field: '', text: ERROR_CHANGED } }; /* the row moved or is gone */
+  return { rows: data };
+}
+
+function stateOf(row) {
+  if (row.excluded) return 'excluded';
+  if (row.gap) return 'card';
+  return row.status === 'ok' ? 'crawled' : 'pending';
+}
+
+/* A fetched count of the jobs of one company, or null when it could not be counted. Only the key columns are read. */
+async function countJobs(name, openOnly) {
+  let query = client.from('jobs').select('job_id', { count: 'exact', head: true }).eq('company', name);
+  if (openOnly) query = query.eq('status', 'open');
+  const { count, error } = await query;
+  return error || typeof count !== 'number' ? null : count;
+}
+
+/* How many excluded companies still have jobs that the daily run has not purged yet, or null. A thousand rows is the
+   most one answer holds: a count that reaches it is "at least". */
+async function waitingToPurge(excluded) {
+  if (excluded.length === 0) return 0;
+  const { data, error } = await client.from('jobs').select('company').in('company', excluded).limit(1000);
+  return error ? null : new Set(data.map((job) => job.company)).size;
+}
+
+/* The list on screen. `render` and `say` are set when the area is built, and nothing opens a dialog before that. */
+const board = { rows: [], view: 'all', query: '', render: null, say: null };
+let focusAfter = null; /* where the focus goes when a dialog closes: { id } of a row, or { node } */
+
+function focusBack() {
+  const target = focusAfter?.id === undefined ? focusAfter?.node : document.querySelector(`.company-edit[data-id="${focusAfter.id}"]`);
+  (target?.isConnected ? target : $('companiesTitle')).focus();
+}
+
+function companyFacts(row, state) {
+  if (state === 'excluded') return [['Reason', row.excluded.reason], ['Added', row.excluded.date_added]];
+  const facts = [['Domain', row.domain], ['Segment', SEGMENTS[row.segment] ?? row.segment ?? NONE]];
+  if (state === 'card') {
+    facts.push(['Reason', GAP_REASONS[row.gap.reason] ?? row.gap.reason]);
+    if (row.gap.note) facts.push(['Note', row.gap.note]);
+  } else {
+    facts.push(['Job feed', row.ats || NONE]);
+  }
+  if (state === 'pending') facts.push(['Discovery status', row.status || 'Not run yet']);
+  if (row.israel_only) facts.push(['Jobs kept', 'Israel only']);
+  return facts;
+}
+
+function careerLink(row) {
+  const href = row.links?.israel ?? row.links?.global ?? row.careers_url;
+  if (typeof href !== 'string' || !href.startsWith('https://')) return null;
+  const link = el('a', 'admin-link', 'Career page');
+  link.href = href;
+  link.target = '_blank';
+  link.rel = 'noopener';
+  link.append(el('span', 'sr-only', ' (opens in a new tab)'));
+  return link;
+}
+
+function companyCard(row) {
+  const state = stateOf(row);
+  const card = el('li', 'gap-card crawl-card company-card');
+  card.dataset.company = row.name;
+  card.dataset.state = state;
+  const head = el('div', 'crawl-head');
+  const name = el('h3', 'crawl-name', row.name);
+  name.dir = 'auto';
+  head.append(name, el('span', state === 'crawled' ? 'pill pill-soft' : 'pill pill-warn', COMPANY_STATES[state]));
+  const list = el('dl', 'crawl-facts');
+  for (const [term, value] of companyFacts(row, state)) {
+    const group = el('div', 'crawl-fact');
+    const description = el('dd', '', value);
+    description.dir = 'auto';
+    group.append(el('dt', '', term), description);
+    list.append(group);
+  }
+  const edit = el('button', 'btn btn-pill company-edit', 'Edit');
+  edit.type = 'button';
+  edit.dataset.id = String(row.id);
+  edit.append(el('span', 'sr-only', ` ${row.name}`));
+  edit.addEventListener('click', () => openEditor(row, { id: row.id }));
+  const actions = el('div', 'company-actions');
+  const link = careerLink(row);
+  if (link) actions.append(link);
+  actions.append(edit);
+  card.append(head, list, actions);
+  return card;
+}
+
+/* The page of the area: the counts, what takes effect when, the two buttons that add a record, the search, the chips,
+   a status line and the list. The chips and the search stay put while the list is redrawn under them. */
+function companiesView() {
+  const root = el('div', 'crawl companies');
+  const headline = el('p', 'crawl-headline');
+  const note = el('p', 'crawl-note', 'A company you add is crawled only after the discover-companies workflow has run. Every other change takes effect at the next daily run.');
+  const workflow = el('a', 'btn btn-pill', 'Open the workflow');
+  workflow.href = DISCOVER_URL;
+  workflow.target = '_blank';
+  workflow.rel = 'noopener';
+  workflow.append(el('span', 'sr-only', ' (opens in a new tab)'));
+  const add = el('button', 'btn btn-pill btn-primary', 'Add a company');
+  add.type = 'button';
+  add.addEventListener('click', () => openEditor(null, { node: add }));
+  const exclude = el('button', 'btn btn-pill', 'Exclude a company');
+  exclude.type = 'button';
+  exclude.addEventListener('click', () => openExclude(null, { node: exclude }));
+  const buttons = el('div', 'company-toolbar');
+  buttons.append(add, exclude, workflow);
+  const label = el('label', 'sr-only', 'Search companies');
+  label.htmlFor = 'companySearch';
+  const search = el('input', 'field');
+  search.id = 'companySearch';
+  search.type = 'search';
+  search.placeholder = 'Search by name or domain';
+  search.autocomplete = 'off';
+  search.addEventListener('input', () => {
+    board.query = search.value;
+    board.render();
+  });
+  const chips = el('div', 'chip-group');
+  chips.setAttribute('role', 'group');
+  chips.setAttribute('aria-label', 'Show');
+  const chipFor = new Map();
+  for (const view of COMPANY_VIEWS) {
+    const chip = el('button', 'chip');
+    chip.type = 'button';
+    chip.dataset.view = view.id;
+    chip.addEventListener('click', () => {
+      board.view = view.id;
+      board.render();
+    });
+    chipFor.set(view.id, chip);
+    chips.append(chip);
+  }
+  const count = el('p', 'crawl-count');
+  count.setAttribute('role', 'status');
+  const saved = el('p', 'company-saved');
+  saved.setAttribute('role', 'status');
+  const lines = el('div', 'company-lines');
+  lines.append(count, saved);
+  const none = el('p', 'crawl-none', 'No companies match.');
+  const list = el('ul', 'crawl-list');
+  board.say = (...parts) => {
+    saved.replaceChildren(...parts);
+  };
+  board.render = () => {
+    const words = board.query.trim().toLowerCase();
+    const everyone = [...board.rows].sort((a, b) => a.name.localeCompare(b.name));
+    const shown = everyone.filter(
+      (row) =>
+        (board.view === 'all' || stateOf(row) === board.view) &&
+        (!words || row.name.toLowerCase().includes(words) || (row.domain ?? '').toLowerCase().includes(words)),
+    );
+    for (const view of COMPANY_VIEWS) {
+      const n = everyone.filter((row) => view.id === 'all' || stateOf(row) === view.id).length;
+      const chip = chipFor.get(view.id);
+      chip.textContent = `${view.label} (${n})`;
+      chip.setAttribute('aria-pressed', String(view.id === board.view));
+    }
+    const crawled = everyone.filter((row) => stateOf(row) === 'crawled').length;
+    const excluded = everyone.filter((row) => row.excluded).length;
+    headline.textContent = `${plural(everyone.length, 'company', 'companies')}: ${crawled} crawled, ${excluded} excluded.`;
+    list.replaceChildren(...shown.map(companyCard));
+    list.hidden = shown.length === 0;
+    none.hidden = shown.length > 0;
+    count.textContent = `Showing ${shown.length} of ${everyone.length}`;
+  };
+  root.append(headline, note, buttons, label, search, chips, lines, none, list);
+  board.view = 'all';
+  board.query = '';
+  board.render();
+  return root;
+}
+
+async function companyRows() {
+  /* One answer holds up to 1000 rows; the list is the few hundred companies and at most 200 exclusions. */
+  const { data, error, status } = await client.from('companies').select(COMPANY_COLUMNS).order('name').range(0, 999);
+  if (status === HTTP_UNAUTHORIZED) return null;
+  if (error) throw error;
+  return data ?? [];
+}
+
+async function loadCompanies(box) {
+  const rows = await renewing(companyRows, 'the company list');
+  if (rows === undefined) return true;
+  if (rows.length === 0) return false;
+  board.rows = rows;
+  box.removeAttribute('role');
+  box.replaceChildren(companiesView());
+  return true;
+}
+
+/* ---- the dialogs ---- */
+
+const editorDialog = $('companyEditor');
+const confirmDialog = $('companyConfirm');
+const editor = { mode: 'add', row: null, busy: false, values: null };
+const asking = { kind: '', row: null, busy: false, token: 0, waiting: null };
+
+function setBusy(state, button, busy) {
+  state.busy = busy;
+  if (busy) button.setAttribute('aria-disabled', 'true');
+  else button.removeAttribute('aria-disabled');
+}
+
+function fieldError(id, text) {
+  const input = $(id);
+  const message = $(`${id}Error`);
+  message.textContent = text ?? '';
+  message.hidden = !text;
+  if (text) input.setAttribute('aria-invalid', 'true');
+  else input.removeAttribute('aria-invalid');
+}
+
+function notice(id, text) {
+  const node = $(id);
+  node.textContent = text ?? '';
+  node.hidden = !text;
+}
+
+/* Shows a problem in one dialog: at the field it names there, else in the dialog's notice. The focus goes to the field. */
+function showProblem(scope, problem) {
+  for (const field of Object.values(FIELD_IDS[scope])) fieldError(field, '');
+  const id = FIELD_IDS[scope][problem.field];
+  notice(scope === 'editor' ? 'editorNotice' : 'confirmNotice', id ? '' : problem.text);
+  if (id) {
+    fieldError(id, problem.text);
+    $(id).focus();
+  }
+}
+
+function clearProblems(scope) {
+  showProblem(scope, { field: '', text: '' });
+}
+
+function option(value, text) {
+  const node = el('option', '', text);
+  node.value = value;
+  return node;
+}
+
+function fillSelect(select, entries, firstText) {
+  select.replaceChildren(option('', firstText), ...entries.map(([value, text]) => option(value, text)));
+}
+
+function syncEditor() {
+  const crawl = $('cCrawl').checked;
+  $('cardFields').hidden = crawl;
+  $('timingNote').hidden = !(crawl && (editor.mode !== 'edit' || !editor.row.crawl));
+}
+
+function openEditor(row, back) {
+  focusAfter = back;
+  editor.row = row;
+  editor.mode = row === null ? 'add' : row.excluded ? 'include' : 'edit';
+  const { mode } = editor;
+  $('editorTitle').textContent = { add: 'Add a company', include: `Include ${row?.name} again`, edit: `Edit ${row?.name}` }[mode];
+  $('cName').value = row?.name ?? '';
+  $('cName').readOnly = mode !== 'add';
+  $('cNameHint').hidden = mode === 'add';
+  $('cDomain').value = row?.domain ?? '';
+  $('cCrawl').checked = row?.excluded ? true : (row?.crawl ?? true);
+  $('cCard').checked = !$('cCrawl').checked;
+  fillSelect($('cReason'), Object.entries(GAP_REASONS), 'Choose a reason');
+  $('cReason').value = row?.gap?.reason ?? '';
+  $('cNote').value = row?.gap?.note ?? '';
+  const segments = Object.entries(SEGMENTS);
+  if (row?.segment && !(row.segment in SEGMENTS)) segments.push([row.segment, row.segment]); /* keep a value this page does not know */
+  fillSelect($('cSegment'), segments, 'None');
+  $('cSegment').value = row?.segment ?? '';
+  $('cIsrael').checked = row?.israel_only === true;
+  $('cVerify').checked = row?.verify === false;
+  $('cLinkIsrael').value = row?.links?.israel ?? '';
+  $('cLinkGlobal').value = row?.links?.global ?? '';
+  $('requeueRow').hidden = mode !== 'edit' || !row.crawl;
+  $('cRequeue').checked = false;
+  const facts = $('discovered');
+  facts.replaceChildren();
+  const shown =
+    mode === 'edit'
+      ? [['Career page', row.careers_url], ['Job feed', row.ats], ['Feed slug', row.slug], ['Found by', row.source], ['Discovery status', row.status]]
+      : mode === 'include'
+        ? [['Excluded on', row.excluded.date_added], ['Reason', row.excluded.reason]]
+        : [];
+  for (const [term, value] of shown) {
+    const group = el('div', 'crawl-fact');
+    group.append(el('dt', '', term), el('dd', '', value || NONE));
+    facts.append(group);
+  }
+  facts.hidden = shown.length === 0;
+  $('editorMore').hidden = mode !== 'edit';
+  $('editorSave').textContent = { add: 'Add company', include: 'Include again', edit: 'Save' }[mode];
+  clearProblems('editor');
+  syncEditor();
+  editorDialog.showModal();
+  (mode === 'add' ? $('cName') : $('editorTitle')).focus();
+}
+
+/* The record the form describes, and the fields of it that stay as the database holds them. */
+function readEditor() {
+  const text = (id) => $(id).value.trim();
+  const crawl = $('cCrawl').checked;
+  const links = {};
+  if (text('cLinkIsrael')) links.israel = text('cLinkIsrael');
+  if (text('cLinkGlobal')) links.global = text('cLinkGlobal');
+  const record = {
+    domain: text('cDomain'),
+    segment: text('cSegment') || null,
+    crawl,
+    israel_only: $('cIsrael').checked ? true : null,
+    verify: $('cVerify').checked ? false : null,
+    links: Object.keys(links).length > 0 ? links : null,
+    gap: crawl ? null : { reason: $('cReason').value, note: text('cNote') },
+  };
+  const { mode, row } = editor;
+  /* A company that starts crawling (new, included again or moved back from the card) has no job feed yet: an empty
+     status puts it in the queue of the discover-companies workflow. */
+  if (mode === 'edit') {
+    if ($('cRequeue').checked || (crawl && !row.crawl)) record.status = '';
+    return record;
+  }
+  const fresh = { ...record, careers_url: '', ats: '', slug: '', source: '', status: '' };
+  return mode === 'add' ? { ...fresh, name: text('cName') } : { ...fresh, excluded: null };
+}
+
+async function saveEditor(event) {
+  event.preventDefault();
+  if (editor.busy) return;
+  const record = readEditor();
+  const { mode, row } = editor;
+  if (mode === 'edit' && row.crawl && !record.crawl) {
+    editor.values = record;
+    openConfirm('leave', row);
+    return;
+  }
+  await persistEditor(record, 'editor');
+}
+
+/* Writes the editor's record (add, include again or edit) and shows what happened in `scope`. */
+async function persistEditor(record, scope) {
+  const { mode, row } = editor;
+  const table = client.from('companies');
+  const query =
+    mode === 'add'
+      ? table.insert(record).select(COMPANY_COLUMNS)
+      : table.update(record).eq('id', row.id).eq('updated_at', row.updated_at).select(COMPANY_COLUMNS);
+  setBusy(editor, $('editorSave'), true);
+  const { rows, problem } = await write(query);
+  setBusy(editor, $('editorSave'), false);
+  if (problem) {
+    if (scope === 'confirm' && !FIELD_IDS.editor[problem.field]) showProblem('confirm', problem);
+    else {
+      if (scope === 'confirm') confirmDialog.close();
+      showProblem('editor', problem);
+    }
+    return;
+  }
+  const [saved] = rows;
+  settleRow(saved, row);
+  if (mode === 'add') {
+    board.view = 'all';
+    board.query = '';
+    $('companySearch').value = '';
+    focusAfter = { id: saved.id };
+  }
+  const queued = record.status === '' && saved.crawl; /* new, included again, moved back from the card, or sent back to discovery */
+  finish(queued ? 'Saved. It is crawled only after the discover-companies workflow has run. ' : 'Saved. Takes effect at the next daily run.');
+}
+
+function settleRow(saved, previous) {
+  const at = previous ? board.rows.findIndex((row) => row.id === previous.id) : -1;
+  if (at === -1) board.rows.push(saved);
+  else board.rows[at] = saved;
+}
+
+function finish(...words) {
+  confirmDialog.close();
+  editorDialog.close();
+  board.render();
+  const parts = words.map((word) => document.createTextNode(word));
+  if (words.some((word) => word.includes('discover-companies'))) {
+    const link = el('a', 'admin-link', 'Open the workflow');
+    link.href = DISCOVER_URL;
+    link.target = '_blank';
+    link.rel = 'noopener';
+    link.append(el('span', 'sr-only', ' (opens in a new tab)'));
+    parts.push(link);
+  }
+  board.say(...parts);
+  focusBack();
+}
+
+const today = () => new Intl.DateTimeFormat('en-CA').format(new Date()); /* year-month-day */
+
+/* One confirmation dialog for the three actions that need one: leaving the crawl ('leave'), removing a company from
+   the list ('remove') and excluding one ('exclude', of a listed company, or of a name that is not in the list when
+   `row` is null). It counts the company's jobs and shows the number; a count that fails says so and the action stays. */
+function openConfirm(kind, row) {
+  asking.kind = kind;
+  asking.row = row;
+  asking.waiting = null;
+  const name = row?.name;
+  const copy = {
+    leave: {
+      title: `Take ${name} off the crawl?`,
+      text: 'It moves to the coverage card and nothing crawls it any more. At the next daily run its open jobs are closed. The rows stay as history.',
+      go: 'Move to the card',
+    },
+    remove: {
+      title: `Remove ${name} from the list?`,
+      text: 'The company is deleted from the list. After that nothing crawls it and no run closes its open jobs: they stay in the history. To close them first, move the company to the coverage card.',
+      go: 'Remove',
+    },
+    exclude: {
+      title: row ? `Exclude ${name}?` : 'Exclude a company',
+      text: 'The record keeps only the name, the reason and the date. At the next daily run every job of the company, open or closed, and its crawl log rows are deleted, and it is never crawled again. This page never removes the record, so the request is remembered.',
+      go: 'Exclude',
+    },
+  }[kind];
+  $('confirmTitle').textContent = copy.title;
+  $('confirmText').replaceChildren(el('p', '', copy.text));
+  $('confirmGo').textContent = copy.go;
+  $('confirmFields').hidden = kind !== 'exclude';
+  $('xNameGroup').hidden = row !== null;
+  $('xName').value = row?.name ?? '';
+  $('xReason').value = '';
+  $('xDate').value = today();
+  clearProblems('confirm');
+  confirmDialog.showModal();
+  $('confirmCancel').focus();
+  recount();
+}
+
+async function recount() {
+  const { kind, row } = asking;
+  const name = row?.name ?? $('xName').value.trim();
+  const line = $('confirmCount');
+  const token = ++asking.token;
+  if (!name) {
+    line.textContent = '';
+    return;
+  }
+  line.textContent = 'Counting jobs…';
+  const [n, others] = await Promise.all([
+    countJobs(name, kind !== 'exclude'),
+    kind === 'exclude' ? waitingToPurge(board.rows.filter((r) => r.excluded && r.name !== name).map((r) => r.name)) : 0,
+  ]);
+  if (token !== asking.token) return; /* a newer count is on its way */
+  if (n === null) {
+    line.textContent = 'Could not count the jobs. You can still continue.';
+    return;
+  }
+  const lines = {
+    leave: `${plural(n, 'open job', 'open jobs')} will be closed at the next daily run.`,
+    remove: `${plural(n, 'open job', 'open jobs')} stay${n === 1 ? 's' : ''} in the history.`,
+    exclude: `${plural(n, 'job', 'jobs')} will be deleted at the next daily run.`,
+  };
+  let text = lines[kind];
+  if (kind === 'exclude' && others !== null) {
+    const waiting = others + (n > 0 ? 1 : 0);
+    text += ` ${plural(waiting, 'company waits', 'companies wait')} to be purged at that run.`;
+    if (waiting > MAX_PURGE_COMPANIES) text += ` The run stops when more than ${MAX_PURGE_COMPANIES} wait: exclude the rest on another day.`;
+  }
+  line.textContent = text;
+}
+
+async function runConfirmed(event) {
+  event.preventDefault();
+  if (asking.busy) return;
+  const { kind, row } = asking;
+  if (kind === 'leave') {
+    setBusy(asking, $('confirmGo'), true);
+    await persistEditor(editor.values, 'confirm');
+    setBusy(asking, $('confirmGo'), false);
+    return;
+  }
+  const table = client.from('companies');
+  let query;
+  if (kind === 'remove') {
+    query = table.delete().eq('id', row.id).eq('updated_at', row.updated_at).select('id');
+  } else {
+    const excluded = { reason: $('xReason').value.trim(), date_added: $('xDate').value };
+    query = row
+      ? table.update({ ...EXCLUDED_BLANKS, crawl: false, excluded }).eq('id', row.id).eq('updated_at', row.updated_at).select(COMPANY_COLUMNS)
+      : table.insert({ name: $('xName').value.trim(), crawl: false, excluded }).select(COMPANY_COLUMNS);
+  }
+  setBusy(asking, $('confirmGo'), true);
+  const { rows, problem } = await write(query);
+  setBusy(asking, $('confirmGo'), false);
+  if (problem) {
+    showProblem('confirm', problem);
+    return;
+  }
+  if (kind === 'remove') board.rows = board.rows.filter((r) => r.id !== row.id);
+  else settleRow(rows[0], row);
+  const done = { remove: 'Removed from the list.', exclude: 'Excluded. Its jobs are deleted at the next daily run.' }[kind];
+  finish(done);
+}
+
+function openExclude(row, back) {
+  focusAfter = back;
+  openConfirm('exclude', row);
+}
+
+/* Wires the dialogs once. A dialog that is busy ignores Esc and its buttons, as the delete dialog of the dashboard does. */
+function wireCompanyDialogs() {
+  $('editorForm').addEventListener('submit', saveEditor);
+  $('confirmForm').addEventListener('submit', runConfirmed);
+  for (const radio of document.querySelectorAll('input[name="cState"]')) radio.addEventListener('change', syncEditor);
+  $('xName').addEventListener('change', recount);
+  const closes = [
+    [editorDialog, editor, ['editorClose', 'editorCancel']],
+    [confirmDialog, asking, ['confirmClose', 'confirmCancel']],
+  ];
+  for (const [dialog, state, ids] of closes) {
+    for (const id of ids) $(id).addEventListener('click', () => !state.busy && dialog.close());
+    dialog.addEventListener('cancel', (event) => state.busy && event.preventDefault());
+    dialog.addEventListener('close', () => {
+      if (!editorDialog.open && !confirmDialog.open) focusBack();
+    });
+  }
+  $('editorExclude').addEventListener('click', () => {
+    const { row } = editor;
+    editorDialog.close();
+    openExclude(row, { id: row.id });
+  });
+  $('editorRemove').addEventListener('click', () => {
+    const { row } = editor;
+    editorDialog.close();
+    openConfirm('remove', row);
+  });
 }
 
 /* The answer of the check, or 'check-failed' when it takes longer than the page waits. */
@@ -350,4 +979,5 @@ async function start() {
   settle(await verdict());
 }
 
+wireCompanyDialogs();
 await start();
