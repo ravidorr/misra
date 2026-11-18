@@ -176,7 +176,7 @@ function el(tag, className, text) {
 
 const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
 
-/* "2026-11-18T07:12:00" (the log's own stamp, UTC) as "18 Nov" in the viewer's language, with the year when it is not
+/* "2026-11-18T07:12:00" (the log's own stamp; only the date is shown) as "18 Nov" in the viewer's language, with the year when it is not
    this year. Anything else is shown as it is, as the dashboard does. */
 function day(stamp) {
   const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(stamp ?? '');
@@ -283,6 +283,7 @@ async function crawlRows() {
 }
 
 async function loadCrawl(box) {
+  box.removeAttribute('role'); /* the loading line was a status; the rows that replace it are not */
   let rows = await crawlRows();
   if (rows === null) {
     /* A 401: run the admin check again, as the page does, which renews the token or ends the session. */

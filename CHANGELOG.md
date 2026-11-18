@@ -10,6 +10,7 @@ All notable changes are documented here. Format follows [Keep a Changelog](https
 
 ### Added
 
+- A `pill-warn` variant of the pill (`design-system/components/sticker.css`, shown on `design-system/index.html`).
 - The Crawl area of the admin page (PLAN_2.md step 2.2): it calls `admin_crawl_health()` when first shown and lists one card per company, worst first, with a headline, chips with counts (Needs attention, Failing, Robots.txt, Held, All), the values of the crawl and a status pill. Loading, empty, error and 401 states. Templates and tests only.
 - A Copy button under every code block of the legal pages (the address on "Connect your assistant", the command for Claude Code), in `templates/theme.js`.
 

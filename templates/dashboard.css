@@ -1152,11 +1152,6 @@ html:has(.sheet:modal) {
   flex: none;
 }
 
-.pill-warn {
-  background: var(--warn-bg);
-  color: var(--ink);
-}
-
 .crawl-facts {
   display: grid;
   gap: var(--space-1);

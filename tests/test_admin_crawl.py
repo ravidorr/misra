@@ -326,7 +326,7 @@ async def test_an_error_says_so_and_try_again_loads_it(page: Page, site: Path) -
     await expect(page.locator("#crawl")).to_have_attribute("data-state", "ready")
     assert await names(page) == ATTENTION_ORDER
     await expect(page.get_by_role("heading", name="Crawl", level=2)).to_be_focused()
-    assert backend.health_asked == CALLS_WHEN_REFUSED_TWICE
+    assert backend.health_asked == 2  # noqa: PLR2004  (the failed call, then the retry)
 
 
 async def test_an_answer_that_is_not_a_list_is_an_error(page: Page, site: Path) -> None:
