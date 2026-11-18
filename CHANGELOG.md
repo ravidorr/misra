@@ -4,6 +4,10 @@ All notable changes are documented here. Format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
+### Fixed
+
+- A company that is no longer crawled (`crawl` set to false, kept for the coverage gap card) had its open jobs frozen as open for good, because nothing crawled it to close them. `run.py` now closes them at the start of the run and keeps the rows as history. Freightos, Weebit Nano and Xtend move to the gap card (bot protection).
+
 ### Removed
 
 - The "Filters reset." line with an "Undo" button that showed for 6 seconds after "Reset" (`#resetNote`, its timer and the code that restored the filters), and its `.reset-note` styles. "Reset" is unchanged and still acts at once; the `sr-only` status region now says "Filters reset." so screen readers still hear it.

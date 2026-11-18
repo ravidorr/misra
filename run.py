@@ -173,6 +173,18 @@ def purge_excluded(c: sqlite3.Connection, excluded: list[str]) -> dict[str, int]
     return held
 
 
+def close_uncrawled(c: sqlite3.Connection, names: list[str]) -> int:
+    """Close the open jobs of the companies that are kept only for the coverage card (`crawl` is not true). Nothing
+    crawls them, so nothing else would ever close their roles and the dashboard would list them as open for good. The
+    rows stay, as closed history. Returns how many were closed."""
+    n = sum(
+        c.execute("UPDATE jobs SET status='closed' WHERE company=? AND status='open'", (name,)).rowcount
+        for name in names
+    )
+    c.commit()
+    return n
+
+
 def check_spelling(c: sqlite3.Connection, known: list[str], excluded: list[str]) -> None:
     """Deleting needs the exact name, skipping does not care about case: a list that says `acme` while the data says
     `Acme` would hide the company but leave its rows. That must stop the run, so the list gets the stored spelling."""
@@ -309,13 +321,16 @@ def save_descriptions(texts: list[dict[str, Any]], crawled: list[tuple[str, list
 
 def main() -> None:  # noqa: PLR0915
     excluded = load_excluded()  # a bad list stops the run: nobody can say who must not be crawled
-    every = crawled_companies(load_companies())
+    everyone = load_companies()
+    every = crawled_companies(everyone)
     companies = [c for c in every if c["status"] == "ok" and not is_excluded(c["name"], excluded)]
     c = open_history()
     c.executescript(SCHEMA)  # a pulled file has the tables; `touch data/jobs.db` for a local trial does not
     check_spelling(c, [co["name"] for co in every], excluded)
     for name, n in purge_excluded(c, excluded).items():
         print(f"exclusion list: deleted {n} jobs of {name}")
+    if closed := close_uncrawled(c, [x["name"] for x in everyone if x not in every]):
+        print(f"closed {closed} open jobs of companies that are no longer crawled")
     print(f"robots.txt: {'enforced' if common.ROBOTS_ENFORCED else 'NOT enforced (ROBOTS_ENFORCED is False)'}")
     now = time.strftime("%Y-%m-%dT%H:%M:%S")
     api = [co for co in companies if co["ats"] != "browser"]

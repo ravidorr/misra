@@ -112,6 +112,23 @@ def test_main_full_cycle(
     check.close()
 
 
+def test_main_closes_the_open_jobs_of_a_company_that_is_no_longer_crawled(
+    workdir: Path, adapter: dict[str, Any], capsys: pytest.CaptureFixture[str]
+) -> None:
+    conn = run.init()
+    add_job(conn, "Walled", "w1", "Kept as history")
+    add_job(conn, "Plain", "p1", "Still crawled")
+    conn.close()
+    write_json(workdir / "data" / "companies.json", [{**co("Walled"), "crawl": False}, co("Plain")])
+    adapter["plain"] = [[job("p1")]]
+    run.main()
+    check = sqlite3.connect(run.DB)
+    rows = {(r[0], r[1]): r[2] for r in check.execute("SELECT company,job_id,status FROM jobs")}
+    assert rows == {("Walled", "w1"): "closed", ("Plain", "p1"): "open"}  # closed, not deleted
+    assert "closed 1 open jobs of companies that are no longer crawled" in capsys.readouterr().out
+    check.close()
+
+
 def test_main_israel_only_keeps_israel_jobs(workdir: Path, adapter: dict[str, Any]) -> None:
     conn = run.init()
     add_job(conn, "Big", "old-us", "Old US job", location="Austin, TX")
