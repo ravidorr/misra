@@ -57,16 +57,22 @@ HOST_BASED = {"jazzhr", "bamboohr"}  # the slug is a subdomain, not a path segme
 CAREER_PATHS = ["/careers", "/jobs", "/careers/", "/company/careers", "/about/careers", "/join-us", "/careers/jobs"]
 
 
+def ats_in_text(text: str) -> tuple[str, str] | None:
+    """The first job board a page links to, as (ats, slug), or None. Also used by `survey.py --candidates`."""
+    for ats, rx in ATS_LINK:
+        m = rx.search(text)
+        if m and m.group(1).lower() not in ("embed", "jobs", "careers"):
+            # a host is case-insensitive and the adapters compare it with the lowercase one the response gives back
+            return ats, m.group(1).lower() if ats in HOST_BASED else m.group(1)
+    return None
+
+
 def scan_page(url: str) -> tuple[str | None, str | None]:
     r = get(url)
     if r is None or r.status_code != HTTP_OK:
         return None, None
-    for ats, rx in ATS_LINK:
-        m = rx.search(r.text)
-        if m and m.group(1).lower() not in ("embed", "jobs", "careers"):
-            # a host is case-insensitive and the adapters compare it with the lowercase one the response gives back
-            return ats, m.group(1).lower() if ats in HOST_BASED else m.group(1)
-    return None, r.url
+    found = ats_in_text(r.text)
+    return found if found else (None, r.url)
 
 
 def israel_count(jobs: list[dict[str, Any]]) -> int:
