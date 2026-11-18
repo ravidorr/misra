@@ -11,11 +11,11 @@
 <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#121116">
 <title>Admin</title>
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="dashboard.css" integrity="sha384-K5Tf05RHyOFVhmfr0NklXLViUUb7NYV/UbBOfmDnfAKLdAN0FztKeFYKN7+1YkNF">
+<link rel="stylesheet" href="dashboard.css" integrity="sha384-yDmMF2tWJauTojuqcpVLZFoJ+ssedK3u6qLM6HTSVNHv/FjBTEZV3VNwQ3RUPlgi">
 <script src="theme.js" integrity="sha384-7z2KN8CtvARlTfXl2TowUS4HxyeN0rAe6Q516+zOt4eo/dTIOcQvyW4xeRr+6GqC"></script>
 <script src="supabase.js" integrity="sha384-TcHRA3zBbn+Lexh5n+Oil4guNPOS3rjNDpGRAN46u/s/mB2IZ50ceC6TYDU2yvgK" defer></script>
 <link rel="modulepreload" href="session.js" integrity="sha384-FsEWKURtN691ugcpyRrC9xb7SvxuqaiRnxSvtOGlmtmb/tdFHcsFW6p02Mf+LraA">
-<script type="module" src="admin.js" integrity="sha384-GpfIBLER73hDIhjj254Y8X4JpZrCEe7egqyKgbWacKwLrlneNF1+VE9l+VLRHIar"></script>
+<script type="module" src="admin.js" integrity="sha384-voPy1Ly31vz2ZB2vKt7kecqQcb1wRbWlRESwc7U0nqqdIOjJ8aTIN8pEmJ3NWFuv"></script>
 </head>
 <body>
 <a class="skip" href="#main">Skip to main content</a>
@@ -128,7 +128,7 @@
             <input class="field" type="text" id="cNote" autocomplete="off">
           </div>
         </div>
-        <div class="field-group">
+        <div class="field-group" id="segmentGroup">
           <label for="cSegment">Segment</label>
           <select class="field" id="cSegment"></select>
         </div>
@@ -146,6 +146,28 @@
           <input class="field" id="cLinkGlobal" type="url" autocomplete="off">
         </div>
         <label class="choice" id="requeueRow" hidden><input type="checkbox" id="cRequeue"> <span>Find its job feed again: clears its status, so the next discover-companies run looks at it. Its jobs stay open but are not refreshed until then.</span></label>
+                <fieldset class="choice-group pin-group" id="pinGroup" hidden>
+          <legend>Pin the job feed</legend>
+          <p class="field-hint">For a company whose feed discovery cannot find, or finds wrong. Saving a pin empties its status, so it is not crawled until the discover-companies workflow has checked it.</p>
+          <label class="choice" id="unpinRow" hidden><input type="checkbox" id="cUnpin"> <span>Remove the pin: clears the feed and its slug, and sends the company back to discovery.</span></label>
+          <div id="pinFields">
+            <div class="field-group">
+              <label for="cPinAts">Job feed</label>
+              <select class="field" id="cPinAts" aria-describedby="cPinAtsError"></select>
+              <p class="field-error" id="cPinAtsError" hidden></p>
+            </div>
+            <div class="field-group">
+              <label for="cPinSlug">Feed slug</label>
+              <input class="field" type="text" id="cPinSlug" autocomplete="off" spellcheck="false" aria-describedby="cPinHint cPinSlugError">
+              <p class="field-hint" id="cPinHint"></p>
+              <p class="field-error" id="cPinSlugError" hidden></p>
+            </div>
+          </div>
+          <div class="company-timing">
+            <p class="field-hint">A Workday or Oracle feed may come back not ok, because the GitHub runner cannot read it. Then edit the company back, or put it on the coverage card with a reason. This page never sets a feed to ok; for a board only the crawl can read, tick "Trust its job board" after the pin is saved.</p>
+            <a class="admin-link" href="https://github.com/ravidorr/misra/actions/workflows/discover-companies.yml" target="_blank" rel="noopener">Open the workflow<span class="sr-only"> (opens in a new tab)</span></a>
+          </div>
+        </fieldset>
         <dl class="crawl-facts" id="discovered" hidden></dl>
         <p class="company-more" id="editorMore" hidden>
           <button type="button" class="btn btn-pill" id="editorExclude">Exclude…</button>
