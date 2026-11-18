@@ -591,6 +591,9 @@ def problems(stmts: list[str]) -> list[str]:
         ):
             found.append(f"statement kind not allowed by the lint: {s}")
         found.extend(p for p in (grant_problem(s), policy_problem(s), companies_load_problem(s)) if p)
+    dropped = COMPANIES_ATS_DROP in stmts
+    added = any(COMPANIES_ATS_ADD.fullmatch(s) for s in stmts)
+    found.extend(["companies_ats_known is dropped and added again together, or not at all"] * (dropped != added))
     found.extend(f"row-level security not enabled on {t}" for t in sorted(tables - secured))
     found.extend(
         f"all privileges on {t} not revoked from {role}"
@@ -1199,6 +1202,11 @@ def test_the_ats_check_migration_passes_the_lint_and_changes_nothing_else() -> N
 
 
 ATS_CHECK = "check ( ats is null or ats = '' or ats in ( 'a' ))"
+
+
+@pytest.mark.parametrize("which", [0, 1])
+def test_the_lint_refuses_the_drop_or_the_add_of_the_ats_check_alone(which: int) -> None:
+    assert problems([statements_of(ATS_SQL)[which]])
 
 
 @pytest.mark.parametrize(
