@@ -94,7 +94,7 @@ if (open && dialog) {
      `draft` is what "Start job alerts" will send while there is no running subscription (off or unsubscribed), and `result`
      is the outcome of the last action. It takes the place of the state's words in the state line until the next action or
      the dialog is closed, so the dialog never shows two banners that say the same. */
-  const view = { row: null, phase: 'loading', draft: { frequency: 'daily', filters: emptyFilters() }, busy: false, user: null, result: '' };
+  const view = { row: null, phase: 'loading', draft: { frequency: 'daily', filters: emptyFilters() }, busy: false, user: null, result: '', resultConfirms: false };
 
   function emptyFilters() {
     return { regions: [], levels: [], role_types: [], keywords: '' };
@@ -167,8 +167,11 @@ if (open && dialog) {
     problem.hidden = !text;
   }
 
-  function showNote(text) {
+  /* `confirms` is true when the note itself says that a confirmation link was sent and that nothing is emailed until it is
+     opened: the state line then carries the disclosure that the paragraph below repeats (see `disclosed` in render). */
+  function showNote(text, confirms = false) {
     view.result = text;
+    view.resultConfirms = text !== '' && confirms;
   }
 
   /* Draws the dialog, the button hooks and the form from `view`. `keepAddress` leaves what the user typed. */
@@ -187,8 +190,17 @@ if (open && dialog) {
     if (!keepAddress) address.value = view.row && state !== 'unsubscribed' ? view.row.address : (account()?.email ?? view.row?.address ?? '');
     for (const radio of frequencies) radio.checked = radio.value === frequency;
     renderFilters();
-    $('digestConsentTo').textContent = address.value.trim() || account()?.email || 'your address';
+    const shownAddress = address.value.trim() || account()?.email || 'your address';
+    $('digestConsentTo').textContent = shownAddress;
     const typed = address.value.trim().toLowerCase();
+    /* The state line already tells the user that a confirmation link goes to the address and that nothing is sent until it
+       is opened when it shows the "waiting" words for the address that is typed, or an outcome that says so (and names it). Then the
+       paragraph and the hint keep only what the line does not say. In every other case (off, on, unsubscribed, "Saved." or
+       "Copied." while waiting, an address that differs from the one the line names) they say it whole. */
+    const named = state !== 'waiting' || shownAddress.toLowerCase() === view.row.address.toLowerCase(); /* the line names this address */
+    const disclosed = view.result ? view.resultConfirms && named : state === 'waiting' && named;
+    $('digestConsentFirst').hidden = disclosed;
+    $('digestAddressHintMore').hidden = disclosed;
     const changed = state === 'on' && typed !== '' && typed !== view.row.address.toLowerCase();
     send.hidden = state === 'on' && !changed;
     off.hidden = !running();
@@ -262,7 +274,7 @@ if (open && dialog) {
   }
 
   /* One action that talks to the function: runs it, then reads the account again and says what the database holds. */
-  async function act(body, { success }) {
+  async function act(body, { success, confirms = () => false }) {
     if (view.busy) return;
     showProblem('');
     showNote('');
@@ -278,7 +290,7 @@ if (open && dialog) {
     const reread = outcome.reread === false ? true : await refresh();
     setBusy(false);
     if (!account()) return;
-    if (outcome.ok) showNote(success(outcome.body));
+    if (outcome.ok) showNote(success(outcome.body), confirms(outcome.body));
     else {
       showProblem(outcome.message);
       if (outcome.fields?.address) fieldError(outcome.fields.address);
@@ -315,6 +327,7 @@ if (open && dialog) {
           answer.state === 'on'
             ? 'Job alerts were already on for this address. Nothing changed and nothing was sent.'
             : `Check ${sentTo} for a confirmation link. Your ${running() ? view.row.frequency : view.draft.frequency} job alerts start only after you open it and press "Confirm my email".${state === 'on' ? ' Job alerts are paused until then.' : ''}`,
+        confirms: (answer) => answer.state !== 'on',
       },
     );
   }
