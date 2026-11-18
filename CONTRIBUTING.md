@@ -348,7 +348,7 @@ PLAN.md step 7.1. Where the text of a posting lives, and how it gets there:
   (Nvidia's 400 jobs take ten days at 40 a day), then the new jobs. Estimated, not yet seen live: about 830 of the 1,589 browser
   jobs. **Not read, and not to be tried again without a reason:** Check Point (231 jobs; a plain request answers HTTP 403, bot
   protection, never worked around) and every other browser company (monday.com, Tower, Priority,
-  Xtend, Komodor, Intezer, Oligo, Mesh, Weebit, Pecan, Freightos, Panorays, Lightbits, ForSight, Valens, Lasso): a sample of one
+  Komodor, Intezer, Oligo, Mesh, Pecan, Panorays, Lightbits, ForSight, Valens, Lasso): a sample of one
   job page each shows no JobPosting markup in the static HTML (the text is drawn by JavaScript). Digital Turbine is a Workday site
   read through its JSON-LD; its Workday JSON would be an alternative.
 - **Not read yet.** Phenom (89 jobs, the list carries a teaser, not the text), Oracle HCM (9 jobs), `comeet_page` (11), JazzHR
