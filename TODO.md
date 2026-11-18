@@ -76,12 +76,11 @@ Observations about live sites below come from checks made on 2026-11-14 and may 
 
 ## Research the remaining unresolved companies
 
-- [ ] The `companies` table holds 80 researched companies with no usable job feed (as of 2026-11-14: 22
-  multinational, 36 deeptech, 11 cyber_infra, 11 biz_software; they are the records with a `gap`). Each needs
-  its own research; there is no batch fix left. Every observation about a live site below is from the checks of
-  2026-11-14, a crawl of the 105 rows that had a careers URL that day (57 today) and a scan of their rendered pages. The
-  remaining work falls into these groups:
-  - **No careers URL (23).** They have no `careers_url` in the `companies` table: Upsolver, Speedata,
+- [ ] The `companies` table holds researched companies with no usable job feed (the records with a `gap`, in four
+  segments: multinational, deeptech, cyber_infra, biz_software). Each needs its own research; there is no batch fix
+  left. Every observation about a live site below is from the checks of 2026-11-14, a crawl of the rows that had a
+  careers URL that day and a scan of their rendered pages. The remaining work falls into these groups:
+  - **No careers URL.** They have no `careers_url` in the `companies` table: Upsolver, Speedata,
     Teramount, X-Globe, Q Factor, Gilat, Siklu, Silicom, Sight Diagnostics, Brainsway, EarlySign, Diagnostic Robotics,
     Tevel Aerobotics, SolarEdge, Watergen, AIR, SAP, eBay,
     Akamai, Ford, Ericsson, Uber, Keysight. Find the real
@@ -270,9 +269,10 @@ Observations about live sites below come from checks made on 2026-11-14 and may 
        navigation links, a worldwide first page or a partial list is not a feed.
     4. Pin with one edit of the company's row in the `companies` table (Supabase Table Editor; one company at a time, so a
        bad pin is easy to undo): set `"crawl": true`, `"ats"`, `"slug"`, `"source": "override"` (that is what pins it: `discover.py`
-       keeps the `ats` and `slug` of a pinned record and only checks them), `"status": "ok"` and, for a large
-       multinational, `"israel_only": true`; remove the `gap` (and the `segment`). Do not run `discover-companies` for it:
-       it re-probes every crawled company.
+       keeps the `ats` and `slug` of a pinned record and only checks them), and, for a large
+       multinational, `"israel_only": true`; remove the `gap` (and the `segment`). Then run the `discover-companies`
+       workflow: it checks the pin and sets its `status` (`run.py` crawls only `status` `ok`), and it re-probes the other
+       crawled companies, which never downgrades one that has `status` `ok`.
        A board with no Israel job today is fine to pin: the `israel_only` rule reports the first Israel job it ever
        lists. Code changes (an adapter, a parser fix) need a version bump and a changelog entry.
        Probe a Workday slug with `.venv/bin/python -c "import adapters; print(adapters.workday('visa/wd5/Visa'))"`:

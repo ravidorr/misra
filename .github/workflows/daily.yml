@@ -120,10 +120,11 @@ jobs:
         timeout-minutes: 10
         # The history lives in Supabase (PLAN.md step 9.1); data/jobs.db is a scratch file rebuilt here on every run and
         # never committed. So is the company list (PLAN_2.md step 3.2): the same pull writes data/companies.json from the
-        # `companies` table, the excluded records included, and fails when the table is empty. This step, the sync, the digests and the backup are the only ones that hold the service-role
-        # key: the crawl, which runs third-party pages in a browser, never does. An empty secret, an empty `jobs` table or
-        # one with under half of the jobs last published, or an empty company list, fails the step, so the crawl (and everything after it that
-        # needs the history) does not run.
+        # `companies` table, the excluded records included, and fails when the table is empty. This step, the sync, the
+        # digests and the backup are the only ones that hold the service-role key: the crawl, which runs third-party
+        # pages in a browser, never does. An empty secret, an empty `jobs` table or one with under half of the jobs last
+        # published, or an empty or far too small company list, fails the step, so the crawl (and everything after it
+        # that needs the history) does not run.
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}

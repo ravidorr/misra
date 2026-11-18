@@ -662,7 +662,9 @@ def test_an_excluded_company_is_never_crawled_and_its_data_is_deleted(
     exclude(workdir, "Acme")
     run.main()
     assert crawled == ["other"]  # Acme is not crawled
-    assert "exclusion list: deleted 1 jobs of Acme" in capsys.readouterr().out
+    out = capsys.readouterr().out
+    assert "exclusion list: deleted 1 jobs of 1 excluded companies" in out
+    assert "Acme" not in out  # an excluded company's name is private and the log is public
     check = sqlite3.connect(run.DB)
     left = {r[0] for r in check.execute("SELECT company FROM jobs")}
     assert left == {"Acme Corp", "Other"}  # deleted by the exact name only
@@ -797,7 +799,8 @@ def test_the_purge_deletes_jobs_stars_and_emailed_keys_of_that_company_only(
     assert {r["company"] for r in fake.others["emailed"]} == {"Acme Corp", "acme", "Beta"}
     assert {r["company"] for r in fake.others["crawl_log"]} == {"Acme Corp", "acme", "Beta"}
     out = capsys.readouterr().out
-    assert "deleted {'user_jobs': 1, 'emailed': 1, 'jobs': 2, 'crawl_log': 1} for Acme" in out
+    assert "deleted {'user_jobs': 1, 'emailed': 1, 'jobs': 2, 'crawl_log': 1} for an excluded company" in out
+    assert "Acme" not in out.replace("Acme Corp", "")  # the name of an excluded company never reaches the log
     assert "kept title" not in out and KEY not in out  # counts only, never rows
     deletes = [c for c in fake.calls if c["method"] == "DELETE"]
     assert len(deletes) == FOUR_DELETES
@@ -911,7 +914,9 @@ def test_a_list_that_spells_a_company_differently_stops_the_run_and_deletes_noth
     conn.close()
     write_json(workdir / "data" / "companies.json", [co("Acme")])
     exclude(workdir, "acme")  # skipping ignores case, deleting does not: the run must say so
-    with pytest.raises(ExclusionError, match="spells a company differently"):
+    with pytest.raises(
+        ExclusionError, match=r"spells a company differently from the data: use the exact stored spelling$"
+    ):
         run.main()
     assert crawled == []
     check = sqlite3.connect(run.DB)

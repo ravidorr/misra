@@ -50,8 +50,11 @@ Supabase dashboard (Table Editor, `companies`).
    which fills in each crawled company's careers URL and job feed, and sends back only those five fields. A new company
    is crawled by the daily run after that.
 3. If `discover.py` finds the wrong feed or none, pin the company: set `source` to `override` and its `ats` and `slug`
-   (or `ats` `browser` and a career page URL as the `slug`). `discover.py` keeps a pinned `ats` and `slug` and only
-   checks them. Clear `source` to let it search again.
+   (or `ats` `browser` and a career page URL as the `slug`), then run the `discover-companies` workflow again so the
+   `status` becomes `ok` (`run.py` crawls only `status` `ok`). `discover.py` keeps a pinned `ats` and `slug` and only
+   checks them. Clear `source` to let it search again. A company that has `status` `ok` is never downgraded by the
+   push (a feed that died stays `ok` until someone edits the row): that is the intended trade-off, so a failed
+   discovery run, from a blocked runner for example, cannot switch working companies off.
 
 Set `israel_only` to true on a record to keep only the jobs located in Israel. Use it for large multinational boards.
 Set `verify` to false on a pin whose board this network cannot reach: it is trusted and checked at crawl time.
@@ -94,8 +97,8 @@ and it is excluded, so it is never crawled again. `TERMS.md` promises "removed p
 
    The reason is a few words: no person's name, no address, no copy of the message. The date is `YYYY-MM-DD`. A company
    that asked to be removed and was never in the list gets the same record with `insert`. Never delete an excluded
-   record: it is what keeps a company from coming back, and the daily backup to `ravidorr/misra-backups` is the only
-   history of who asked, and when.
+   record: it is what keeps a company from coming back. Until PLAN_2 step 3.4 adds the backup of `companies`, the
+   table is the only copy of who asked, and when.
 3. Run the daily workflow from `main` (Actions, `daily-job-digest`, Run workflow). It does the rest in one run: the crawl
    step skips the company and deletes its jobs and crawl log from the scratch history `data/jobs.db` (pulled from
    Supabase at the start of the run); the sync step deletes its rows from Supabase `jobs` and `crawl_log`,
@@ -467,7 +470,7 @@ from public.jobs
 where status = 'open';
 ```
 
-Accepted sites are not in Supabase: a report is only an email, and accepting it adds a `crawl` true record to the `companies` table (see "Reported sites"). The table is not in git: count the additions of the month from the daily backup in `ravidorr/misra-backups` or, in the Supabase SQL editor, `select count(*) from public.companies where crawl and updated_at >= '2026-11-01'` (an approximation: `updated_at` also moves when a crawl field is rewritten), and compare with the number of report emails received.
+Accepted sites are not in Supabase: a report is only an email, and accepting it adds a `crawl` true record to the `companies` table (see "Reported sites"). The table is not in git and has no backup until PLAN_2 step 3.4: count the additions of the month in the Supabase SQL editor, `select count(*) from public.companies where crawl and updated_at >= '2026-11-01'` (an approximation: `updated_at` also moves when a crawl field is rewritten), and compare with the number of report emails received.
 
 ## Backups of the account tables and the job history
 

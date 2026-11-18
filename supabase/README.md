@@ -191,8 +191,8 @@ of `data/excluded_companies.csv`. Apply it once, as in "Apply the migrations" (a
 
 Columns: `id` (identity, the row's key, so a rename never changes it), then one per key of `common.RECORD_KEYS` (`name`,
 `domain`, `segment`, `crawl`, `careers_url`, `ats`, `slug`, `source`, `status`, `israel_only`, `verify`, `links`, `gap`;
-`links`, `gap` and `excluded` are jsonb), then `excluded` (`{reason, date_added}`; step 3.2 adds the key to the Python
-side) and `updated_at` (set by the trigger on every write). An undiscovered string is `''`, as in the file; a key a record
+`links`, `gap` and `excluded` are jsonb), then `excluded` (`{reason, date_added}`; `common.RECORD_KEYS` has the key
+since step 3.2) and `updated_at` (set by the trigger on every write). An undiscovered string is `''`, as in the file; a key a record
 does not have is null. The checks and the two unique indexes, by the names the editor of step 3.3 maps to sentences (the
 database refuses the write, the page does not re-implement the rules):
 

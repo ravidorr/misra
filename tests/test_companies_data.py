@@ -12,7 +12,7 @@ import pytest
 import common
 import run
 from common import COMPANIES, ExclusionError, crawled_companies, load_companies, load_excluded
-from tests.conftest import FROZEN_COMPANIES, excluded_record, write_json
+from tests.conftest import FROZEN_COMPANIES, exclude, write_json
 
 MANY = 300  # the frozen list holds 347
 
@@ -40,14 +40,25 @@ def test_a_company_that_is_not_crawled_is_never_requested(workdir: Path, monkeyp
         [
             {**row, "name": "In", "slug": "in", "crawl": True},
             {**row, "name": "Out", "slug": "out", "crawl": False, "gap": {"reason": "needs_reader", "note": ""}},
-            {**excluded_record("Gone"), **row, "slug": "gone"},  # an excluded record is never requested either
+            {**row, "name": "Gone", "slug": "gone", "crawl": True},  # crawling, but on the exclusion list below
         ],
     )
+    exclude(workdir, "Gone")
     run.main()
     assert asked == ["in"]
     check = sqlite3.connect(common.DB)
     assert [r[0] for r in check.execute("SELECT DISTINCT company FROM crawl_log")] == ["In"]
     check.close()
+
+
+def test_a_record_with_an_exclusion_is_never_in_the_crawled_companies_whatever_else_it_says() -> None:
+    """The surveys call it without the exclusion filter, and an exclusion is a legal commitment."""
+    rows = [
+        {"name": "A", "crawl": True},
+        {"name": "B", "crawl": True, "excluded": {"reason": "r", "date_added": "2026-11-20"}},
+        {"name": "C", "crawl": True, "excluded": None},
+    ]
+    assert [c["name"] for c in crawled_companies(rows)] == ["A", "C"]
 
 
 def test_the_loaders(workdir: Path) -> None:

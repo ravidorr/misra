@@ -1,12 +1,13 @@
 name: discover-companies
 
 # Finds the career page and the job feed of the companies of the list (discover.py) and writes what it found back to the
-# `companies` table (PLAN_2.md step 3.2, decision D2). Started by hand only: after a company is added on the admin page,
-# or when a feed moved. It never crawls jobs and sends no email; it writes only the five fields discover.py owns
+# `companies` table (PLAN_2.md step 3.2, decision D2). Started by hand only: after a company is added in the `companies` table
+# (the admin page gets an editor in PLAN_2 step 3.3), or when a feed moved. It never crawls jobs and sends no email; it writes only the five fields discover.py owns
 # (careers_url, ats, slug, source, status) of the crawled companies it changed, and no other field of any record.
 #
 # discover.py requests career sites and runs third-party answers through its own parsers, so it never holds the
-# service-role key. Only the first and the last step do: the first reads the list, the last sends the result back. Each
+# service-role key. Only the pull step (the first that runs python) and the last step hold it: the pull reads the list, the last sends the
+# result back. Each
 # step is its own, so the key is in the environment of that step alone. There is no `ssh-key:` on the checkout and no
 # deploy key: nothing here pushes to the repository.
 on:

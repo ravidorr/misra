@@ -128,14 +128,15 @@ Decisions made before 3.1:
   table into a git-ignored scratch `data/companies.json`, as it does for `data/jobs.db`; `run.py`, `build_dashboard.py`
   and the surveys read that file and are unchanged. The tests that read the real file move to a fixture
   (`tests/fixtures/companies.json`, a frozen copy of the file). Reason: two homes for the list is the state `PLAN.md`
-  was written to remove. Cost: no git diff of edits; the daily backup to `ravidorr/misra-backups` is the history. That
-  backup is also the only record of which companies asked to be removed, and when.
+  was written to remove. Cost: no git diff of edits. Step 3.4 adds the daily backup of `companies` to
+  `ravidorr/misra-backups`, which is then the history, and the only record of which companies asked to be removed, and
+  when; until then the table is the only copy.
 - **D2. `discover.py` runs without the key, in a workflow.** It makes requests to career sites, so it never holds the
-  service-role key. A new manual-dispatch workflow (`workflow_dispatch`) lands in step 3.2. It follows `daily.yml`: the
+  service-role key. The manual-dispatch workflow `discover-companies.yml` (step 3.2, done) follows `daily.yml`: the
   pull step reads the list; `discover.py` runs in its own step without the key; only a final separate step holds the
   service-role key and runs `sync_supabase.py --push-companies`, which pushes the discovered fields
   (`discover.DISCOVERED`) and nothing else. No checkout gets an `ssh-key:`. The key-exposure rule in `AGENTS.md` names
-  the steps that hold the key; 3.4 adds this one.
+  the steps that hold the key.
 - **D3. Exclusions are a field of the company record, edited on the admin page.** `data/excluded_companies.csv` and its
   second loader go away. An excluded record holds `name`, `crawl: false` and `excluded: {reason, date_added}` and
   nothing else, `domain` included. Excluding sets every other field to null in the same write, and `domain` may be null
@@ -149,7 +150,8 @@ Decisions made before 3.1:
 
 Steps:
 
-- [ ] 3.1 Migration, alone: it lands before any sync or pipeline change, so the table exists and holds the list while
+- [x] 3.1 (done: PR #214, migration `20261130100000_companies.sql` applied to production on 2026-11-18, 347 rows.)
+  Migration, alone: it lands before any sync or pipeline change, so the table exists and holds the list while
   `companies.json` is still the source. `public.companies` has the columns of `common.RECORD_KEYS`; `links`, `gap` and
   `excluded` are `jsonb`.
   - Checks, each with a stable name: `name` and `domain` unique ignoring case; exactly one of `crawl` is true, `gap`
@@ -160,23 +162,19 @@ Steps:
     trigger writes `admin_log`. The same migration loads the records of the file at that commit.
   - SQL tests for each denial and each check. The editor (3.3) asks for a gap reason and a
     note when a record goes on the card, and for a gap reason or crawling when an excluded record is included again.
-- [x] 3.2 (done: v0.69.0; the table matched the file when it was checked, 347 records, 267 crawled and 80 on the card,
-  so no reload was needed; `--pull-companies` was added for the workflow, which has no use for the history; the
-  key-exposure rule of `AGENTS.md` names the workflow's steps here, and 3.4 keeps only the docs it lists.) Before the switch, reload the table from the file of that day (edits to `companies.json` between 3.1 and 3.2
-  would be lost). Then `sync_supabase.py --pull` also writes `data/companies.json` from the table (sorted by name, the
-  format of `discover.py`, refusing an empty table as it refuses an empty `jobs`); `--push-companies` writes back the
-  discovered fields of crawled records. The pulled file carries the excluded records, and `load_excluded` reads them
-  from it (the CSV and `EXCLUDED_COLUMNS` are removed). `common.RECORD_KEYS` gains `excluded`; this is a change to
-  `common.py` (version bump), and until then `discover.py` drops an excluded record's key. `run.py`, `discover.py`,
-  `build_dashboard.py` and the sync keep calling `load_excluded` as they do today. `.gitignore` lists the file. The
-  discover-and-push workflow of D2 is added here. Tests, including the refusal of an empty table. The test changes land
-  in this same PR, since the suite cannot pass without them once the file and the CSV are gone:
-  - `tests/test_companies_data.py` stops checking the rules; the Python side only checks that the pulled file loads
-    and that `load_excluded` still raises `ExclusionError`. The tests of `load_excluded` and the purge
-    (`tests/test_politeness.py`, `tests/conftest.py`, and the other tests that write `data/excluded_companies.csv`: `test_companies_covered`, `test_descriptions_flow`, `test_discover`, `test_sync_supabase`, `test_build_dashboard`) are ported case for case from the CSV to excluded records.
-  - The tests that read the real file move to the frozen fixture: `test_build_dashboard`, `test_companies_covered`,
-    `test_dashboard_page`, `test_report_site` and `test_companies_data`. `test_todo_counts` would no longer check
-    `TODO.md` against reality; drop it or rethink it in this PR.
+- [x] 3.2 (done: v0.69.0, PR #215.) The table matched `companies.json` when it was checked (347 records, 267 crawled and
+  80 on the card), so no reload was needed. `sync_supabase.py --pull` also writes `data/companies.json` from the table
+  (sorted by name, the format of `discover.py`, every record that is not excluded with its five discovered fields,
+  empty where the table holds null) and its baseline `data/companies.pulled.json`, and refuses an empty table, or one
+  with fewer than half of the yardstick (the baseline's records or `covered` in `docs/jobs.json`).
+  `--pull-companies` does only that. `--push-companies` writes back the discovered fields that discovery changed
+  against the baseline, only while the row still holds its pulled values, and holds back a working feed that discovery
+  no longer finds. The pulled file carries the excluded records, and `load_excluded` reads them from it (the CSV and
+  `EXCLUDED_COLUMNS` are gone). `common.RECORD_KEYS` gained `excluded`, and `crawled_companies` skips an excluded
+  record. `.gitignore` lists the files, and the discover-and-push workflow of D2 was added. The tests moved in the same
+  PR: `tests/test_companies_data.py` only checks that the pulled file loads and that `load_excluded` raises
+  `ExclusionError`; the `load_excluded` and purge tests were ported from the CSV to excluded records; the tests that
+  read the real file read the frozen `tests/fixtures/companies.json`; `test_todo_counts` was dropped.
 - [ ] 3.3 The editor.
   - **List.** A searchable `ul` with "Showing n of 347" in `role="status"`, chips Crawled, On the card (a company with a
     gap, shown with its reason, note and career link) and Excluded, and an Edit button
@@ -211,11 +209,12 @@ Steps:
 - [ ] 3.4 One source of truth for the company rules: the SQL checks of 3.1 are the rules.
   - `companies` is backed up with the `Table(..., account=False)` pattern of `JOBS` and `CRAWL_LOG` in
     `export_accounts.py`, and `restore_accounts.py` restores it.
-  - Docs: `AGENTS.md` (the exclusion paragraph, the single-list rule, the key-exposure rule with the D2 step, and one
-    line in the backup paragraph); `CONTRIBUTING.md` ("Adding a company" now says how a visitor or contributor suggests
-    one, through the report form or the contact page, and that the maintainer adds it on the admin page; "Removing a
+  - Docs: `AGENTS.md` (the exclusion paragraph and one line in the backup paragraph; the single-list rule and the key-exposure rule
+    were done in 3.2); `CONTRIBUTING.md` ("Adding a company" now says how a visitor or contributor suggests
+    one, through the report form or the contact page, and that the maintainer adds it on the admin page, replacing the
+    interim table-editor steps of 3.2; "Removing a
     company on request"; "Reported sites": the three outcomes of accept, keep on the card and decline now start on the
-    admin page); `README.md` (the quickstart starts with `sync_supabase.py --pull`).
+    admin page); `README.md` (done in 3.2: the quickstart starts with `sync_supabase.py --pull`).
 - Done when: a company is added, put on the card or excluded from the page; an added company is crawled after the next
   discover-and-push run, and the other changes take effect at the next daily run (its jobs closed, kept or deleted as
   the page said).

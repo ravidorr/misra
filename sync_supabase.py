@@ -11,13 +11,21 @@ renamed over, so there is never a half-built one, and the crawl and the dashboar
 
 The pull also writes the company list (PLAN_2.md step 3.2): every row of the `companies` table, the excluded ones
 included (the service-role key reads them), into the git-ignored scratch file data/companies.json, sorted by name and
-written the way discover.py writes it, without the keys a record does not have. An empty table is refused, as an empty
-`jobs` is: a run without the list would crawl nobody and, worse, without the exclusions. `--pull-companies` does only
-this (the discover-companies workflow has no use for the history). `python sync_supabase.py --push-companies` runs after
-discover.py: it sends back the discovered fields (discover.DISCOVERED) of the crawled records that discovery changed,
-by exact name, and never a field a person owns (`crawl`, `gap`, `excluded`, `links`, `domain`, `segment`, `israel_only`,
-`verify`). What discovery changed is the file against the baseline the pull kept (data/companies.pulled.json), and each
-update names the values the row had at the pull, so a row an editor changed since is left alone.
+written the way discover.py writes it. A record carries the keys the table has a value for; every record that is not
+excluded also has its five discovered fields, empty where the table holds null, so a company added with a name and a
+domain waits for discovery and stops no run. Beside it the pull keeps the baseline, data/companies.pulled.json: the same
+list as the table holds it (a null is a key left out). Both files are built beside (`.part`) and renamed over. The pull
+refuses an empty table, as it refuses an empty `jobs` (a run without the list would crawl nobody and, worse, without
+the exclusions), and a table with fewer than half of the yardstick (the larger of the baseline's records and `covered`
+in docs/jobs.json, which a fresh runner has). `--pull-companies` does only this (the discover-companies workflow has no
+use for the history).
+
+`python sync_supabase.py --push-companies` runs after discover.py: it sends back the discovered fields
+(discover.DISCOVERED) that discovery changed, by exact name. What discovery changed is the file against the baseline,
+and each update names the values the row had at the pull, so a row an editor changed since is left alone. It never
+sends a field a person owns (`crawl`, `gap`, `excluded`, `links`, `domain`, `segment`, `israel_only`, `verify`). A
+company that had a working feed is held back when discovery now finds nothing for it (a dead feed stays `ok` in the
+table until someone edits the row), and the counts are logged, never a name.
 
 `python sync_supabase.py` runs after the crawl: it copies the open jobs of data/jobs.db into the Supabase `jobs` table
 (PostgREST over HTTPS), closes the jobs that are no longer open, writes the crawl log rows of this run (the ones with
@@ -56,6 +64,7 @@ text until `jobs_text_trim` sets description, details and snippet to null 30 day
 this pass); the removal of an excluded company deletes the whole row, text included. A failure in this pass or in the
 trim is a warning, never a failed step: the jobs are already stored and the day's update goes on."""
 
+import contextlib
 import json
 import os
 import sqlite3
@@ -264,7 +273,7 @@ def purge(client: Client, excluded: Sequence[str]) -> int:
     for name in present:
         counts = {table: client.delete_company(table, name) for table in PURGE_TABLES}
         total += sum(counts.values())
-        print(f"Supabase: exclusion list, deleted {counts} for {name}")
+        print(f"Supabase: exclusion list, deleted {counts} for an excluded company")  # no name: the log is public
     return total
 
 
@@ -363,39 +372,66 @@ def pull(source: Source, path: str = DB, allow_shrink: bool = False) -> tuple[in
 
 
 def pull_companies(source: Source, path: str = COMPANIES) -> int:
-    """Write the company list of Supabase to `path` and return how many records it holds. Every row is read before the
-    file is touched; an empty table is refused. A record carries the keys that have a value (a null is a key it does not
-    have), in the order of common.RECORD_KEYS, sorted by name ignoring case, written as discover.py writes it, and the
-    file is built beside and renamed over the old one."""
+    """Write the company list of Supabase to `path` and return how many records it holds.
+
+    Every row is read before any file is touched. An empty table is refused, and so is one with fewer than half of the
+    yardstick (see `list_yardstick`): a partly hidden or partly lost table would hide the excluded records and stop
+    the purge. Two files are written, each built beside (`.part`) and renamed over the old one, `path` first and its
+    baseline `data/companies.pulled.json` after it. The baseline is the table as it is, a null being a key left out,
+    sorted by name ignoring case in the format of discover.py, in the order of common.RECORD_KEYS; `path` is the same
+    list for the readers, in which every record that is not excluded also has its five discovered fields, empty where
+    the table holds null (a company added with a name and a domain waits for discovery and stops no run)."""
     rows = source.read(COMPANY_TABLE)
     if not rows:
         raise SyncError(
             "Supabase holds no companies: refusing to start a run without the list "
-            "(restore the backup first, CONTRIBUTING.md, 'Backups')"
+            "(the table has no backup until PLAN_2.md step 3.4)"
         )
-    try:
-        before = len(load_companies(baseline_path(path)))
-    except (OSError, ValueError):  # no earlier pull to compare with
-        before = 0
+    before = list_yardstick(path)
     if fell_by_half(before, len(rows)):
         raise SyncError(
-            f"Supabase holds {len(rows)} companies and the last pull had {before}: refusing a list that lost more than "
-            "half of them (a wrong key or a policy change?); if it is real, delete the file "
-            f"{baseline_path(path)} and pull again"
+            f"Supabase holds {len(rows)} companies and the yardstick is {before}: refusing a list that lost more than "
+            "half of them (a wrong key or a policy change?); if it is real, delete "
+            f"{baseline_path(path)} and lower `covered` in {PUBLISHED}, then pull again"
         )
     records = [{k: row[k] for k in RECORD_KEYS if row[k] is not None} for row in rows]
     records.sort(key=lambda record: str(record["name"]).casefold())
-    part = Path(path + ".part")
-    part.parent.mkdir(parents=True, exist_ok=True)  # data/ holds nothing else in a fresh checkout
-    Path(baseline_path(path)).write_text(dump(records), encoding="utf-8")  # as the table holds it: nulls left out
     # a company added with a name and a domain has no discovered field yet: the readers get empty ones (not found
     # yet, as discover.py writes them) so such a record waits for discovery and never stops a run
     filled = [
         {k: r.get(k, "") for k in RECORD_KEYS if k in r or (k in DISCOVERED and "excluded" not in r)} for r in records
     ]
-    part.write_text(dump(filled), encoding="utf-8")
-    part.replace(path)
+    Path(path).parent.mkdir(parents=True, exist_ok=True)  # data/ holds nothing else in a fresh checkout
+    for target, text in ((path, dump(filled)), (baseline_path(path), dump(records))):
+        part = Path(target + ".part")
+        part.write_text(text, encoding="utf-8")
+        part.replace(target)
     return len(records)
+
+
+def read_records(path: str) -> list[dict[str, Any]]:
+    """The records of a list file; a file that is not a list of records is a ValueError, like one that is not JSON."""
+    records = load_companies(path)
+    if not isinstance(records, list) or not all(isinstance(r, dict) for r in records):
+        raise ValueError("not a list of records")
+    return records
+
+
+def list_yardstick(path: str) -> int:
+    """What the table must not fall far below: the larger of the records of the last pull here (its baseline, which a
+    fresh runner does not have) and `covered` in docs/jobs.json (the companies with a working feed when the dashboard
+    was last built, committed, so every checkout has it). A baseline that exists and cannot be read is a warning; a
+    missing file is no yardstick."""
+    counts = [0]
+    try:
+        counts.append(len(read_records(baseline_path(path))))
+    except FileNotFoundError:
+        pass
+    except (OSError, ValueError):
+        print("::warning::the baseline of the last pull could not be read, so the list is not compared with it")
+    with contextlib.suppress(OSError, ValueError, KeyError, TypeError):  # no published number: a local trial
+        counts.append(int(json.loads(Path(PUBLISHED).read_text(encoding="utf-8"))["covered"]))
+    return max(counts)
 
 
 def dump(records: list[dict[str, Any]]) -> str:
@@ -421,16 +457,17 @@ def push_companies(client: Client, path: str = COMPANIES) -> tuple[int, int, int
     records are considered and only the five DISCOVERED fields are ever sent, a careers address as https://. Each
     request names the company and the values the row had at the pull for all five fields, plus `crawl` true and no
     exclusion: a row an editor changed since (a pin, a correction, off the crawl, excluded) matches nothing and is left
-    alone. A record the baseline does not have is left alone too (a company is added on the admin page).
+    alone. A record the baseline does not have is left alone too (a company is added in the `companies` table; the
+    admin page gets an editor in PLAN_2 step 3.3).
 
     A company that had a working feed (status ok) is held back when discovery now finds nothing for it: a status that
     is not ok, or a blank where there was a value, is never pushed over it, and one warning counts them (no names). A
     request that fails is counted and the next one still goes; the log holds the status, never the row."""
-    baseline = {str(r.get("name")): r for r in load_companies(baseline_path(path))}
+    baseline = {str(r.get("name")): r for r in read_records(baseline_path(path))}
     if not baseline:
         raise SyncError("the pulled list is empty: nothing to compare with, nothing written")
-    changed = alone = failed = held = 0
-    for record in load_companies(path):
+    changed = alone = failed = held = sent = 0
+    for record in read_records(path):
         if record.get("crawl") is not True:
             continue
         pulled = baseline.get(str(record.get("name")))
@@ -454,20 +491,23 @@ def push_companies(client: Client, path: str = COMPANIES) -> tuple[int, int, int
             "select": "name",
             **{k: condition(pulled.get(k)) for k in DISCOVERED},
         }
+        sent += 1
         try:
             done = client.call(
                 "PATCH", where, fields, table="companies", prefer="return=representation", quiet=True
             ).json()
             if not isinstance(done, list):
                 raise SyncError("PATCH companies returned something other than a list")
-        except SyncError as exc:
+        except (SyncError, ValueError) as exc:  # a ValueError is an answer that is not JSON
             failed += 1
-            print(f"::warning::a company could not be updated: {exc}")
+            print(f"::warning::a company could not be updated: {exc if isinstance(exc, SyncError) else 'not JSON'}")
             continue
         if done:
             changed += 1
         else:  # an editor changed the row since the pull
             alone += 1
+    if sent and not changed and not failed:  # every update found its row changed, or none matched at all
+        print(f"::warning::none of {sent} updates matched a row: the conditions may not match what the table holds")
     if held:
         print(
             f"::warning::{held} companies with a working feed were left as they are: discovery found nothing for them"

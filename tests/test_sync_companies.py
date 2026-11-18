@@ -26,6 +26,7 @@ from tests.test_sync_supabase import KEY, URL, company_row, job_row
 from tests.test_sync_supabase import Pages as HistoryPages
 
 SECRET_TEXT = "a secret cell"
+HALF = 127  # of 253
 COUNT = 4  # rows of the first test
 
 
@@ -48,6 +49,7 @@ class Companies:
             answer.headers = {"Content-Range": f"0-{len(window)}/{len(self.rows)}"}  # type: ignore[attr-defined]
             return answer
         assert method == "PATCH"
+        assert kw["headers"]["Prefer"] == "return=representation"  # the answer names the rows it changed
         name = params["name"].removeprefix("eq.")
         if name == self.fail_patch_of:
             return FakeHttpResponse(status_code=400, text=f"violates a check, Failing row contains ({SECRET_TEXT})")
@@ -58,6 +60,13 @@ class Companies:
 
     def patches(self) -> list[dict[str, Any]]:
         return [call for call in self.calls if call["method"] == "PATCH"]
+
+
+@pytest.fixture(autouse=True)
+def nothing_published(tmp_path_factory: pytest.TempPathFactory, monkeypatch: pytest.MonkeyPatch) -> None:
+    """No test compares a list with the repository's real docs/jobs.json (`covered`); the ones that want a number
+    write their own."""
+    monkeypatch.setattr(sync_supabase, "PUBLISHED", str(tmp_path_factory.mktemp("published") / "jobs.json"))
 
 
 def matches(row: dict[str, Any], column: str, condition: str) -> bool:
@@ -176,14 +185,60 @@ def test_a_table_that_lost_more_than_half_of_the_last_pull_is_refused_and_the_fi
     path = tmp_path / "companies.json"
     sync_supabase.pull_companies(source(CompanyPages([company_row(f"C{n}") for n in range(10)])), str(path))
     before = path.read_text(encoding="utf-8")
-    with pytest.raises(SyncError, match=r"holds 4 companies and the last pull had 10"):
+    with pytest.raises(SyncError, match=r"holds 4 companies and the yardstick is 10"):
         sync_supabase.pull_companies(source(CompanyPages([company_row(f"C{n}") for n in range(4)])), str(path))
     assert path.read_text(encoding="utf-8") == before
     sync_supabase.pull_companies(
         source(CompanyPages([company_row(f"C{n}") for n in range(5)])), str(path)
     )  # half is fine
-    (tmp_path / "companies.pulled.json").write_text("cut", encoding="utf-8")  # an unreadable baseline: no yardstick
+
+
+def test_with_no_baseline_and_no_published_number_a_tiny_table_still_pulls(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A local trial: nothing to compare with, so the guard has nothing to say (CI has the published number)."""
+    monkeypatch.setattr(sync_supabase, "PUBLISHED", str(tmp_path / "none.json"))
+    assert sync_supabase.pull_companies(source(CompanyPages([company_row("A")])), str(tmp_path / "c.json")) == 1
+
+
+@pytest.mark.parametrize("published", ["not json", "[]", '{"covered": "many"}', '{"jobs": []}'])
+def test_a_published_file_that_says_nothing_is_no_yardstick(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, published: str
+) -> None:
+    (tmp_path / "jobs.json").write_text(published, encoding="utf-8")
+    monkeypatch.setattr(sync_supabase, "PUBLISHED", str(tmp_path / "jobs.json"))
+    assert sync_supabase.list_yardstick(str(tmp_path / "c.json")) == 0
+
+
+def test_a_fresh_runner_compares_the_table_with_the_companies_the_dashboard_last_covered(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The baseline does not exist on a runner; the committed docs/jobs.json says how many companies had a feed."""
+    (tmp_path / "jobs.json").write_text('{"jobs": [], "covered": 253}', encoding="utf-8")
+    monkeypatch.setattr(sync_supabase, "PUBLISHED", str(tmp_path / "jobs.json"))
+    path = tmp_path / "companies.json"
+    with pytest.raises(SyncError, match="holds 100 companies and the yardstick is 253"):
+        sync_supabase.pull_companies(source(CompanyPages([company_row(f"C{n}") for n in range(100)])), str(path))
+    assert not path.exists()
+    assert (
+        sync_supabase.pull_companies(source(CompanyPages([company_row(f"C{n}") for n in range(HALF)])), str(path))
+        == HALF
+    )
+
+
+@pytest.mark.parametrize("baseline", ["cut", '{"a": 1}', '["a"]'])
+def test_a_baseline_that_cannot_be_read_is_a_warning_and_the_pull_goes_on(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], baseline: str
+) -> None:
+    monkeypatch.setattr(sync_supabase, "PUBLISHED", str(tmp_path / "none.json"))
+    path = tmp_path / "companies.json"
+    (tmp_path / "companies.pulled.json").write_text(baseline, encoding="utf-8")
     assert sync_supabase.pull_companies(source(CompanyPages([company_row("A")])), str(path)) == 1
+    assert capsys.readouterr().out == (
+        "::warning::the baseline of the last pull could not be read, so the list is not compared with it\n"
+    )
+    assert json.loads((tmp_path / "companies.pulled.json").read_text(encoding="utf-8"))[0]["name"] == "A"
+    assert not list(tmp_path.glob("*.part"))  # both files were built beside and renamed over
 
 
 def test_a_table_that_cannot_be_read_leaves_no_file(tmp_path: Path) -> None:
@@ -369,6 +424,51 @@ def test_a_request_that_fails_is_counted_and_the_next_one_still_goes_and_the_log
     assert out.endswith("::warning::a company could not be updated: PATCH companies failed: HTTP 400\n")
     assert SECRET_TEXT not in out
     assert rows[1]["slug"] == "y"
+
+
+def test_an_answer_that_is_not_json_is_a_failure_of_that_company_only(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    class Html(Companies):
+        def request(self, method: str, url: str, **kw: Any) -> Any:
+            if method == "PATCH" and kw["params"]["name"] == "eq.Bad":
+                return FakeHttpResponse(json_error=True)
+            return super().request(method, url, **kw)
+
+    rows = [company_row("Bad"), company_row("Good")]
+    fake = Html(rows)
+    path = tmp_path / "c.json"
+    sync_supabase.pull_companies(source(fake), str(path))
+    write_json(path, [found("Bad", slug="x"), found("Good", slug="y")])
+    assert sync_supabase.push_companies(client(fake), str(path)) == (1, 0, 1, 0)
+    assert capsys.readouterr().out == "::warning::a company could not be updated: not JSON\n"
+
+
+def test_updates_that_all_matched_no_row_say_so_with_a_count(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    rows = [company_row("A"), company_row("B")]
+    done, _ = push(
+        rows, [found("A", slug="1"), found("B", slug="2")], tmp_path, edit=lambda r: [x.update(ats="x") for x in r]
+    )
+    assert done == (0, 2, 0, 0)
+    assert capsys.readouterr().out == (
+        "::warning::none of 2 updates matched a row: the conditions may not match what the table holds\n"
+    )
+
+
+def test_a_careers_address_that_was_already_https_and_came_back_http_changes_nothing(tmp_path: Path) -> None:
+    rows = [company_row("Acme", careers_url="https://acme.test/jobs", ats="lever", slug="acme", source="page")]
+    done, fake = push(rows, [found("Acme", careers_url="http://acme.test/jobs", slug="acme", status="ok")], tmp_path)
+    assert (done, fake.patches()) == ((0, 0, 0, 0), [])
+
+
+def test_a_baseline_that_is_not_a_list_stops_the_push(tmp_path: Path) -> None:
+    path = tmp_path / "c.json"
+    write_json(path, [found("Acme")])
+    write_json(tmp_path / "c.pulled.json", {"name": "Acme"})
+    with pytest.raises(ValueError, match="not a list of records"):
+        sync_supabase.push_companies(client(Companies([])), str(path))
 
 
 def test_an_answer_that_is_not_a_list_is_a_failure(tmp_path: Path) -> None:

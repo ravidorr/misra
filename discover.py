@@ -8,7 +8,8 @@ is left as it is, and so are the records of the companies that are not crawled, 
 never looked at). A careers address that came out as `http://` is written as `https://` (the table refuses any other).
 The file is written through a temporary file, and a run that would turn more than MAX_LOST working companies into
 failures (an offline run) writes nothing unless it is given `--force`. A record whose `source` is `override` is pinned
-by hand: its `ats` and `slug` are kept and only checked. A company is added on the admin page, never in this file."""
+by hand: its `ats` and `slug` are kept and only checked. A company is added in the `companies` table (the admin
+page gets an editor in PLAN_2 step 3.3), never in this file."""
 
 import json
 import os

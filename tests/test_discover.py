@@ -289,7 +289,9 @@ def test_main_puts_a_key_added_by_discovery_in_its_place_and_leaves_the_excluded
         ],
     )
     (out, kept) = run_main(workdir, monkeypatch)
-    assert kept == gone  # its record is not looked at and not changed: the table holds it, the next pull has it
+    assert json.dumps(kept) == json.dumps(
+        gone
+    )  # byte for byte; its record is not looked at and not changed: the table holds it, the next pull has it
     assert list(out) == [
         "name",
         "domain",

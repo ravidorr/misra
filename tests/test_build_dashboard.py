@@ -749,16 +749,19 @@ def test_a_no_careers_page_row_links_to_the_own_site_even_when_it_has_an_address
     assert group["sites"][0]["url"] == "https://a.test"
 
 
+BLOCKED = 5  # companies the frozen card treats as failing
+
+
 def test_every_site_on_the_frozen_coverage_gap_card_has_an_https_address() -> None:
     """The card as the daily build draws it, from the frozen list: a site with no address fails here, so a new failing
-    company or a company that left the list cannot reach the page without a link. The failing companies are the ones
-    of the last committed build (docs/jobs.json): the history itself is not in the repository."""
+    company or a company that left the list cannot reach the page without a link. Five crawled companies stand in
+    for the failing ones (the history is not in the repository, and no test reads the live docs/jobs.json)."""
     excluded = load_excluded(str(FROZEN_COMPANIES))
-    blocked = json.loads((REPO / "docs" / "jobs.json").read_text(encoding="utf-8"))["gaps"]["blocked"]
     everyone = [
         c for c in load_companies(str(FROZEN_COMPANIES)) if not build_dashboard.is_excluded(c["name"], excluded)
     ]
     crawled = crawled_companies(everyone)
+    blocked = [{"c": c["name"], "why": build_dashboard.BLOCKED_WHY, "last": "never"} for c in crawled[:BLOCKED]]
     unfed = [c for c in crawled if c["status"] != "ok"]
     links = build_dashboard.read_career_links(everyone)
     groups = build_dashboard.gap_groups(blocked, unfed, build_dashboard.read_unresolved(everyone), crawled, links)
