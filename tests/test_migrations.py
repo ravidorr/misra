@@ -1,12 +1,14 @@
 """Sanity checks on the SQL of supabase/migrations/, without a database. This is an allow-list lint, not a proof: every
 statement must be one of a few known kinds (so a view, `alter default privileges` or `disable row level security` fails
 until this file is taught about it), every table has row-level security and a full revoke from the public roles, the
-anonymous role can only read open jobs, the signed-in role gets only the privileges listed below, every policy lets a
-user touch their own rows only, every function pins its search path and is closed to the public roles, and a function
-that copies from `auth.users` never reads the provider's metadata (FR-1: the email is the only personal detail kept).
+anonymous role can only read open jobs and the companies that are not excluded, the signed-in role gets only the
+privileges listed below, every policy lets a user touch their own rows only, every function pins its search path and is
+closed to the public roles, and a function that copies from `auth.users` never reads the provider's metadata (FR-1:
+the email is the only personal detail kept).
 File names follow the Supabase CLI format. The policies themselves are tested against a real database with
 supabase/tests/accounts_rls.sql (see supabase/README.md)."""
 
+import json
 import re
 from pathlib import Path
 
@@ -29,6 +31,7 @@ AUTHENTICATED_MAY = {
     "subscriptions": {"select", "update"},
     "admin_log": {"select"},  # PLAN_2.md step 1.3: read by an admin, written by the service role and a trigger only
     "crawl_log": {"select"},  # PLAN_2.md step 2.1: read by an admin (the policy), written by the service role only
+    "companies": CRUD,  # PLAN_2.md step 3.1: only an admin writes (the policies); the public read is in PUBLIC_READ
 }
 # `emailed` belongs to the service role alone: no grant, no policy. `subscriptions` is granted column by column only
 # (see COLUMN_GRANTS), never as a whole table, because a table-level select would include the two token hashes.
@@ -57,7 +60,8 @@ COLUMN_GRANTS = {
     "update": {"frequency", "filters"},
 }
 # `address` is the one column that is an address on purpose: the place the digest goes, kept with the consent log.
-PERSONAL_COLUMN_ALLOWED = {("subscriptions", "address")}
+# `companies.name` is the name of a company, not of a person.
+PERSONAL_COLUMN_ALLOWED = {("subscriptions", "address"), ("companies", "name")}
 # The two functions behind confirm-email and unsubscribe: each may touch only these two tables, runs as the caller and
 # is executable by the service role alone.
 SUBSCRIPTION_FUNCTIONS = {
@@ -251,6 +255,39 @@ ADMIN_HEALTH_COLUMNS = (
     "held boolean, robots_skipped boolean, open_jobs integer, fetched_30d_ago integer"
 )
 GRANT_ADMIN_HEALTH = "grant execute on function public.admin_crawl_health() to authenticated"
+# PLAN_2.md step 3.1: the company list. The two unique indexes (ignoring case) and the load of the records are matched
+# whole, and so are the two trigger functions: the guard (an invoker: it sets `updated_at` and counts the excluded
+# records, 200 at most) and the log (a definer: it writes one `admin_log` row for a change an admin makes, with the
+# action and the company name and nothing else). The body of each is compared word for word, as `clean()` gives it.
+COMPANIES_INDEXES = {
+    "create unique index companies_name_unique on public.companies (lower(name))",
+    "create unique index companies_domain_unique on public.companies (lower(domain))",
+}
+COMPANIES_LOAD = re.compile(
+    r"insert into public\.companies \(\s*(?P<columns>[a-z_, ]+?)\s*\) select (?P<select>[a-z_, ]+) "
+    r"from jsonb_to_recordset\(\$companies\$(?P<data>(?:(?!\$companies\$).)*)\$companies\$::jsonb\) "
+    r"as r \(\s*(?P<types>[a-z_, ]+?)\s*\)"
+)
+COMPANY_FUNCTION = re.compile(
+    r"create function public\.(?P<name>companies_\w+)\(\) returns trigger language plpgsql "
+    r"(?P<definer>security definer )?set search_path = '' as \$\$(?P<body>.*)\$\$"
+)
+COMPANY_FUNCTIONS = {
+    "companies_before_write": (
+        False,
+        " begin new.updated_at := now(); if new.excluded is not null then perform "
+        "pg_advisory_xact_lock(hashtext('companies_excluded_limit')); if (select count(*) from public.companies "
+        "where excluded is not null and id is distinct from new.id) >= 200 then raise exception 'at most 200 excluded "
+        "companies (companies_excluded_limit)' using errcode = 'check_violation', constraint = "
+        "'companies_excluded_limit'; end if; end if; return new; end; ",
+    ),
+    "companies_log_change": (
+        True,
+        " begin if public.is_admin() then insert into public.admin_log (action, target) values ( case tg_op when "
+        "'insert' then 'company added' when 'update' then 'company changed' else 'company removed' end, case tg_op "
+        "when 'delete' then old.name else new.name end ); end if; return null; end; ",
+    ),
+}
 # The tables of the admin page (PLAN_2.md steps 1.3 to 3.1). A policy on one of them is for the signed-in role and its
 # only accepted `using` and `with check` is `public.is_admin()`. Two tables also keep a public read policy, which is
 # matched whole: `jobs` (open jobs) and `companies` (the records that are not excluded, decision D1).
@@ -317,7 +354,7 @@ def columns_of(body: str) -> dict[str, str]:
 def allowed_privileges(table: str, role: str) -> set[str]:
     if role == "authenticated":
         return AUTHENTICATED_MAY.get(table, set())
-    return {"select"} if table == "jobs" else set()  # anon and public
+    return {"select"} if table in PUBLIC_READ else set()  # anon and public: the tables with a public read policy
 
 
 def grant_problem(s: str) -> str | None:
@@ -455,7 +492,7 @@ def parse_function(s: str) -> tuple[str, bool, list[str]] | None:
         ] * bool(touched - SUBSCRIPTION_TABLES)
         bad += [f"function {m['name']} reaches outside public: {elsewhere}"] * bool(elsewhere)
         return m["name"], False, bad
-    if m := FUNCTION.fullmatch(s):
+    if (m := FUNCTION.fullmatch(s)) and m["name"] not in COMPANY_FUNCTIONS:  # those are pinned whole, see below
         bad = [f"function {m['name']} reads data the provider sends: {s}"] if PROVIDER_DATA.search(m["body"]) else []
         return m["name"], bool(m["definer"]), bad
     return None
@@ -503,6 +540,8 @@ def problems(stmts: list[str]) -> list[str]:
             or GRANT_REPORT_FUNCTION.fullmatch(s)
             or GRANT_JOBS_TRIM_FUNCTION.fullmatch(s)
             or s in {SEARCH_INDEX, GRANT_SEARCH_FUNCTION, GRANT_SEARCH_JOBS, GRANT_IS_ADMIN, GRANT_ADMIN_HEALTH}
+            or s in COMPANIES_INDEXES
+            or COMPANIES_LOAD.fullmatch(s)
             or ADD_JOBS_COLUMN.fullmatch(s)
             or GRANT_SUBSCRIPTION_FUNCTION.fullmatch(s)
             or GRANT_SUBSCRIBE_FUNCTION.fullmatch(s)
@@ -510,7 +549,7 @@ def problems(stmts: list[str]) -> list[str]:
             or s in (BACKFILL, SNIPPET_CUT_BACKFILL)
         ):
             found.append(f"statement kind not allowed by the lint: {s}")
-        found.extend(p for p in (grant_problem(s), policy_problem(s)) if p)
+        found.extend(p for p in (grant_problem(s), policy_problem(s), companies_load_problem(s)) if p)
     found.extend(f"row-level security not enabled on {t}" for t in sorted(tables - secured))
     found.extend(
         f"all privileges on {t} not revoked from {role}"
@@ -601,6 +640,10 @@ def search_problems(m: re.Match[str]) -> list[str]:
 def pinned_function(s: str) -> tuple[str, bool, list[str]] | None:
     """(name, security definer, problems) of one of the functions that are matched whole (the two searches and the
     admin check), or None."""
+    if m := COMPANY_FUNCTION.fullmatch(s):
+        wanted = COMPANY_FUNCTIONS.get(m["name"])
+        bad = [] if wanted == (bool(m["definer"]), m["body"]) else [f"function {m['name']} is not the pinned one: {s}"]
+        return m["name"], bool(m["definer"]), bad
     if m := ADMIN_FUNCTION.fullmatch(s):
         bad = [] if m["body"] == ADMIN_BODY else [f"is_admin may only ask whether the caller is listed: {s}"]
         return "is_admin", True, bad
@@ -651,12 +694,35 @@ def search_jobs_problems(m: re.Match[str]) -> list[str]:
     return found
 
 
+def companies_load_problem(s: str) -> str | None:
+    """The load of the company records names only columns of `common.RECORD_KEYS`, selects and types exactly those."""
+    if not (m := COMPANIES_LOAD.fullmatch(s)):
+        return None
+    columns = [w.strip() for w in m["columns"].split(",")]
+    found = []
+    try:
+        records = json.loads(m["data"])
+    except ValueError:
+        records = None
+    if not (isinstance(records, list) and all(isinstance(r, dict) for r in records)):
+        found.append("the data is not a json array of objects")
+    if set(columns) - set(common.RECORD_KEYS):
+        found.append(f"not record keys: {sorted(set(columns) - set(common.RECORD_KEYS))}")
+    if columns != [w.strip() for w in m["select"].split(",")]:
+        found.append("the select is not the inserted columns, in order")
+    if columns != [w.split()[0] for w in m["types"].split(",")]:
+        found.append("the typed columns are not the inserted columns, in order")
+    return f"the companies load: {'; '.join(found)}" if found else None
+
+
 def trigger_problems(triggers: list[tuple[str, str]], functions: dict[str, bool]) -> list[str]:
     """Triggers that run an undefined function, or anything but the profile copy on auth.users."""
     found = []
     for table, function in triggers:
         if function not in functions:
             found.append(f"trigger on {table} runs {function}, which this migration does not define")
+        elif function in COMPANY_FUNCTIONS and table != "public.companies":
+            found.append(f"{function} may run only on public.companies, not on {table}")
         elif table.startswith("auth.") and not (
             table == "auth.users" and function in AUTH_TRIGGER_FUNCTIONS and functions[function]
         ):
@@ -687,6 +753,7 @@ def test_migrations_are_safe() -> None:
             "emailed",
             "admins",
             "admin_log",
+            "companies",
         }
         | REPORT_TABLES
         | CONFIRM_LIMIT_TABLES
@@ -704,12 +771,16 @@ def test_crawl_log_is_read_by_an_admin_only() -> None:
     ]
 
 
-def test_the_anonymous_role_gets_nothing_but_the_open_jobs() -> None:
+def test_the_anonymous_role_gets_nothing_but_the_open_jobs_and_the_companies_that_are_not_excluded() -> None:
     stmts = statements()
     grants = [g for s in stmts if (g := GRANT.fullmatch(s))]
-    assert [(g["table"], g["privs"]) for g in grants if words(g["roles"]) & {"anon", "public"}] == [("jobs", "select")]
+    assert [(g["table"], g["privs"]) for g in grants if words(g["roles"]) & {"anon", "public"}] == [
+        ("jobs", "select"),
+        ("companies", "select"),
+    ]
     policies = [p for s in stmts if (p := POLICY.fullmatch(s))]
-    assert {p["table"] for p in policies if words(p["roles"]) & {"anon", "public"}} == {"jobs"}
+    assert {p["table"] for p in policies if words(p["roles"]) & {"anon", "public"}} == {"jobs", "companies"}
+    assert {p["using"] for p in policies if words(p["roles"]) & {"anon", "public"}} == set(PUBLIC_READ.values())
 
 
 def test_every_user_policy_is_for_the_signed_in_role_and_tests_the_own_row() -> None:

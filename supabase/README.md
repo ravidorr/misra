@@ -122,7 +122,7 @@ definer`, `stable`, has an empty search path, may be run by `anon` and `authenti
 caller only. There is no way to become an admin from the page: the first sign in never claims the row.
 `supabase/tests/admins.sql` checks all of it (`all admin check passed`), and the migration lint of
 `tests/test_migrations.py` pins it, and accepts a policy on an admin table only when its `using` and `with check` are `public.is_admin()` (besides the
-existing public read policies of `jobs` and, later, `companies`).
+public read policies of `jobs` and `companies`).
 
 Add the maintainer's own row once, after the migration is applied and after signing in once on the dashboard (the row
 points at `auth.users`, which Google sign-in fills at the first sign in). In the
@@ -141,8 +141,8 @@ run the statement again.
 
 Migration `20261128100000_admin_log.sql` (PLAN_2.md step 1.3) adds `public.admin_log(id, ts, action, target)`: one row per
 change made on the admin page, with the time, a plain action and the company or table it touched. `target` is never an
-address and never a user id (and may be empty), so the table holds no personal data. Nothing writes to it yet: the trigger
-of step 3.1 and the `admin-account` function of step 5.2 (service role) will. No public role has insert, update, delete or
+address and never a user id (and may be empty), so the table holds no personal data. Two writers: the trigger of
+`companies` (step 3.1, see "The company list") and, later, the `admin-account` function of step 5.2 (service role). No public role has insert, update, delete or
 truncate, a listed admin included; a signed-in admin reads it through one select policy, `using (public.is_admin())`, and
 everyone else gets a permission error (`anon`) or no rows. It is not in the daily account backup (no auth user to restore,
 and the plan names the backup of `companies` as the history of edits). `supabase/tests/admin_log.sql` checks all of it
@@ -180,6 +180,55 @@ The four literals of the `const` CTE are copies of `DROP_NOTE` and `ROBOTS_NOTE`
 `GAP_STALE_DAYS` (`run.py`); `tests/test_migrations.py` fails when they differ. `supabase/tests/admin_crawl_health.sql`
 checks the denial first (`anon`, a signed-in non-admin), the admin's reads, that the text of a posting stays unreadable,
 and each column on seeded logs (`all admin crawl health checks passed`); the migration lint pins the function and the policies.
+
+## The company list
+
+Migration `20261130100000_companies.sql` (PLAN_2.md step 3.1) adds `public.companies` and loads the 347 records of
+`data/companies.json` as they were at that commit (267 crawled, 80 on the coverage card, none excluded). **The file is
+still the source until step 3.2**: nothing in the pipeline reads the table yet, and no test compares the file with the
+loaded records, so an edit of the file, an added company or a row in `data/excluded_companies.csv` (a removal on request
+is never blocked) is fine. The table loads no exclusion; step 3.2 reloads it from the file of that day, exclusions
+included. Apply it once, as in "Apply the migrations" (applying it twice fails at `create table`).
+
+Columns: `id` (identity, the row's key, so a rename never changes it), then one per key of `common.RECORD_KEYS` (`name`,
+`domain`, `segment`, `crawl`, `careers_url`, `ats`, `slug`, `source`, `status`, `israel_only`, `verify`, `links`, `gap`;
+`links`, `gap` and `excluded` are jsonb), then `excluded` (`{reason, date_added}`; step 3.2 adds the key to the Python
+side) and `updated_at` (set by the trigger on every write). An undiscovered string is `''`, as in the file; a key a record
+does not have is null. The checks and the two unique indexes, by the names the editor of step 3.3 maps to sentences (the
+database refuses the write, the page does not re-implement the rules):
+
+| Name | Refuses |
+| --- | --- |
+| `companies_name_unique` | a name that exists already, ignoring case |
+| `companies_domain_unique` | a domain that exists already, ignoring case |
+| `companies_name_min_length` | a name shorter than 2 characters, or with white space at either end |
+| `companies_domain_required` | a missing or blank domain, except on an excluded record |
+| `companies_exactly_one_status` | none or more than one of: crawl is true, a gap, an exclusion |
+| `companies_gap_reason` | a gap that is not `{reason, note}` or whose reason is not a key of `REASONS` in `build_dashboard.py` |
+| `companies_careers_https` | a careers address that is not empty and does not start with `https://` |
+| `companies_links_https` | a link (`israel`, `global`) that does not start with `https://`, or another key |
+| `companies_ats_known` | a feed that is not empty, `browser` or a key of `adapters.ADAPTERS` |
+| `companies_excluded_keys` | an exclusion with other keys than `reason` and `date_added` |
+| `companies_excluded_reason` | a blank reason |
+| `companies_excluded_date` | a date that is not `YYYY-MM-DD` (an impossible one such as 2026-02-30 is refused by the cast, with no check name) |
+| `companies_excluded_shape` | an excluded record that has `crawl` true or any other field set |
+| `companies_excluded_limit` | a 201st excluded record (a trigger raising a check violation with this name) |
+
+The gap reasons, the feeds, the limit of 200 and the minimum of 2 are copies of `REASONS`, `ADAPTERS`,
+`common.EXCLUDED_MAX` and `common.EXCLUDED_MIN_NAME`; a test fails when a copy drifts, and the change is a new migration.
+
+Who may do what: everybody (`anon` and `authenticated`) reads the records that are not excluded (decision D1: the list is
+public); a signed-in admin (`public.is_admin()`) reads, adds, changes and deletes every record, excluded ones included;
+nobody else has anything, so an excluded record is never readable by anyone but the admin, and `truncate` is revoked from
+everybody. Row-level security answers a signed-in non-admin's `update` and `delete` with zero changed rows and an
+`insert` with a permission error; `anon` gets a permission error on every write.
+
+The log: an admin's insert, update or delete writes one `admin_log` row ('company added', 'company changed', 'company
+removed', target = the company name, never a reason). The trigger function is `security definer` (`admin_log` has no
+insert for any public role), pins its search path and is executable by nobody, and it logs only when the caller is an
+admin: the load, the pipeline (service role, step 3.2) and the SQL editor write no row. `supabase/tests/companies.sql`
+checks all of it (`all company checks passed`); the migration lint pins the grants, the policies and both trigger
+functions. `companies` is not in the daily backup until step 3.4 (it holds no personal data).
 
 ## Stars and discards
 
