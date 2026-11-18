@@ -179,8 +179,12 @@ class Backend:
         if request.method == "OPTIONS":
             await route.fulfill(status=204, headers=CORS)
             return
-        if urlparse(request.url).path.endswith("/rpc/search_job_keys"):
+        path = urlparse(request.url).path
+        if path.endswith("/rpc/search_job_keys"):
             await self.search(route)
+            return
+        if not path.endswith("/rest/v1/jobs"):  # a stray call (the sign-out, say) is not a page of jobs: no `offset`
+            await route.fulfill(status=204, headers=CORS)
             return
         self.requests.append(request)
         query = parse_qs(urlparse(request.url).query)
