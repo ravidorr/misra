@@ -18,11 +18,14 @@ All notable changes are documented here. Format follows [Keep a Changelog](https
 
 - The Python tests use at most 4 parallel workers (`--maxprocesses=4` next to `-n auto`): several full runs at once (one per worktree) on one machine starved each other and made the browser tests time out.
 
+- The About page sends people to the Contact page for a question, not to GitHub issues, and the comment on `CONTACT_FORM_ENABLED` describes the form-off Contact page as it is now.
+
 ## [0.67.0] - 2026-11-18
 
 ### Added
 
 - A way home on every page but the dashboard: an icon-only house button in the header, in the place the dashboard gives to the account controls (`btn btn-pill btn-icon`, named "Home", so it looks and acts like the profile and theme buttons), and a "Home" link first in the footer. The logo link stays. `build_dashboard.SLOTS` now says what each slot holds on the dashboard and on every other page (`templates/parts/home-button.inc`, `home-link.inc`).
+
 ## [0.66.1] - 2026-11-18
 
 ### Changed
