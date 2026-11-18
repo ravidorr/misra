@@ -138,14 +138,13 @@ def test_the_spam_guard_sentence_is_the_lawyers_in_the_notice_and_the_form_and_a
 def test_the_privacy_notice_contact_is_a_direct_address_not_only_a_public_issue() -> None:
     body = sections(read("PRIVACY.md"))["Contact"]
     assert CONTACT in body
-    assert "do not put personal details" in body
-    assert body.strip() == (  # his text of 2026-11-17 (A3), with the address and the two links kept as they were
+    # the lawyer's text of 2026-11-17 (A3); the maintainer alone made the Contact link a word link and dropped the
+    # GitHub-issue and security-note sentences on 2026-11-18
+    assert body.strip() == (
         f"Raanan Avidor, <{CONTACT}>, for any question, a request to see, correct or delete your data, or a "
-        "complaint. The Contact page <https://ravidorr.github.io/misra/contact.html> lists every way to reach us. Its "
+        "complaint. The [Contact page](https://ravidorr.github.io/misra/contact.html) lists every way to reach us. Its "
         "form emails your message, and your name and email address if you give them, to the maintainer's mailbox "
-        f"through Resend. We do not store them. {SPAM_GUARD} General questions can also go in a "
-        "[GitHub issue](https://github.com/ravidorr/misra/issues); do not put personal details in it. To report a "
-        "security problem, use the private route in [the security note](./SECURITY.md)."
+        f"through Resend. We do not store them. {SPAM_GUARD}"
     )
 
 
@@ -270,10 +269,19 @@ def test_the_agreement_line_sits_next_to_the_email_control_and_is_in_the_dialog_
     assert f'and the <a href="https://ravidorr.github.io/misra/privacy.html" {new_tab}>privacy notice{shown}' in region
     assert region.count('<span class="sr-only"> (opens in a new tab)</span></a>') == len(("Terms", "privacy notice"))
     assert "Email me new matching roles" not in region  # B1: the heading is cut; the helper text stays whole
+    # The lawyer's sentences stay whole and in this order; the script only hides the first two (the confirmation
+    # disclosure) while the state line above says the same (round 11, B1), so neither span may be hidden in the markup.
     assert (
-        'We first send a confirmation link to <span id="digestConsentTo"></span>. Nothing is sent until you '
-        "confirm, and you get an email only when there are new matches. One-click unsubscribe is in every email."
+        '<span id="digestConsentFirst">We first send a confirmation link to <span id="digestConsentTo"></span>. '
+        "Nothing is sent until you confirm, and you get an email only when there are new matches. </span>"
+        "One-click unsubscribe is in every email. By turning this on you agree to the"
     ) in region
+    assert not re.search(r'id="digestConsentFirst"[^>]*hidden', region)
+    assert (
+        '<span id="digestAddressHintMore"> Either way, the address gets a confirmation email first, and nothing else '
+        "until its owner confirms.</span>"
+    ) in region
+    assert not re.search(r'id="digestAddressHintMore"[^>]*hidden', region)
     assert 'id="digestConsent"' in region
     assert not re.search(r'id="digestConsent"[^>]*hidden', region)
 
@@ -422,7 +430,7 @@ def test_the_lawyers_round_of_2026_11_16_editorial_wording_is_in_the_notice_the_
     )
     assert "Gmail (Google SMTP)" not in privacy
     assert "daily summary email" not in privacy
-    assert "use the private route in [the security note](./SECURITY.md)." in privacy
+    assert "the private route in [the security note]" not in privacy  # the maintainer dropped the pointer, 2026-11-18
     assert "[SECURITY.md]" not in privacy  # a file name is not link text
     assert "stars, discards" not in privacy
     terms = read("TERMS.md")
@@ -450,7 +458,7 @@ def test_the_screens_carry_the_lawyers_round_of_2026_11_16_editorial_wording() -
         "the live service.",
         "any job alert settings and the record of your consent to them from our database.",
         '<p id="digestIntro">Get the new roles that match your filters by email.</p>',
-        "Either way, the address gets a confirmation email first, and nothing else until its owner confirms.",
+        " Either way, the address gets a confirmation email first, and nothing else until its owner confirms.",
     ):
         assert phrase in page, phrase
     assert "Privacy Notice" not in page

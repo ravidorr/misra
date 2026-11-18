@@ -143,8 +143,6 @@ let page = 0;
 let ready = false;
 let announceTimer;
 let announcedQuery = ''; /* the search the live region last spoke for */
-let undoTimer; /* "Reset" can be undone for a few seconds (see hideUndo) */
-let undoFilters = null;
 let view = 'roles';
 /* Signed out, the choices live in this browser: `gone` maps a job key to the day it was discarded, `starred` maps it to
    what the page needs to show it later (company, id, title, location, link). Signed in, they live in the account (see
@@ -1112,7 +1110,7 @@ function select(f) {
 }
 
 function sync() {
-  hideUndo(); /* every change to F, from the reader or from the account, ends the offer of an undo (reset sets it after) */
+  $('resetStatus').textContent = ''; /* the next Reset says it again */
   $('q').value = F.q;
   searchText();
   $('company').value = F.company;
@@ -1167,12 +1165,13 @@ function newRoles() {
   return { counts, total: jobs.length };
 }
 
-/* One circle per company with new roles, 15 at most, most first; the chosen company always stays, so it can be turned off. */
+/* One circle per company with new roles, 15 at most, most first. The chosen company is always there and always first, so
+   its circle is on the line while the strip is closed and it can be turned off. */
 function renderStories(counts) {
-  const names = Object.keys(counts)
+  let names = Object.keys(counts)
     .sort((a, b) => counts[b] - counts[a] || a.localeCompare(b))
     .slice(0, 15);
-  if (F.company && !names.includes(F.company)) names.push(F.company);
+  if (F.company) names = [F.company, ...names.filter((company) => company !== F.company)];
   const focused = document.activeElement?.closest('#stories .story')?.dataset.company; /* replaceChildren drops the focus */
   $('hiring').hidden = names.length === 0;
   $('stories').replaceChildren(
@@ -1199,9 +1198,12 @@ function renderStories(counts) {
   );
   layoutStories();
   if (focused !== undefined) {
-    /* the circle can be gone (a chosen company without new roles, turned off): the focus goes to the list heading, never to the page */
+    /* the circle can be gone (a chosen company without new roles, turned off) or put away behind "Show all" (a company
+       that is not on the first line goes back to its place): the focus goes to the button, or else to the list heading,
+       never to the page and never to a hidden circle */
     const same = [...$('stories').children].find((li) => li.firstChild.dataset.company === focused);
-    (same?.firstChild ?? $('list-h')).focus();
+    const toggle = $('hiringToggle');
+    (same && !same.hidden ? same.firstChild : toggle.hidden ? $('list-h') : toggle).focus();
   }
 }
 
@@ -1598,28 +1600,10 @@ $('stories').addEventListener('click', (e) => {
   F.company = F.company === button.dataset.company ? '' : button.dataset.company;
   update();
 });
-/* "Reset" can be undone for a few seconds: the filters as they were are kept in memory only, with no history
-   and no dialog. Any other change to the filters ends the offer (update() hides it), so it never restores stale state. */
-const UNDO_MS = 6000;
-function hideUndo() {
-  clearTimeout(undoTimer);
-  undoFilters = null;
-  const note = $('resetNote');
-  if (note.contains(document.activeElement)) $('reset').focus(); /* the focus never falls to the page when it goes */
-  note.replaceChildren();
-}
 $('reset').addEventListener('click', () => {
-  const before = F;
   F = { ...defaults(), q: F.q }; /* the search words are not a filter: the search box keeps them */
   update();
-  undoFilters = before;
-  $('resetNote').replaceChildren(h('span', { text: 'Filters reset.' }), h('button', { type: 'button', class: 'btn btn-pill', id: 'undoReset', text: 'Undo' }));
-  undoTimer = setTimeout(hideUndo, UNDO_MS);
-});
-$('resetNote').addEventListener('click', (e) => {
-  if (!e.target.closest('#undoReset')) return;
-  F = { ...undoFilters, q: F.q }; /* the search words typed meanwhile stay */
-  update();
+  $('resetStatus').textContent = 'Filters reset.'; /* in the sheet: the rest of the page is inert while the sheet is modal */
 });
 /* The filters are a panel in the page on a wide screen and a bottom sheet on a phone. It is one native <dialog>: open
    as a panel (show) on a wide screen, and opened modally (showModal) from "Filters" on a narrow one, where the browser

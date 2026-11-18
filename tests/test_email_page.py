@@ -237,10 +237,8 @@ async def test_a_failed_confirmation_link_keeps_its_text(page: Page, site: Path)
 
 async def test_the_button_works_from_the_keyboard(page: Page, site: Path) -> None:
     confirm, _ = await open_page(page, site, f"#token={TOKEN}")
-    await page.keyboard.press("Tab")  # the skip link, the logo link, the theme button, then the button
-    await page.keyboard.press("Tab")
-    await page.keyboard.press("Tab")
-    await page.keyboard.press("Tab")
+    for _ in range(5):  # the skip link, the logo link, the home button, the theme button, then the button
+        await page.keyboard.press("Tab")
     assert await page.evaluate("document.activeElement.id") == "confirm"
     await page.keyboard.press("Enter")
     await expect(page.locator("#heading")).to_have_text(CONFIRMED)
@@ -336,6 +334,7 @@ async def test_every_state_sits_in_one_card_with_the_dashboard_header_and_footer
     assert await top.locator("a.top-home").get_attribute("href") == "./"
     links = page.locator("footer.foot nav.foot-links a")
     assert await links.all_inner_texts() == [
+        "Home",
         "About",
         "Connect your assistant",
         "Contact",
@@ -344,6 +343,7 @@ async def test_every_state_sits_in_one_card_with_the_dashboard_header_and_footer
         "Security",
     ]
     assert [await link.get_attribute("href") for link in await links.all()] == [
+        "./",
         "about.html",
         "assistant.html",
         "contact.html",

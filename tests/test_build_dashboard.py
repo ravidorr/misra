@@ -96,6 +96,8 @@ def write_static(workdir: Path) -> None:
     )
     (parts / "account.inc").write_text("<div>account</div>\n", encoding="utf-8")
     (parts / "updated.inc").write_text("<p>updated</p>\n", encoding="utf-8")
+    (parts / "home-button.inc").write_text('<a id="home" href="./">Home</a>\n', encoding="utf-8")
+    (parts / "home-link.inc").write_text('<a href="./">Home</a>\n', encoding="utf-8")
     for legal in (*build_dashboard.LEGAL_PAGES, build_dashboard.ASSISTANT_PAGE, build_dashboard.ABOUT_PAGE):
         (workdir / legal.source).write_text(f"# {legal.source}\n", encoding="utf-8")
     (workdir / "templates" / "report.js").write_text("const report = '__SUPABASE_URL__/report';\n", encoding="utf-8")
@@ -958,8 +960,8 @@ def test_the_real_contact_page_marks_every_form_part_so_the_switch_cuts_all_of_i
     assert template.count("<!--contactform-->") == template.count("<!--/contactform-->") == len(parts)
     cut = build_dashboard.CONTACT_REGION.sub("", template)
     assert not re.search(r"contact\.js|connect-src|<form|<noscript|contactForm|__SRI_CONTACT", cut)
-    # what stays with the form off: the three routes that need no form, and no address of the maintainer
-    for needed in ("github.com/ravidorr/misra/issues", 'href="security.html"', 'href="privacy.html#contact"'):
+    # what stays with the form off: the one route that needs no form, and no address of the maintainer
+    for needed in ('href="privacy.html#contact"',):
         assert needed in cut
     assert "@" not in cut
     assert "form-action 'none'" in cut  # a no-JavaScript submit can never go anywhere
