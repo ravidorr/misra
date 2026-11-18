@@ -14,7 +14,7 @@ All notable changes are documented here. Format follows [Keep a Changelog](https
 - The Crawl area of the admin page (PLAN_2.md step 2.2): it calls `admin_crawl_health()` when first shown and lists one card per company, worst first, with a headline, chips with counts (Needs attention, Failing, Robots.txt, Held, All), the values of the crawl and a status pill. Loading, empty, error and 401 states. Templates and tests only.
 - A Copy button under every code block of the legal pages (the address on "Connect your assistant", the command for Claude Code), in `templates/theme.js`.
 
-## [0.70.0] - 2026-11-18
+## [0.71.0] - 2026-11-18
 
 ### Added
 
@@ -23,6 +23,12 @@ All notable changes are documented here. Format follows [Keep a Changelog](https
 ### Changed
 
 - The error of a pull that finds an empty `companies` table now points to the restore (`restore_accounts.py`) instead of saying the table has no backup. `CONTRIBUTING.md`, `AGENTS.md`, `SECURITY.md`, `README.md` and `supabase/README.md` say the table is backed up.
+
+## [0.70.0] - 2026-11-18
+
+### Changed
+
+- The `discover-companies` workflow runs `discover.py --new-only`: only the crawled companies with no `status` yet are discovered, and every other record stays exactly as pulled, so a site that blocks a GitHub runner can no longer downgrade a working company (the first live run was refused by the `MAX_LOST` guard). `discover.py` without the flag still re-discovers the whole list by hand. To have a pinned record looked at again, empty its `status`.
 
 ## [0.69.0] - 2026-11-18
 

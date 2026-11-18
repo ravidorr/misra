@@ -46,12 +46,13 @@ and says which. Until the admin page has its editor (PLAN_2.md step 3.3) the mai
 Supabase dashboard (Table Editor, `companies`).
 
 1. Insert a row with `name`, `domain` and `crawl` true.
-2. Run the `discover-companies` workflow from `main` (Actions, Run workflow). It pulls the list, runs `discover.py`,
-   which fills in each crawled company's careers URL and job feed, and sends back only those five fields. A new company
-   is crawled by the daily run after that.
+2. Run the `discover-companies` workflow from `main` (Actions, Run workflow). It pulls the list, runs
+   `discover.py --new-only`, which fills in the careers URL and job feed of the crawled companies that have no `status`
+   yet (every other record is left as pulled, since a runner cannot rebuild the whole list), and sends back only those
+   five fields. A new company is crawled by the daily run after that.
 3. If `discover.py` finds the wrong feed or none, pin the company: set `source` to `override` and its `ats` and `slug`
-   (or `ats` `browser` and a career page URL as the `slug`), then run the `discover-companies` workflow again so the
-   `status` becomes `ok` (`run.py` crawls only `status` `ok`). `discover.py` keeps a pinned `ats` and `slug` and only
+   (or `ats` `browser` and a career page URL as the `slug`), empty its `status`, then run the `discover-companies` workflow
+   again so the `status` becomes `ok` (`run.py` crawls only `status` `ok`). `discover.py` keeps a pinned `ats` and `slug` and only
    checks them. Clear `source` to let it search again. A company that has `status` `ok` is never downgraded by the
    push (a feed that died stays `ok` until someone edits the row): that is the intended trade-off, so a failed
    discovery run, from a blocked runner for example, cannot switch working companies off.
