@@ -64,7 +64,10 @@ CALLS_WHEN_REFUSED_TWICE = 2  # refused, the check again, refused again
 async def open_crawl(
     page: Page, docs: Path, backend: Backend | None = None, **kwargs: object
 ) -> tuple[Backend, list[str]]:
-    return await open_admin(page, docs, backend=backend or Backend(health=ROWS), **kwargs)  # type: ignore[arg-type]
+    opened = await open_admin(page, docs, backend=backend or Backend(health=ROWS), **kwargs)  # type: ignore[arg-type]
+    if kwargs.get("wait", True) and backend is not None and backend.health_gate is None:
+        await expect(page.locator("#crawl")).not_to_have_attribute("data-state", "loading")  # the area has answered
+    return opened
 
 
 async def names(page: Page) -> list[str]:
@@ -76,6 +79,7 @@ def card(page: Page, company: str) -> Locator:
 
 
 async def facts(page: Page, company: str) -> dict[str, str]:
+    await expect(card(page, company)).to_be_visible()  # the card is in the DOM before its values are read
     groups = await card(page, company).locator(".crawl-fact").all()
     return {(await g.locator("dt").inner_text()): (await g.locator("dd").inner_text()) for g in groups}
 
