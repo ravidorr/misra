@@ -96,6 +96,8 @@ def write_static(workdir: Path) -> None:
     )
     (parts / "account.inc").write_text("<div>account</div>\n", encoding="utf-8")
     (parts / "updated.inc").write_text("<p>updated</p>\n", encoding="utf-8")
+    (parts / "home-button.inc").write_text('<a id="home" href="./">Home</a>\n', encoding="utf-8")
+    (parts / "home-link.inc").write_text('<a href="./">Home</a>\n', encoding="utf-8")
     for legal in (*build_dashboard.LEGAL_PAGES, build_dashboard.ASSISTANT_PAGE, build_dashboard.ABOUT_PAGE):
         (workdir / legal.source).write_text(f"# {legal.source}\n", encoding="utf-8")
     (workdir / "templates" / "report.js").write_text("const report = '__SUPABASE_URL__/report';\n", encoding="utf-8")

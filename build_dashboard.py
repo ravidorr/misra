@@ -147,10 +147,16 @@ def legal_links() -> dict[str, str]:
 NEW_TAB = '<span class="sr-only"> (opens in a new tab)</span>'
 
 # The header and the footer of every page, written once (templates/parts/). A page template holds `__HEADER__` and
-# `__FOOTER__`. Two slots only the dashboard fills: the account controls (they need auth.js) and the "last read" line
-# (it needs dashboard.js); every other page leaves them empty. The link to the page being shown gets aria-current.
+# `__FOOTER__`. Each slot names what the dashboard puts there and what every other page does (None: nothing). The
+# dashboard has the account controls (they need auth.js) and the "last read" line (it needs dashboard.js); every other
+# page has a home button in the place of the account controls and a "Home" link in the footer, which the dashboard
+# does not need. The link to the page being shown gets aria-current.
 PARTS = "templates/parts"
-SLOTS = {"__ACCOUNT__": "account.inc", "__FOOT_NOTE__": "updated.inc"}
+SLOTS: dict[str, tuple[str | None, str | None]] = {
+    "__ACCOUNT__": ("account.inc", "home-button.inc"),
+    "__FOOT_NOTE__": ("updated.inc", None),
+    "__FOOT_HOME__": (None, "home-link.inc"),
+}
 
 # The backend the page reads the jobs from: the one place for the project URL and the PUBLIC anon key. Row-level
 # security lets the anon key read open jobs only, so the key may live in docs/. The build puts both values into the
@@ -385,15 +391,17 @@ def markdown_to_html(text: str) -> str:
 def apply_chrome(text: str, output: str, root: Path = Path(), dashboard: bool = False) -> str:
     """Put the shared header and footer into a page template. `output` is the page's file name in docs/, so its own
     link in the header and the footer is marked `aria-current="page"`. Only the dashboard (`dashboard=True`) fills
-    the slots of the account controls and of the "last read" line."""
+    the slots of the account controls and of the "last read" line; every other page fills the home button and the
+    footer's "Home" link instead (see SLOTS)."""
     parts = root / PARTS
     here = "./" if output == "index.html" else output
     shared = {
         "__HEADER__": (parts / "header.inc").read_text(encoding="utf-8"),
         "__FOOTER__": (parts / "footer.inc").read_text(encoding="utf-8"),
     }
-    for placeholder, source in SLOTS.items():
-        filled = (parts / source).read_text(encoding="utf-8") if dashboard else ""
+    for placeholder, (on_dashboard, elsewhere) in SLOTS.items():
+        source = on_dashboard if dashboard else elsewhere
+        filled = (parts / source).read_text(encoding="utf-8") if source else ""
         for name, part in shared.items():
             shared[name] = part.replace(f"{placeholder}\n", filled)
     for name, part in shared.items():

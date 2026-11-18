@@ -12,6 +12,11 @@ All notable changes are documented here. Format follows [Keep a Changelog](https
 
 - A Copy button under every code block of the legal pages (the address on "Connect your assistant", the command for Claude Code), in `templates/theme.js`.
 
+## [0.67.0] - 2026-11-18
+
+### Added
+
+- A way home on every page but the dashboard: an icon-only house button in the header, in the place the dashboard gives to the account controls (`btn btn-pill btn-icon`, named "Home", so it looks and acts like the profile and theme buttons), and a "Home" link first in the footer. The logo link stays. `build_dashboard.SLOTS` now says what each slot holds on the dashboard and on every other page (`templates/parts/home-button.inc`, `home-link.inc`).
 ## [0.66.1] - 2026-11-18
 
 ### Changed
