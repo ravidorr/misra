@@ -104,3 +104,95 @@ def test_run_as_script(workdir: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr("playwright.async_api.async_playwright", lambda: FakePlaywright([]))
     runpy.run_module("survey", run_name="__main__")
     assert json.loads((workdir / "data" / "survey.json").read_text()) == []
+
+
+# the baseline report (PLAN_3.md steps A1 and A2): counts only, from frozen fixtures
+FIXTURES = Path(__file__).parent / "fixtures"
+FROZEN_JOBS = FIXTURES / "jobs.json"
+
+
+def frozen_companies() -> list[dict[str, Any]]:
+    return json.loads((FIXTURES / "companies.json").read_text(encoding="utf-8"))  # type: ignore[no-any-return]
+
+
+def test_baseline_counts_the_frozen_list() -> None:
+    jobs = json.loads(FROZEN_JOBS.read_text(encoding="utf-8"))
+    report = survey.baseline(frozen_companies(), jobs)
+    assert "Coverage baseline (jobs.json generated 2026-11-18 16:29 UTC)" in report
+    assert "Crawled companies: 267\n" in report
+    assert "Researched only: 80\n" in report
+    assert "Excluded records: 0 (a count only)" in report
+    # AI21 Labs and Adobe have Israel jobs; Aidoc has none; "Ghost Co" is not a crawled company
+    assert "Crawled companies with at least one Israel job: 2\n" in report
+    assert "Israel jobs (all companies in jobs.json): 4\n" in report
+    assert "Israel jobs of crawled companies: 3\n" in report
+    assert "not in the crawled list (name mismatch): 1\n" in report
+    assert "Researched only by gap.reason (80):\n  no_careers_url: 23\n  needs_reader: 20\n" in report
+    assert "Researched only by segment (80):\n  deeptech: 36\n  multinational: 22\n" in report
+    assert "Crawled by ats (267):\n  comeet: 88\n  greenhouse: 57\n" in report
+    assert "  multinational (israel_only): 73\n  startup (not israel_only): 194" in report
+    assert "gh run list --workflow=daily.yml --limit 10" in report
+
+
+def test_baseline_never_prints_an_excluded_name_or_a_job() -> None:
+    companies: list[dict[str, Any]] = [
+        {"name": "Alpha", "crawl": True, "ats": "comeet"},
+        {"name": "Hidden Corp", "crawl": True, "excluded": {"reason": "asked", "date_added": "2026-11-01"}},
+        {"name": "Beta", "crawl": False, "excluded": {"reason": "asked", "date_added": "2026-11-01"}},
+        {"name": "Gamma", "crawl": False, "gap": "not a mapping"},
+        {"name": "Delta", "gap": {"reason": ""}, "segment": "deeptech"},
+    ]
+    jobs = {"jobs": [{"c": "Alpha", "il": True, "t": "Secret Title"}, {"c": "Hidden Corp", "il": True}]}
+    report = survey.baseline(companies, jobs)
+    for private in ("Hidden Corp", "Beta", "Secret Title"):
+        assert private not in report
+    assert "Excluded records: 2 (a count only)" in report
+    assert "Crawled companies: 1\n" in report and "Researched only: 2\n" in report
+    assert "Crawled companies with at least one Israel job: 1\n" in report
+    assert "  none: 2\n" in report  # gap that is not a mapping, and an empty reason
+    assert "generated unknown" in report
+
+
+def test_baseline_with_nothing() -> None:
+    report = survey.baseline([], {})
+    assert "Crawled companies: 0\n" in report and "Israel jobs (all companies in jobs.json): 0\n" in report
+    assert "startup (not israel_only): 0" in report
+
+
+def test_baseline_main_prints_to_stdout(capsys: pytest.CaptureFixture[str]) -> None:
+    code = survey.baseline_main(str(FIXTURES / "companies.json"), str(FROZEN_JOBS))
+    captured = capsys.readouterr()
+    assert code == 0
+    assert "Crawled companies: 267" in captured.out
+    assert captured.err == ""
+
+
+def test_baseline_main_stops_when_the_list_is_missing(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    code = survey.baseline_main(str(tmp_path / "companies.json"), str(FROZEN_JOBS))
+    captured = capsys.readouterr()
+    assert code == 1
+    assert captured.out == ""
+    assert "sync_supabase.py --pull-companies" in captured.err
+    assert "SUPABASE_SERVICE_ROLE_KEY" in captured.err
+
+
+def test_baseline_as_script(workdir: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
+    (workdir / "docs").mkdir(exist_ok=True)
+    (workdir / "docs" / "jobs.json").write_text(FROZEN_JOBS.read_text(encoding="utf-8"), encoding="utf-8")
+    write_json(workdir / "data" / "companies.json", frozen_companies())
+    monkeypatch.setattr("sys.argv", ["survey.py", "--baseline"])
+    with pytest.raises(SystemExit) as stop:
+        runpy.run_module("survey", run_name="__main__")
+    assert stop.value.code == 0
+    assert "Crawled companies: 267" in capsys.readouterr().out
+
+
+def test_baseline_ranks_ties_by_label() -> None:
+    companies = [
+        {"name": n, "crawl": True, "ats": a} for n, a in (("A", "zed"), ("B", "alpha"), ("C", "alpha"), ("D", "zed"))
+    ]
+    companies.append({"name": "E", "crawl": True, "ats": "mid", "israel_only": "true"})
+    report = survey.baseline(companies, {"jobs": [{"c": "A", "il": "true"}, {"il": True}]})
+    assert "Crawled by ats (5):\n  alpha: 2\n  zed: 2\n  mid: 1\n" in report
+    assert "multinational (israel_only): 0\n  startup (not israel_only): 5" in report
+    assert "Crawled companies with at least one Israel job: 0\n" in report

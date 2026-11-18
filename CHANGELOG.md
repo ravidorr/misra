@@ -19,6 +19,12 @@ All notable changes are documented here. Format follows [Keep a Changelog](https
 - The Crawl area of the admin page (PLAN_2.md step 2.2): it calls `admin_crawl_health()` when first shown and lists one card per company, worst first, with a headline, chips with counts (Needs attention, Failing, Robots.txt, Held, All), the values of the crawl and a status pill. Loading, empty, error and 401 states. Templates and tests only.
 - A Copy button under every code block of the legal pages (the address on "Connect your assistant", the command for Claude Code), in `templates/theme.js`.
 
+## [0.72.0] - 2026-11-18
+
+### Added
+
+- `python survey.py --baseline`, the read-only coverage report of PLAN_3.md steps A1 and A2: from the pulled company list (`data/companies.json`, written by `sync_supabase.py --pull-companies`; the command stops with that instruction when the file is missing) and the public `docs/jobs.json`, it prints to stdout the crawled count, the crawled companies with at least one Israel job and the Israel job count, the researched-only records by `gap.reason` and by `segment`, the crawled companies by `ats`, the startup versus multinational split (from `israel_only`) and the excluded records as a count only. It prints counts only (no job, no name of an excluded company) and calls no network. `PLAN_3.md` records the three budgets (crawl time, failures, size) measured with it and with `gh run view`.
+
 ## [0.71.0] - 2026-11-18
 
 ### Added
