@@ -55,9 +55,9 @@ jobs:
         run: python sync_supabase.py --pull-companies
       - name: Discover the career pages and feeds
         timeout-minutes: 20
-        # No secret in this step: it requests third-party sites. It writes data/companies.json only; a run that would
-        # turn more than discover.MAX_LOST working companies into failures (an offline run) writes nothing and fails.
-        # --new-only: only the records with no status are discovered; the others are not touched.
+        # No secret in this step: it requests third-party sites. It writes data/companies.json only.
+        # --new-only: only the records with no status are discovered; the others are not touched. (A full run by hand
+        # that would turn more than discover.MAX_LOST working companies into failures writes nothing and fails.)
         run: python discover.py --new-only
       - name: Send the discovered fields to Supabase
         timeout-minutes: 5

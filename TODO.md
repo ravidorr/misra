@@ -270,9 +270,9 @@ Observations about live sites below come from checks made on 2026-11-14 and may 
     4. Pin with one edit of the company's row in the `companies` table (Supabase Table Editor; one company at a time, so a
        bad pin is easy to undo): set `"crawl": true`, `"ats"`, `"slug"`, `"source": "override"` (that is what pins it: `discover.py`
        keeps the `ats` and `slug` of a pinned record and only checks them), and, for a large
-       multinational, `"israel_only": true`; remove the `gap` (and the `segment`). Then run the `discover-companies`
-       workflow: it checks the pin and sets its `status` (`run.py` crawls only `status` `ok`), and it re-probes the other
-       crawled companies, which never downgrades one that has `status` `ok`.
+       multinational, `"israel_only": true`; remove the `gap` (and the `segment`), and empty its `status` (the workflow
+       discovers only records with no `status`). Then run the `discover-companies` workflow: it checks the pin and sets
+       the `status` (`run.py` crawls only `status` `ok`) and leaves every other record as it is.
        A board with no Israel job today is fine to pin: the `israel_only` rule reports the first Israel job it ever
        lists. Code changes (an adapter, a parser fix) need a version bump and a changelog entry.
        Probe a Workday slug with `.venv/bin/python -c "import adapters; print(adapters.workday('visa/wd5/Visa'))"`:
