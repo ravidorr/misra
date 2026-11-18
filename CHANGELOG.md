@@ -12,11 +12,15 @@ All notable changes are documented here. Format follows [Keep a Changelog](https
 
 - A Copy button under every code block of the legal pages (the address on "Connect your assistant", the command for Claude Code), in `templates/theme.js`.
 
-## [0.67.1] - 2026-11-18
+## [0.67.2] - 2026-11-18
 
 ### Changed
 
 - The Python tests use at most 4 parallel workers (`--maxprocesses=4` next to `-n auto`): several full runs at once (one per worktree) on one machine starved each other and made the browser tests time out.
+
+## [0.67.1] - 2026-11-18
+
+### Changed
 
 - The About page sends people to the Contact page for a question, not to GitHub issues, and the comment on `CONTACT_FORM_ENABLED` describes the form-off Contact page as it is now.
 
