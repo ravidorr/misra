@@ -604,7 +604,8 @@ const SUBSCRIPTION_KINDS = [
   ['pending', 'Waiting for confirmation'],
   ['off', 'Turned off'],
 ];
-const NOTE_EMAILED = 'People who were emailed that day (UTC), one count each however many jobs they got.';
+const NOTE_EMAILED =
+  'People who were emailed that day (UTC), one count each however many jobs they got. Someone who turned the email off or deleted the account is no longer counted.';
 
 async function alertRows() {
   const { data, error, status } = await client.rpc('admin_alert_counts');

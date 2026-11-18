@@ -10,7 +10,8 @@
 --   day   date     for 'emailed' one of the last 7 UTC days, today first, with 0 for a day nobody was emailed; null for
 --                  the three subscription kinds
 --   n     integer  for a subscription kind, the subscriptions in that state; for 'emailed', the DISTINCT users who were
---                  emailed that day (not the number of jobs)
+--                  emailed that day (not the number of jobs). It can only fall after the day: turning the email off and
+--                  deleting the account both delete the user's `emailed` rows, so that person is no longer counted
 -- A subscription is 'off' when `unsubscribed_at` is set, 'confirmed' when the address was confirmed and not
 -- unsubscribed (`consent_confirmed_at` set, the only state the digest sends in), and 'pending' otherwise (turned on, the
 -- address not confirmed yet). Nothing here is applied by the pull request: apply it once, see supabase/README.md.
