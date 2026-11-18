@@ -24,6 +24,7 @@ AUTHENTICATED_MAY = {
     "user_prefs": CRUD,
     "user_jobs": CRUD,
     "subscriptions": {"select", "update"},
+    "admin_log": {"select"},  # PLAN_2.md step 1.3: read by an admin, written by the service role and a trigger only
 }
 # `emailed` belongs to the service role alone: no grant, no policy. `subscriptions` is granted column by column only
 # (see COLUMN_GRANTS), never as a whole table, because a table-level select would include the two token hashes.
@@ -641,7 +642,17 @@ def test_migrations_are_safe() -> None:
     tables = {m["table"] for s in stmts if (m := CREATE_TABLE.fullmatch(s))}
     assert (
         tables
-        == {"jobs", "crawl_log", "profiles", "user_prefs", "user_jobs", "subscriptions", "emailed", "admins"}
+        == {
+            "jobs",
+            "crawl_log",
+            "profiles",
+            "user_prefs",
+            "user_jobs",
+            "subscriptions",
+            "emailed",
+            "admins",
+            "admin_log",
+        }
         | REPORT_TABLES
         | CONFIRM_LIMIT_TABLES
     )
@@ -920,6 +931,38 @@ def test_the_lint_rejects_a_weakened_admins_migration(old: str, new: str) -> Non
 )
 def test_the_lint_rejects_anything_that_opens_admins(extra: str) -> None:
     assert problems(statements_of(f"{ADMINS_SQL}\n{extra};"))
+
+
+ADMIN_LOG_FILE = MIGRATION_DIR / "20261128100000_admin_log.sql"
+ADMIN_LOG_SQL = ADMIN_LOG_FILE.read_text(encoding="utf-8")
+
+
+@pytest.mark.parametrize(
+    ("old", "new"),
+    [
+        (
+            "grant select on public.admin_log to authenticated;",
+            "grant select, insert on public.admin_log to authenticated;",
+        ),
+        (
+            "grant select on public.admin_log to authenticated;",
+            "grant select on public.admin_log to anon, authenticated;",
+        ),
+        ("revoke all on public.admin_log from anon, authenticated, public;", ""),
+        ("alter table public.admin_log enable row level security;", ""),
+        ("using (public.is_admin())", "using (true)"),
+        ("for select to authenticated", "for select to anon, authenticated"),
+        ("for select to authenticated", "for insert to authenticated"),
+    ],
+)
+def test_the_lint_rejects_a_weakened_admin_log_migration(old: str, new: str) -> None:
+    assert old in ADMIN_LOG_SQL, old
+    assert problems(statements_of(ADMIN_LOG_SQL.replace(old, new)))
+
+
+def test_admin_log_holds_no_user_id_and_no_address() -> None:
+    body = columns_of(next(m for s in statements_of(ADMIN_LOG_SQL) if (m := CREATE_TABLE.fullmatch(s)))["body"])
+    assert set(body) == {"id", "ts", "action", "target"}
 
 
 ADMIN_POLICY = 'create policy "p" on public.{table} for {command} to {roles} {clauses}'

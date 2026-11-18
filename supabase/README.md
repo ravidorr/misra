@@ -137,6 +137,17 @@ It inserts one row, or none when no account uses that address (`select * from pu
 a user id and no address). Deleting the auth user deletes the row. A restore of the accounts does not bring the row back:
 run the statement again.
 
+## The admin log
+
+Migration `20261128100000_admin_log.sql` (PLAN_2.md step 1.3) adds `public.admin_log(id, ts, action, target)`: one row per
+change made on the admin page, with the time, a plain action and the company or table it touched. `target` is never an
+address and never a user id (and may be empty), so the table holds no personal data. Nothing writes to it yet: the trigger
+of step 3.1 and the `admin-account` function of step 5.2 (service role) will. No public role has insert, update, delete or
+truncate, a listed admin included; a signed-in admin reads it through one select policy, `using (public.is_admin())`, and
+everyone else gets a permission error (`anon`) or no rows. It is not in the daily account backup (no auth user to restore,
+and the plan names the backup of `companies` as the history of edits). `supabase/tests/admin_log.sql` checks all of it
+(`all admin log checks passed`), and the migration lint pins it.
+
 ## Stars and discards
 
 `user_jobs` holds one row per user and job with a single `state`, so a job is starred or discarded, never both. A star
