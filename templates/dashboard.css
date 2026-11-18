@@ -1223,10 +1223,6 @@ html:has(.sheet:modal) {
   font-weight: 700;
 }
 
-.alert-answer:empty {
-  display: none;
-}
-
 /* The Log area: one card per change, the time first and then the sentence, wrapping on a phone. */
 .log-list {
   display: grid;

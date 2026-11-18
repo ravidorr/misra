@@ -672,7 +672,8 @@ const ACCOUNT_URL = `${SUPABASE_URL}/functions/v1/admin-account`;
 const ACCOUNT_TIMEOUT_MS = 20000;
 const HTTP_OK = 200;
 const HTTP_BAD_REQUEST = 400;
-const HTTP_BAD_GATEWAY = 502;
+const HTTP_UNAVAILABLE = 503;
+const HTTP_TOO_MANY = 429;
 const HTTP_NOT_FOUND = 404;
 const HTTP_CONFLICT = 409;
 const DONE_TEXT = { done: 'Done.', no_account: 'No account uses that address.' };
@@ -689,9 +690,17 @@ const account = { busy: false };
 
 /* The access token: the session is renewed first when it expired, or by force once the function said no (a 404 is also what
    an expired session looks like). Resolves with null when there is no session. */
+class TokenError extends Error {}
+
 async function accountToken(renew) {
-  const { data, error } = renew ? await client.auth.refreshSession() : await client.auth.getSession();
-  if (error) throw error;
+  let result;
+  try {
+    result = renew ? await client.auth.refreshSession() : await client.auth.getSession();
+  } catch {
+    throw new TokenError('session');
+  }
+  const { data, error } = result;
+  if (error) throw new TokenError('session');
   return data.session?.access_token ?? null;
 }
 
@@ -713,12 +722,14 @@ async function postAccount(address, action, renew) {
    field, for an answer where pressing the button again (or fixing the address) is the way on. */
 function accountOutcome({ status, body }) {
   if (status === HTTP_OK && body?.ok === true && Object.hasOwn(DONE_TEXT, body.result)) {
-    return { kind: 'status', text: DONE_TEXT[body.result], keep: false, done: body.result === 'done' };
+    return { kind: 'status', text: DONE_TEXT[body.result], keep: false, done: body.result === 'done', logged: body.result === 'done' };
   }
-  if (status === HTTP_CONFLICT) return { kind: 'problem', text: ACCOUNT_WORDS.conflict, keep: false, done: false };
-  if (status === HTTP_BAD_REQUEST) return { kind: 'problem', text: ACCOUNT_WORDS.address, keep: true, done: false };
-  const unsure = status === HTTP_BAD_GATEWAY; /* a deletion that was asked for and not confirmed */
-  return { kind: 'problem', text: unsure ? ACCOUNT_WORDS.maybe : ACCOUNT_WORDS.nothing, keep: true, done: false };
+  if (status === HTTP_CONFLICT) return { kind: 'problem', text: ACCOUNT_WORDS.conflict, keep: false, done: false, logged: false };
+  if (status === HTTP_BAD_REQUEST) return { kind: 'problem', text: ACCOUNT_WORDS.address, keep: true, done: false, logged: false };
+  /* Only a 503 (the admin check could not be made) and a 429 are known to have done nothing: a 500 can come after the
+     log row and part of the work, a 502 after a deletion that was asked for, and a gateway timeout after all of it. */
+  const none = status === HTTP_UNAVAILABLE || status === HTTP_TOO_MANY;
+  return { kind: 'problem', text: none ? ACCOUNT_WORDS.nothing : ACCOUNT_WORDS.maybe, keep: true, done: false, logged: !none };
 }
 
 /* Asks the function; a 404 gets one renewed session and one more try. Resolves with an outcome, or null when the page
@@ -728,9 +739,11 @@ async function sendAccount(address, action) {
   try {
     answer = await postAccount(address, action, false);
     if (answer.status === HTTP_NOT_FOUND) answer = await postAccount(address, action, true);
-  } catch {
-    /* No answer, or no token: the error holds nothing worth keeping, and nothing here may log what was typed. */
-    return { kind: 'problem', text: ACCOUNT_WORDS.maybe, keep: true, done: false };
+  } catch (error) {
+    /* Log the kind of failure only: the error holds nothing worth keeping and nothing here may log what was typed. */
+    console.error(`admin-account: ${error?.name ?? 'failed'}`);
+    if (error instanceof TokenError) answer = { status: HTTP_NOT_FOUND, body: null }; /* nothing was sent: the page's check decides */
+    else return { kind: 'problem', text: ACCOUNT_WORDS.maybe, keep: true, done: false, logged: true };
   }
   if (answer.status !== HTTP_NOT_FOUND) return accountOutcome(answer);
   const result = await verdict(); /* the page's own check: a session that is over, or an account that is not an admin */
@@ -738,7 +751,7 @@ async function sendAccount(address, action) {
     settle(result);
     return null;
   }
-  return { kind: 'problem', text: ACCOUNT_WORDS.nothing, keep: true, done: false };
+  return { kind: 'problem', text: ACCOUNT_WORDS.nothing, keep: true, done: false, logged: false };
 }
 
 /* Closes the question and forgets the address it showed, at once: the `close` event comes later, and not for a close made here. */
@@ -751,6 +764,7 @@ function clearAddresses() {
   for (const name of Object.keys(ACCOUNT_FORMS)) {
     $(`${name}Address`).value = '';
     fieldError(`${name}Address`, '');
+    sayAccount(name, null);
   }
   closeAccountDialog();
 }
@@ -791,10 +805,8 @@ async function runAccount(name) {
   }
   if (!outcome.keep) input.value = '';
   sayAccount(name, outcome);
-  if (outcome.done) {
-    opened.delete('log'); /* the function logged the action: the Log area reads it again when it is next shown */
-    loadArea('alerts'); /* the counts moved */
-  }
+  if (outcome.logged) opened.delete('log'); /* the function may have logged the action: the Log area reads it again when next shown */
+  if (outcome.done) loadArea('alerts'); /* the counts moved */
 }
 
 /* The address of a form when it is one the function could take, else the field says so and keeps the focus. */
@@ -808,7 +820,10 @@ function checkedAddress(name) {
 
 function wireAccountForms() {
   for (const name of Object.keys(ACCOUNT_FORMS)) {
-    $(`${name}Address`).addEventListener('input', () => fieldError(`${name}Address`, ''));
+    $(`${name}Address`).addEventListener('input', () => {
+      fieldError(`${name}Address`, '');
+      sayAccount(name, null);
+    });
   }
   $('endForm').addEventListener('submit', (event) => {
     event.preventDefault();

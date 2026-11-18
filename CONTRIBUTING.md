@@ -487,8 +487,8 @@ Accepted sites are not in Supabase: a report is only an email, and accepting it 
 When someone writes to ask that their job alerts stop or that their account be deleted (for example because the button
 did not work for them), use the Alerts area of the admin page (`admin.html`) before touching the database by hand. Type
 the address from their email in "End job alerts" or "Delete an account"; deleting asks you to confirm first. The page
-answers "Done." or "No account uses that address." and shows no list of accounts. It writes one line to the Log (the
-action and the time, never the address). If it says more than one account uses the address, nothing was done: decide by
+answers "Done." or "No account uses that address." and shows no list of accounts. When it acts it writes one line to the Log (the
+action and the time, never the address); "No account uses that address." writes none. If it says more than one account uses the address, nothing was done: decide by
 hand which account is meant. Do not paste the address into an issue, a commit or a log. The page calls the Edge Function
 `admin-account` (`supabase/README.md`, "Admin: end alerts or delete an account"). A deleted account stays in the daily
 backup until the backup is replaced, within 30 days (see "Backups of the account tables and the job history").

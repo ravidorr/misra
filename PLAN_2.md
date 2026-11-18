@@ -271,7 +271,7 @@ maintainer would do by hand. It shows counts, never lists.
 
 Status: every box of steps 1 to 5 is ticked, so the code of PLAN_2 is complete. What remains is not code: the maintainer
 checks the live admin page once against the real project (sign in, read the Crawl, Alerts and Log areas, and try the two
-forms on an address that is his own), and keeps `PLAN_3.md` as the next work.
+"End job alerts" on an address of his own, and "Delete an account" only on a throwaway account or on an address no account uses, expecting "No account uses that address."), and keeps `PLAN_3.md` as the next work.
 
 ## Out of scope
 

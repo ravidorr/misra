@@ -173,6 +173,8 @@ async def test_the_other_answer_is_no_account_and_it_changes_nothing_else(page: 
     await expect(page.locator("#endStatus")).to_have_text("No account uses that address.")
     assert await values(page) == ["", ""]
     await page.get_by_role("link", name="Log").click()
+    await expect(page.locator("#log .crawl-count")).to_be_visible()
+    await asyncio.sleep(0.3)  # a wrong reload would be asked for by now
     assert backend.log_asked == ONE  # nothing was logged: the log is not read again
     assert backend.alerts_asked == ONE  # nor the counts
 
@@ -231,21 +233,23 @@ async def test_more_than_one_account_says_nothing_was_done_and_clears_the_field(
     assert await values(page) == ["", ""]
     assert ADDRESS not in await page.locator("main").inner_text()
     assert watch.carrying(ADDRESS) == [("POST", ACCOUNT)]
+    await asyncio.sleep(0.3)
     assert backend.alerts_asked == ONE  # nothing was done: nothing refreshed
 
 
 @pytest.mark.parametrize(
     ("answer", "words"),
     [
-        ((500, {"ok": False, "error": {"code": "server_error"}}), NOTHING),
+        ((500, {"ok": False, "error": {"code": "server_error"}}), MAYBE),
+        ((504, None), MAYBE),
         ((503, {"ok": False, "error": {"code": "service_unavailable"}}), NOTHING),
         ((502, {"ok": False, "error": {"code": "delete_unconfirmed"}}), MAYBE),
         ((429, None), NOTHING),
-        ((200, {"ok": True, "result": "surprise"}), NOTHING),
-        ((200, {"ok": False}), NOTHING),
+        ((200, {"ok": True, "result": "surprise"}), MAYBE),
+        ((200, {"ok": False}), MAYBE),
         ((0, None), MAYBE),
     ],
-    ids=["500", "503", "502", "other-status", "unknown-result", "not-ok", "no-answer"],
+    ids=["500", "504", "503", "502", "other-status", "unknown-result", "not-ok", "no-answer"],
 )
 async def test_a_failure_says_so_in_a_plain_sentence_keeps_the_address_and_lets_the_button_try_again(
     page: Page, site: Path, answer: tuple[int, object], words: str
@@ -259,6 +263,7 @@ async def test_a_failure_says_so_in_a_plain_sentence_keeps_the_address_and_lets_
     assert await values(page) == [ADDRESS, ""]  # retryable: the field keeps it
     await expect(page.get_by_role("button", name="End job alerts")).not_to_have_attribute("aria-disabled", "true")
     assert ADDRESS not in await page.locator("#alerts").inner_text()
+    await asyncio.sleep(0.3)
     assert backend.alerts_asked == ONE
     await page.get_by_role("button", name="End job alerts").click()  # the same button, the same address
     await expect(page.locator("#endStatus")).to_have_text("Done.")
@@ -424,6 +429,40 @@ async def test_a_404_renews_the_session_once_and_tries_again(page: Page, site: P
     assert len(backend.account_calls) == TWO
     refreshes = [r for r in backend.auth.requests if "refresh_token" in r.url]
     assert len(refreshes) == ONE  # the session was renewed in between, once
+
+
+async def test_a_session_the_service_refuses_to_renew_sends_nothing_a_second_time_and_says_so(
+    page: Page, site: Path
+) -> None:
+    backend = backend_with((404, None))
+    await start(page, site, backend)
+    backend.auth.mode = "bad_code"  # the renewal is refused for good
+    await end_alerts(page)
+    await expect(page.locator("#endProblem")).to_have_text(NOTHING)  # the page's own check found it still ready
+    assert len(backend.account_calls) == ONE  # the retry never left the browser
+    assert await values(page) == [ADDRESS, ""]
+
+
+async def test_typing_again_clears_the_last_answer(page: Page, site: Path) -> None:
+    await start(page, site, backend_with((200, DONE)))
+    await end_alerts(page)
+    await expect(page.locator("#endStatus")).to_have_text("Done.")
+    await page.locator("#endAddress").press_sequentially("a")
+    await expect(page.locator("#endStatus")).to_have_text("")
+
+
+async def test_a_failed_server_leaves_the_log_to_be_read_again_because_it_may_have_written_a_row(
+    page: Page, site: Path
+) -> None:
+    backend = backend_with((500, None))
+    await start(page, site, backend)
+    await page.get_by_role("link", name="Log").click()
+    await expect(page.locator("#log")).to_have_attribute("data-state", "ready")
+    await page.get_by_role("link", name="Alerts").click()
+    await end_alerts(page)
+    await expect(page.locator("#endProblem")).to_have_text(MAYBE)
+    await page.get_by_role("link", name="Log").click()
+    await until(lambda: backend.log_asked == TWO)
 
 
 async def test_a_404_twice_with_a_live_session_says_nothing_was_done_and_keeps_the_field(
