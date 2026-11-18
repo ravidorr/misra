@@ -12,6 +12,7 @@ from tests.test_legal_pages import open_legal
 
 OTHER_PAGES = [
     "about.html",
+    "admin.html",
     "assistant.html",
     "contact.html",
     "email.html",

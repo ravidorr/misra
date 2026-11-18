@@ -80,6 +80,9 @@ def write_static(workdir: Path) -> None:
     (workdir / "templates" / "auth.js").write_text("const auth = '__SUPABASE_URL__';\n", encoding="utf-8")
     (workdir / "templates" / "email.html").write_text("<!doctype html><title>e</title>", encoding="utf-8")
     (workdir / "templates" / "email.js").write_text("const email = '__SUPABASE_URL__';\n", encoding="utf-8")
+    (workdir / "templates" / "session.js").write_text("export const session = 1;\n", encoding="utf-8")
+    (workdir / "templates" / "admin.html").write_text("<!doctype html><title>a</title>", encoding="utf-8")
+    (workdir / "templates" / "admin.js").write_text("const admin = '__SUPABASE_URL__';\n", encoding="utf-8")
     (workdir / "templates" / "contact.html").write_text("<!doctype html><title>c</title>", encoding="utf-8")
     (workdir / "templates" / "contact.js").write_text("const contact = '__SUPABASE_URL__/contact';\n", encoding="utf-8")
     (workdir / "templates" / "legal.html").write_text(
@@ -285,6 +288,8 @@ def test_site_files_are_written_next_to_the_page(db: sqlite3.Connection, workdir
     docs = workdir / "docs"
     assert sorted(p.name for p in docs.iterdir()) == [
         "about.html",
+        "admin.html",
+        "admin.js",
         "apple-touch-icon.png",
         "assistant.html",
         "auth.js",
@@ -303,6 +308,7 @@ def test_site_files_are_written_next_to_the_page(db: sqlite3.Connection, workdir
         "privacy.html",
         "report.js",
         "security.html",
+        "session.js",
         "supabase.js",
         "terms.html",
         "theme.js",

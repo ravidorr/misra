@@ -8,10 +8,11 @@
    cannot edit it: it carries the same details as its `user_metadata` claim unless the project's access token hook (the
    migration's `custom_access_token_hook`, switched on in the Supabase dashboard) empties the claim. The tables keep
    the email only (supabase/migrations). */
+import { STORAGE_KEY, storage } from './session.js';
+
 const $ = (id) => document.getElementById(id);
 const SUPABASE_URL = '__SUPABASE_URL__';
 const SUPABASE_ANON_KEY = '__SUPABASE_ANON_KEY__';
-const STORAGE_KEY = 'misra-auth';
 const DELETE_TIMEOUT_MS = 15000;
 const HTTP_UNAUTHORIZED = 401;
 const MESSAGES = {
@@ -24,22 +25,6 @@ const MESSAGES = {
   deleted: 'Your account and everything saved in it were deleted. You are signed out and the roles work as before, without an account.',
   out: 'You are signed out here, but the service could not end the session on its side. It ends by itself when it expires.',
 };
-
-/* The session as the page keeps it: the user reduced to id, email and a few account fields, and without Google's own
-   access and refresh tokens (the page never uses them, and they could fetch the name and photo). */
-function scrubbed(value) {
-  let session;
-  try {
-    session = JSON.parse(value);
-  } catch {
-    return value; /* not a session (the PKCE code verifier is a plain string) */
-  }
-  if (typeof session?.user !== 'object' || session.user === null) return value;
-  const kept = { ...session };
-  for (const name of ['provider_token', 'provider_refresh_token']) Reflect.deleteProperty(kept, name); /* Google's own */
-  const { id, aud, role, email, created_at: createdAt } = session.user;
-  return JSON.stringify({ ...kept, user: { id, aud, role, email, created_at: createdAt, app_metadata: {}, user_metadata: {} } });
-}
 
 /* The per-user notes dashboard.js keeps in this browser (queued changes, unsent filters, the first-sign-in answer), by user id.
    Deleting an account clears this user's entries here too, so it does not depend on dashboard.js having loaded its data. */
@@ -57,37 +42,6 @@ function forgetUser(userId) {
     }
   }
 }
-
-/* localStorage, or memory for this page view when the browser blocks it or its quota is full (then a sign-in cannot survive the
-   redirect from Google: the code that comes back has no matching start, and the page says the sign-in did not finish). */
-const memory = new Map();
-const storage = {
-  getItem(key) {
-    if (memory.has(key)) return memory.get(key); /* a write that failed is newer than what the storage still holds */
-    try {
-      return localStorage.getItem(key);
-    } catch {
-      return null;
-    }
-  },
-  setItem(key, value) {
-    const kept = scrubbed(value);
-    try {
-      localStorage.setItem(key, kept);
-      memory.delete(key);
-    } catch {
-      memory.set(key, kept);
-    }
-  },
-  removeItem(key) {
-    memory.delete(key);
-    try {
-      localStorage.removeItem(key);
-    } catch {
-      /* Storage is blocked: nothing was saved. */
-    }
-  },
-};
 
 let deleting = false; /* a deletion request is in flight */
 
