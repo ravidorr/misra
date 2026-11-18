@@ -155,7 +155,7 @@ Steps:
   - Checks, each with a stable name: `name` and `domain` unique ignoring case; exactly one of `crawl` is true, `gap`
     is not null, `excluded` is not null; the checks of D3; a gap reason in the migration's list, with a test that fails
     when that list differs from the keys of `REASONS` in `build_dashboard.py`; a careers link that is empty or
-    starts with `https://` (the one `http://` record of the file is fixed in the same migration).
+    starts with `https://` (the 3.1 PR also corrects the one `http://` record in `data/companies.json`, Verbit, so the file and the table agree).
   - RLS (see the lint of 1.1): the policy of D1 for reading; `select, insert, update, delete` for `is_admin()`; a
     trigger writes `admin_log`. The same migration loads the records of the file at that commit.
   - SQL tests for each denial and each check. The editor (3.3) asks for a gap reason and a
