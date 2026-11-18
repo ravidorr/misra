@@ -98,19 +98,21 @@ def test_read_candidates_refuses_a_file_it_cannot_read(tmp_path: Path) -> None:
 def test_split_candidates_counts_and_never_names_the_excluded() -> None:
     companies = [
         {"name": "Known", "domain": "known.com", "crawl": True},
-        {"name": "Researched Co", "domain": "researched.io", "crawl": False},
-        excluded_record("Gone Inc") | {"domain": "gone-domain.com"},
+        {"name": "Researched Co", "domain": "https://www.Researched.io/", "crawl": False},
+        excluded_record("Gone Inc Ltd") | {"domain": "gone-domain.com"},
     ]
     candidates = [
         Candidate("known", "other.com", ""),  # listed by name, case ignored
         Candidate("Other", "www.known.com".removeprefix("www."), ""),  # listed by domain
         Candidate("Gone Inc", "new.com", ""),  # excluded by name
         Candidate("Renamed", "gone-domain.com", ""),  # excluded by domain
+        Candidate("Researched", "researched.io", ""),  # listed by a dirty domain of a researched record
+        Candidate("GONE", "newer.com", ""),  # excluded as the same name without Inc and Ltd
         Candidate("Fresh", "fresh.com", "x"),
     ]
-    todo, listed, barred = survey.split_candidates(candidates, companies, ["Gone Inc"])
+    todo, listed, barred = survey.split_candidates(candidates, companies, ["Gone Inc Ltd"])
     assert todo == [Candidate("Fresh", "fresh.com", "x")]
-    assert (listed, barred) == (2, 2)
+    assert (listed, barred) == (3, 3)
 
 
 def test_scan_career_pages_finds_a_board_link(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -137,18 +139,15 @@ def test_scan_career_pages_reads_what_a_page_without_a_board_offers(monkeypatch:
     assert scan == PageScan(careers_url="https://w/c", hint="workday")
 
 
-def test_scan_career_pages_records_a_refusal_and_goes_on(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_scan_career_pages_stops_at_a_refusal(monkeypatch: pytest.MonkeyPatch) -> None:
     pages: dict[str, FakeHttpResponse | None] = {
         "https://www.acme.com/": FakeHttpResponse(status_code=403),
         "https://acme.com/": FakeHttpResponse(status_code=429),
         "https://acme.com/careers": FakeHttpResponse(text="https://boards.greenhouse.io/acme"),
     }
-    serve(monkeypatch, pages)
-    assert survey.scan_career_pages("acme.com") == PageScan(
-        "greenhouse", "acme", "https://acme.com/careers", blocked=True
-    )
-    serve(monkeypatch, {"https://acme.com/": FakeHttpResponse(status_code=403)})
-    assert survey.scan_career_pages("acme.com").blocked is True
+    net = serve(monkeypatch, pages)
+    assert survey.scan_career_pages("acme.com") == PageScan(blocked=True)
+    assert net.asked == ["https://www.acme.com/"]  # one refusal ends the scan
 
 
 def test_scan_career_pages_sees_an_oracle_board(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -437,8 +436,9 @@ def test_candidates_main_limit_and_no_keep_file(
     out = capsys.readouterr().out
     assert "Probed: 1" in out
     assert "Beta" not in out
-    assert survey.candidates_main(["--candidates", csv_path, "--limit", "-3"], companies) == 0
-    assert "Probed: 0" in capsys.readouterr().out
+    for number in ("-3", "0"):
+        assert survey.candidates_main(["--candidates", csv_path, "--limit", number], companies) == 0
+        assert "Probed: 0" in capsys.readouterr().out
     assert not (workdir / "keep.json").exists()
 
 
@@ -473,7 +473,9 @@ def test_candidates_main_warns_when_no_excluded_record_is_visible(
     write_json(companies, [{"name": "Known", "domain": "known.com", "crawl": True}])
     csv_path = write_csv(workdir / "c.csv", "name,domain,kind\nKnown,known.com,x\n")
     assert survey.candidates_main(["--candidates", csv_path], str(companies)) == 0
-    assert "service-role key" in capsys.readouterr().err
+    captured = capsys.readouterr()
+    assert "service-role key" in captured.err
+    assert "service-role key" in captured.out
 
 
 def test_candidates_main_needs_the_file_argument() -> None:

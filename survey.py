@@ -321,10 +321,11 @@ def split_candidates(
     excluded_domains = {clean_domain(str(c.get("domain") or "")) for c in companies if c.get("excluded") is not None}
     listed_names = {str(c.get("name") or "").strip().casefold() for c in companies}
     listed_domains = {clean_domain(str(c.get("domain") or "")) for c in companies}
+    excluded_keys = {"".join(_tokens(n)) for n in excluded}  # "Acme Ltd" and "ACME" are the same company here
     todo: list[Candidate] = []
     listed = barred = 0
     for c in candidates:
-        if is_excluded(c.name, excluded) or c.domain in excluded_domains:
+        if is_excluded(c.name, excluded) or "".join(_tokens(c.name)) in excluded_keys or c.domain in excluded_domains:
             barred += 1
         elif c.name.casefold() in listed_names or c.domain in listed_domains:
             listed += 1
@@ -336,24 +337,23 @@ def split_candidates(
 def scan_career_pages(domain: str) -> PageScan:
     """The career page link scan of discover.py: the home page and the usual career paths, with and without `www.`,
     for a link to a job board. A refused request (robots.txt) shows in `common.robots_blocked`; a 403 or 429 is
-    recorded here. Nothing is retried or worked around."""
+    recorded here and ends the scan at once. Nothing is retried or worked around."""
     careers_url = hint = ""
-    blocked = False
     for path in ["/", *CAREER_PATHS]:
         for host in (f"https://www.{domain}", f"https://{domain}"):
             r = get(host + path)
             if r is None:
                 continue
             if r.status_code in BOT_STATUSES:
-                blocked = True
-            elif r.status_code == HTTP_OK:
+                return PageScan(blocked=True)  # the site refuses us: not one more request to it
+            if r.status_code == HTTP_OK:
                 found = ats_in_text(r.text)
                 if found:
-                    return PageScan(found[0], found[1], host + path, blocked=blocked)
+                    return PageScan(found[0], found[1], host + path)
                 hint = hint or next((ats for ats, rx in PAGE_HINTS if rx.search(r.text)), "")
                 if path != "/" and not careers_url:
                     careers_url = r.url
-    return PageScan(careers_url=careers_url, hint=hint, blocked=blocked)
+    return PageScan(careers_url=careers_url, hint=hint)
 
 
 def board_name(ats: str, slug: str) -> str:
@@ -514,6 +514,7 @@ def candidates_main(argv: list[str], companies_path: str = COMPANIES) -> int:
         return 1
     if not excluded:
         print(NO_EXCLUDED_NOTE, file=sys.stderr)
+        print(NO_EXCLUDED_NOTE)  # the table is read without stderr too
     todo, listed, barred = split_candidates(candidates, load_companies(companies_path), excluded)
     if args.limit is not None:
         todo = todo[: max(args.limit, 0)]
