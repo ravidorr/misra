@@ -17,7 +17,7 @@
   padding: 0;
   border: var(--border-width) solid var(--line);
   border-radius: var(--radius-card);
-  background: var(--warn-bg);
+  background: var(--panel);
   color: var(--ink);
   box-shadow: var(--shadow-md);
 }
@@ -105,7 +105,7 @@ dialog.sheet:not(:modal) .sheet-done {
     position: sticky;
     top: 0;
     z-index: 1;
-    background: var(--warn-bg);
+    background: var(--panel);
   }
 
   .sheet-foot {
@@ -114,7 +114,7 @@ dialog.sheet:not(:modal) .sheet-done {
     z-index: 1;
     padding-bottom: max(var(--space-3), env(safe-area-inset-bottom));
     border-top: var(--border-width) solid var(--line);
-    background: var(--warn-bg);
+    background: var(--panel);
   }
 
   .sheet-done {
