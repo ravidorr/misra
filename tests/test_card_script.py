@@ -207,3 +207,14 @@ async def test_an_apply_link_that_accompanies_a_titled_link_does_not_split_its_c
         f'<div><a href="{BASE}/jobs/x-role/apply">Apply</a><a href="{BASE}/jobs/x-role/details">Details</a></div></div>'
     )
     assert (await row_for(page, html, "/jobs/x-role/apply"))[2].startswith("X Role")
+
+
+async def test_adjacent_label_cards_with_numbered_addresses_are_two_cards(page: Page) -> None:
+    html = (
+        "<div>"
+        + label_card("/jobs/1234", "Backend Engineer", "Haifa")
+        + label_card("/jobs/12345", "Product Designer", "Berlin, Germany")
+        + "</div>"
+    )
+    assert "Berlin" not in (await row_for(page, html, "/jobs/1234"))[2]
+    assert "Haifa" not in (await row_for(page, html, "/jobs/12345"))[2]

@@ -86,7 +86,7 @@ CARD_JS = r"""(els, cfg) => {
     const titled = a => jobLink(a) && text(a) && !button.test(text(a));
     const nav = /^(view|read|learn|see|more|details)\b/i;  // not "Apply": that link only accompanies a job
     const label = a => !text(a) || !/\w/.test(text(a)) || nav.test(text(a));  // an icon, an arrow, "Details"
-    const near = (x, y) => x.startsWith(y) || y.startsWith(x);  // "/jobs/x/apply" belongs to "/jobs/x"
+    const near = (x, y) => x === y || x.startsWith(y + '/') || y.startsWith(x + '/');  // "/jobs/x/apply" is "/jobs/x"
     const many = (n, e) => {  // two or more jobs in n? A label link e is one job, and other label links count too
         const mine = key(href(e)), seen = new Set(label(e) ? [mine] : []);
         const titles = [...n.querySelectorAll('a[href]')].filter(titled).map(a => key(href(a)));
@@ -283,9 +283,13 @@ def _card_extras(card: str, title: str) -> list[str]:
 
 def _card_lines(leaves: str) -> list[str]:
     """The text of a card whose job link has no title of its own (an icon, "Details"), one line for each element,
-    without the button labels."""
+    without the button labels but with a "Location" label, which marks the line under it as a place."""
     lines = [ln.strip() for ln in leaves.split("\n")]
-    return [ln for ln in lines if ln and len(ln) <= CARD_LINE_MAX and ln.lower() not in LINK_NOISE and _WORD.search(ln)]
+    return [
+        ln
+        for ln in lines
+        if ln and len(ln) <= CARD_LINE_MAX and ln.lower() not in LINK_NOISE - LOCATION_LABELS and _WORD.search(ln)
+    ]
 
 
 def _usable_heading(head: str) -> bool:

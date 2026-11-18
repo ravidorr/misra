@@ -973,3 +973,9 @@ async def test_two_adjacent_label_cards_are_two_jobs_with_their_own_places() -> 
         ("Backend Engineer", "Haifa", True),
         ("Product Designer", "Berlin, Germany", False),
     ]
+
+
+async def test_a_location_label_in_a_label_link_card_marks_its_bare_city() -> None:
+    leaves = "Backend Engineer\nEngineering\nHybrid\nLocation\nCupertino"
+    row = link("/jobs/backend-role", "Details", leaves.replace("\n", " "), leaves=leaves)
+    assert await crawl_cards([row]) == {"Backend Engineer": ("Hybrid | Cupertino", "Engineering")}
