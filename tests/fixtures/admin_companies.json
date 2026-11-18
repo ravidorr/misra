@@ -81,7 +81,7 @@
   "slug": "gamma/wd1/external",
   "status": "ok",
   "careers_url": "",
-  "source": "",
+  "source": "override",
   "israel_only": true,
   "verify": false,
   "links": null,

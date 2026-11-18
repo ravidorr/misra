@@ -676,6 +676,7 @@ function openEditor(row, back) {
   $('cSegment').value = row?.segment ?? '';
   $('cIsrael').checked = row?.israel_only === true;
   $('cVerify').checked = row?.verify === false;
+  $('verifyRow').hidden = !(mode === 'edit' && (row.source === 'override' || row.verify === false)); /* discover.py reads it for a pinned feed only */
   $('cLinkIsrael').value = row?.links?.israel ?? '';
   $('cLinkGlobal').value = row?.links?.global ?? '';
   $('requeueRow').hidden = mode !== 'edit' || !row.crawl;
@@ -714,7 +715,7 @@ function readEditor() {
     segment: text('cSegment') || null,
     crawl,
     israel_only: $('cIsrael').checked ? true : null,
-    verify: $('cVerify').checked ? false : null,
+    verify: $('verifyRow').hidden ? (editor.row?.verify ?? null) : ($('cVerify').checked ? false : null),
     links: Object.keys(links).length > 0 ? links : null,
     gap: crawl ? null : { reason: $('cReason').value, note: text('cNote') },
   };
