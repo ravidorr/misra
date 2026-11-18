@@ -43,7 +43,7 @@ Alerts and Log. Adding a site a visitor reported is the Add button of the Compan
 
 ## Step 1: Foundation (sign in and the admin check)
 
-- [ ] 1.1 Migration: `public.admins(user_id uuid primary key references auth.users on delete cascade)`, and
+- [x] 1.1 (done: `20261127100000_admins.sql`, `supabase/tests/admins.sql`, the admin lint of `tests/test_migrations.py`.) Migration: `public.admins(user_id uuid primary key references auth.users on delete cascade)`, and
   `public.is_admin()` (`security definer`, `stable`, `set search_path = ''`; true when `auth.uid()` is in `admins`),
   with `revoke ... from public` and `grant execute ... to anon, authenticated`. Revoke all on `admins` from `anon` and
   `authenticated`. SQL test: no role but the owner reads or writes `admins` ("the owner" is `postgres`; the service role
@@ -55,7 +55,7 @@ Alerts and Log. Adding a site a visitor reported is the Add button of the Compan
   - The `admins` row has a foreign key to `auth.users`, so the maintainer signs in once on the dashboard first, then
     runs one statement in the SQL editor: `insert into public.admins select id from auth.users where email = '...'`
     (the exact text goes in `supabase/README.md`). There is no way to become an admin from the page.
-- [ ] 1.2 `templates/admin.html`, `templates/admin.js`, built into `docs/admin.html` and `docs/admin.js` by
+- [x] 1.2 (done: `templates/admin.html`, `admin.js`, `session.js`, `tests/test_admin_page.py`.) `templates/admin.html`, `templates/admin.js`, built into `docs/admin.html` and `docs/admin.js` by
   `build_dashboard.py`, with SRI and the CSP rules of the dashboard. The page lives at `/misra/admin.html`. Add both
   files to the generated-files list in `AGENTS.md`, to the SRI placeholder and page lists in `build_dashboard.py`, and
   to the source paths of `publish-docs.yml`.
@@ -77,7 +77,7 @@ Alerts and Log. Adding a site a visitor reported is the Add button of the Compan
     `templates/dashboard.css`. One CSS bundle, no CSP change.
   - **Tests.** The page is built, is not linked from any other page, and is not in `jobs.jsonld`; a browser test of
     the signed-out, not-admin and check-failed states.
-- [ ] 1.3 The log: `public.admin_log(id bigint generated always as identity primary key, ts timestamptz not null default
+- [x] 1.3 (done: `20261128100000_admin_log.sql` and `supabase/tests/admin_log.sql`; the Log area reads it, last 50 rows, in the PR of step 5.1.) The log: `public.admin_log(id bigint generated always as identity primary key, ts timestamptz not null default
   now(), action text not null, target text)`. It is written only by the trigger of 3.1 and by `admin-account` (5.2),
   and readable when `is_admin()`; no public role has insert, update or delete (the function writes with the service
   role). `target` is a company name or a table name,
@@ -90,13 +90,13 @@ Alerts and Log. Adding a site a visitor reported is the Add button of the Compan
 
 The data is already in Supabase, so this step adds no table and no pipeline change.
 
-- [ ] 2.1 Read access for `is_admin()` only (see the lint of 1.1). On `jobs`, add a select policy
+- [x] 2.1 (done: `20261129100000_admin_crawl_health.sql`, `supabase/tests/admin_crawl_health.sql`.) Read access for `is_admin()` only (see the lint of 1.1). On `jobs`, add a select policy
   `using (public.is_admin())`. The column grant that hides `description` and `details` already exists
   (`20261121100000_jobs_text_not_public.sql`) and stays, and `tests/test_migrations.py` still refuses any grant of
   either. The grants of the short `snippet` columns (`20261122100000_jobs_snippet.sql` and later) stay as they are. On `crawl_log`, which has `revoke all` and no grant, add
   a `grant select` to `authenticated` and the same policy. The lawyer's rule of 2026-11-16 stays: the admin page never
   shows posting text.
-- [ ] 2.2 The Crawl area. PostgREST returns 1000 rows at most by default and `crawl_log` holds about 24,000 (90 days of
+- [x] 2.2 (done: the Crawl area, `tests/test_admin_crawl.py`.) The Crawl area. PostgREST returns 1000 rows at most by default and `crawl_log` holds about 24,000 (90 days of
   267 companies), so a count made in the browser would stop at 1000 rows. Use a view or a `security invoker` function
   `admin_crawl_health()` gated by `is_admin()`, with one row per company. Terms, from `run.py` and `common.py`:
   - failing: the last two crawls have `ok = 0` (`FAILING_RUNS`), not counting robots.txt skips; last good crawl: the last row with `ok = 1`;
@@ -246,7 +246,7 @@ daily cap is not shown (it is not actionable for one person).
 The maintainer already has database access (`PRIVACY.md`); this step puts a narrow, audited front on what the
 maintainer would do by hand. It shows counts, never lists.
 
-- [ ] 5.1 The Alerts counts, from a view or a `security definer` function gated by `is_admin()` that returns numbers
+- [x] 5.1 (done: `20261201100000_admin_alert_counts.sql`, `public.admin_alert_counts()`, rows of kind, day and n; `supabase/tests/admin_alert_counts.sql`; the Alerts area shows the counts, read-only. The maintainer applies the migration after merge.) The Alerts counts, from a view or a `security definer` function gated by `is_admin()` that returns numbers
   only: subscriptions by state (pending, confirmed, off), and the number of distinct users emailed in each of the last 7
   days (from `emailed`; not the number of jobs). No address and no user id in the result.
 - [x] 5.2 (done: PR #220, `supabase/functions/admin-account/`, migration `20261202100000_admin_account_ids.sql`, not yet deployed or applied; request and answers in `supabase/README.md`.) The Edge Function `admin-account`, which first checks `is_admin()` with the caller's token and answers 404
