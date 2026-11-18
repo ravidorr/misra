@@ -325,6 +325,57 @@
   color: var(--on-lime);
 }
 /*
+ * Choice: a checkbox or a radio with its words, one tap target of at least 44px. Radios of one question sit in a
+ * fieldset with a legend; the group takes the layout, the label takes the target. The words wrap, the box stays put.
+ *   <fieldset class="choice-group">
+ *     <legend>At the daily run</legend>
+ *     <label class="choice"><input type="radio" name="state" value="crawl"> <span>Crawl it</span></label>
+ *     <label class="choice"><input type="radio" name="state" value="card"> <span>Show it on the card</span></label>
+ *   </fieldset>
+ *   <div class="choice-group"><label class="choice"><input type="checkbox"> <span>Israel jobs only</span></label></div>
+ */
+.choice-group {
+  display: grid;
+  gap: var(--space-1);
+  min-width: 0;
+  margin: 0 0 var(--space-4);
+  padding: 0;
+  border: 0;
+}
+
+.choice-group legend {
+  padding: 0;
+  margin-bottom: var(--space-1);
+  font-weight: 600;
+}
+
+.choice {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  min-height: var(--tap);
+  padding-block: var(--space-2);
+  cursor: pointer;
+}
+
+.choice input {
+  flex: none;
+  width: 1.5rem;
+  height: 1.5rem;
+  margin: 0;
+  accent-color: var(--accent);
+}
+
+.choice input:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.choice span {
+  min-width: 0;
+  padding-top: 0.125rem;
+}
+/*
  * Dialog: a native <dialog> opened with showModal(), so the browser traps focus, closes on Esc and hides the rest of the
  * page from screen readers. Name it with aria-labelledby and describe it with aria-describedby.
  *   <dialog class="dialog" aria-labelledby="t" aria-describedby="d">
@@ -1983,4 +2034,104 @@ html:has(.sheet:modal) {
   font-variant-numeric: tabular-nums;
   overflow-wrap: anywhere;
   text-align: end;
+}
+
+/* The Companies area (PLAN_2.md step 3.3): the cards of the Crawl area, with an action row, and the editor, a dialog whose
+   head and foot stay in view while the fields scroll (so Save is never off the screen on a phone). */
+.company-toolbar,
+.company-actions,
+.company-more {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0;
+}
+
+.company-actions {
+  justify-content: space-between;
+  margin-top: auto;
+}
+
+.company-lines {
+  display: grid;
+  gap: var(--space-1);
+}
+
+.company-saved {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  column-gap: var(--space-2);
+  font-weight: 700;
+}
+
+.companies .field[type="search"] {
+  width: 100%;
+  max-width: 24rem;
+}
+
+.company-dialog {
+  width: min(34rem, calc(100vw - 2 * var(--space-4)));
+  padding: 0;
+}
+
+.company-dialog .sheet-head {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--panel);
+  border-bottom: var(--border-width) solid var(--line);
+}
+
+.company-dialog .sheet-foot {
+  position: sticky;
+  bottom: 0;
+  z-index: 1;
+  padding-bottom: max(var(--space-3), env(safe-area-inset-bottom));
+  border-top: var(--border-width) solid var(--line);
+  background: var(--panel);
+}
+
+.company-dialog .company-body {
+  display: grid;
+  gap: 0;
+  padding: var(--space-4);
+}
+
+.company-dialog .company-body > .notice {
+  margin-bottom: var(--space-4);
+}
+
+.company-dialog .company-body > .field-hint,
+.company-dialog .company-timing {
+  margin: calc(-1 * var(--space-2)) 0 var(--space-4);
+}
+
+.company-dialog .field {
+  width: 100%;
+  min-width: 0;
+}
+
+.company-dialog .crawl-facts {
+  margin-bottom: var(--space-4);
+}
+
+.company-dialog .company-more {
+  padding-top: var(--space-3);
+  border-top: var(--border-width) solid var(--line);
+}
+
+.company-dialog .sheet-foot .btn-primary {
+  flex: 1 1 auto;
+}
+
+@media (width < 561px) {
+  .company-dialog {
+    width: 100vw;
+    max-width: none;
+    margin: auto 0 0;
+    border-bottom: 0;
+    border-radius: var(--radius-card) var(--radius-card) 0 0;
+  }
 }
