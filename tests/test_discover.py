@@ -356,3 +356,14 @@ def test_main_writes_nothing_when_too_many_working_companies_would_fail(
 def test_main_accepts_a_few_companies_failing(workdir: Path, env: Env, monkeypatch: pytest.MonkeyPatch) -> None:
     write_json(workdir / "data" / "companies.json", many(discover.MAX_LOST, ok=True))
     assert {r["status"] for r in run_main(workdir, monkeypatch)} == {"not_found"}
+
+
+def test_main_new_only_discovers_just_the_records_without_a_status_and_leaves_the_rest_as_pulled(
+    workdir: Path, env: Env, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    working = many(discover.MAX_LOST + 3, ok=True)  # would be refused by the guard if they were looked at
+    new = {"name": "New Co", "domain": "new.com", "crawl": True}
+    write_json(workdir / "data" / "companies.json", [*working, new])
+    out = run_main(workdir, monkeypatch, "--new-only")
+    assert out[:-1] == working
+    assert out[-1]["name"] == "New Co" and out[-1]["status"] == "not_found"

@@ -39,7 +39,7 @@ def test_only_the_pull_and_the_push_hold_the_key_and_the_push_is_the_last_step()
 def test_discover_runs_in_its_own_step_between_them_with_no_secret_and_no_other_command() -> None:
     discover = step("name: Discover")
     assert "secrets." not in discover and "env:" not in discover
-    assert re.search(r"(?m)^        run: python discover\.py$", discover)
+    assert re.search(r"(?m)^        run: python discover\.py --new-only$", discover)
     assert [chunk.split("\n", 1)[0] for chunk in STEPS].index("name: Discover the career pages and feeds") == len(
         STEPS
     ) - 2
