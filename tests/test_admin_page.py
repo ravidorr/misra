@@ -7,7 +7,7 @@ import json
 import mimetypes
 import re
 from pathlib import Path
-from urllib.parse import urlparse
+from urllib.parse import parse_qs, urlparse
 
 import pytest
 from playwright.async_api import Page, Route, expect
@@ -30,6 +30,7 @@ from tests.test_sign_in import AXE_RUN, STORAGE_KEY
 REPO = Path(__file__).resolve().parents[1]
 RPC = f"{build_dashboard.SUPABASE_URL}/rest/v1/rpc/is_admin"
 HEALTH = f"{build_dashboard.SUPABASE_URL}/rest/v1/rpc/admin_crawl_health"
+ALERTS = f"{build_dashboard.SUPABASE_URL}/rest/v1/rpc/admin_alert_counts"
 REST = f"{build_dashboard.SUPABASE_URL}/rest/v1/**"
 DESKTOP = {"width": 1280, "height": 900}
 AREAS = ["Crawl", "Companies", "Alerts", "Log"]
@@ -71,8 +72,22 @@ class Backend:
         recheck_answer: str | None = None,
         companies: list[dict[str, object]] | None = None,
         jobs: list[tuple[str, str]] | None = None,
+        alerts: list[dict[str, object]] | None = None,
+        alerts_answer: str = "rows",
+        log: list[dict[str, object]] | None = None,
+        log_answer: str = "rows",
     ) -> None:
         self.answer = answer
+        self.alerts = [] if alerts is None else alerts
+        self.alerts_answer = alerts_answer  # rows, unauthorized, unauthorized_once, broken, broken_once, not_a_list
+        self.alerts_asked = 0
+        self.alerts_gate: asyncio.Event | None = None
+        self.alerts_bodies: list[str | None] = []
+        self.log = [] if log is None else log
+        self.log_answer = log_answer  # the same choices, for a read of `admin_log`
+        self.log_asked = 0
+        self.log_gate: asyncio.Event | None = None
+        self.log_queries: list[dict[str, list[str]]] = []
         self.health = [] if health is None else health
         self.health_answer = health_answer
         self.recheck_answer = recheck_answer
@@ -135,6 +150,46 @@ class Backend:
         else:
             await route.fulfill(headers=CORS, body=json.dumps(self.health), content_type="application/json")
 
+    async def answering(self, route: Route, kind: str, rows: object, asked: int) -> None:
+        """The answer of a call that is counted in the database: rows, or the refusal the test chose."""
+        choice = getattr(self, f"{kind}_answer")
+        refused = choice == "unauthorized" or (choice == "unauthorized_once" and asked == 1)
+        broken = choice == "broken" or (choice == "broken_once" and asked == 1)
+        if refused:
+            await route.fulfill(
+                status=401, headers=REST_CORS, body='{"message":"JWT expired"}', content_type="application/json"
+            )
+        elif broken:
+            await route.fulfill(status=500, headers=REST_CORS, body="unavailable")  # not 503: the library retries a GET
+        elif choice == "not_a_list":
+            await route.fulfill(headers=REST_CORS, body='{"rows": 1}', content_type="application/json")
+        else:
+            await route.fulfill(headers=REST_CORS, body=json.dumps(rows), content_type="application/json")
+
+    async def alert_counts(self, route: Route) -> None:
+        request = route.request
+        if request.method == "OPTIONS":
+            await route.fulfill(status=204, headers=CORS)
+            return
+        self.requests.append((request.method, urlparse(request.url).path))
+        self.alerts_bodies.append(request.post_data)
+        self.alerts_asked += 1
+        if self.alerts_gate is not None:
+            await self.alerts_gate.wait()
+        await self.answering(route, "alerts", self.alerts, self.alerts_asked)
+
+    async def admin_log(self, route: Route) -> None:
+        """A read of `admin_log` as PostgREST answers it: newest first, `limit` rows, the columns the page asked for."""
+        query = parse_qs(urlparse(route.request.url).query)
+        self.log_queries.append(query)
+        self.log_asked += 1
+        if self.log_gate is not None:
+            await self.log_gate.wait()
+        columns = query.get("select", ["*"])[0].split(",")
+        newest = sorted(self.log, key=lambda r: (str(r["ts"]), int(str(r["id"]))), reverse=True)
+        rows = [{c: row[c] for c in columns} for row in newest[: int(query.get("limit", ["1000"])[0])]]
+        await self.answering(route, "log", rows, self.log_asked)
+
     async def rest(self, route: Route) -> None:
         """Every other request to the project's tables: the fake `companies` and `jobs` (tests/fake_companies.py), and
         anything else is refused and recorded, so a test never reaches a real project."""
@@ -144,6 +199,9 @@ class Backend:
             return
         path = urlparse(request.url).path
         self.requests.append((request.method, path))
+        if path == "/rest/v1/admin_log" and request.method == "GET":
+            await self.admin_log(route)
+            return
         if path not in ("/rest/v1/companies", "/rest/v1/jobs"):
             self.strays.append(path)
             await route.abort()
@@ -186,6 +244,7 @@ async def open_admin(  # noqa: PLR0913  (each choice is one thing a test varies)
     await page.route(REST, backend.rest)  # first: a later route wins, so the functions below take their own paths
     await page.route(RPC, backend.rpc)
     await page.route(HEALTH, backend.crawl_health)
+    await page.route(ALERTS, backend.alert_counts)
     await page.route(f"{build_dashboard.SUPABASE_URL}/auth/v1/**", backend.auth_route)
     if signed_in:
         session = backend.auth.session()
@@ -411,11 +470,11 @@ async def test_ready_shows_the_crawl_area_empty_and_loads_each_area_on_its_first
     await expect(page.get_by_role("button", name="Sign out")).to_be_visible()
 
 
-async def test_the_log_area_is_a_shell_that_says_no_changes_yet(page: Page, site: Path) -> None:
+async def test_the_log_area_says_no_changes_yet_when_the_log_is_empty(page: Page, site: Path) -> None:
     backend, _problems = await open_admin(page, site, hash_="#log")
     await expect(page.get_by_role("heading", name="Log", level=2)).to_be_visible()
-    assert await page.locator("#log .admin-state").inner_text() == "No changes yet."
-    assert not any("admin_log" in path for path in backend.paths())  # the log table is not read yet
+    await expect(page.locator("#log .admin-state")).to_have_text("No changes yet.")
+    assert backend.log_asked == 1
 
 
 async def test_choosing_an_area_moves_the_focus_to_its_heading_and_the_title(page: Page, site: Path) -> None:
@@ -430,7 +489,7 @@ async def test_choosing_an_area_moves_the_focus_to_its_heading_and_the_title(pag
         assert await page.locator(".admin-area:visible").count() == 1
         await expect(nav.get_by_role("link", name=name)).to_have_attribute("aria-current", "page")
         assert await nav.locator("[aria-current]").count() == 1
-        assert await page.locator(f"#{name.lower()}").get_attribute("data-state") == "empty"
+        await expect(page.locator(f"#{name.lower()}")).to_have_attribute("data-state", "empty")
     await page.go_back()  # the history works, and the focus follows it
     await expect(page.get_by_role("heading", name="Alerts", level=2)).to_be_focused()
 

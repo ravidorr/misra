@@ -148,6 +148,16 @@ everyone else gets a permission error (`anon`) or no rows. It is not in the dail
 and the plan names the backup of `companies` as the history of edits). `supabase/tests/admin_log.sql` checks all of it
 (`all admin log checks passed`), and the migration lint pins it.
 
+## Alert counts
+
+Migration `20261201100000_admin_alert_counts.sql` (PLAN_2.md step 5.1) adds `public.admin_alert_counts()` for the Alerts
+area of the admin page: rows of `kind`, `day` and `n`. The kinds `confirmed`, `pending` and `off` count subscriptions by
+state (`off` when `unsubscribed_at` is set, `confirmed` when `consent_confirmed_at` is set, `pending` otherwise) and have no
+day; `emailed` has one row for each of the last 7 UTC days with the number of distinct users emailed (not jobs), 0 included.
+It is `security definer` because the two tables have no admin read; every branch is gated by `public.is_admin()` (a signed-in
+non-admin gets zero rows, `anon` a permission error), it reads only those two tables and returns no address and no user id.
+`supabase/tests/admin_alert_counts.sql` checks all of it. Apply it once, like the others; the pull request does not.
+
 ## Crawl health
 
 Migration `20261129100000_admin_crawl_health.sql` (PLAN_2.md steps 2.1 and 2.2) lets a signed-in admin read the crawl
