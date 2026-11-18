@@ -145,7 +145,7 @@ Measured 2026-11-18 with the A1 report and read-only `gh` commands (counts and t
 
   Status (2026-11-18): done. Method: the adapters were run read-only from a laptop (the project's own `get`: its
   User-Agent, robots.txt enforced, one request a second per host) against the frozen list
-  (`tests/fixtures/companies.json`), and each feed's complete answer was compared with what the pipeline keeps. 12
+  (`tests/fixtures/companies.json`), and each feed's complete answer was compared with what the pipeline keeps. 29
   companies on 7 feed types were compared: Datadog, MongoDB, Okta, Zscaler (Greenhouse), Snowflake (Ashby), Splitit
   (BambooHR), Ceva, DriveNets, Nayax, Papaya Global, Quantum Machines (Comeet), Guesty, Optibus (Comeet pages); for
   Workday, Intel, KLA, Medtronic, Salesforce, Palo Alto Networks, Philips, CrowdStrike, Marvell and Unity (the facet
@@ -160,7 +160,7 @@ Measured 2026-11-18 with the A1 report and read-only `gh` commands (counts and t
     word search found only extra postings outside Israel or in several places ("2 Locations").
   - Oracle HCM: a real miss. The keyword Israel matches the text of a posting, not its place: it returned 6 of the 16
     Israel requisitions of Dell (the full scan by country code is the truth), 2 of 19 at Oracle, 1 of 2 at JPMorgan
-    Chase, 0 of 1 at Nokia. The location filter returned all of them, every one with country code IL. Fixed in 0.72.1
+    Chase, 0 of 1 at Nokia (American Express lists no Israel requisition by either route). The location filter returned all of them, every one with country code IL. Fixed in 0.72.1
     (the adapter asks for the location Israel), with a test that has an Israel and a non-Israel requisition.
   - Not a filter fault: Unity shows 123 jobs outside Israel in `docs/jobs.json` (first seen 2026-11-13, titles such
     as a language name). They are old rows of an earlier browser crawl of the company site, not the Workday feed,
