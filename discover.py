@@ -7,9 +7,11 @@ in the same order; everything a person wrote (`crawl`, `israel_only`, `verify`, 
 is left as it is, and so are the records of the companies that are not crawled, the excluded ones included (they are
 never looked at). A careers address that came out as `http://` is written as `https://` (the table refuses any other).
 The file is written through a temporary file, and a run that would turn more than MAX_LOST working companies into
-failures (an offline run) writes nothing unless it is given `--force`. A record whose `source` is `override` is pinned
-by hand: its `ats` and `slug` are kept and only checked. A company is added in the `companies` table (the admin
-page gets an editor in PLAN_2 step 3.3), never in this file."""
+failures (an offline run) writes nothing unless it is given `--force`. With `--new-only` (what the workflow runs: a
+runner cannot rebuild the whole list reliably) only the records with no status yet are discovered and every other record
+stays exactly as pulled, so a site that blocks the runner can never downgrade a working company. A record whose
+`source` is `override` is pinned by hand: its `ats` and `slug` are kept and only checked. A company is added in the
+`companies` table (the admin page gets an editor in PLAN_2 step 3.3), never in this file."""
 
 import json
 import os
@@ -34,6 +36,7 @@ from common import (
 
 HTTP_OK = 200
 MAX_LOST = 5  # more companies than this going from ok to not ok in one run is refused without --force
+FLAGS = ("--force", "--new-only")
 DISCOVERED = ("careers_url", "ats", "slug", "source", "status")  # the fields this script owns
 PROBE_ORDER = ["greenhouse", "lever", "ashby", "workable", "smartrecruiters"]
 ATS_LINK = [
@@ -149,11 +152,13 @@ def discover(row: dict[str, Any]) -> dict[str, Any]:  # noqa: PLR0912
 
 
 def main() -> None:
-    args = [a for a in sys.argv[1:] if a != "--force"]
+    args = [a for a in sys.argv[1:] if a not in FLAGS]
     path = args[0] if args else COMPANIES
     excluded = load_excluded(path)  # a company that asked to be removed is never looked at again
     kept = load_companies(path)  # an excluded record stays in the file as it is: it is never looked at
     todo = [r for r in kept if r.get("crawl") is True and not is_excluded(r["name"], excluded)]
+    if "--new-only" in sys.argv:  # a record that already has a status is left exactly as it is
+        todo = [r for r in todo if not r.get("status")]
     with ThreadPoolExecutor(8) as ex:
         found = list(ex.map(discover, todo))
     pairs = list(zip(todo, found, strict=True))

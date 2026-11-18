@@ -90,8 +90,9 @@ the public API; only the maintainer changes them. `sync_supabase.py --pull` writ
 `data/companies.json` from the table, as it writes `data/jobs.db`, and `run.py`, `build_dashboard.py` and the surveys
 read that file. The tests read a frozen copy, `tests/fixtures/companies.json`.
 
-`discover.py` fills in the career page and the job feed of the crawled companies. It runs from the manual
-`discover-companies` workflow, without the service-role key, and only its last step sends the result back to the table
+`discover.py` fills in the career page and the job feed of the crawled companies. The manual `discover-companies`
+workflow runs it with `--new-only`, so it resolves only the companies that have no `status` yet and leaves every other
+record as it is (run it without the flag by hand for a full re-discovery). It runs without the service-role key, and only its last step sends the result back to the table
 (`sync_supabase.py --push-companies`). See [Adding a company](./CONTRIBUTING.md#adding-a-company).
 
 ## Dashboard

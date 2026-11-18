@@ -1,8 +1,11 @@
 name: discover-companies
 
-# Finds the career page and the job feed of the companies of the list (discover.py) and writes what it found back to the
+# Finds the career page and the job feed of the NEW companies of the list (discover.py --new-only: the crawled records
+# with no status yet) and writes what it found back to the
 # `companies` table (PLAN_2.md step 3.2, decision D2). Started by hand only: after a company is added in the `companies` table
-# (the admin page gets an editor in PLAN_2 step 3.3), or when a feed moved. It never crawls jobs and sends no email; it writes only the five fields discover.py owns
+# (the admin page gets an editor in PLAN_2 step 3.3), or after the status of a record is emptied to have it looked at again. A GitHub runner
+# cannot rebuild the whole list (some sites block it), so every record that already has a status is left as pulled; a full
+# re-discovery is `python discover.py` by hand. It never crawls jobs and sends no email; it writes only the five fields discover.py owns
 # (careers_url, ats, slug, source, status) of the crawled companies it changed, and no other field of any record.
 #
 # discover.py requests career sites and runs third-party answers through its own parsers, so it never holds the
@@ -52,9 +55,10 @@ jobs:
         run: python sync_supabase.py --pull-companies
       - name: Discover the career pages and feeds
         timeout-minutes: 20
-        # No secret in this step: it requests third-party sites. It writes data/companies.json only; a run that would
-        # turn more than discover.MAX_LOST working companies into failures (an offline run) writes nothing and fails.
-        run: python discover.py
+        # No secret in this step: it requests third-party sites. It writes data/companies.json only.
+        # --new-only: only the records with no status are discovered; the others are not touched. (A full run by hand
+        # that would turn more than discover.MAX_LOST working companies into failures writes nothing and fails.)
+        run: python discover.py --new-only
       - name: Send the discovered fields to Supabase
         timeout-minutes: 5
         # The last step, and the only other one that holds the key. It sends only the discovered fields of the
