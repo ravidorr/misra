@@ -47,3 +47,9 @@ verify_jwt = false
 # a limit per visitor and a daily cap.
 [functions.contact]
 verify_jwt = false
+
+# The admin page calls this with the signed-in maintainer's token. The gateway's JWT check is off because the CORS preflight
+# carries no Authorization header; the function asks the database `public.is_admin()` with the caller's token first and
+# answers 404 to everyone else, so a redeploy cannot weaken it.
+[functions.admin-account]
+verify_jwt = false

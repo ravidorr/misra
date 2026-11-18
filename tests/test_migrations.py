@@ -172,7 +172,7 @@ REPORT_SIGNATURE = (
     r"(?:jsonb|date|date, text|date, text, integer|date, text, integer, integer|text, timestamptz|date, text, text"
     r"|date, text, text, integer, integer, integer|uuid, timestamptz"
     r"|uuid, text, text, jsonb, text, timestamptz, text, timestamptz"
-    r"|text, text\[\], text\[\], text\[\], integer, integer|text)?"
+    r"|text, text\[\], text\[\], text\[\], integer, integer|text, boolean|text)?"
 )
 REVOKE_FUNCTION = re.compile(
     rf"revoke (?:all|execute) on function public\.(?P<name>\w+)\({REPORT_SIGNATURE}\) from (?P<roles>[a-z, ]+)"
@@ -255,6 +255,18 @@ ADMIN_HEALTH_COLUMNS = (
     "held boolean, robots_skipped boolean, open_jobs integer, fetched_30d_ago integer"
 )
 GRANT_ADMIN_HEALTH = "grant execute on function public.admin_crawl_health() to authenticated"
+# PLAN_2.md step 5.2: the lookup behind the `admin-account` function. NOT definer, read-only, answers user ids only;
+# only the service role may run it. Matched whole, so a change to it (another table, another column, a wider match)
+# fails the lint until it is taught.
+ADMIN_ACCOUNT_FUNCTION = re.compile(
+    r"create function public\.admin_account_ids\(p_address text, p_login_only boolean\) returns setof uuid "
+    r"language sql stable set search_path = '' as \$\$(?P<body>.*)\$\$"
+)
+ADMIN_ACCOUNT_BODY = (
+    " select p.user_id from public.profiles p where lower(p.email) = lower(p_address) union select s.user_id from "
+    "public.subscriptions s where not p_login_only and lower(s.address) = lower(p_address); "
+)
+GRANT_ADMIN_ACCOUNT = "grant execute on function public.admin_account_ids(text, boolean) to service_role"
 # PLAN_2.md step 3.1: the company list. The two unique indexes (ignoring case) and the load of the records are matched
 # whole, and so are the two trigger functions: the guard (an invoker: it sets `updated_at` and counts the excluded
 # records, 200 at most) and the log (a definer: it writes one `admin_log` row for a change an admin makes, with the
@@ -539,7 +551,8 @@ def problems(stmts: list[str]) -> list[str]:
             or COLUMN_GRANT.fullmatch(s)
             or GRANT_REPORT_FUNCTION.fullmatch(s)
             or GRANT_JOBS_TRIM_FUNCTION.fullmatch(s)
-            or s in {SEARCH_INDEX, GRANT_SEARCH_FUNCTION, GRANT_SEARCH_JOBS, GRANT_IS_ADMIN, GRANT_ADMIN_HEALTH}
+            or s in {SEARCH_INDEX, GRANT_SEARCH_FUNCTION, GRANT_SEARCH_JOBS, GRANT_IS_ADMIN}
+            or s in {GRANT_ADMIN_HEALTH, GRANT_ADMIN_ACCOUNT}
             or s in COMPANIES_INDEXES
             or COMPANIES_LOAD.fullmatch(s)
             or ADD_JOBS_COLUMN.fullmatch(s)
@@ -649,6 +662,14 @@ def pinned_function(s: str) -> tuple[str, bool, list[str]] | None:
         return "is_admin", True, bad
     if m := ADMIN_HEALTH_FUNCTION.fullmatch(s):
         return ADMIN_HEALTH_NAME, False, admin_health_problems(m)
+    if m := ADMIN_ACCOUNT_FUNCTION.fullmatch(s):
+        bad = [] if m["body"] == ADMIN_ACCOUNT_BODY else [f"admin_account_ids may only look up user ids: {s}"]
+        return "admin_account_ids", False, bad
+    return pinned_search_function(s)
+
+
+def pinned_search_function(s: str) -> tuple[str, bool, list[str]] | None:
+    """The two searches, matched whole (the rest of `pinned_function`)."""
     if m := SEARCH_FUNCTION.fullmatch(s):
         return SEARCH_NAME, True, search_problems(m)
     if m := SEARCH_JOBS_FUNCTION.fullmatch(s):
@@ -1076,6 +1097,42 @@ def test_admin_log_holds_no_user_id_and_no_address() -> None:
     assert set(body) == {"id", "ts", "action", "target"}
 
 
+ADMIN_ACCOUNT_FILE = MIGRATION_DIR / "20261201100000_admin_account_ids.sql"
+ADMIN_ACCOUNT_SQL = ADMIN_ACCOUNT_FILE.read_text(encoding="utf-8")
+
+
+def test_the_admin_account_lookup_is_one_closed_read_only_function_and_adds_no_column() -> None:
+    stmts = statements_of(ADMIN_ACCOUNT_SQL)
+    assert not problems(stmts)
+    assert sum(1 for s in stmts if ADMIN_ACCOUNT_FUNCTION.fullmatch(s)) == 1
+    assert "revoke all on function public.admin_account_ids(text, boolean) from public, anon, authenticated" in stmts
+    assert GRANT_ADMIN_ACCOUNT in stmts
+    assert not any(CREATE_TABLE.fullmatch(s) or s.startswith("alter table") for s in stmts)  # no table, no column
+
+
+@pytest.mark.parametrize(
+    ("old", "new"),
+    [
+        ("lower(p.email) = lower(p_address)", "p.email ilike '%' || p_address || '%'"),  # a partial match
+        ("where not p_login_only and", "where"),  # a digest address could delete an account
+        ("select p.user_id from", "select p.user_id, p.email from"),
+        ("language sql\nstable", "language sql\nstable\nsecurity definer"),
+        ("set search_path = ''", "set search_path = public"),
+        ("public.subscriptions s", "auth.users s"),
+        ("revoke all on function public.admin_account_ids(text, boolean) from public, anon, authenticated;", ""),
+        (
+            "revoke all on function public.admin_account_ids(text, boolean) from public, anon, authenticated;",
+            "revoke all on function public.admin_account_ids(text, boolean) from public, anon;",
+        ),
+        ("to service_role;", "to service_role, authenticated;"),
+        ("to service_role;", "to authenticated;"),
+    ],
+)
+def test_the_lint_rejects_a_weakened_admin_account_migration(old: str, new: str) -> None:
+    assert old in ADMIN_ACCOUNT_SQL, old
+    assert problems(statements_of(ADMIN_ACCOUNT_SQL.replace(old, new)))
+
+
 ADMIN_POLICY = 'create policy "p" on public.{table} for {command} to {roles} {clauses}'
 IS_ADMIN_CLAUSE = "using (public.is_admin())"
 
@@ -1230,6 +1287,7 @@ def test_the_report_counters_have_no_policy_and_no_grant_for_anyone_but_the_serv
         and not GRANT_SUBSCRIBE_FUNCTION.fullmatch(s)
         and not GRANT_JOBS_TRIM_FUNCTION.fullmatch(s)
         and s not in {GRANT_SEARCH_FUNCTION, GRANT_SEARCH_JOBS, GRANT_IS_ADMIN, GRANT_ADMIN_HEALTH}
+        and s != GRANT_ADMIN_ACCOUNT
         and s not in HOOK_GRANTS
     ]
 
