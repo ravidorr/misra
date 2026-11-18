@@ -38,6 +38,7 @@ function setState(state) {
   for (const part of main.querySelectorAll('[data-when]')) part.hidden = !part.dataset.when.split(' ').includes(state);
   if (state === 'ready') showArea(areaName(), false);
   else document.title = PAGE_TITLE;
+  if (state !== 'ready') clearAddresses(); /* an address typed is not kept once the page stops being ready */
 }
 
 /* A word of the area's own: its `notice` or its plain text, in the area's box. */
@@ -660,6 +661,196 @@ async function loadAlerts(box) {
   return true;
 }
 
+/* ---- Alerts: the two forms (PLAN_2.md step 5.3) ----
+   One address field each: end a person's job alerts, or delete their account. There is no list or search of accounts, and
+   the page never keeps what was typed. The address goes in the body of one request to the `admin-account` function, never
+   in a URL, in storage, in the console, in the Log or in the text of an answer: the answers are fixed sentences of this
+   page. The field is emptied after every answer that cannot be retried by pressing the button again (and when the page
+   stops being ready). Deleting asks first, in a dialog that shows the typed address and nothing else does. */
+
+const ACCOUNT_URL = `${SUPABASE_URL}/functions/v1/admin-account`;
+const ACCOUNT_TIMEOUT_MS = 20000;
+const HTTP_OK = 200;
+const HTTP_BAD_REQUEST = 400;
+const HTTP_UNAVAILABLE = 503;
+const HTTP_TOO_MANY = 429;
+const HTTP_NOT_FOUND = 404;
+const HTTP_CONFLICT = 409;
+const DONE_TEXT = { done: 'Done.', no_account: 'No account uses that address.' };
+const ACCOUNT_WORDS = {
+  conflict: 'More than one account uses that address. Nothing was done.',
+  nothing: 'Nothing was done. Try again.',
+  maybe: 'It may not have finished. Try again.',
+  address: 'Enter the full email address.',
+};
+/* The two forms: what each is called in the ids, and what it asks the function to do. */
+const ACCOUNT_FORMS = { end: { action: 'end_alerts' }, delete: { action: 'delete_account' } };
+const accountDialog = $('accountConfirm');
+const account = { busy: false };
+
+/* The access token: the session is renewed first when it expired, or by force once the function said no (a 404 is also what
+   an expired session looks like). Resolves with null when there is no session. */
+class TokenError extends Error {}
+
+async function accountToken(renew) {
+  let result;
+  let timer;
+  const silence = new Promise((_resolve, reject) => {
+    timer = setTimeout(reject, CHECK_TIMEOUT_MS, new TokenError('timeout')); /* the library's own requests have no deadline */
+  });
+  try {
+    result = await Promise.race([renew ? client.auth.refreshSession() : client.auth.getSession(), silence]);
+  } catch {
+    throw new TokenError('session'); /* the request is never sent after this: postAccount stops at the throw */
+  } finally {
+    clearTimeout(timer);
+  }
+  const { data, error } = result;
+  if (error) throw new TokenError('session');
+  return data.session?.access_token ?? null;
+}
+
+/* One request. Resolves with { status, body }; a missing session counts as a refused one. Throws when nothing answers. */
+async function postAccount(address, action, renew) {
+  const token = await accountToken(renew);
+  if (!token) return { status: HTTP_NOT_FOUND, body: null };
+  const response = await fetch(ACCOUNT_URL, {
+    method: 'POST',
+    headers: { authorization: `Bearer ${token}`, apikey: SUPABASE_ANON_KEY, 'content-type': 'application/json' },
+    body: JSON.stringify({ address, action }),
+    signal: AbortSignal.timeout(ACCOUNT_TIMEOUT_MS),
+  });
+  const body = await response.json().catch(() => null);
+  return { status: response.status, body };
+}
+
+/* What an answer means for the page: { kind: 'status' | 'problem', text, keep, done }. `keep` leaves the address in the
+   field, for an answer where pressing the button again (or fixing the address) is the way on. */
+function accountOutcome({ status, body }) {
+  if (status === HTTP_OK && body?.ok === true && Object.hasOwn(DONE_TEXT, body.result)) {
+    return { kind: 'status', text: DONE_TEXT[body.result], keep: false, done: body.result === 'done', logged: body.result === 'done' };
+  }
+  if (status === HTTP_CONFLICT) return { kind: 'problem', text: ACCOUNT_WORDS.conflict, keep: false, done: false, logged: false };
+  if (status === HTTP_BAD_REQUEST) return { kind: 'problem', text: ACCOUNT_WORDS.address, keep: true, done: false, logged: false };
+  /* Only a 503 (the admin check could not be made) and a 429 are known to have done nothing: a 500 can come after the
+     log row and part of the work, a 502 after a deletion that was asked for, and a gateway timeout after all of it. */
+  const none = status === HTTP_UNAVAILABLE || status === HTTP_TOO_MANY;
+  return { kind: 'problem', text: none ? ACCOUNT_WORDS.nothing : ACCOUNT_WORDS.maybe, keep: true, done: false, logged: !none };
+}
+
+/* Asks the function; a 404 gets one renewed session and one more try. Resolves with an outcome, or null when the page
+   is no longer ready (it has said so). */
+async function sendAccount(address, action) {
+  let answer;
+  try {
+    answer = await postAccount(address, action, false);
+    if (answer.status === HTTP_NOT_FOUND) answer = await postAccount(address, action, true);
+  } catch (error) {
+    /* Log the kind of failure only: the error holds nothing worth keeping and nothing here may log what was typed. */
+    console.error(`admin-account: ${error?.name ?? 'failed'}`);
+    if (error instanceof TokenError) answer = { status: HTTP_NOT_FOUND, body: null }; /* nothing was sent: the page's check decides */
+    else return { kind: 'problem', text: ACCOUNT_WORDS.maybe, keep: true, done: false, logged: true };
+  }
+  if (answer.status !== HTTP_NOT_FOUND) return accountOutcome(answer);
+  const result = await verdict(); /* the page's own check: a session that is over, or an account that is not an admin */
+  if (result !== 'ready') {
+    settle(result);
+    return null;
+  }
+  return { kind: 'problem', text: ACCOUNT_WORDS.nothing, keep: true, done: false, logged: false };
+}
+
+/* Closes the question and forgets the address it showed, at once: the `close` event comes later, and not for a close made here. */
+function closeAccountDialog() {
+  $('accountAddress').textContent = '';
+  if (accountDialog.open) accountDialog.close();
+}
+
+function clearAddresses() {
+  for (const name of Object.keys(ACCOUNT_FORMS)) {
+    $(`${name}Address`).value = '';
+    fieldError(`${name}Address`, '');
+    sayAccount(name, null);
+  }
+  closeAccountDialog();
+}
+
+/* One answer in the form's own lines: a status (the two answers) or a problem, never both. */
+function sayAccount(name, outcome) {
+  const status = $(`${name}Status`);
+  const problem = $(`${name}Problem`);
+  status.textContent = outcome?.kind === 'status' ? outcome.text : '';
+  problem.textContent = outcome?.kind === 'problem' ? outcome.text : '';
+  problem.hidden = outcome?.kind !== 'problem';
+}
+
+function setAccountBusy(button, busy) {
+  account.busy = busy;
+  button.setAttribute('aria-busy', String(busy));
+  if (busy) button.setAttribute('aria-disabled', 'true');
+  else button.removeAttribute('aria-disabled');
+}
+
+async function runAccount(name) {
+  if (account.busy) return;
+  const input = $(`${name}Address`);
+  const address = input.value.trim();
+  const button = $(name === 'delete' ? 'accountGo' : 'endGo');
+  sayAccount(name, null);
+  setAccountBusy(button, true);
+  let outcome;
+  try {
+    outcome = await sendAccount(address, ACCOUNT_FORMS[name].action);
+  } finally {
+    setAccountBusy(button, false);
+  }
+  closeAccountDialog();
+  if (!outcome) {
+    clearAddresses(); /* the page left its ready state */
+    return;
+  }
+  if (!outcome.keep) input.value = '';
+  sayAccount(name, outcome);
+  if (outcome.logged) opened.delete('log'); /* the function may have logged the action: the Log area reads it again when next shown */
+  if (outcome.done) loadArea('alerts'); /* the counts moved */
+}
+
+/* The address of a form when it is one the function could take, else the field says so and keeps the focus. */
+function checkedAddress(name) {
+  const input = $(`${name}Address`);
+  const ok = input.value.trim() !== '' && input.validity.valid;
+  fieldError(`${name}Address`, ok ? '' : ACCOUNT_WORDS.address);
+  if (!ok) input.focus();
+  return ok;
+}
+
+function wireAccountForms() {
+  for (const name of Object.keys(ACCOUNT_FORMS)) {
+    $(`${name}Address`).addEventListener('input', () => {
+      fieldError(`${name}Address`, '');
+      sayAccount(name, null);
+    });
+  }
+  $('endForm').addEventListener('submit', (event) => {
+    event.preventDefault();
+    if (!account.busy && checkedAddress('end')) runAccount('end');
+  });
+  $('deleteForm').addEventListener('submit', (event) => {
+    event.preventDefault();
+    if (account.busy || !checkedAddress('delete')) return;
+    sayAccount('delete', null);
+    $('accountAddress').textContent = $('deleteAddress').value.trim(); /* text, never HTML */
+    accountDialog.showModal();
+    $('accountCancel').focus(); /* the safe choice first */
+  });
+  $('accountGo').addEventListener('click', () => runAccount('delete'));
+  for (const id of ['accountClose', 'accountCancel']) $(id).addEventListener('click', () => !account.busy && closeAccountDialog());
+  accountDialog.addEventListener('cancel', (event) => account.busy && event.preventDefault()); /* Esc does not abandon a request */
+  accountDialog.addEventListener('close', () => {
+    $('accountAddress').textContent = ''; /* the address is shown only while the question is open */
+  });
+}
+
 /* ---- Log: what the admin changed, newest first (PLAN_2.md step 1.3) ----
    Read with the admin's own session (row-level security lets only a listed admin read it). The target is a company
    name or a table name, never an address. PostgREST answers 1000 rows at most; the page asks for the last 50. */
@@ -1135,4 +1326,5 @@ async function start() {
 }
 
 wireCompanyDialogs();
+wireAccountForms();
 await start();

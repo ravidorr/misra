@@ -832,11 +832,13 @@ async def test_the_trust_checkbox_shows_only_for_a_feed_pinned_by_hand(page: Pag
     await open_editor(page, "Acme Robotics")
     await expect(page.locator("#verifyRow")).to_be_hidden()  # discover.py ignores it for a discovered feed
     await page.get_by_role("button", name="Save", exact=True).click()
+    await expect(page.locator("#companyEditor")).not_to_be_visible()  # the write is answered before the editor closes
     assert writes(backend)[0][1]["verify"] is None  # type: ignore[index]
     await open_editor(page, "Gamma Cloud")
     await expect(page.locator("#verifyRow")).to_be_visible()
     await expect(page.get_by_role("checkbox", name=re.compile("Trust its job board"))).to_be_checked()
     await page.get_by_role("button", name="Save", exact=True).click()
+    await expect(page.locator("#companyEditor")).not_to_be_visible()
     assert writes(backend)[1][1]["verify"] is False  # type: ignore[index]
 
 

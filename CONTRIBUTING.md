@@ -482,6 +482,17 @@ where status = 'open';
 
 Accepted sites are not in Supabase: a report is only an email, and accepting it adds a `crawl` true record to the `companies` table (see "Reported sites"). The table is not in git; its daily backup (see "Backups of the account tables and the job history") is the history, and `companies.json` in the backup repository shows each day's `updated_at`. Count the additions of the month in the Supabase SQL editor, `select count(*) from public.companies where crawl and updated_at >= '2026-11-01'` (an approximation: `updated_at` also moves when a crawl field is rewritten), and compare with the number of report emails received.
 
+## Ending job alerts or deleting an account on request
+
+When someone writes to ask that their job alerts stop or that their account be deleted (for example because the button
+did not work for them), use the Alerts area of the admin page (`admin.html`) before touching the database by hand. Type
+the address from their email in "End job alerts" or "Delete an account"; deleting asks you to confirm first. The page
+answers "Done." or "No account uses that address." and shows no list of accounts. When it acts it writes one line to the Log (the
+action and the time, never the address); "No account uses that address." writes none. If it says more than one account uses the address, nothing was done: decide by
+hand which account is meant. Do not paste the address into an issue, a commit or a log. The page calls the Edge Function
+`admin-account` (`supabase/README.md`, "Admin: end alerts or delete an account"). A deleted account stays in the daily
+backup until the backup is replaced, within 30 days (see "Backups of the account tables and the job history").
+
 ## Backups of the account tables and the job history
 
 Supabase Free has no backups, so the daily workflow (`.github/workflows/daily.yml`, step `backup`, PLAN.md step 9.1) copies the account tables, the job history and the company list to a private repository, `ravidorr/misra-backups` (branch `main`). This repository is public: no account data may be committed to it, logged, uploaded as an artifact or left in the checkout.

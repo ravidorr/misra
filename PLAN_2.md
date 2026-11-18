@@ -241,6 +241,8 @@ daily cap is not shown (it is not actionable for one person).
 
 - Done when: a report email becomes a company record through the Add button, and nothing about the report is stored.
 
+Status: met by the Add button of step 3.3 (done) and the `CONTRIBUTING.md` text of "Reported sites"; nothing more was built here, so step 4 has no box of its own.
+
 ## Step 5: Alerts and accounts
 
 The maintainer already has database access (`PRIVACY.md`); this step puts a narrow, audited front on what the
@@ -260,12 +262,16 @@ maintainer would do by hand. It shows counts, never lists.
   `admin_log` records the action and the time only: no hash of the address and no user id. When no account matches,
   nothing is written to the log. It never logs the address (the rule of `AGENTS.md`), never returns a row, and never
   emails the person.
-- [ ] 5.3 The Alerts area: two forms and the counts of 5.1. There is no list of accounts and no search by partial text.
+- [x] 5.3 (done: `templates/admin.html`, `templates/admin.js`, `templates/dashboard.css`, `tests/test_admin_account_forms.py`. Below the counts, "End job alerts" and "Delete an account" each have one address field and one button; deleting asks first in a dialog that names the action and shows the typed address, ending asks nothing. The answers are fixed sentences of the page ("Done.", "No account uses that address.", and plain ones for 409, 5xx and no answer), never the text of the function; a 404 renews the session once and tries again, then runs the page's own check. The address is in the body of one request only and the field is emptied after every answer that is not retryable. After a "Done." the counts reload and the Log is read again when next shown.) The Alerts area: two forms and the counts of 5.1. There is no list of accounts and no search by partial text.
 - [x] 5.4 (done with 5.2: `test/admin-account.test.ts` and the pinned lookup in `tests/test_migrations.py`.) `PRIVACY.md` is not touched. `tests/test_migrations.py` pins that the new migrations add no personal column
   (the `PERSONAL_COLUMN_ALLOWED` pattern), and a vitest test in `test/` checks the 404 of the function for a non-admin
   and that the function never logs the address.
 - Done when: a request to stop alerts or delete an account is done on the admin page with the two answers above, the
   log shows the action and the time, and no address is stored or shown anywhere.
+
+Status: every box of steps 1 to 5 is ticked, so the code of PLAN_2 is complete. What remains is not code: the maintainer
+checks the live admin page once against the real project (sign in, read the Crawl, Alerts and Log areas, and try the two
+"End job alerts" on an address of his own, and "Delete an account" only on a throwaway account or on an address no account uses, expecting "No account uses that address."), and keeps `PLAN_3.md` as the next work.
 
 ## Out of scope
 

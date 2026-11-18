@@ -32,6 +32,14 @@ RPC = f"{build_dashboard.SUPABASE_URL}/rest/v1/rpc/is_admin"
 HEALTH = f"{build_dashboard.SUPABASE_URL}/rest/v1/rpc/admin_crawl_health"
 ALERTS = f"{build_dashboard.SUPABASE_URL}/rest/v1/rpc/admin_alert_counts"
 REST = f"{build_dashboard.SUPABASE_URL}/rest/v1/**"
+FUNCTIONS = f"{build_dashboard.SUPABASE_URL}/functions/v1/**"
+ACCOUNT = f"{build_dashboard.SUPABASE_URL}/functions/v1/admin-account"
+ACCOUNT_CORS = {
+    **CORS,
+    "access-control-allow-headers": "authorization, apikey, content-type",
+    "access-control-allow-methods": "POST, OPTIONS",
+}
+DONE = {"ok": True, "result": "done", "message": "Done."}
 DESKTOP = {"width": 1280, "height": 900}
 AREAS = ["Crawl", "Companies", "Alerts", "Log"]
 CRAWL_EMPTY = "No crawl results yet."
@@ -76,8 +84,14 @@ class Backend:
         alerts_answer: str = "rows",
         log: list[dict[str, object]] | None = None,
         log_answer: str = "rows",
+        account_answers: list[tuple[int, object]] | None = None,
     ) -> None:
         self.answer = answer
+        # What the fake `admin-account` function answers, one entry for each call (the last one repeats): a status and
+        # a JSON body (None for a bare answer), or the status 0 for no answer at all.
+        self.account_answers = [(200, DONE)] if account_answers is None else account_answers
+        self.account_calls: list[dict[str, object]] = []
+        self.account_gate: asyncio.Event | None = None
         self.alerts = [] if alerts is None else alerts
         self.alerts_answer = alerts_answer  # rows, unauthorized, unauthorized_once, broken, broken_once, not_a_list
         self.alerts_asked = 0
@@ -190,6 +204,34 @@ class Backend:
         rows = [{c: row[c] for c in columns} for row in newest[: int(query.get("limit", ["1000"])[0])]]
         await self.answering(route, "log", rows, self.log_asked)
 
+    async def account(self, route: Route) -> None:
+        """The `admin-account` function: records what the page sent (never printed) and answers as the test chose."""
+        request = route.request
+        if request.method == "OPTIONS":
+            await route.fulfill(status=204, headers=ACCOUNT_CORS)
+            return
+        self.requests.append((request.method, urlparse(request.url).path))
+        self.account_calls.append({"headers": request.headers, "body": request.post_data, "url": request.url})
+        if self.account_gate is not None:
+            await self.account_gate.wait()
+        status, body = self.account_answers[min(len(self.account_calls), len(self.account_answers)) - 1]
+        if status == 0:
+            await route.abort()
+        elif body is None:
+            await route.fulfill(status=status, headers=ACCOUNT_CORS)
+        else:
+            await route.fulfill(
+                status=status, headers=ACCOUNT_CORS, body=json.dumps(body), content_type="application/json"
+            )
+
+    async def functions(self, route: Route) -> None:
+        """Any other function: refused and recorded, so a test never reaches a real one."""
+        if route.request.method == "OPTIONS":
+            await route.fulfill(status=204, headers=ACCOUNT_CORS)
+            return
+        self.strays.append(urlparse(route.request.url).path)
+        await route.abort()
+
     async def rest(self, route: Route) -> None:
         """Every other request to the project's tables: the fake `companies` and `jobs` (tests/fake_companies.py), and
         anything else is refused and recorded, so a test never reaches a real project."""
@@ -254,6 +296,8 @@ async def open_admin(  # noqa: PLR0913  (each choice is one thing a test varies)
     await page.route(RPC, backend.rpc)
     await page.route(HEALTH, backend.crawl_health)
     await page.route(ALERTS, backend.alert_counts)
+    await page.route(FUNCTIONS, backend.functions)  # before the one function the page may call: a later route wins
+    await page.route(ACCOUNT, backend.account)
     await page.route(f"{build_dashboard.SUPABASE_URL}/auth/v1/**", backend.auth_route)
     if signed_in:
         session = backend.auth.session()

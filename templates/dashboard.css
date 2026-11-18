@@ -1140,7 +1140,8 @@ html:has(.sheet:modal) {
   gap: var(--space-2);
 }
 
-.crawl-name {
+.crawl-name,
+.alert-name {
   min-width: 0;
   margin: 0;
   font-size: var(--text-md);
@@ -1180,6 +1181,46 @@ html:has(.sheet:modal) {
 /* The Alerts cards keep their own height instead of stretching to the taller one. */
 .alerts .crawl-list {
   align-items: start;
+}
+
+/* The Alerts forms (PLAN_2.md step 5.3): two cards side by side when there is room, each with one field and one button. */
+.alert-forms {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(19rem, 100%), 1fr));
+  align-items: start;
+  gap: var(--space-3);
+  margin-top: var(--space-4);
+}
+
+.alert-form {
+  align-items: stretch;
+  justify-content: flex-start;
+  gap: var(--space-3);
+  min-width: 0;
+  padding: var(--space-3);
+}
+
+.alert-form p,
+.alert-form .field-group {
+  margin: 0;
+}
+
+.alert-form .field {
+  width: 100%;
+  min-width: 0;
+}
+
+.alert-go {
+  align-self: flex-start;
+}
+
+.alert-go[aria-disabled="true"] {
+  opacity: 0.6;
+  cursor: progress;
+}
+
+.alert-answer {
+  font-weight: 700;
 }
 
 /* The Log area: one card per change, the time first and then the sentence, wrapping on a phone. */
