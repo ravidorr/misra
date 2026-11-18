@@ -1,7 +1,7 @@
 # Plan 3: more companies
 
 Step plan to close the coverage gap users reported: too few startups and too few large multinationals. Drafted
-2026-11-18, revised the same day after two reviews; A1 and A2 are done; the rest is not built yet. Targets are proposals for the
+2026-11-18, revised the same day after two reviews; A1, A2, B1 and B3 are done, B2 waits for the maintainer; the rest is not built yet. Targets are proposals for the
 maintainer to confirm.
 
 Conventions are those of `PLAN.md`: a change to a listed Python module bumps `package.json` and `pyproject.toml`
@@ -140,14 +140,40 @@ Measured 2026-11-18 with the A1 report and read-only `gh` commands (counts and t
 
 ## Step B: fix what is already listed (no new names)
 
-- **B1. The 14 crawled records with no `ats`.** They are browser crawls (Bigabid, Deel, Dynamic Yield, Hailo, Imperva,
+- [x] **B1. The 14 crawled records with no `ats`.** They are browser crawls (Bigabid, Deel, Dynamic Yield, Hailo, Imperva,
   Innoviz, Rapyd, SentinelOne, Trax, Varonis, Verbit, Vimeo, Wix, Zesty). From the last runs, list those that return no
   jobs. Pin or park only those, one at a time: parking closes the company's jobs (`close_uncrawled`), so check each
   closing is intended. Done when: none is crawled while returning zero jobs without a note.
-- **B2. "Request failed" companies.** Split the failing list into (a) the Workday and Oracle tenants that fail only
+
+  Status (2026-11-18): done. Today these 14 records (`crawl: true`, no `ats`, `status` `careers_page_only` or
+  `not_found`) were listed as crawled but never crawled: `run.py` crawls only `status == "ok"`, `discover.py` sets those
+  two statuses when it finds no feed, and `build_dashboard.py` shows every crawled company that is not `ok` on the
+  coverage card (`no_feed_found`, or `no_careers_url` for `not_found`), so they cost nothing but were counted as
+  crawled. None had a row in `jobs` or `crawl_log`, so nothing closed and no digest could flood. Each career page was
+  read politely (project User-Agent, robots.txt honoured, 1 request a second per host, no bot protection worked
+  around), the ATS adapters were tried on the obvious slugs and the browser crawl on the pages. No feed qualified for a
+  pin (a pin needs a real feed with Israel jobs): all 14 were parked with a dated note, journal entries 5 to 18
+  (`plan3-b1`): `bot_protection` Innoviz (Incapsula), Bigabid (Cloudflare 403), SentinelOne (429);
+  `no_openings` Trax (4 roles, none in Israel), Verbit (3 roles, none in Israel); `needs_reader` Zesty (Comeet page
+  with 3 roles, 2 in Tel Aviv, that the `comeet_page` reader cannot parse) and Rapyd (7 Tel Aviv roles, half the
+  titles read "DETAILS"); `no_feed_found` Deel, Hailo, Varonis, Vimeo, Wix, Dynamic Yield (career address is
+  Mastercard's) and Imperva (Thales'). The table now has 253 crawled, 94 researched only, none crawled without `ok`.
+  Two may become real work later: a `comeet_page` fix for Zesty, and a better title read for Rapyd.
+- [ ] **B2. "Request failed" companies.** Split the failing list into (a) the Workday and Oracle tenants that fail only
   from the runner (known limitation, see above) and (b) real failures (wrong slug, changed feed). Re-test (a) from a
   daily run once; if still blocked, leave them and say so in `TODO.md`. Fix (b). Done when: every failing company is in
   (a) with a dated note or fixed.
+
+  Status (2026-11-18): partly done, waiting for the maintainer. From the last two days of `crawl_log` (runs of
+  2026-11-17 04:23 UTC to 2026-11-18 16:28 UTC), 39 companies had at least one failed crawl. (a) 25 Workday tenants,
+  all runner-blocked (each answered from a normal network the same day; dated note in `TODO.md`). Oracle HCM: none
+  failed. (b) The other 14 are not wrong slugs: 5 SmartRecruiters companies skipped by `robots.txt` (ServiceNow, Nexar,
+  Atera, Kaltura, Armis; a decision, not a failure); 7 browser crawls behind bot protection from the runner (Nayax,
+  DriveNets, Check Point, Papaya Global; Xtend, Weebit Nano, Freightos held back by the sharp-drop guard); and 2
+  `comeet_page` companies (Optibus, REE Automotive) that failed on 2 of 4 runs and answer from a normal network, a
+  transient failure. None needs a feed change, and each of the 14 has history, so no change is applied. Done when
+  stays open until the maintainer decides on the bot-protected browser companies (keep listed, or park) and the
+  Workday limitation (accept, or move the crawl to another network).
 - [x] **B3. Audit `israel_only`.** For the 73 pinned records, confirm the filter drops only non-Israel jobs. Spot-check 10
   against the career page. Done when: no known Israel posting is dropped; a mismatch gets an adapter test.
 
