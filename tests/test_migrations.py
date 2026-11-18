@@ -225,6 +225,20 @@ SEARCH_JOBS_GUARDS = (  # each is something the function must keep saying
 GRANT_SEARCH_JOBS = (
     "grant execute on function public.search_jobs(text, text[], text[], text[], integer, integer) to service_role"
 )
+# PLAN_2.md step 1.1: the admin check. `admins` has no policy and no grant for anyone (only the owner and the service
+# role reach it); `is_admin()` is the one definer function that answers a boolean about the caller, matched whole.
+ADMIN_FUNCTION = re.compile(
+    r"create function public\.is_admin\(\) returns boolean language sql stable security definer "
+    r"set search_path = '' as \$\$(?P<body>.*)\$\$"
+)
+ADMIN_BODY = " select exists (select 1 from public.admins where user_id = (select auth.uid())); "
+GRANT_IS_ADMIN = "grant execute on function public.is_admin() to anon, authenticated"
+# The tables of the admin page (PLAN_2.md steps 1.3 to 3.1). A policy on one of them is for the signed-in role and its
+# only accepted `using` and `with check` is `public.is_admin()`. Two tables also keep a public read policy, which is
+# matched whole: `jobs` (open jobs) and `companies` (the records that are not excluded, decision D1).
+ADMIN_TABLES = {"jobs", "crawl_log", "admin_log", "companies"}
+IS_ADMIN = "public.is_admin()"
+PUBLIC_READ = {"jobs": "status = 'open'", "companies": "excluded is null"}
 DOLLAR_QUOTE = re.compile(r"\$\w*\$")
 CASCADE = "references auth.users (id) on delete cascade"
 
@@ -342,10 +356,13 @@ def policy_problem(s: str) -> str | None:
     table, command, roles = policy["table"], policy["command"], words(policy["roles"])
     using, check = policy["using"], policy["check"]
     own = sorted(OWN_ROW)[0]
-    if table == "jobs":
-        wrong = command != "select" or using != "status = 'open'" or check or not roles <= PUBLIC_ROLES
-        return f"the jobs policy must be select of open jobs for public roles: {s}" if wrong else None
     wants_using, wants_check = command in {"select", "update", "delete"}, command in {"insert", "update"}
+    if table in PUBLIC_READ and using == PUBLIC_READ[table]:
+        wrong = command != "select" or check or not roles <= PUBLIC_ROLES
+        return f"the {table} public policy must be a select for public roles with no check: {s}" if wrong else None
+    if table in ADMIN_TABLES:
+        wrong = roles != {"authenticated"} or (using == IS_ADMIN) != wants_using or (check == IS_ADMIN) != wants_check
+        return f"a policy on {table} must be for authenticated and use only {IS_ADMIN}: {s}" if wrong else None
     checks = [
         (table not in USER_TABLES, f"no policy is allowed on {table}: {s}"),
         (roles != {"authenticated"}, f"a policy on {table} must be for authenticated only: {s}"),
@@ -374,7 +391,9 @@ def table_problems(table: str, body: str) -> list[str]:
         found.append(f"subscriptions has other columns than {sorted(SUBSCRIPTION_COLUMNS)}: {sorted(columns)}")
     if table == "emailed" and set(columns) != EMAILED_COLUMNS:
         found.append(f"emailed has other columns than {sorted(EMAILED_COLUMNS)}: {sorted(columns)}")
-    if table in USER_TABLES and CASCADE not in columns.get("user_id", ""):
+    if table == "admins" and set(columns) != {"user_id"}:
+        found.append(f"admins may hold only user_id, not {sorted(columns)}")
+    if table in USER_TABLES | {"admins"} and CASCADE not in columns.get("user_id", ""):
         found.append(f"{table}.user_id must be `{CASCADE}`")
     return found
 
@@ -449,7 +468,7 @@ def problems(stmts: list[str]) -> list[str]:
         elif m := JOBS_TRIM_FUNCTION.fullmatch(s):
             functions[JOBS_TRIM_NAME] = False
             found.extend(jobs_trim_problems(m))
-        elif search := search_function(s):
+        elif search := pinned_function(s):
             functions[search[0]] = search[1]
             found.extend(search[2])
         elif m := TRIGGER.fullmatch(s):
@@ -460,7 +479,7 @@ def problems(stmts: list[str]) -> list[str]:
             or COLUMN_GRANT.fullmatch(s)
             or GRANT_REPORT_FUNCTION.fullmatch(s)
             or GRANT_JOBS_TRIM_FUNCTION.fullmatch(s)
-            or s in {SEARCH_INDEX, GRANT_SEARCH_FUNCTION, GRANT_SEARCH_JOBS}
+            or s in {SEARCH_INDEX, GRANT_SEARCH_FUNCTION, GRANT_SEARCH_JOBS, GRANT_IS_ADMIN}
             or ADD_JOBS_COLUMN.fullmatch(s)
             or GRANT_SUBSCRIPTION_FUNCTION.fullmatch(s)
             or GRANT_SUBSCRIBE_FUNCTION.fullmatch(s)
@@ -556,8 +575,12 @@ def search_problems(m: re.Match[str]) -> list[str]:
     return found
 
 
-def search_function(s: str) -> tuple[str, bool, list[str]] | None:
-    """(name, security definer, problems) of one of the two pinned search functions, or None."""
+def pinned_function(s: str) -> tuple[str, bool, list[str]] | None:
+    """(name, security definer, problems) of one of the functions that are matched whole (the two searches and the
+    admin check), or None."""
+    if m := ADMIN_FUNCTION.fullmatch(s):
+        bad = [] if m["body"] == ADMIN_BODY else [f"is_admin may only ask whether the caller is listed: {s}"]
+        return "is_admin", True, bad
     if m := SEARCH_FUNCTION.fullmatch(s):
         return SEARCH_NAME, True, search_problems(m)
     if m := SEARCH_JOBS_FUNCTION.fullmatch(s):
@@ -613,7 +636,7 @@ def test_migrations_are_safe() -> None:
     tables = {m["table"] for s in stmts if (m := CREATE_TABLE.fullmatch(s))}
     assert (
         tables
-        == {"jobs", "crawl_log", "profiles", "user_prefs", "user_jobs", "subscriptions", "emailed"}
+        == {"jobs", "crawl_log", "profiles", "user_prefs", "user_jobs", "subscriptions", "emailed", "admins"}
         | REPORT_TABLES
         | CONFIRM_LIMIT_TABLES
     )
@@ -834,6 +857,122 @@ def test_the_accounts_migration_passes_when_unchanged() -> None:
     assert problems(statements_of(REAL)) == []
 
 
+# ---- The admin check (PLAN_2.md step 1.1): `admins` is closed to everyone, `is_admin()` is the one way to ask ----
+
+ADMINS_FILE = MIGRATION_DIR / "20261127100000_admins.sql"
+ADMINS_SQL = ADMINS_FILE.read_text(encoding="utf-8")
+
+
+def test_admins_has_no_policy_and_no_grant() -> None:
+    mentioned = [s for s in statements() if "public.admins" in s and s.startswith(("create policy", "grant"))]
+    assert not mentioned
+    stmts = statements_of(ADMINS_SQL)
+    assert any(CREATE_TABLE.fullmatch(s) and "public.admins" in s for s in stmts)
+    assert "revoke all on public.admins from anon, authenticated, public" in stmts
+    assert problems(stmts) == []
+
+
+def test_is_admin_is_one_pinned_definer_function_open_to_the_two_public_roles_only() -> None:
+    stmts = statements()
+    function = next(m for s in stmts if (m := ADMIN_FUNCTION.fullmatch(s)))
+    assert function["body"] == ADMIN_BODY
+    assert GRANT_IS_ADMIN in stmts
+    assert "revoke all on function public.is_admin() from public, anon, authenticated" in stmts
+
+
+@pytest.mark.parametrize(
+    ("old", "new"),
+    [
+        ("where user_id = (select auth.uid())", "where true"),  # anyone is an admin
+        ("where user_id = (select auth.uid())", "where user_id is not null"),
+        ("select exists (select 1 from public.admins", "select exists (select 1 from auth.users"),
+        ("\nsecurity definer\n", "\nsecurity invoker\n"),  # not a function this lint knows
+        ("set search_path = ''", "set search_path = public"),
+        ("returns boolean", "returns jsonb"),
+        ("alter table public.admins enable row level security;", ""),
+        ("revoke all on public.admins from anon, authenticated, public;", ""),
+        ("revoke all on public.admins from anon, authenticated, public;", "revoke all on public.admins from anon;"),
+        ("revoke all on function public.is_admin() from public, anon, authenticated;", ""),
+        ("to anon, authenticated;", "to anon, authenticated, service_role;"),
+        ("references auth.users (id) on delete cascade", "references auth.users (id)"),
+        ("user_id uuid primary key", "user_id uuid primary key, email text"),  # more than the user id
+    ],
+)
+def test_the_lint_rejects_a_weakened_admins_migration(old: str, new: str) -> None:
+    assert old in ADMINS_SQL, old
+    assert problems(statements_of(ADMINS_SQL.replace(old, new)))
+
+
+@pytest.mark.parametrize(
+    "extra",
+    [
+        'create policy "p" on public.admins for select to authenticated using (public.is_admin())',
+        "grant select on public.admins to authenticated",
+        "grant select on public.admins to anon",
+        "create function public.is_admin(p uuid) returns boolean language sql stable security definer "
+        "set search_path = '' as $$ select true $$",
+    ],
+)
+def test_the_lint_rejects_anything_that_opens_admins(extra: str) -> None:
+    assert problems(statements_of(f"{ADMINS_SQL}\n{extra};"))
+
+
+ADMIN_POLICY = 'create policy "p" on public.{table} for {command} to {roles} {clauses}'
+IS_ADMIN_CLAUSE = "using (public.is_admin())"
+
+
+@pytest.mark.parametrize(
+    ("table", "command", "roles", "clauses"),
+    [
+        ("jobs", "select", "authenticated", IS_ADMIN_CLAUSE),
+        ("jobs", "select", "anon, authenticated", "using (status = 'open')"),  # the existing policy, unchanged
+        ("crawl_log", "select", "authenticated", IS_ADMIN_CLAUSE),
+        ("admin_log", "select", "authenticated", IS_ADMIN_CLAUSE),
+        ("companies", "select", "authenticated", IS_ADMIN_CLAUSE),
+        ("companies", "select", "anon, authenticated", "using (excluded is null)"),  # decision D1
+        ("companies", "insert", "authenticated", "with check (public.is_admin())"),
+        ("companies", "update", "authenticated", "using (public.is_admin()) with check (public.is_admin())"),
+        ("companies", "delete", "authenticated", IS_ADMIN_CLAUSE),
+    ],
+)
+def test_the_lint_accepts_an_admin_only_policy_on_an_admin_table(
+    table: str, command: str, roles: str, clauses: str
+) -> None:
+    assert policy_problem(ADMIN_POLICY.format(table=table, command=command, roles=roles, clauses=clauses)) is None
+
+
+@pytest.mark.parametrize(
+    ("table", "command", "roles", "clauses"),
+    [
+        ("crawl_log", "select", "authenticated", "using (true)"),  # not the admin check
+        ("crawl_log", "select", "authenticated", "using (auth.uid() is not null)"),
+        ("crawl_log", "select", "authenticated", "using (public.is_admin() or true)"),
+        ("crawl_log", "select", "anon", IS_ADMIN_CLAUSE),  # not for the signed-out role
+        ("crawl_log", "select", "authenticated, anon", IS_ADMIN_CLAUSE),
+        ("crawl_log", "select", "public", IS_ADMIN_CLAUSE),
+        ("crawl_log", "select", "authenticated", "using (public.is_admin()) with check (public.is_admin())"),
+        ("crawl_log", "all", "authenticated", IS_ADMIN_CLAUSE),
+        ("companies", "insert", "authenticated", "with check (true)"),
+        ("companies", "insert", "authenticated", IS_ADMIN_CLAUSE),  # insert has no using
+        ("companies", "update", "authenticated", IS_ADMIN_CLAUSE),  # update without the check
+        ("companies", "delete", "authenticated", "using (true)"),
+        ("companies", "select", "anon, authenticated", "using (excluded is null) with check (true)"),
+        ("companies", "insert", "anon, authenticated", "using (excluded is null)"),
+        ("companies", "select", "anon", "using (excluded is not null)"),  # not the public rule
+        ("jobs", "select", "anon, authenticated", IS_ADMIN_CLAUSE),  # anon may not use the admin policy
+        ("jobs", "select", "authenticated", "using (true)"),
+        ("jobs", "update", "authenticated", "using (status = 'open')"),
+        ("admins", "select", "authenticated", IS_ADMIN_CLAUSE),  # no policy at all on admins
+        ("emailed", "select", "authenticated", IS_ADMIN_CLAUSE),  # nor on a user table, for the admin
+        ("profiles", "select", "authenticated", IS_ADMIN_CLAUSE),
+    ],
+)
+def test_the_lint_refuses_a_policy_on_an_admin_table_that_is_not_the_admin_check(
+    table: str, command: str, roles: str, clauses: str
+) -> None:
+    assert policy_problem(ADMIN_POLICY.format(table=table, command=command, roles=roles, clauses=clauses))
+
+
 # ---- Stars and discards (step 4.2; FR-2 AC 10): the row limit and the discard that goes when its job closes ----
 
 
@@ -930,7 +1069,7 @@ def test_the_report_counters_have_no_policy_and_no_grant_for_anyone_but_the_serv
         and not GRANT_SUBSCRIPTION_FUNCTION.fullmatch(s)
         and not GRANT_SUBSCRIBE_FUNCTION.fullmatch(s)
         and not GRANT_JOBS_TRIM_FUNCTION.fullmatch(s)
-        and s not in {GRANT_SEARCH_FUNCTION, GRANT_SEARCH_JOBS}
+        and s not in {GRANT_SEARCH_FUNCTION, GRANT_SEARCH_JOBS, GRANT_IS_ADMIN}
         and s not in HOOK_GRANTS
     ]
 
