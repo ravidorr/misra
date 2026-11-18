@@ -25,7 +25,7 @@ count query with the service role, never printing rows.
   career page: 12 `careers_page_only`, 2 `not_found`).
 - 73 records are pinned `israel_only`.
 - `segment` exists only on researched records (`deeptech` 36, `multinational` 22, `biz_software` 11, `cyber_infra` 11),
-  and the table's checks and the fixture test (`tests/test_companies_data.py`) forbid it on crawled ones.
+  by convention (it is set only on researched records today; nothing enforces it).
 - Crawl step: `timeout-minutes: 20` inside a 30 minute job, 8 threads, 1 second per host (`common.py:24`).
 - `docs/jobs.json` is 2.1 MB. The history is about 9.7k jobs and about 250 `crawl_log` rows a day.
 
@@ -48,11 +48,14 @@ count query with the service role, never printing rows.
   and lists roles in Israel. A company with no Israel role is not added to the crawl.
 - **Respect the limits.** `robots.txt` is honoured, bot protection is never worked around, and
   an opt-out is an `excluded` record in the table (readable only by the admin, never deleted, backed up daily to the
-  private repository), checked with `is_excluded` before any candidate is probed.
+  private repository), checked with `is_excluded` before any candidate is probed. That check sees the excluded records
+  only when the pull used the service-role key (`SUPABASE_SERVICE_ROLE_KEY`); with any other key they are invisible
+  and the check passes silently. Never paste the key in a PR or chat.
 - **One list.** No candidate file is committed. Candidate lists live in the scratchpad or the PR description; only
-  accepted records reach the `companies` table, through the Companies area of the admin page
-  (`https://ravidorr.github.io/misra/admin.html`, admin only) or, as a fallback, SQL. Every admin change is in the admin
-  Log.
+  accepted records reach the `companies` table. Adding a company and excluding one are done on the Companies area of
+  the admin page (`https://ravidorr.github.io/misra/admin.html`, admin only). Pins (`source`, `ats`, `slug`) are not
+  editable there yet: use SQL (`CONTRIBUTING.md`, "Adding a company"). Only admin-page changes are in the admin Log; a
+  SQL edit leaves no log entry, and the daily backup history is the only record of it.
 - **Adapters need two.** Write an adapter only when two or more companies share a platform that `robots.txt` allows.
   One company gets a pinned `browser` or `comeet_page` record.
 - **First run must return jobs.** A company is added only if its first crawl returns jobs. A company that returned
@@ -61,13 +64,13 @@ count query with the service role, never printing rows.
 - **Count only what the runner can read.** A target counts a company only if it returns jobs from the GitHub runner,
   not from a normal network. Test a Workday or Oracle pin from a daily run before counting it.
 - **Batches.** Add at most 25 new companies before each `discover-companies` run (steps D and E; it resolves only
-  crawled companies with an empty `status` and never downgrades a working one). Before each batch, check the three budgets below. After it,
-  review the next daily run (jobs per company, new failures, new entries on the coverage card and in the maintainer
-  alert) before the next batch starts. Pinning a researched record (step C) is the exception: one pin at a time, as
-  `TODO.md` ("How to research a company", step 4) says. A bad pin is reverted by editing the row, and to have a pinned
-  record looked at again its `status` is emptied.
-- **No counts to keep.** `tests/test_todo_counts.py` is deleted, so nothing enforces the counts `TODO.md` still quotes
-  as a dated snapshot. The current numbers live in the A1 report and in each batch description (A4).
+  crawled companies with an empty `status` and never downgrades a working one). The cap is a plan rule, not enforced by
+  the workflow. Before each batch, check the three budgets below. After it, review the next daily run (jobs per company,
+  new failures, new entries on the coverage card and in the maintainer alert) before the next batch starts. Pinning a
+  researched record (step C) is the exception: one pin at a time, as `TODO.md` ("How to research a company", step 4)
+  says. A bad pin is reverted by editing the row, and to have a pinned record looked at again its `status` is emptied.
+- **No counts to keep.** `tests/test_todo_counts.py` is deleted, so nothing enforces any number quoted in `TODO.md`.
+  The current numbers come from the A1 report and each batch description (A4).
 - **Lawyer's files.** `ABOUT.md`, `PRIVACY.md`, `TERMS.md` and `ASSISTANT.md` are not touched by this plan.
 - **Track in `TODO.md`.** This plan is the design; open items go to `TODO.md`.
 
@@ -111,11 +114,13 @@ count query with the service role, never printing rows.
 
 ## Step C: unlock the 80 researched records
 
-Each unlocked company is one edit of its row, one at a time: set `crawl` to `true`, `source` to `override` with its `ats`
-and `slug` (and `israel_only` for a multinational), remove its `gap` and `segment`, and empty its `status`. Then run
-`discover-companies`, which checks the pin and sets `status` to `ok` (it touches only crawled companies with an empty
-`status`). Target: 30. Read
-the "Prior findings" first; do not repeat a checked path.
+Each unlocked company is one SQL edit of its row (the admin page cannot set `ats` or `slug` yet; see `CONTRIBUTING.md`,
+"Adding a company"), one at a time: set `crawl` to `true`, `source` to `override` with its `ats` and `slug` (and
+`israel_only` for a multinational), remove its `gap` and `segment`, and empty its `status`. Then run
+`discover-companies`, which sets `status` to `ok` only when the GitHub runner can read the feed (it touches only crawled
+companies with an empty `status`). Workday and Oracle pins are the known runner-blocked case, and step E has many of
+them. A pin that comes back not `ok` is edited back or parked with a `gap`; never set `status` to `ok` by hand.
+Target: 30. Read the "Prior findings" first; do not repeat a checked path.
 
 - **C1. `no_careers_url` (23).** Find the real career page by hand (company site, LinkedIn page, VC portfolio page),
   not by slug guessing. Then read the ATS from the page source (Comeet `company-uid`, Greenhouse embed, Ashby, Lever,
@@ -146,16 +151,18 @@ Target: +60 crawled that return jobs from the runner.
   - Israeli job boards as a source of employer names: only after the maintainer has checked each site's terms with the
     lawyer. Skipped until then.
 - **D3. Candidate script.** A dev tool in `survey.py` or `survey2.py` (typed, with tests, 100% coverage; the network
-  calls faked as the other tests do). For each name it skips excluded (`is_excluded`) and already-listed domains (run `sync_supabase.py --pull` first), probes the career page
-  link scan (`ATS_LINK`) and then the ATS list in `PROBE_ORDER`, counts Israel jobs with `israel_count`, and prints a
-  keep or skip table. Output goes to the scratchpad. Done when: 100 names run in one command.
+  calls faked as the other tests do). For each name it skips excluded (`is_excluded`) and already-listed domains, probes
+  the career page link scan (`ATS_LINK`) and then the ATS list in `PROBE_ORDER`, counts Israel jobs with `israel_count`,
+  and prints a keep or skip table. It needs a `sync_supabase.py --pull` with the service-role key first (see "Respect
+  the limits"); never paste the key in a PR or chat. Output goes to the scratchpad. Done when: 100 names run in one
+  command.
 - **D4. Accept rule.** Keep a candidate that has Israel jobs on its own board. A candidate with only a career page and
   no feed becomes a browser crawl and counts against the crawl-time budget, so it needs the maintainer's yes. Skip
   everything else and record nothing.
 - **D5. Batches.** Up to 25 names per batch: add each as `{name, domain, crawl: true}` on the admin page, run the
   `discover-companies` workflow, review each result for a wrong feed (check the board's company name against the
-  record), pin where needed and empty its `status` for a second run. Done when: the target is met and each batch's next
-  daily run is reviewed.
+  record), pin where needed (with SQL, as in step C) and empty its `status` for a second run. Done when: the target is
+  met and each batch's next daily run is reviewed.
 
 ## Step E: add large multinationals
 
@@ -190,7 +197,8 @@ Israeli R&D centres of global companies. Target: +40 crawled with `israel_only: 
 - **G2. Quarterly recheck.** Rerun C4 and C5 on the gap records; refresh the dated `gap.note`.
 - **G3. Dead-board alert.** Extend the daily coverage-gap log line (`Log the coverage gaps`) to flag a crawled company
   with no open job for 30 days, from `crawl_log`. It is an alert, not a test; a test only covers the query on fixtures.
-- **G4. Removal.** Only on request (an `excluded` record, see `CONTRIBUTING.md`, "Removing a company on request") or when a company has closed for good.
+- **G4. Removal.** Only on request (an `excluded` record, see `CONTRIBUTING.md`, "Removing a company on request") or
+  when a company has closed for good.
 
 ## Order and size
 
@@ -200,7 +208,8 @@ Israeli R&D centres of global companies. Target: +40 crawled with `israel_only: 
 4. D4, D5 and E1 to E6 in batches of 25 or fewer, each followed by a first-run review before the next.
 5. F1 and F2 start after the first batch; G from the first month.
 
-Roughly 10 PRs (code and docs: 4 for A, adapters and the D3 tool, F1) and about 5 to 8 batches of table edits (D and E), plus the unlocks of C and the recurring G. About one batch a week, so about 10 to 12 weeks end to end.
+Roughly 10 PRs (code and docs: 4 for A, adapters and the D3 tool, F1) and about 5 to 8 batches of table edits (D and
+E), plus the unlocks of C and the recurring G. About one batch a week, so about 10 to 12 weeks end to end.
 
 ## Risks
 
@@ -212,7 +221,7 @@ Roughly 10 PRs (code and docs: 4 for A, adapters and the D3 tool, F1) and about 
   rule and the first-run review.
 - **Dead or empty boards.** Clutter on the coverage card. Mitigation: the accept rule (D4) and G3.
 - **Wrong feed.** Slug probing can hit an unrelated company (`air`). Mitigation: compare the board's company name.
-- **Legal.** A company may object to being listed; the opt-out stays an `excluded` record in the table. Job board terms are
-  checked with the lawyer before D2 uses them.
+- **Legal.** A company may object to being listed; the opt-out stays an `excluded` record in the table. Job board
+  terms are checked with the lawyer before D2 uses them.
 - **Israel filter errors.** A global company's feed may mix countries. Mitigation: B3 and E6 spot checks, fixtures with
   non-Israel jobs.
