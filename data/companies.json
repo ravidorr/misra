@@ -1306,12 +1306,20 @@
  {
   "name": "Freightos",
   "domain": "freightos.com",
-  "crawl": true,
+  "segment": "biz_software",
+  "crawl": false,
   "careers_url": "https://www.freightos.com/careers/",
-  "ats": "browser",
-  "slug": "https://www.freightos.com/careers/",
-  "source": "override",
-  "status": "ok"
+  "ats": "",
+  "slug": "",
+  "source": "",
+  "status": "careers_page_only",
+  "links": {
+   "global": "https://www.freightos.com/careers/"
+  },
+  "gap": {
+   "reason": "bot_protection",
+   "note": "A challenge page with no links"
+  }
  },
  {
   "name": "Fundbox",
@@ -4023,12 +4031,20 @@
  {
   "name": "Weebit Nano",
   "domain": "weebit-nano.com",
-  "crawl": true,
+  "segment": "deeptech",
+  "crawl": false,
   "careers_url": "https://www.weebit-nano.com/company/careers/",
-  "ats": "browser",
-  "slug": "https://www.weebit-nano.com/company/careers/",
-  "source": "override",
-  "status": "ok"
+  "ats": "",
+  "slug": "",
+  "source": "",
+  "status": "careers_page_only",
+  "links": {
+   "global": "https://www.weebit-nano.com/company/careers/"
+  },
+  "gap": {
+   "reason": "bot_protection",
+   "note": "A challenge page with no links"
+  }
  },
  {
   "name": "Weka",
@@ -4176,12 +4192,20 @@
  {
   "name": "Xtend",
   "domain": "xtend.me",
-  "crawl": true,
+  "segment": "deeptech",
+  "crawl": false,
   "careers_url": "https://xtend.me/careers/",
-  "ats": "browser",
-  "slug": "https://xtend.me/careers/",
-  "source": "override",
-  "status": "ok"
+  "ats": "",
+  "slug": "",
+  "source": "",
+  "status": "careers_page_only",
+  "links": {
+   "global": "https://xtend.me/careers/"
+  },
+  "gap": {
+   "reason": "bot_protection",
+   "note": "A challenge page with no links"
+  }
  },
  {
   "name": "Yotpo",
