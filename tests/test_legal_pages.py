@@ -608,7 +608,8 @@ PAGES_WITH_CHROME = [
 
 
 def chrome_of(html: str) -> tuple[str, str]:
-    """The header and the footer of a built page, without the marks that differ by page."""
+    """The header and the footer of a built page, without what differs by page: the marks, the dashboard's account
+    controls and "last read" line, and the other pages' home button and footer link."""
     header = re.search(r'<header class="top">.*?</header>', html, re.DOTALL)
     footer = re.search(r'<footer class="foot">.*?</footer>', html, re.DOTALL)
     assert header
@@ -616,10 +617,12 @@ def chrome_of(html: str) -> tuple[str, str]:
     marked = lambda s: s.replace(' aria-current="page"', "")  # noqa: E731
     footer_text = re.sub(r"\s*<p class=\"foot-updated\">.*?</p>", "", marked(footer[0]), flags=re.DOTALL)
     header_text = re.sub(r'\s*<div class="account".*?\n  </div>', "", marked(header[0]), flags=re.DOTALL)
+    header_text = re.sub(r'\s*<a class="btn[^>]*id="home".*?</a>', "", header_text, flags=re.DOTALL)
+    footer_text = footer_text.replace('\n    <a href="./">Home</a>', "")
     return header_text, footer_text
 
 
-def test_every_page_has_the_same_header_and_footer_apart_from_the_dashboards_two_slots(
+def test_every_page_has_the_same_header_and_footer_apart_from_what_the_slots_fill(
     workdir: Path, db: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setattr(build_dashboard, "DIGEST_SIGNUP_ENABLED", False)
@@ -629,8 +632,11 @@ def test_every_page_has_the_same_header_and_footer_apart_from_the_dashboards_two
     index = (docs / "index.html").read_text(encoding="utf-8")
     assert 'id="account"' in index
     assert 'id="upd"' in index
+    assert 'id="home"' not in index  # the dashboard has the account controls and no way home but the logo
+    assert '<a href="./">Home</a>' not in index
     for name in PAGES_WITH_CHROME[1:]:
         other = (docs / name).read_text(encoding="utf-8")
+        assert other.count('id="home"') == 1
         assert 'id="account"' not in other  # they load no sign-in script
         assert 'id="upd"' not in other  # and nothing that would fill the date
         assert "__" not in re.sub(r"__SRI_[A-Z_]+__", "", other).replace("__BODY__", "")
@@ -714,16 +720,17 @@ def test_every_skip_link_leads_to_an_element_of_its_page(
         assert f'id="{target[1]}"' in html, name
 
 
-@pytest.mark.parametrize("output", ["privacy.html", "about.html"])
+@pytest.mark.parametrize("output", ["privacy.html", "about.html", "contact.html", "email.html"])
 async def test_the_header_is_in_the_same_tab_order_on_every_page_and_the_skip_link_comes_first(
     page: Page, site: Path, output: str
 ) -> None:
     await open_legal(page, site, output)
     order = []
-    for _ in range(3):
+    for _ in range(4):
         await page.keyboard.press("Tab")
         order.append(await page.evaluate("document.activeElement.id || document.activeElement.className"))
-    assert order == ["skip", "top-home", "theme"]
+    assert order == ["skip", "top-home", "home", "theme"]
+    await page.keyboard.press("Shift+Tab")
     await page.keyboard.press("Shift+Tab")
     await page.keyboard.press("Shift+Tab")
     await page.keyboard.press("Enter")
