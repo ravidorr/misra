@@ -4,8 +4,10 @@
 import html
 import json
 import re
+import xml.etree.ElementTree as ET
 from collections import Counter
 from collections.abc import Callable, Iterable, Iterator
+from email.utils import parsedate_to_datetime
 from typing import Any
 from urllib.parse import parse_qsl, urljoin, urlparse
 
@@ -30,6 +32,7 @@ AMAZON_MAX_PAGES = 50
 PHENOM_PAGE = 50
 PHENOM_MAX_PAGES = 100
 PHENOM_SLUG_PARTS = 3
+AVATURE_MAX = 20  # the most jobs an Avature feed gives (it has no paging): a feed this long may be cut short
 
 
 def _job(  # noqa: PLR0913, PLR0917
@@ -894,6 +897,67 @@ def phenom(slug: str) -> list[Job] | None:
     return None  # more pages than the limit: the list is not complete
 
 
+_AVATURE_FACET = re.compile(r"(\d+)=(\d+)")
+_AVATURE_JOB_ID = re.compile(r"/(\d+)/?$")
+
+
+def _avature_posted(text: str | None) -> str:
+    """The date of an RSS `pubDate` as YYYY-MM-DD, or '' when it is missing or not a date."""
+    try:
+        return parsedate_to_datetime(text or "").date().isoformat()
+    except (TypeError, ValueError):
+        return ""
+
+
+def _avature_job(host: str, item: ET.Element) -> Job | None:
+    """One job of the feed, or None when it lacks a title or a link, the link is not on the board's own host or does not
+    end with the job's number. The feed has no place: its `description` holds the country of the posting (Siemens) or
+    only a requisition number (Synopsys, ` - 50209`), so the place is the description when it names Israel, and else
+    Israel, the country the feed was filtered to (a posting of several countries lists Israel among them)."""
+    title = (item.findtext("title") or "").strip()
+    link = (item.findtext("link") or "").strip()
+    found = _AVATURE_JOB_ID.search(link)
+    if not (title and found and host_of(link) == host and link.startswith("https://")):
+        return None
+    job_id = found[1]
+    title = title.removesuffix(f" - {job_id}").strip()  # Synopsys ends every title with its number
+    description = (item.findtext("description") or "").strip()
+    place = description if ISRAEL.search(description) else "Israel"
+    return _job(job_id, title, place, link, posted=_avature_posted(item.findtext("pubDate")))
+
+
+def avature(slug: str) -> list[Job] | None:
+    """slug is '<host>/<portal>?<field>=<value>' of an Avature career site filtered to Israel, for example
+    'synopsys.avature.net/careers?2001=21374' or 'jobs.siemens.com/en_US/externaljobs?42386=811993' (the site's own
+    search page is `https://<host>/<portal>/SearchJobs`; the field and value are those of its Country facet, which a
+    person reads once from the page: the option list is loaded by script, from the page's own search API). The
+    public RSS feed `https://<host>/<portal>/SearchJobs/feed/` is asked for that facet, one request: the feed has
+    no paging (it ignores jobOffset and jobRecordsPerPage) and gives at most AVATURE_MAX jobs, so a feed that long is
+    a failure, not a list: it may be cut short (a partial list would close the jobs it lacks), and it is also what an
+    ignored facet gives (the worldwide list). Any answer that is not an RSS feed, or a job that cannot be read, is
+    None too."""
+    path, _, query = slug.partition("?")
+    host, _, portal = path.partition("/")
+    if "." not in host or not portal or not _AVATURE_FACET.fullmatch(query):
+        return None
+    field, value = query.split("=")
+    r = get(f"https://{host}/{portal.strip('/')}/SearchJobs/feed/", params={field: value})
+    if r is None or r.status_code != HTTP_OK:
+        return None
+    try:
+        root = ET.fromstring(r.text)
+    except ET.ParseError:
+        return None
+    items = root.findall("./channel/item")
+    if root.tag != "rss" or len(items) >= AVATURE_MAX:
+        return None
+    out = [_avature_job(host, item) for item in items]
+    jobs = [j for j in out if j]
+    if len(jobs) != len(out) or len({j["job_id"] for j in jobs}) != len(jobs):
+        return None
+    return jobs
+
+
 ADAPTERS: dict[str, Callable[[str], list[Job] | None]] = {
     "greenhouse_url": greenhouse_url,
     "greenhouse": greenhouse,
@@ -909,4 +973,5 @@ ADAPTERS: dict[str, Callable[[str], list[Job] | None]] = {
     "amazon": amazon,
     "phenom": phenom,
     "comeet_page": comeet_page,
+    "avature": avature,
 }

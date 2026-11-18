@@ -60,7 +60,7 @@ Hosted job boards:
 - Greenhouse, Lever, Ashby, Workable, SmartRecruiters
 - Comeet: public pages and WordPress plugin pages
 - JazzHR, BambooHR
-- Workday, Oracle Fusion HCM and Phenom: jobs in Israel only
+- Workday, Oracle Fusion HCM, Phenom and Avature: jobs in Israel only
 - Amazon (amazon.jobs)
 
 The browser crawler reads:
