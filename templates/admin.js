@@ -19,10 +19,10 @@ const MESSAGES = {
   failed: 'Could not load this area.',
   retry: 'Try again',
 };
-/* The page title of each area, and what loads it. A loader resolves to true when it showed something; none asks the
-   database for anything yet, so each area is empty until its step lands. */
+/* The page title of each area, and what loads it. A loader resolves to true when it showed something. Only the Crawl
+   area asks the database for anything yet; the others are empty until their steps land. */
 const AREAS = {
-  crawl: { title: 'Crawl', load: async () => false },
+  crawl: { title: 'Crawl', load: loadCrawl },
   companies: { title: 'Companies', load: async () => false },
   alerts: { title: 'Alerts', load: async () => false },
   log: { title: 'Log', load: async () => false },
@@ -78,6 +78,7 @@ async function loadArea(name) {
   paint(box, 'loading', MESSAGES.loading);
   try {
     const filled = await AREAS[name].load(box);
+    box.removeAttribute('role'); /* the loading line was a status; what replaced it is not */
     section.dataset.state = filled ? 'ready' : 'empty';
     if (!filled) paint(box, 'empty', section.dataset.empty);
   } catch (error) {
@@ -149,6 +150,174 @@ async function check(again) {
   }
 }
 
+/* ---- Crawl: one card per company, worst first (PLAN_2.md step 2.2) ---- */
+
+const STATUS_TEXT = { failing: 'Failing', held: 'Held', robots: 'Robots.txt', ok: 'OK' };
+const RANK = { failing: 0, held: 1, robots: 2, ok: 3 };
+/* The views, one pressed at a time. A company has one status, so the counts never add one twice. */
+const VIEWS = [
+  { id: 'attention', label: 'Needs attention', has: (status) => status !== 'ok' },
+  { id: 'failing', label: 'Failing', has: (status) => status === 'failing' },
+  { id: 'robots', label: 'Robots.txt', has: (status) => status === 'robots' },
+  { id: 'held', label: 'Held', has: (status) => status === 'held' },
+  { id: 'all', label: 'All', has: () => true },
+];
+const NOTE_LOG =
+  'The crawl log may read short until about 20 Nov 2026, after the history moved to Supabase. Until then, streaks can read low and older days can be missing.';
+const NOTE_FETCHED = '"Fetched" is the number of jobs a crawl read that day. A failed crawl fetches 0.';
+const NONE = '-';
+
+function el(tag, className, text) {
+  const node = document.createElement(tag);
+  if (className) node.className = className;
+  if (text !== undefined) node.textContent = text;
+  return node;
+}
+
+const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
+
+/* "2026-11-18T07:12:00" (the log's own stamp, UTC) as "18 Nov" in the viewer's language, with the year when it is not
+   this year. Anything else is shown as it is, as the dashboard does. */
+function day(stamp) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(stamp ?? '');
+  if (!m) return stamp ?? NONE;
+  const when = new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3])));
+  const year = when.getUTCFullYear() === new Date().getUTCFullYear() ? undefined : 'numeric';
+  return new Intl.DateTimeFormat(undefined, { day: 'numeric', month: 'short', year, timeZone: 'UTC' }).format(when);
+}
+
+/* The rows of the function, each with its one status, worst first: failing by the longest streak, then held, then
+   skipped for robots.txt, then the rest, each by name. */
+function ranked(rows) {
+  const withStatus = rows.map((row) => {
+    let status = 'ok';
+    if (row.held) status = 'held';
+    else if (row.robots_skipped) status = 'robots';
+    else if (row.failing) status = 'failing';
+    return { row, status };
+  });
+  return withStatus.sort(
+    (a, b) =>
+      RANK[a.status] - RANK[b.status] ||
+      (a.status === 'failing' ? b.row.streak - a.row.streak : 0) ||
+      a.row.company.localeCompare(b.row.company),
+  );
+}
+
+function crawlCard({ row, status }) {
+  const card = el('li', 'gap-card crawl-card');
+  card.dataset.company = row.company;
+  card.dataset.status = status;
+  const head = el('div', 'crawl-head');
+  const name = el('h3', 'crawl-name', row.company);
+  name.dir = 'auto';
+  head.append(name, el('span', status === 'ok' ? 'pill pill-soft' : 'pill pill-warn', STATUS_TEXT[status]));
+  const facts = [
+    ['Last good crawl', row.last_good ? day(row.last_good) : 'None in the log'],
+    ['Last result', `${day(row.last_crawl)}, ${row.last_ok ? 'OK' : 'failed'}`],
+    ...(row.last_note ? [['Note', row.last_note]] : []),
+    ['Failed days in a row', String(row.streak)],
+    ['Open jobs now', String(row.open_jobs)],
+    ['Fetched about 30 days ago', row.fetched_30d_ago === null ? NONE : String(row.fetched_30d_ago)],
+  ];
+  const list = el('dl', 'crawl-facts');
+  for (const [term, value] of facts) {
+    const group = el('div', 'crawl-fact');
+    group.append(el('dt', '', term), el('dd', '', value));
+    list.append(group);
+  }
+  card.append(head, list);
+  return card;
+}
+
+/* The page of the area: headline, notes, the view chips, a status line and the list of the pressed view. Only that
+   view is in the DOM, and the chips stay put, so the focus stays on the chip that was pressed. */
+function crawlView(rows) {
+  const companies = ranked(rows);
+  const counts = Object.fromEntries(VIEWS.map((view) => [view.id, companies.filter((c) => view.has(c.status)).length]));
+  const needs = counts.attention;
+  const fine = companies.length - needs;
+  const root = el('div', 'crawl');
+  root.append(
+    el('p', 'crawl-headline', `${needs === 0 ? 'None need' : plural(needs, 'needs', 'need')} attention, ${fine} fine.`),
+    el('p', 'crawl-note', NOTE_FETCHED),
+    el('p', 'crawl-note', NOTE_LOG),
+  );
+  const chips = el('div', 'chip-group');
+  chips.setAttribute('role', 'group');
+  chips.setAttribute('aria-label', 'Show');
+  const buttons = new Map();
+  for (const view of VIEWS) {
+    const chip = el('button', 'chip', `${view.label} (${counts[view.id]})`);
+    chip.type = 'button';
+    chip.dataset.view = view.id;
+    chip.addEventListener('click', () => show(view));
+    buttons.set(view.id, chip);
+    chips.append(chip);
+  }
+  const status = el('p', 'crawl-count');
+  status.setAttribute('role', 'status');
+  const none = el('p', 'crawl-none', 'No companies in this view.');
+  const list = el('ul', 'crawl-list');
+  function show(view) {
+    const shown = companies.filter((c) => view.has(c.status));
+    for (const [id, chip] of buttons) chip.setAttribute('aria-pressed', String(id === view.id));
+    list.replaceChildren(...shown.map(crawlCard));
+    list.hidden = shown.length === 0;
+    none.hidden = shown.length > 0;
+    status.textContent = `Showing ${shown.length} of ${plural(companies.length, 'company', 'companies')}`;
+  }
+  root.append(chips, status, none, list);
+  show(VIEWS[0]);
+  return root;
+}
+
+/* One call, one row per company, counted in the database (PostgREST stops at 1000 rows). Resolves with the rows, or
+   with null when the token was refused. A null answer is no rows. */
+async function crawlRows() {
+  const { data, error, status } = await client.rpc('admin_crawl_health');
+  if (status === HTTP_UNAUTHORIZED) return null;
+  if (error) throw error;
+  if (data !== null && !Array.isArray(data)) throw new TypeError('admin_crawl_health did not return a list');
+  return data ?? [];
+}
+
+async function loadCrawl(box) {
+  let rows = await crawlRows();
+  if (rows === null) {
+    /* A 401: run the admin check again, as the page does, which renews the token or ends the session. */
+    const result = await verdict();
+    if (result !== 'ready') {
+      settle(result);
+      return true; /* the page is no longer ready: nothing to say in this area */
+    }
+    rows = await crawlRows();
+    if (rows === null) throw new Error('admin_crawl_health was refused twice');
+  }
+  if (rows.length === 0) return false;
+  box.replaceChildren(crawlView(rows));
+  return true;
+}
+
+/* The answer of the check, or 'check-failed' when it takes longer than the page waits. */
+async function verdict() {
+  const silence = new Promise((resolve) => {
+    setTimeout(resolve, CHECK_TIMEOUT_MS, 'check-failed');
+  });
+  return Promise.race([check(true), silence]);
+}
+
+/* Shows what the check said. A session the service refuses is cleared, no use to the dashboard either. */
+function settle(result) {
+  if (result !== 'expired') {
+    setState(result);
+    return;
+  }
+  storage.removeItem(STORAGE_KEY);
+  setState('signed-out');
+  $('adminExpired').textContent = MESSAGES.expired; /* after the line is shown, so a screen reader announces it */
+}
+
 async function start() {
   if (typeof globalThis.supabase?.createClient !== 'function') {
     setState('check-failed');
@@ -177,17 +346,7 @@ async function start() {
     /* Only a link to an area changes the area: the skip link ("#main") leaves the page where it is. */
     if (main.dataset.state === 'ready' && isArea(location.hash.slice(1))) showArea(areaName(), true);
   });
-  const silence = new Promise((resolve) => {
-    setTimeout(resolve, CHECK_TIMEOUT_MS, 'check-failed');
-  });
-  const result = await Promise.race([check(true), silence]);
-  if (result !== 'expired') {
-    setState(result);
-    return;
-  }
-  storage.removeItem(STORAGE_KEY); /* a session the service refuses is no use to the dashboard either */
-  setState('signed-out');
-  $('adminExpired').textContent = MESSAGES.expired; /* after the line is shown, so a screen reader announces it */
+  settle(await verdict());
 }
 
 await start();

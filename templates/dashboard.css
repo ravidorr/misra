@@ -1084,3 +1084,100 @@ html:has(.sheet:modal) {
 .admin-state p {
   margin: 0;
 }
+
+/* The Crawl area (PLAN_2.md step 2.2): a card per company in the look of the coverage gap card, wider and with its
+   values in a list. The box that holds it is a grid that packs its children to the start: this one fills the row. */
+.crawl {
+  display: grid;
+  justify-self: stretch;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.crawl p {
+  margin: 0;
+}
+
+.crawl-headline {
+  font-size: var(--text-lg);
+  font-weight: 800;
+}
+
+.crawl-note,
+.crawl-count,
+.crawl-none {
+  color: var(--muted);
+  font-size: var(--text-sm);
+}
+
+.crawl-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(19rem, 100%), 1fr));
+  gap: var(--space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.crawl-list[hidden],
+.crawl-none[hidden] {
+  display: none;
+}
+
+.crawl-card {
+  align-items: stretch;
+  justify-content: flex-start;
+  gap: var(--space-3);
+  min-width: 0;
+  padding: var(--space-3);
+}
+
+.crawl-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.crawl-name {
+  min-width: 0;
+  margin: 0;
+  font-size: var(--text-md);
+  font-weight: 800;
+  overflow-wrap: anywhere;
+}
+
+.crawl-head .pill {
+  flex: none;
+}
+
+.pill-warn {
+  background: var(--warn-bg);
+  color: var(--ink);
+}
+
+.crawl-facts {
+  display: grid;
+  gap: var(--space-1);
+  margin: 0;
+}
+
+.crawl-fact {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  column-gap: var(--space-3);
+  font-size: var(--text-sm);
+}
+
+.crawl-fact dt {
+  color: var(--muted);
+}
+
+.crawl-fact dd {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+  text-align: end;
+}

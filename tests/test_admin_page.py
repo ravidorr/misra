@@ -28,9 +28,10 @@ from tests.test_sign_in import AXE_RUN, STORAGE_KEY
 
 REPO = Path(__file__).resolve().parents[1]
 RPC = f"{build_dashboard.SUPABASE_URL}/rest/v1/rpc/is_admin"
+HEALTH = f"{build_dashboard.SUPABASE_URL}/rest/v1/rpc/admin_crawl_health"
 DESKTOP = {"width": 1280, "height": 900}
 AREAS = ["Crawl", "Companies", "Alerts", "Log"]
-EMPTY = "Nothing here yet."
+CRAWL_EMPTY = "No crawl results yet."
 STATES = ["signed-out", "not-admin", "check-failed", "ready"]
 WIDE_MIN = 761  # wider than the 760px reading width of the other pages
 WIDE_MAX = 1000
@@ -51,11 +52,29 @@ class FailingAuth(AuthBackend):
 
 
 class Backend:
-    """The fake `is_admin()` and sign-in service. `answer` is one of: admin, not_admin, unauthorized (401 always),
-    unauthorized_once (401, then true), down (no answer) or broken (503). Every request to the project is recorded."""
+    """The fake `is_admin()`, `admin_crawl_health()` and sign-in service. `answer` is one of: admin, not_admin,
+    unauthorized (401 always), unauthorized_once (401, then true), down (no answer) or broken (503). `health` is the
+    list of rows the crawl function returns (or None for a JSON null); `health_answer` is rows, unauthorized (401
+    always), unauthorized_once, broken_once (503, then rows), broken (503 always) or not_a_list. `recheck_answer`, when
+    set, replaces `answer` for the checks made after the crawl function was refused. Every request to the project is
+    recorded."""
 
-    def __init__(self, answer: str = "admin", auth: AuthBackend | None = None) -> None:
+    def __init__(
+        self,
+        answer: str = "admin",
+        auth: AuthBackend | None = None,
+        *,
+        health: list[dict[str, object]] | None = None,
+        health_answer: str = "rows",
+        recheck_answer: str | None = None,
+    ) -> None:
         self.answer = answer
+        self.health = [] if health is None else health
+        self.health_answer = health_answer
+        self.recheck_answer = recheck_answer
+        self.health_asked = 0
+        self.health_gate: asyncio.Event | None = None
+        self.health_bodies: list[str | None] = []
         self.auth = auth or AuthBackend()
         self.requests: list[tuple[str, str]] = []
         self.asked = 0
@@ -70,8 +89,9 @@ class Backend:
         self.asked += 1
         if self.gate is not None:
             await self.gate.wait()
-        match self.answer:
-            case "admin" | "unauthorized_once" if self.answer == "admin" or self.asked > 1:
+        answer = self.recheck_answer if self.recheck_answer and self.health_asked > 0 else self.answer
+        match answer:
+            case "admin" | "unauthorized_once" if answer == "admin" or self.asked > 1:
                 await route.fulfill(headers=CORS, body="true", content_type="application/json")
             case "not_admin":
                 await route.fulfill(headers=CORS, body="false", content_type="application/json")
@@ -83,6 +103,31 @@ class Backend:
                 await route.abort()
             case _:
                 await route.fulfill(status=503, headers=CORS, body="unavailable")
+
+    async def crawl_health(self, route: Route) -> None:
+        request = route.request
+        if request.method == "OPTIONS":
+            await route.fulfill(status=204, headers=CORS)
+            return
+        self.requests.append((request.method, urlparse(request.url).path))
+        self.health_bodies.append(request.post_data)
+        self.health_asked += 1
+        if self.health_gate is not None:
+            await self.health_gate.wait()
+        refused = self.health_answer == "unauthorized" or (
+            self.health_answer == "unauthorized_once" and self.health_asked == 1
+        )
+        broken = self.health_answer == "broken" or (self.health_answer == "broken_once" and self.health_asked == 1)
+        if refused:
+            await route.fulfill(
+                status=401, headers=CORS, body='{"message":"JWT expired"}', content_type="application/json"
+            )
+        elif broken:
+            await route.fulfill(status=503, headers=CORS, body="unavailable")
+        elif self.health_answer == "not_a_list":
+            await route.fulfill(headers=CORS, body='{"rows": 1}', content_type="application/json")
+        else:
+            await route.fulfill(headers=CORS, body=json.dumps(self.health), content_type="application/json")
 
     async def auth_route(self, route: Route) -> None:
         if route.request.method != "OPTIONS":
@@ -118,6 +163,7 @@ async def open_admin(  # noqa: PLR0913  (each choice is one thing a test varies)
 
     await page.route(f"{ORIGIN}/**", files)
     await page.route(RPC, backend.rpc)
+    await page.route(HEALTH, backend.crawl_health)
     await page.route(f"{build_dashboard.SUPABASE_URL}/auth/v1/**", backend.auth_route)
     if signed_in:
         session = backend.auth.session()
@@ -318,11 +364,12 @@ async def test_it_saves_a_renewed_session_without_the_providers_name_and_photo(p
 # ---- the areas ----
 
 
-async def test_ready_shows_four_empty_areas_and_loads_each_on_its_first_show(page: Page, site: Path) -> None:
+async def test_ready_shows_the_crawl_area_empty_and_loads_each_area_on_its_first_show(page: Page, site: Path) -> None:
     backend, problems = await open_admin(page, site)
     assert problems == []
     assert await state(page) == "ready"
-    assert backend.requests == [("POST", "/rest/v1/rpc/is_admin")]  # no data call beyond the check
+    # the check, then the Crawl area's one call; the other areas ask for nothing
+    assert backend.requests == [("POST", "/rest/v1/rpc/is_admin"), ("POST", "/rest/v1/rpc/admin_crawl_health")]
     nav = page.get_by_role("navigation", name="Admin")
     assert await nav.get_by_role("link").all_inner_texts() == AREAS
     assert [await link.get_attribute("href") for link in await nav.get_by_role("link").all()] == [
@@ -338,7 +385,7 @@ async def test_ready_shows_four_empty_areas_and_loads_each_on_its_first_show(pag
     assert await page.title() == "Crawl - Admin"
     await expect(nav.get_by_role("link", name="Crawl")).to_have_attribute("aria-current", "page")
     assert await nav.locator("[aria-current]").count() == 1
-    assert EMPTY in await visible_text(page)
+    assert CRAWL_EMPTY in await visible_text(page)
     await expect(page.get_by_role("button", name="Sign out")).to_be_visible()
 
 
