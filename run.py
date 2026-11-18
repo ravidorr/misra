@@ -2,6 +2,7 @@
 Supabase), mark new/closed. `--gaps` logs the coverage gaps."""
 
 import datetime
+import re
 import sqlite3
 import sys
 import time
@@ -106,6 +107,14 @@ def robots_skipped(co: dict[str, Any]) -> bool:
     """Was this company left uncrawled because its host's robots.txt does not allow it? That is a decision, not a
     failure: no retry, no failure count, no alert."""
     return WHY.get(co["slug"], "").startswith(ROBOTS_NOTE)
+
+
+REASON_MAX = 150
+
+
+def short_reason(why: str) -> str:
+    """A failure reason fit for the public log: no URL query strings, one line, 150 characters at most."""
+    return " ".join(re.sub(r"(https?://[^\s?#]*)[?#]\S*", r"\1", why, flags=re.IGNORECASE).split())[:REASON_MAX]
 
 
 def fetch(co: dict[str, Any]) -> list[dict[str, Any]] | None:
@@ -438,11 +447,11 @@ def main() -> None:  # noqa: PLR0915
             f"robots.txt would have refused {len(common.ROBOTS_WOULD_BLOCK)} hosts {sorted(common.ROBOTS_WOULD_BLOCK)}"
         )
     for co, jobs in results:
-        if co["ats"] == "browser":
-            state = (
-                "SKIPPED" if co["name"] in skipped else "FAILED" if jobs is None or co["name"] in failed else len(jobs)
-            )
-            print(f"  browser {co['name']:15s} {state}" + (f"  <- {WHY[co['slug']]}" if co["slug"] in WHY else ""))
+        failing = co["name"] in skipped or jobs is None or co["name"] in failed
+        if co["ats"] == "browser" or failing:  # every failure says why, not only the browser ones
+            state = "SKIPPED" if co["name"] in skipped else "FAILED" if failing else len(jobs or [])
+            why = WHY.get(co["slug"]) or ("request failed" if failing else "")
+            print(f"  {co['ats']} {co['name']:15s} {state}" + (f"  <- {short_reason(why)}" if why else ""))
 
 
 if __name__ == "__main__":

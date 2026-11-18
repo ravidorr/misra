@@ -94,6 +94,8 @@ def test_main_full_cycle(
     assert "browser Br1" in out
     assert "<- empty page" in out
     assert "FAILED  <- blocked" in out
+    assert "  fake Failing         FAILED  <- request failed" in out  # an API company says why too
+    assert "fake New" not in out  # and only the failures of those are listed
 
     check = sqlite3.connect(run.DB)
     rows = {(r[0], r[1]): r[2:] for r in check.execute("SELECT company,job_id,status,reported,title FROM jobs")}
@@ -700,3 +702,14 @@ def test_a_browser_company_whose_crawl_failed_gets_no_job_pages_and_the_others_d
     monkeypatch.setitem(adapters.DETAILS, "browser", lambda _slug, j: ("text", {}))
     run.main()
     assert list(descriptions.read_work_file()) == [("Up", "1")]
+
+
+def test_short_reason_strips_url_queries_and_trims() -> None:
+    why = "HTTP 403 for https://x.example/a/b?token=SECRET#frag and 'https://y.example/p?k=v'\n" + "z" * 300
+    out = run.short_reason(why)
+    assert "SECRET" not in out
+    assert "k=v" not in out
+    assert "https://x.example/a/b and 'https://y.example/p" in out
+    assert "TOKEN" not in run.short_reason("HTTPS://a.com/x?q=a)b&t=TOKEN")
+    assert "\n" not in out
+    assert len(out) == run.REASON_MAX
