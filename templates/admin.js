@@ -40,6 +40,7 @@ function setState(state) {
 
 /* A word of the area's own: its `notice` or its plain text, in the area's box. */
 function paint(box, state, text, retry) {
+  const section = box.parentElement;
   box.replaceChildren();
   if (state === 'loading') box.setAttribute('role', 'status');
   else box.removeAttribute('role');
@@ -53,7 +54,10 @@ function paint(box, state, text, retry) {
     again.type = 'button';
     again.className = 'btn btn-pill';
     again.textContent = MESSAGES.retry;
-    again.addEventListener('click', retry);
+    again.addEventListener('click', async () => {
+      await retry();
+      $(`${section.id}Title`).focus(); /* the pressed button is gone: the focus goes to the area's heading */
+    });
     box.append(again);
   }
 }
@@ -80,9 +84,13 @@ async function loadArea(name) {
   }
 }
 
+function isArea(name) {
+  return Object.hasOwn(AREAS, name);
+}
+
 function areaName() {
   const name = location.hash.slice(1);
-  return name in AREAS ? name : FIRST_AREA;
+  return isArea(name) ? name : FIRST_AREA;
 }
 
 /* Shows one area and hides the rest. A change the visitor made moves the focus to the area's heading, so a keyboard or
@@ -157,7 +165,8 @@ async function start() {
     setState('signed-out');
   });
   globalThis.addEventListener('hashchange', () => {
-    if (main.dataset.state === 'ready') showArea(areaName(), true);
+    /* Only a link to an area changes the area: the skip link ("#main") leaves the page where it is. */
+    if (main.dataset.state === 'ready' && isArea(location.hash.slice(1))) showArea(areaName(), true);
   });
   const result = await check(true);
   if (result !== 'expired') {

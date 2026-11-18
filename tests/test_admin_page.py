@@ -152,6 +152,8 @@ def test_the_page_is_built_noindex_under_the_csp_with_its_scripts_hashed(site: P
     for name in ("admin.js", "supabase.js", "theme.js", "dashboard.css"):
         assert re.search(rf'(src|href)="{re.escape(name)}" integrity="sha384-[A-Za-z0-9+/]+=*"', html), name
     assert (site / "session.js").is_file()
+    # the module both pages import is hashed too: the integrity of a script does not cover what it imports
+    assert re.search(r'<link rel="modulepreload" href="session.js" integrity="sha384-[A-Za-z0-9+/]+=*">', html)
     assert "__SUPABASE" not in (site / "admin.js").read_text(encoding="utf-8")
 
 
@@ -347,6 +349,15 @@ async def test_an_unknown_hash_shows_the_first_area(page: Page, site: Path) -> N
     await open_admin(page, site, hash_="#nothing")
     await expect(page.get_by_role("heading", name="Crawl", level=2)).to_be_visible()
     assert await page.title() == "Crawl - Admin"
+
+
+async def test_the_skip_link_and_a_strange_hash_leave_the_area_alone(page: Page, site: Path) -> None:
+    await open_admin(page, site, hash_="#companies")
+    await page.evaluate("location.hash = 'main'")
+    await page.evaluate("location.hash = 'constructor'")
+    await expect(page.get_by_role("heading", name="Companies", level=2)).to_be_visible()
+    assert await page.title() == "Companies - Admin"
+    assert await page.evaluate("document.activeElement === document.body")
 
 
 async def test_the_first_show_does_not_take_the_focus(page: Page, site: Path) -> None:
