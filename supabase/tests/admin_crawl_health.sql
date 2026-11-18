@@ -100,10 +100,28 @@ insert into public.crawl_log (ts, company, ats, ok, n_jobs, note) values
   (pg_temp.ts(2), 'Skip Between Co', 'lever', 0, 0, 'request failed'),
   (pg_temp.ts(1), 'Skip Between Co', 'lever', 0, 0, 'robots.txt does not allow it'),
   (pg_temp.ts(0), 'Skip Between Co', 'lever', 0, 0, 'request failed'),
-  -- never good, and a note that only resembles a prefix
-  (pg_temp.ts(1), 'Never Co', 'lever', 0, 0, 'robots.txt does not allow it'),
-  (pg_temp.ts(1, '04'), 'Never Co', 'lever', 0, 0, 'the sharp drop was not held'),
+  -- never good
+  (pg_temp.ts(1), 'Never Co', 'lever', 0, 0, 'request failed'),
   (pg_temp.ts(0), 'Never Co', 'lever', 0, 0, 'request failed'),
+  -- notes that only CONTAIN a prefix are neither held nor skipped, and the company is failing
+  (pg_temp.ts(1), 'Contains Co', 'lever', 0, 0, 'request failed'),
+  (pg_temp.ts(0), 'Contains Co', 'lever', 0, 0, 'note: sharp drop, robots.txt does not allow it'),
+  -- the 7 day edge of the stale cut (listed) and the 8 day one (not listed, until the newest crawl day moves back)
+  (pg_temp.ts(0), 'Fresh Co', 'lever', 1, 1, ''),
+  (pg_temp.ts(7), 'Edge 7 Co', 'lever', 0, 0, 'request failed'),
+  (pg_temp.ts(8), 'Edge 8 Co', 'lever', 0, 0, 'request failed'),
+  -- fetched 30 days ago: the window is 30 to 37 days, the newest row in it wins, 29 and 38 are outside
+  (pg_temp.ts(38), 'Window Co', 'lever', 1, 6, ''),
+  (pg_temp.ts(37), 'Window Co', 'lever', 1, 5, ''),
+  (pg_temp.ts(30, '01'), 'Window Co', 'lever', 1, 1, ''),
+  (pg_temp.ts(30, '02'), 'Window Co', 'lever', 1, 2, ''),
+  (pg_temp.ts(29), 'Window Co', 'lever', 1, 9, ''),
+  (pg_temp.ts(0), 'Window Co', 'lever', 1, 2, ''),
+  (pg_temp.ts(37), 'Window 37 Co', 'lever', 1, 5, ''),
+  (pg_temp.ts(0), 'Window 37 Co', 'lever', 1, 2, ''),
+  (pg_temp.ts(38), 'Outside Co', 'lever', 1, 6, ''),
+  (pg_temp.ts(29), 'Outside Co', 'lever', 1, 9, ''),
+  (pg_temp.ts(0), 'Outside Co', 'lever', 1, 2, ''),
   -- a company not crawled for 10 days drops out; a row with no company is ignored
   (pg_temp.ts(10), 'Stale Co', 'lever', 0, 0, 'request failed'),
   (pg_temp.ts(0), null, 'lever', 0, 0, 'request failed');
@@ -159,7 +177,7 @@ end $$;
 do $$
 declare sql text;
 begin
-  assert pg_temp.count_as('authenticated', 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', 'select count(*) from public.crawl_log') = 28,
+  assert pg_temp.count_as('authenticated', 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', 'select count(*) from public.crawl_log') = 43,
     'the admin does not read the whole crawl log';
   assert pg_temp.count_as('authenticated', 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', 'select count(*) from public.jobs') = 4,
     'the admin does not read closed jobs';
@@ -274,22 +292,47 @@ begin
   assert (r->>'streak')::int = 3 and (r->>'failing')::boolean and not (r->>'robots_skipped')::boolean, 'skip between: ' || r::text;
 end $$;
 
--- Never good: no last good crawl. A note that only contains a prefix does not count as held; one that starts with the
--- robots prefix on the earlier day is left out of the streak.
+-- Never good: no last good crawl.
 do $$
 declare r jsonb := pg_temp.health('Never Co');
 begin
   assert r->'last_good' = 'null'::jsonb, 'never good';
-  assert (r->>'failing')::boolean and not (r->>'held')::boolean, 'never: ' || r::text;
-  assert (r->>'streak')::int = 2, 'never streak: ' || (r->>'streak');
+  assert (r->>'failing')::boolean and not (r->>'held')::boolean and (r->>'streak')::int = 2, 'never: ' || r::text;
+end $$;
+
+-- A note that contains a prefix without starting with it is neither held nor skipped.
+do $$
+declare r jsonb := pg_temp.health('Contains Co');
+begin
+  assert (r->>'failing')::boolean and not (r->>'held')::boolean and not (r->>'robots_skipped')::boolean, 'contains: ' || r::text;
+  assert (r->>'streak')::int = 2, 'contains streak';
+end $$;
+
+-- Stale edge and the 30 day window.
+do $$
+begin
+  assert pg_temp.health('Edge 7 Co') is not null, '7 days is listed';
+  assert pg_temp.health('Edge 8 Co') is null, '8 days is not listed';
+  assert (pg_temp.health('Window Co')->>'fetched_30d_ago')::int = 2, 'the newest row of the window wins';
+  assert (pg_temp.health('Window 37 Co')->>'fetched_30d_ago')::int = 5, '37 days is inside the window';
+  assert pg_temp.health('Outside Co')->'fetched_30d_ago' = 'null'::jsonb, '29 and 38 days are outside the window';
 end $$;
 
 -- The service role does not need the function; the owner and the service role still read the whole log directly.
 do $$
 begin
   perform pg_temp.act_as('service_role', null);
-  assert (select count(*) from public.crawl_log) = 28, 'the service role cannot read the log';
+  assert (select count(*) from public.crawl_log) = 43, 'the service role cannot read the log';
   reset role;
+end $$;
+
+-- The stale cut counts from the newest crawl day, not from today: with today's runs gone the newest day is yesterday, so
+-- the company of 8 days ago is 7 days before it and is listed.
+delete from public.crawl_log where left(ts, 10) = to_char(current_date, 'yyyy-mm-dd');
+do $$
+begin
+  assert pg_temp.health('Edge 8 Co') is not null, 'the stale cut counts from today, not from the newest crawl day';
+  assert pg_temp.health('Edge 7 Co') is not null, 'the 7 day company dropped out';
 end $$;
 
 -- Removing the admin closes everything again.
