@@ -335,6 +335,33 @@ const SEGMENTS = {
   biz_software: 'Business software',
   cyber_infra: 'Cyber and infrastructure',
 };
+/* The job feeds a pin may name: the keys of adapters.ADAPTERS plus `browser` (run.py routes it to the browser), as the
+   check `companies_ats_known` of the migration lists them; tests/test_admin_companies.py keeps all three equal. */
+const PIN_ATS = [
+  'greenhouse_url', 'greenhouse', 'lever', 'ashby', 'workable', 'smartrecruiters', 'comeet', 'workday', 'jazzhr',
+  'bamboohr', 'oraclehcm', 'amazon', 'phenom', 'comeet_page', 'browser',
+];
+/* The form of the slug, only where CONTRIBUTING.md ("Adding a company") or the adapter's own text documents it. */
+const PIN_HINTS = {
+  comeet: '<name>/<uid>, from comeet.com/jobs/<name>/<uid>.',
+  comeet_page: 'The address of the career page, starting with https://. Its job links look like /co/<place>/<uid>/<title>.',
+  workday: 'tenant/wdN/site, from <tenant>.<wdN>.myworkdayjobs.com/<site>. Israel only.',
+  jazzhr: 'The <slug> of <slug>.applytojob.com.',
+  bamboohr: 'The <slug> of <slug>.bamboohr.com.',
+  oraclehcm: 'host/site, from the public requisition search. Israel only.',
+  amazon: 'ISR.',
+  phenom: 'host/country/lang, from the search widget, filtered to Israel.',
+  browser: 'The address of the career page, starting with https://, for example an Eightfold ...careers?location=Israel address.',
+};
+const PIN_ADDRESS = ['browser', 'comeet_page']; /* the slug of these is a career page address */
+const PIN_SLUG_MAX = 300;
+const PIN_SLUG_CHARS = /^[A-Za-z0-9._~:/?&=#%+@-]+$/;
+const PIN_WORDS = {
+  pair: ['pinAts', 'Choose the job feed and write its slug, or leave both empty.'],
+  slug: ['pinSlug', 'The slug may hold only letters, digits and . _ ~ : / ? & = # % + @ -, with no space.'],
+  long: ['pinSlug', 'The slug is too long.'],
+  address: ['pinSlug', 'For this feed the slug is the career page address, starting with https://.'],
+};
 const COMPANY_STATES = { crawled: 'Crawled', card: 'On the card', pending: 'Not crawled yet', excluded: 'Excluded' };
 const COMPANY_VIEWS = [{ id: 'all', label: 'All' }, ...Object.entries(COMPANY_STATES).map(([id, label]) => ({ id, label }))];
 const EXCLUDED_BLANKS = {
@@ -366,7 +393,7 @@ const CONSTRAINTS = {
   companies_gap_reason: ['gapReason', 'Choose why it is not crawled.'],
   companies_careers_https: ['', 'The career page address must start with https://.'],
   companies_links_https: ['', 'A career page address must start with https://.'],
-  companies_ats_known: ['', 'The job feed is not one the crawler knows.'],
+  companies_ats_known: ['pinAts', 'The job feed is not one the crawler knows.'],
   companies_excluded_keys: ['', 'An exclusion holds a reason and a date, and nothing else.'],
   companies_excluded_reason: ['reason', 'Write the reason.'],
   companies_excluded_date: ['date', 'Enter the date as year-month-day, for example 2026-11-18.'],
@@ -375,7 +402,7 @@ const CONSTRAINTS = {
 };
 /* The inputs each dialog can mark, by the field names of CONSTRAINTS. */
 const FIELD_IDS = {
-  editor: { name: 'cName', domain: 'cDomain', gapReason: 'cReason' },
+  editor: { name: 'cName', domain: 'cDomain', gapReason: 'cReason', pinAts: 'cPinAts', pinSlug: 'cPinSlug' },
   confirm: { name: 'xName', reason: 'xReason', date: 'xDate' },
 };
 
@@ -972,6 +999,19 @@ function syncEditor() {
   const crawl = $('cCrawl').checked;
   $('cardFields').hidden = crawl;
   $('timingNote').hidden = !(crawl && (editor.mode !== 'edit' || !editor.row.crawl));
+  $('segmentGroup').hidden = unlocking(); /* a crawled record has no segment: the write clears it */
+  $('pinGroup').hidden = !(crawl && editor.mode === 'edit');
+  $('pinFields').hidden = $('cUnpin').checked;
+  showPinHint();
+}
+
+/* A company that is on the coverage card and is being set to crawl. */
+function unlocking() {
+  return editor.mode === 'edit' && !editor.row.crawl && $('cCrawl').checked;
+}
+
+function showPinHint() {
+  $('cPinHint').textContent = PIN_HINTS[$('cPinAts').value] ?? 'Choose the feed first.';
 }
 
 function openEditor(row, back) {
@@ -1000,6 +1040,14 @@ function openEditor(row, back) {
   $('cLinkGlobal').value = row?.links?.global ?? '';
   $('requeueRow').hidden = mode !== 'edit' || !row.crawl;
   $('cRequeue').checked = false;
+  const pinned = mode === 'edit' && row.source === 'override';
+  const feeds = PIN_ATS.map((ats) => [ats, ats]);
+  if (pinned && row.ats && !PIN_ATS.includes(row.ats)) feeds.push([row.ats, row.ats]); /* keep a value this page does not know */
+  fillSelect($('cPinAts'), feeds, 'No feed pinned');
+  $('cPinAts').value = pinned ? (row.ats ?? '') : '';
+  $('cPinSlug').value = pinned ? (row.slug ?? '') : '';
+  $('unpinRow').hidden = !pinned;
+  $('cUnpin').checked = false;
   const facts = $('discovered');
   facts.replaceChildren();
   const shown =
@@ -1020,6 +1068,25 @@ function openEditor(row, back) {
   syncEditor();
   editorDialog.showModal();
   (mode === 'add' ? $('cName') : $('editorTitle')).focus();
+}
+
+/* What the pin part of the editor asks for: { fields } to add to the record (null when nothing changes), or { problem }.
+   A pin is the feed by hand: source override, the feed, its slug, and an empty status, so the discover-companies
+   workflow checks it. The page never writes any other status. */
+function pinChange() {
+  if ($('cUnpin').checked) return { fields: { source: '', ats: '', slug: '', status: '' } };
+  const ats = $('cPinAts').value;
+  const slug = $('cPinSlug').value.trim();
+  if (!ats && !slug) return { fields: null };
+  let words = null;
+  if (!ats || !slug) words = PIN_WORDS.pair;
+  else if (slug.length > PIN_SLUG_MAX) words = PIN_WORDS.long;
+  else if (!PIN_SLUG_CHARS.test(slug)) words = PIN_WORDS.slug;
+  else if (PIN_ADDRESS.includes(ats) && !slug.startsWith('https://')) words = PIN_WORDS.address;
+  if (words) return { problem: { field: words[0], text: words[1] } };
+  const { row } = editor;
+  if (row.source === 'override' && row.ats === ats && row.slug === slug) return { fields: null }; /* already pinned so */
+  return { fields: { source: 'override', ats, slug, status: '' } };
 }
 
 /* The record the form describes, and the fields of it that stay as the database holds them. */
@@ -1043,6 +1110,7 @@ function readEditor() {
      status puts it in the queue of the discover-companies workflow. */
   if (mode === 'edit') {
     if (crawl && ($('cRequeue').checked || !row.crawl)) record.status = '';
+    if (unlocking()) record.segment = null;
     return record;
   }
   const fresh = { ...record, careers_url: '', ats: '', slug: '', source: '', status: '' };
@@ -1054,6 +1122,14 @@ async function saveEditor(event) {
   if (editor.busy) return;
   const record = readEditor();
   const { mode, row } = editor;
+  if (mode === 'edit' && record.crawl) {
+    const pin = pinChange();
+    if (pin.problem) {
+      showProblem('editor', pin.problem);
+      return;
+    }
+    Object.assign(record, pin.fields);
+  }
   if ((mode === 'edit' && row.crawl && !record.crawl) || mode === 'include') {
     editor.values = record;
     openConfirm(mode === 'include' ? 'include' : 'leave', row);
@@ -1249,6 +1325,8 @@ function wireCompanyDialogs() {
   $('confirmForm').addEventListener('submit', runConfirmed);
   for (const radio of document.querySelectorAll('input[name="cState"]')) radio.addEventListener('change', syncEditor);
   $('xName').addEventListener('change', recount);
+  $('cPinAts').addEventListener('change', showPinHint);
+  $('cUnpin').addEventListener('change', syncEditor);
   const closes = [
     [editorDialog, editor, ['editorClose', 'editorCancel']],
     [confirmDialog, asking, ['confirmClose', 'confirmCancel']],

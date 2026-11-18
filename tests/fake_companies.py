@@ -11,6 +11,7 @@ from urllib.parse import parse_qs, urlparse
 
 from playwright.async_api import Route
 
+import adapters
 import build_dashboard
 from tests.test_dashboard_page import CORS
 
@@ -33,6 +34,8 @@ def violated(record: dict[str, Any], others: list[dict[str, Any]], excluded_coun
         return 400, "23514", "companies_exactly_one_status"
     if gap is not None and (set(gap) - {"reason", "note"} or gap.get("reason") not in build_dashboard.REASONS):
         return 400, "23514", "companies_gap_reason"
+    if record.get("ats") not in (None, "", *adapters.ADAPTERS, "browser"):
+        return 400, "23514", "companies_ats_known"
     careers = record.get("careers_url")
     if careers and not careers.startswith("https://"):
         return 400, "23514", "companies_careers_https"

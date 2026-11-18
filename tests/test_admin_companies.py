@@ -15,6 +15,7 @@ from typing import Any
 import pytest
 from playwright.async_api import Locator, Page, expect
 
+import adapters
 import build_dashboard
 from tests.fake_companies import SECRET
 from tests.test_admin_page import (
@@ -88,6 +89,27 @@ def test_the_gap_reasons_of_the_page_are_the_keys_and_labels_of_REASONS() -> Non
     block = ADMIN_JS[ADMIN_JS.index("const GAP_REASONS = {") : ADMIN_JS.index("const SEGMENTS")]
     found = dict(re.findall(r"^  (\w+): '([^']+)',$", block, re.MULTILINE))
     assert found == build_dashboard.REASONS
+
+
+def quoted_names(block: str) -> list[str]:
+    return re.findall(r"'(\w+)'", block)
+
+
+def test_the_feeds_a_pin_can_name_are_the_adapters_plus_browser_and_the_migrations_check() -> None:
+    block = ADMIN_JS[ADMIN_JS.index("const PIN_ATS = [") : ADMIN_JS.index("/* The form of the slug")]
+    page_list = quoted_names(block[block.index("[") : block.index("];")])
+    sql = MIGRATION.read_text(encoding="utf-8")
+    check = sql[sql.index("ats = '' or ats in (") : sql.index("constraint companies_excluded_keys")]
+    assert page_list == [*adapters.ADAPTERS, "browser"]
+    assert page_list == quoted_names(check.split("ats in (", 1)[1])
+
+
+def test_a_slug_hint_exists_only_for_a_feed_the_page_lists() -> None:
+    block = ADMIN_JS[ADMIN_JS.index("const PIN_HINTS = {") : ADMIN_JS.index("const PIN_ADDRESS")]
+    hinted = set(re.findall(r"^  (\w+): '", block, re.MULTILINE))
+    listed = {*adapters.ADAPTERS, "browser"}
+    assert hinted <= listed
+    assert {"workday", "oraclehcm", "browser"} <= hinted  # the formats CONTRIBUTING.md documents
 
 
 def test_the_fixture_is_valid_and_not_live_data() -> None:
@@ -767,7 +789,7 @@ async def test_the_keyboard_reaches_every_control_of_the_editor_in_order_and_sta
 
 @pytest.mark.parametrize("scheme", ["light", "dark"])
 @pytest.mark.parametrize("size", [PHONE, DESKTOP], ids=["phone", "desktop"])
-@pytest.mark.parametrize("which", ["list", "editor", "card-editor", "exclude", "remove", "add"])
+@pytest.mark.parametrize("which", ["list", "editor", "card-editor", "pin", "unlock", "exclude", "remove", "add"])
 async def test_the_area_and_its_dialogs_are_accessible_fit_the_phone_and_have_44px_targets(
     page: Page, site: Path, which: str, size: dict[str, int], scheme: str
 ) -> None:
@@ -779,6 +801,15 @@ async def test_the_area_and_its_dialogs_are_accessible_fit_the_phone_and_have_44
         await open_editor(page, "Acme Robotics")
     elif which == "card-editor":
         await open_editor(page, "Phi Mobile")
+    elif which == "pin":
+        await open_editor(page, "Gamma Cloud")
+        await pin_slug(page).fill("a b")
+        await save(page)
+        await expect(page.locator("#cPinSlugError")).to_be_visible()
+    elif which == "unlock":
+        await open_editor(page, "Phi Mobile")
+        await page.get_by_role("radio", name="Crawl it").check()
+        await pin_ats(page).select_option("oraclehcm")
     elif which == "add":
         await page.get_by_role("button", name="Add a company").click()
     elif which == "exclude":
@@ -801,7 +832,7 @@ async def test_the_area_and_its_dialogs_are_accessible_fit_the_phone_and_have_44
         assert box
         assert box["height"] >= TAP_MIN, await target.inner_text()
         assert box["width"] >= TAP_MIN, await target.inner_text()
-    if which in ("editor", "card-editor", "add"):
+    if which in ("editor", "card-editor", "pin", "unlock", "add"):
         for control in await page.locator("dialog[open] input:visible, dialog[open] select:visible").all():
             box = await control.bounding_box()
             assert box
@@ -855,3 +886,202 @@ async def test_a_change_made_here_shows_in_the_log_when_it_is_next_opened(page: 
     await page.get_by_role("link", name="Log").click()
     await expect(page.locator("#log .log-what")).to_have_text(["Company changed: Acme"])
     assert backend.log_asked == 2  # noqa: PLR2004  (the first show, and the show after the change)
+
+
+# ---- pinning the job feed ----
+
+
+def pin_ats(page: Page) -> Locator:
+    return page.locator("#cPinAts")
+
+
+def pin_slug(page: Page) -> Locator:
+    return page.locator("#cPinSlug")
+
+
+async def save(page: Page) -> None:
+    await page.get_by_role("button", name="Save", exact=True).click()
+
+
+def only_empty_status(backend: Backend) -> None:
+    """The page never writes a status other than empty, whatever the admin chose."""
+    for _method, body, _query in writes(backend):
+        assert body is None or body.get("status", "") == "", body
+
+
+async def test_a_crawled_company_is_pinned_with_the_feed_by_hand_and_its_status_emptied(page: Page, site: Path) -> None:
+    backend = await open_companies(page, site)
+    await open_editor(page, "Acme Robotics")
+    await expect(page.locator("#pinGroup")).to_be_visible()
+    await expect(pin_ats(page)).to_have_value("")  # a discovered feed is not prefilled as a pin
+    await pin_ats(page).select_option("ashby")
+    await pin_slug(page).fill("  acme-board  ")
+    await save(page)
+    await expect(editor(page)).to_be_hidden()
+    [(method, body, query)] = writes(backend)
+    assert method == "PATCH"
+    assert body is not None
+    assert (body["source"], body["ats"], body["slug"], body["status"]) == ("override", "ashby", "acme-board", "")
+    assert query["updated_at"] == ["eq.2026-11-18T08:00:00+00:00"]
+    only_empty_status(backend)
+    assert "discover-companies workflow has run" in await toast(page)
+    assert await card(page, "Acme Robotics").get_attribute("data-state") == "pending"
+    await open_editor(page, "Acme Robotics")  # now a pin: the trust checkbox and the facts show
+    await expect(page.locator("#verifyRow")).to_be_visible()
+    await expect(pin_ats(page)).to_have_value("ashby")
+    await expect(pin_slug(page)).to_have_value("acme-board")
+    await expect(page.locator("#discovered")).to_contain_text("override")
+
+
+async def test_the_pin_part_says_the_workflow_checks_it_and_a_workday_feed_may_fail_there(
+    page: Page, site: Path
+) -> None:
+    await open_companies(page, site)
+    await open_editor(page, "Acme Robotics")
+    group = page.locator("#pinGroup")
+    await expect(group).to_contain_text("discover-companies workflow")
+    await expect(group).to_contain_text("Workday or Oracle feed may come back not ok")
+    await expect(group).to_contain_text("never forced to ok")
+    assert await group.get_by_role("link", name=re.compile("Open the workflow")).get_attribute("href") == WORKFLOW
+    await expect(page.locator("#cPinHint")).to_have_text("Choose the feed first.")
+    await pin_ats(page).select_option("workday")
+    await expect(page.locator("#cPinHint")).to_contain_text("tenant/wdN/site")
+
+
+async def test_the_pin_part_is_only_for_a_listed_company_that_is_crawled_or_becomes_crawled(
+    page: Page, site: Path
+) -> None:
+    await open_companies(page, site)
+    await page.get_by_role("button", name="Add a company").click()
+    await expect(page.locator("#pinGroup")).to_be_hidden()
+    await page.get_by_role("button", name="Cancel").click()
+    await open_editor(page, "Phi Mobile")  # on the card: hidden until it is set to crawl
+    await expect(page.locator("#pinGroup")).to_be_hidden()
+    await page.get_by_role("radio", name="Crawl it").check()
+    await expect(page.locator("#pinGroup")).to_be_visible()
+    await page.get_by_role("radio", name=re.compile("Show it on the coverage card")).check()
+    await expect(page.locator("#pinGroup")).to_be_hidden()
+
+
+async def test_a_researched_company_is_unlocked_and_pinned_in_one_save_without_its_gap_and_segment(
+    page: Page, site: Path
+) -> None:
+    backend = await open_companies(page, site)
+    await open_editor(page, "Phi Mobile")
+    await page.get_by_role("radio", name="Crawl it").check()
+    await expect(page.locator("#segmentGroup")).to_be_hidden()
+    await pin_ats(page).select_option("browser")
+    await pin_slug(page).fill("https://phi.test/careers?location=Israel")
+    await save(page)
+    await expect(editor(page)).to_be_hidden()
+    [(_method, body, _query)] = writes(backend)
+    assert body is not None
+    assert body["crawl"] is True
+    assert body["gap"] is None
+    assert body["segment"] is None
+    assert (body["source"], body["ats"], body["status"]) == ("override", "browser", "")
+    only_empty_status(backend)
+    saved = row_of(backend, "Phi Mobile")
+    assert saved["crawl"] is True
+    assert saved["gap"] is None
+    assert saved["segment"] is None
+    assert await card(page, "Phi Mobile").get_attribute("data-state") == "pending"
+
+
+async def test_unlocking_without_a_pin_still_drops_the_segment_and_empties_the_status(page: Page, site: Path) -> None:
+    backend = await open_companies(page, site)
+    await open_editor(page, "Phi Mobile")
+    await page.get_by_role("radio", name="Crawl it").check()
+    await save(page)
+    await expect(editor(page)).to_be_hidden()
+    body = writes(backend)[0][1]
+    assert body is not None
+    assert (body["segment"], body["gap"], body["status"]) == (None, None, "")
+    assert "ats" not in body
+    only_empty_status(backend)
+
+
+@pytest.mark.parametrize(
+    ("ats", "slug", "text", "where"),
+    [
+        ("ashby", "", "Choose the job feed and write its slug", "#cPinAtsError"),
+        ("", "acme", "Choose the job feed and write its slug", "#cPinAtsError"),
+        ("ashby", "has a space", "no space", "#cPinSlugError"),
+        ("ashby", "a<b>", "no space", "#cPinSlugError"),
+        ("ashby", "x" * 301, "too long", "#cPinSlugError"),
+        ("browser", "phi.test/careers", "starting with https://", "#cPinSlugError"),
+        ("comeet_page", "http://phi.test/careers", "starting with https://", "#cPinSlugError"),
+    ],
+)
+async def test_a_bad_pin_is_refused_by_the_page_in_a_plain_sentence_and_nothing_is_written(  # noqa: PLR0913, PLR0917
+    page: Page, site: Path, ats: str, slug: str, text: str, where: str
+) -> None:
+    backend = await open_companies(page, site)
+    await open_editor(page, "Acme Robotics")
+    await pin_ats(page).select_option(ats)
+    await pin_slug(page).fill(slug)
+    await save(page)
+    await expect(page.locator(where)).to_contain_text(text)
+    await expect(editor(page)).to_be_visible()
+    assert writes(backend) == []
+
+
+async def test_a_feed_the_database_does_not_know_is_refused_in_a_plain_sentence_at_its_field(
+    page: Page, site: Path
+) -> None:
+    backend = await open_companies(page, site)
+    await open_editor(page, "Acme Robotics")
+    await page.evaluate(
+        "() => { const o = document.createElement('option'); o.value = 'bogus'; o.textContent = 'bogus';"
+        " document.querySelector('#cPinAts').append(o); }"
+    )
+    await pin_ats(page).select_option("bogus")
+    await pin_slug(page).fill("acme")
+    await save(page)
+    await expect(page.locator("#cPinAtsError")).to_have_text("The job feed is not one the crawler knows.")
+    await expect(pin_ats(page)).to_be_focused()
+    assert row_of(backend, "Acme Robotics")["ats"] == "greenhouse"  # the database refused it
+    body = await page.locator("body").inner_text()
+    assert "violates" not in body
+    assert "companies_ats_known" not in body
+    assert SECRET not in body
+
+
+async def test_a_pin_on_a_row_changed_somewhere_else_is_refused_and_writes_nothing(page: Page, site: Path) -> None:
+    backend = await open_companies(page, site)
+    await open_editor(page, "Epsilon Data")
+    await pin_ats(page).select_option("lever")
+    await pin_slug(page).fill("epsilon")
+    row_of(backend, "Epsilon Data")["updated_at"] = "2026-11-18T09:59:00+00:00"
+    await save(page)
+    await expect(page.locator("#editorNotice")).to_contain_text(CHANGED_AGAIN)
+    assert row_of(backend, "Epsilon Data")["source"] == ""
+    only_empty_status(backend)
+
+
+async def test_a_saved_pin_that_is_not_changed_is_not_written_again(page: Page, site: Path) -> None:
+    backend = await open_companies(page, site)
+    await open_editor(page, "Gamma Cloud")
+    await expect(pin_ats(page)).to_have_value("workday")
+    await expect(pin_slug(page)).to_have_value("gamma/wd1/external")
+    await save(page)
+    await expect(editor(page)).to_be_hidden()
+    body = writes(backend)[0][1]
+    assert body is not None
+    assert not {"source", "ats", "slug", "status"} & body.keys()  # the status stays as the workflow set it
+    assert row_of(backend, "Gamma Cloud")["status"] == "ok"
+
+
+async def test_the_pin_of_a_company_is_removed_and_the_company_goes_back_to_discovery(page: Page, site: Path) -> None:
+    backend = await open_companies(page, site)
+    await open_editor(page, "Gamma Cloud")
+    await page.get_by_role("checkbox", name=re.compile("Remove the pin")).check()
+    await expect(page.locator("#pinFields")).to_be_hidden()
+    await save(page)
+    await expect(editor(page)).to_be_hidden()
+    body = writes(backend)[0][1]
+    assert body is not None
+    assert (body["source"], body["ats"], body["slug"], body["status"]) == ("", "", "", "")
+    only_empty_status(backend)
+    await open_editor(page, "Acme Robotics")
+    await expect(page.locator("#unpinRow")).to_be_hidden()  # nothing to remove from a discovered feed
