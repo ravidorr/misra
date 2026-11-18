@@ -80,8 +80,8 @@ the browser or the repository. Other secrets by name: <code>RESEND_API_KEY</code
 <code>REPORT_TO_EMAIL</code>, <code>IP_HASH_SECRET</code>, <code>UNSUBSCRIBE_SECRET</code> (the key that signs the unsubscribe links), the GitHub deploy key and <code>BACKUP_DEPLOY_KEY</code> (a write deploy key of the private
 backup repository only, used by the backup step of the daily job and nothing else). Values are typed into the
 providers' own pages.</li>
-<li><strong>Backups:</strong> every daily run copies the account tables and the job history (public data, without the text of the
-postings), as JSON files, to the private repository
+<li><strong>Backups:</strong> every daily run copies the account tables, the job history (public data, without the text of the
+postings) and the company list (the excluded records, the legal opt-outs, included), as JSON files, to the private repository
 <code>ravidorr/misra-backups</code> (only the maintainer has access). The export runs with the service-role key in its own step,
 writes outside the checkout, never prints rows (the public log shows counts only) and uploads no artifact. The
 repository's history is replaced by one new commit when it is 28 days old, so a deleted account leaves the backups
