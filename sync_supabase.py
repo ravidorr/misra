@@ -16,7 +16,8 @@ written the way discover.py writes it, without the keys a record does not have. 
 this (the discover-companies workflow has no use for the history). `python sync_supabase.py --push-companies` runs after
 discover.py: it sends back the discovered fields (discover.DISCOVERED) of the crawled records that discovery changed,
 by exact name, and never a field a person owns (`crawl`, `gap`, `excluded`, `links`, `domain`, `segment`, `israel_only`,
-`verify`); a record that is no longer crawled or is excluded in the table is left alone.
+`verify`). What discovery changed is the file against the baseline the pull kept (data/companies.pulled.json), and each
+update names the values the row had at the pull, so a row an editor changed since is left alone.
 
 `python sync_supabase.py` runs after the crawl: it copies the open jobs of data/jobs.db into the Supabase `jobs` table
 (PostgREST over HTTPS), closes the jobs that are no longer open, writes the crawl log rows of this run (the ones with
@@ -376,48 +377,56 @@ def pull_companies(source: Source, path: str = COMPANIES) -> int:
     records.sort(key=lambda record: str(record["name"]).casefold())
     part = Path(path + ".part")
     part.parent.mkdir(parents=True, exist_ok=True)  # data/ holds nothing else in a fresh checkout
-    part.write_text(json.dumps(records, indent=1, ensure_ascii=False) + "\n", encoding="utf-8")
+    text = json.dumps(records, indent=1, ensure_ascii=False) + "\n"
+    Path(baseline_path(path)).write_text(text, encoding="utf-8")  # what --push-companies compares with
+    part.write_text(text, encoding="utf-8")
     part.replace(path)
     return len(records)
 
 
-def push_companies(source: Source, client: Client, path: str = COMPANIES) -> tuple[int, int, int]:
+def baseline_path(path: str = COMPANIES) -> str:
+    """Where the pull keeps the list as it pulled it (data/companies.pulled.json), for the push to compare with."""
+    return path.removesuffix(".json") + ".pulled.json"
+
+
+def condition(value: Any) -> str:
+    """The PostgREST filter for a column that held exactly this pulled value (a key the pull left out is null)."""
+    return "is.null" if value is None else f"eq.{value}"
+
+
+def push_companies(client: Client, path: str = COMPANIES) -> tuple[int, int, int]:
     """Send the discovered fields that discover.py changed back to the table and return (companies changed, left
-    alone, failed). Only the crawled records of the file are considered, and each is compared with the table as it is
-    now: a field goes only where it differs (an empty string and a null are the same), a careers address starts with
-    https://, and the request names the company, `crawl` true and no exclusion, so a company that an editor took off
-    the crawl or excluded since the pull is never written. Nothing but the five DISCOVERED fields is ever sent. A
-    record the table does not have is left alone (a company is added on the admin page). A request that fails
-    is counted and the next one still goes; the log holds the status, never the row."""
-    current = {str(row["name"]): row for row in source.read(COMPANY_TABLE)}
-    if not current:
-        raise SyncError("Supabase holds no companies: nothing to compare with, nothing written")
+    alone, failed). What discovery changed is the file compared with the list as the pull wrote it (the baseline), never
+    with the table as it is now, so a field an editor saved since the pull is not mistaken for a discovery. Only the
+    crawled records are considered and only the five DISCOVERED fields are ever sent, a careers address as https://.
+    Each request names the company and the values the row had at the pull for all five fields, plus `crawl` true and
+    no exclusion: a row an editor changed since (a pin, a correction, off the crawl, excluded) matches nothing and is
+    left alone. A record the baseline does not have is left alone too (a company is added on the admin page). A request
+    that fails is counted and the next one still goes; the log holds the status, never the row."""
+    baseline = {str(r.get("name")): r for r in load_companies(baseline_path(path))}
+    if not baseline:
+        raise SyncError("the pulled list is empty: nothing to compare with, nothing written")
     changed = alone = failed = 0
     for record in load_companies(path):
         if record.get("crawl") is not True:
             continue
-        row = current.get(str(record.get("name")))
-        if row is None or row["crawl"] is not True or row["excluded"] is not None:
-            alone += 1
-            continue
-        pinned = record.get("source") == "override"
-        if row["source"] == "override" and not pinned:  # an editor pinned the feed while discovery ran: theirs wins
+        pulled = baseline.get(str(record.get("name")))
+        if pulled is None or pulled.get("crawl") is not True:
             alone += 1
             continue
         found = {k: record.get(k) or "" for k in DISCOVERED}
         found["careers_url"] = https_only(found["careers_url"])
-        fields = {k: v for k, v in found.items() if v != (row[k] or "")}
+        fields = {k: v for k, v in found.items() if v != (pulled.get(k) or "")}
         if not fields:
             continue
+        where: dict[str, str | int] = {
+            "name": f"eq.{pulled['name']}",
+            "crawl": "eq.true",
+            "excluded": "is.null",
+            "select": "name",
+            **{k: condition(pulled.get(k)) for k in DISCOVERED},
+        }
         try:
-            where: dict[str, str | int] = {
-                "name": f"eq.{row['name']}",
-                "crawl": "eq.true",
-                "excluded": "is.null",
-                "select": "name",
-            }
-            if not pinned:  # a pin saved between the read and the write misses the filter
-                where["or"] = "(source.is.null,source.neq.override)"
             done = client.call(
                 "PATCH", where, fields, table="companies", prefer="return=representation", quiet=True
             ).json()
@@ -429,7 +438,7 @@ def push_companies(source: Source, client: Client, path: str = COMPANIES) -> tup
             continue
         if done:
             changed += 1
-        else:  # an editor changed the record between the read and the write
+        else:  # an editor changed the row since the pull
             alone += 1
     return changed, alone, failed
 
@@ -644,13 +653,11 @@ def push_companies_main(url: str, key: str) -> None:
     """The last step of the discover-companies workflow: send the discovered fields back (see `push_companies`)."""
     session = requests.Session()
     try:
-        changed, alone, failed = push_companies(
-            Source(cast("ExportSession", session), url, key), Client(cast("HttpSession", session), url, key)
-        )
+        changed, alone, failed = push_companies(Client(cast("HttpSession", session), url, key))
     except (SyncError, ExportError) as exc:
         sys.exit(f"Supabase push of the companies failed: {exc}")
-    except (OSError, ValueError) as exc:  # the file that discover.py wrote cannot be read
-        sys.exit(f"Supabase push of the companies failed: {COMPANIES} cannot be read ({type(exc).__name__})")
+    except (OSError, ValueError) as exc:  # data/companies.json or its baseline cannot be read
+        sys.exit(f"Supabase push of the companies failed: a list file cannot be read ({type(exc).__name__})")
     print(f"Supabase: {changed} companies updated, {alone} left alone (changed or removed since the pull)")
     if failed:
         sys.exit(f"Supabase push of the companies failed for {failed} companies (see the warnings above)")

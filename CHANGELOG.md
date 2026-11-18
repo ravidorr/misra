@@ -24,7 +24,7 @@ All notable changes are documented here. Format follows [Keep a Changelog](https
 
 ### Added
 
-- `sync_supabase.py --pull-companies` (the list only) and `--push-companies`, which sends the discovered fields (`discover.DISCOVERED`) of the crawled records that discovery changed, by exact name, and never a field a person owns (`crawl`, `gap`, `excluded`, `links`).
+- `sync_supabase.py --pull-companies` (the list only) and `--push-companies`, which sends the discovered fields (`discover.DISCOVERED`) of the crawled records that discovery changed (the file against the baseline the pull kept, `data/companies.pulled.json`), by exact name and only while the row still holds the values it had at the pull, and never a field a person owns (`crawl`, `gap`, `excluded`, `links`).
 - The manual-dispatch workflow `discover-companies.yml`: it pulls the list, runs `discover.py` without the service-role key, and only its last step holds the key to push.
 
 ### Removed
