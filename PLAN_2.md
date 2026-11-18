@@ -26,7 +26,7 @@ alerts.
 - **The page has no power of its own.** `admin.html` is static and public, like the rest of `docs/`, and the anon key is
   public. Security is row-level security (RLS) plus a server-side admin check. The service-role key never reaches a
   browser or the crawl (see `AGENTS.md`); anything that needs it runs in an Edge Function that checks the caller first.
-- **One admin.** A single row in `admins`. No roles, no invitations.
+- **One admin.** A single row in `admins`, inserted by hand as in 1.1; the first sign in never claims it. No roles, no invitations.
 - **Not discoverable.** `noindex`, no link from any public page or from `llms.txt`, left out of `jobs.jsonld` and the
   WebMCP tools. It is not a secret (it is in the repository); it is only never advertised.
 - **Every step tests the denial first.** A signed-out user and a signed-in non-admin get a permission error on every
@@ -171,8 +171,3 @@ maintainer would do by hand. It shows counts, never lists.
 - More than one admin, roles, or an admin invitation flow.
 - Changing the privacy, terms or security pages, the digest or contact switches, or the assistant endpoint (all lawyer
   matters or maintainer secrets).
-
-## Open questions
-
-1. Does the maintainer's Google account that signs in match the one in `admins`, or should the first sign in claim the
-   row? Default: insert by hand, as in 1.1.
