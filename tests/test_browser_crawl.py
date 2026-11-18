@@ -802,10 +802,10 @@ async def test_a_heading_in_the_link_is_the_title_whatever_the_line_order() -> N
         "CUSTOMER DELIVERY AND SUCCESS\nField Service Engineer - UK\nIntermediate, Full-time\nBirmingham, UK",
         head="Field Service Engineer - UK",
     )
-    short = link("/cmcareer/d5-473/", "Finance\nAccountant\nIsrael, Rosh Haayin", head="Accountant")
+    short = link("/cmcareer/d5-473/", "Finance\nStaff Accountant\nIsrael, Rosh Haayin", head="Staff Accountant")
     assert await crawl_cards([kornit, short]) == {
         "Field Service Engineer - UK": ("Birmingham, UK", "CUSTOMER DELIVERY AND SUCCESS"),
-        "Accountant": ("Israel, Rosh Haayin", "Finance"),  # not read as a title wrapped over two lines
+        "Staff Accountant": ("Israel, Rosh Haayin", "Finance"),  # not read as a title wrapped over two lines
     }
 
 
@@ -825,7 +825,7 @@ async def test_the_office_heading_above_the_cards_is_the_place_of_a_card_with_on
     assert await crawl_cards(links) == {
         "Account Executive EMEA": ("Tel Aviv | Hybrid", "Sales"),
         "Sales Engineer": ("New York | Remote", "Sales"),
-        "Support Engineer": ("Tel Aviv", ""),
+        "Support Engineer": ("", ""),  # no place at all: the heading is not borrowed
         "Data Engineer": ("Haifa | Hybrid", ""),
         "Designer": ("Remote (US)", ""),
         "Researcher": ("Hybrid", ""),
@@ -887,7 +887,9 @@ def test_parse_card_with_a_heading_title_skips_the_team_guesses() -> None:
         ("Tel Aviv Office", "Tel Aviv"),
         ("Boston offices", "Boston"),
         ("Israel", "Israel"),
-        ("Haifa, Israel", "Haifa, Israel"),
+        ("Haifa, Israel", ""),
+        ("Our Israel offices and more", ""),
+        ("Global Offices Of The World", ""),
         ("Open Roles", ""),
         ("Head Office", ""),
         ("Office", ""),
@@ -920,3 +922,31 @@ def test_a_country_chooser_is_not_a_job_link() -> None:
 
 def test_apple_next_page_button_is_a_pager() -> None:
     assert 'button[aria-label="Next page" i]' in browser_crawl.NEXT_SELS
+
+
+async def test_a_bare_title_link_with_a_heading_inside_keeps_the_place_of_its_card() -> None:
+    row = link("/jobs/be-role", "Backend Engineer", "Backend Engineer\nTel Aviv, Israel", head="Backend Engineer")
+    assert await crawl_cards([row]) == {"Backend Engineer": ("Tel Aviv, Israel", "")}
+
+
+async def test_a_heading_that_is_a_place_or_a_team_is_not_the_title() -> None:
+    places = link("/jobs/a-role", "Haifa\nData\nBackend Engineer", head="Haifa")
+    team = link("/jobs/b-role", "R&D\nBackend Developer\nHaifa", head="R&D")
+    assert await crawl_cards([places, team]) == {
+        "Backend Engineer": ("Haifa", "Data"),
+        "Backend Developer": ("Haifa", "R&D"),
+    }
+
+
+async def test_a_label_link_never_claims_a_job_before_its_titled_twin() -> None:
+    icon = link("/jobs/x-role", "", "Hot job", leaves="Hot job")
+    titled = link("/jobs/x-role", "Backend Engineer", "Backend Engineer\nHaifa")
+    assert await crawl_cards([icon, titled]) == {"Backend Engineer": ("Haifa", "")}
+
+
+def test_a_location_label_before_the_title_does_not_make_the_title_a_place() -> None:
+    lines = [
+        "Backend Engineer",
+        *browser_crawl._card_extras("Location\nBackend Engineer\nHaifa, Israel", "Backend Engineer"),
+    ]
+    assert browser_crawl._parse_card(lines) == ("Backend Engineer", "Haifa, Israel", "")

@@ -2003,3 +2003,17 @@ def test_comeet_page_a_list_printed_twice_gives_each_job_once(monkeypatch: pytes
 def test_comeet_page_a_card_with_no_title_anywhere_is_not_a_list(monkeypatch: pytest.MonkeyPatch, page: str) -> None:
     fake_get(monkeypatch, FakeHttpResponse(text=page, url="https://zesty.test/careers/"))
     assert adapters.comeet_page("https://zesty.test/careers/") is None
+
+
+def test_comeet_page_a_job_read_two_ways_is_kept_once_with_the_first_reading(monkeypatch: pytest.MonkeyPatch) -> None:
+    again = '<a href="/careers/co/haifa/4C.378/bdr/all">Tell me more</a>'
+    page = ZESTY.replace("</ul>", f'<li><div class="comeet-position-name">BDR</div>{again}</li></ul>')
+    fake_get(monkeypatch, FakeHttpResponse(text=page, url="https://zesty.test/careers/"))
+    jobs = adapters.comeet_page("https://zesty.test/careers/")
+    assert jobs is not None
+    assert (jobs[0]["job_id"], jobs[0]["title"], jobs[0]["location"]) == (
+        "4C.378",
+        "Business Development Representative",
+        "tel aviv",
+    )
+    assert len(jobs) == len({j["job_id"] for j in jobs})

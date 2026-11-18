@@ -176,3 +176,11 @@ async def test_a_card_says_whether_it_has_another_titled_job_link(page: Page) ->
     assert (await row_for(page, html("Details"), "/jobs/x-role"))[5] is False  # a button is not a title
     lone = f'<div><a href="{BASE}/jobs/z-role">Details</a></div>'
     assert (await row_for(page, lone, "/jobs/z-role"))[5] is False
+
+
+async def test_an_icon_link_to_another_address_does_not_shrink_the_card_of_a_titled_link(page: Page) -> None:
+    html = (
+        f'<div><div><a href="{BASE}/jobs/x-role">X Role</a></div><div>Haifa</div>'
+        f'<div><a href="{BASE}/jobs/x-role/apply"><svg></svg></a></div></div>'
+    )
+    assert (await row_for(page, html, "/jobs/x-role"))[2].startswith("X Role\nHaifa")

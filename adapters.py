@@ -367,7 +367,7 @@ def comeet_page(slug: str) -> list[Job] | None:
         job = _job(
             uid, title, location, urljoin(r.url, html.unescape(href)), team=_page_text(team.group(1)) if team else ""
         )
-        if job not in out:  # a page that prints its list twice
+        if uid.upper() not in {j["job_id"].upper() for j in out}:  # a page that prints its list twice: the first wins
             out.append(job)
     # job links the card markup did not yield (a changed layout) mean the list is not complete
     if {u.upper() for u in _COMEET_ANY_UID.findall(page)} != {j["job_id"].upper() for j in out}:

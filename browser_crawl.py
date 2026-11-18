@@ -84,10 +84,10 @@ CARD_JS = r"""(els, cfg) => {
     const text = n => (n.innerText || '').trim();
     const jobLink = a => job.test(href(a)) && !skip.test(href(a));
     const titled = a => jobLink(a) && text(a) && !button.test(text(a));
-    const many = n => {  // does n hold the links of two or more jobs? An icon-only link is one too.
+    const many = (n, bare) => {  // two or more jobs in n? An icon-only link counts when e is one
         const seen = new Set();
         for (const a of n.querySelectorAll('a[href]')) {
-            if (jobLink(a) && (!text(a) || titled(a))) {
+            if (jobLink(a) && ((bare && !text(a)) || titled(a))) {
                 seen.add(key(href(a)));
                 if (seen.size > 1) return true;
             }
@@ -99,7 +99,7 @@ CARD_JS = r"""(els, cfg) => {
         let n = e;
         for (let i = 0; i < 4 && n.parentElement; i++) {
             const up = n.parentElement;
-            if ((up.innerText || '').length > cfg.max || many(up)) break;
+            if ((up.innerText || '').length > cfg.max || many(up, !text(e))) break;
             n = up;
         }
         const own = e.querySelector('h1, h2, h3, h4, h5, h6');  // a title heading inside the link
@@ -187,6 +187,7 @@ _WORD = re.compile(r"\w")  # a line with no letter or digit is an icon or an arr
 _OFFICE = re.compile(r"\s+offices?$", re.I)
 _WORK_MODE = re.compile(r"(?:remote|hybrid|on-?site)", re.I)
 MAX_TEAM_WORDS = 2
+MAX_OFFICE_WORDS = 3
 MIN_CARD_TITLE_WORDS = 2  # a title read from a card, not from the link, has a role word or this many words
 MAX_ACRONYM_LEN = 4
 MAX_REMOTE_WORDS = 4
@@ -217,7 +218,7 @@ def _parse_card(lines: list[str], heading_first: bool = False) -> tuple[str, str
     parts = [p for ln in lines for p in re.split(r"\t+|\s+·\s+", ln)]
     lines = [" ".join(p.split()) for p in parts]
     # the line under a "Location" label is a place, whether or not it names a country ("Location" / "Herzliya")
-    labelled = {b for a, b in itertools.pairwise(lines) if a.lower() in LOCATION_LABELS}
+    labelled = {b for a, b in itertools.pairwise(lines) if a.lower() in LOCATION_LABELS and b != lines[0]}
     lines = [ln for ln in lines if ln and ln.lower() not in CARD_NOISE]
     places = list(
         dict.fromkeys(ln for ln in lines if _is_location(ln) or (ln in labelled and len(ln) <= MAX_LOCATION_LEN))
@@ -260,7 +261,7 @@ def _card_extras(card: str, title: str) -> list[str]:
     lines = [ln for ln in lines if ln and len(ln) <= CARD_LINE_MAX and ln.lower() not in CARD_CHROME | BUTTON_LINES]
     fused: list[str] = []
     for ln in lines:
-        if fused and fused[-1].lower() in LOCATION_LABELS:
+        if fused and fused[-1].lower() in LOCATION_LABELS and ln.lower() != low:
             fused[-1] += f"\n{ln}"
         else:
             fused.append(ln)
@@ -280,12 +281,20 @@ def _card_lines(leaves: str) -> list[str]:
     return [ln for ln in lines if ln and len(ln) <= CARD_LINE_MAX and ln.lower() not in LINK_NOISE and _WORD.search(ln)]
 
 
+def _usable_heading(head: str) -> bool:
+    """A heading in a job link is its title unless it reads as a place or as a team name (a word or two, no role)."""
+    return not _is_location(head) and bool(ROLE_WORD.search(head) or len(head.split()) >= MIN_CARD_TITLE_WORDS)
+
+
 def _section_place(heading: str) -> str:
-    """The place an office heading names ("Tel Aviv Office" gives "Tel Aviv"), or "" for any other heading."""
-    place = _OFFICE.sub("", heading).strip()
-    if not place or len(heading) > MAX_LOCATION_LEN or ROLE_WORD.search(heading):
+    """The place an office heading names ("Tel Aviv Office" gives "Tel Aviv"; a short place, three words at most), a
+    heading that is only a country ("Israel"), or "" for any other heading."""
+    if len(heading) > MAX_LOCATION_LEN or ROLE_WORD.search(heading):
         return ""
-    return place if place != heading or _is_location(heading) else ""
+    place = _OFFICE.sub("", heading).strip()
+    if place != heading:
+        return place if 0 < len(place.split()) <= MAX_OFFICE_WORDS else ""
+    return heading if _COUNTRY_ONLY.fullmatch(heading) else ""
 
 
 def _job_key(href: str) -> str:
@@ -470,6 +479,8 @@ async def crawl_one(ctx: Any, url: str, sem: asyncio.Semaphore) -> list[dict[str
                 found = 0
                 links = await page.eval_on_selector_all("a[href]", CARD_JS, CARD_ARGS)
                 link_count = len(links)
+                # links with a title of their own first, so a label link never claims a job before its titled twin
+                links.sort(key=lambda row: not _WORD.search(row[1]) or row[1].strip().lower() in LINK_NOISE)
                 for href, text, card, head, section, others, leaves in links:
                     key = _job_key(href)
                     if key in seen or not JOBLINK.search(href) or NOT_JOB.search(href):
@@ -479,7 +490,7 @@ async def crawl_one(ctx: Any, url: str, sem: asyncio.Semaphore) -> list[dict[str
                         for ln in text.split("\n")
                         if ln.strip().lower() not in LINK_NOISE | {""} and _WORD.search(ln)
                     ]
-                    heading_first = head in lines
+                    heading_first = len(lines) > 1 and head in lines and _usable_heading(head)
                     from_card = False
                     if not lines:
                         # a link that is only an icon or a button label ("Details"): the title is in its card, unless
@@ -502,7 +513,7 @@ async def crawl_one(ctx: Any, url: str, sem: asyncio.Semaphore) -> list[dict[str
                     if from_card and not (ROLE_WORD.search(title) or len(title.split()) >= MIN_CARD_TITLE_WORDS):
                         continue  # a card with only a word or two of text is a banner or a place, not a job
                     place = _section_place(section)
-                    if place and all(_WORK_MODE.fullmatch(p) for p in filter(None, loc.split(" | "))):
+                    if place and loc and all(_WORK_MODE.fullmatch(p) for p in loc.split(" | ")):
                         loc = " | ".join(filter(None, [place, loc]))  # the office heading above the jobs
                     seen.add(key)
                     found += 1
