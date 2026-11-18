@@ -181,7 +181,9 @@ Steps:
   migration's checks do. Differences from the text below, all on purpose: the name of a listed company is read-only
   (`jobs` and `crawl_log` are keyed by it, so a rename would orphan the history); the page chooses between "Crawl it" and
   "Show it on the coverage card" and never sets `excluded` except through "Exclude…" and "Exclude a company"; the hand
-  choice of `ats` and `slug` is left to the table editor, and "Find its job feed again" empties the `status`; rows do not
+  choice of `ats` and `slug` was left to the table editor at first, and "Find its job feed again" empties the
+  `status` (a later PR built "Pin the job feed" in the editor: the feed from the adapters list, the slug, `source`
+  `override`, an empty `status`, and an unlock of a card record in one save, all in the admin Log); rows do not
   say "applies at the next run" (the saved line does, for the change just made); no `updated_at` conflict banner,
   but every update and delete carries `updated_at`, and one that finds the row changed says so; removing a company
   says its open jobs stay in the history, because no run closes the jobs of a company that is not in the list (move it
