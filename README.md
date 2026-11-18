@@ -50,7 +50,7 @@ To run it by hand: Actions tab, "daily-job-digest", Run workflow.
 More in `CONTRIBUTING.md`:
 
 - [The daily digest](./CONTRIBUTING.md#the-daily-digest): the schedule, the secrets and the guard.
-- [Backups of the account tables and the job history](./CONTRIBUTING.md#backups-of-the-account-tables-and-the-job-history)
+- [Backups of the account tables, the job history and the company list](./CONTRIBUTING.md#backups-of-the-account-tables-and-the-job-history)
 - [The history lives in Supabase](./CONTRIBUTING.md#the-history-lives-in-supabase)
 
 ## Career-page systems

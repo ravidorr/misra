@@ -119,11 +119,11 @@ def test_the_log_trigger_logs_the_name_and_never_a_reason() -> None:
     assert body.count("insert into") == 1
 
 
-def test_the_company_list_is_not_in_the_backup_yet() -> None:
-    """Deliberate: step 3.4 backs `companies` up with `Table(..., account=False)` in export_accounts.py (a version
-    bump) and restores it. When that lands, this test is the one to change."""
-    backed_up = {t.name for t in export_accounts.TABLES} | {t.name for t in export_accounts.JOB_TABLES}
-    assert "companies" not in backed_up
+def test_the_company_list_is_in_the_backup_with_every_column() -> None:
+    """Step 3.4: `companies` is exported (the excluded records too) with `Table(..., account=False)`."""
+    assert export_accounts.COMPANIES in export_accounts.JOB_TABLES
+    assert not export_accounts.COMPANIES.account
+    assert "companies" in {t.name for t in export_accounts.ALL_TABLES}
 
 
 @pytest.mark.parametrize(

@@ -41,8 +41,8 @@ are the rules that protect the data.
   `REPORT_TO_EMAIL`, `IP_HASH_SECRET`, `UNSUBSCRIBE_SECRET` (the key that signs the unsubscribe links), the GitHub deploy key and `BACKUP_DEPLOY_KEY` (a write deploy key of the private
   backup repository only, used by the backup step of the daily job and nothing else). Values are typed into the
   providers' own pages.
-- **Backups:** every daily run copies the account tables and the job history (public data, without the text of the
-  postings), as JSON files, to the private repository
+- **Backups:** every daily run copies the account tables, the job history (public data, without the text of the
+  postings) and the company list (the excluded records, the legal opt-outs, included), as JSON files, to the private repository
   `ravidorr/misra-backups` (only the maintainer has access). The export runs with the service-role key in its own step,
   writes outside the checkout, never prints rows (the public log shows counts only) and uploads no artifact. The
   repository's history is replaced by one new commit when it is 28 days old, so a deleted account leaves the backups
