@@ -2,7 +2,7 @@
 
 Step plan for an admin page for the maintainer. Drafted 2026-11-18; nothing here is built yet.
 
-Each numbered step is one or more PRs; the sub-steps (3.1, 3.2 and so on) are the PRs. Strike a step through
+Each numbered step is one or more PRs; the sub-steps (3.1, 3.2 and so on) are the PRs, and step 4 is part of 3.3. Strike a step through
 (`~~text~~`) when it is done. Conventions for every step are those of `PLAN.md`: a change to a listed Python module
 bumps `package.json` and `pyproject.toml` together and adds a `CHANGELOG.md` entry; a new Python module is added to
 `RELEASE_TRIGGER_PATHS` (`ci.yml`, `.husky/pre-push`), `py-modules` and mypy `files`; coverage stays at 100%; browser
@@ -11,8 +11,8 @@ workflow follows the secret rules of `daily.yml` (see D2).
 
 ## What the admin page is
 
-One page, `admin.html`, for one person (the maintainer). It has four areas, built in this order: sign in, then Crawl,
-Companies, Alerts and Log. Adding a site a visitor reported is the Add button of the Companies editor.
+One page, `admin.html`, for one person (the maintainer). After the sign in it has four areas: Crawl, Companies,
+Alerts and Log. Adding a site a visitor reported is the Add button of the Companies editor.
 
 ## Rules for the whole plan
 
@@ -49,8 +49,9 @@ Companies, Alerts and Log. Adding a site a visitor reported is the Add button of
   `authenticated`. SQL test: no role but the owner reads or writes `admins` ("the owner" is `postgres`; the service role
   bypasses RLS); `is_admin()` is false for anon and for a signed-in user who is not listed.
   - The existing lint `policy_problem` in `tests/test_migrations.py` refuses any policy on a table outside
-    `USER_TABLES`. Extend it with a list of admin tables (`jobs`, `crawl_log`, `admins`, `admin_log`, `companies`) whose
-    only accepted `using` is `public.is_admin()`. Never loosen the existing checks. Steps 1.3, 2.1 and 3.1 cite this.
+    `USER_TABLES`, and accepts on `jobs` only `using (status = 'open')`. Extend it with a list of admin tables (`jobs`, `crawl_log`, `admins`, `admin_log`, `companies`) whose
+    only accepted `using` is `public.is_admin()`; keep the open-jobs policy of `jobs`, and accept the public read policy
+    of `companies` (D1, `excluded is null`) as its one other policy. Never loosen the existing checks. Steps 1.3, 2.1 and 3.1 cite this.
   - The `admins` row has a foreign key to `auth.users`, so the maintainer signs in once on the dashboard first, then
     runs one statement in the SQL editor: `insert into public.admins select id from auth.users where email = '...'`
     (the exact text goes in `supabase/README.md`). There is no way to become an admin from the page.
@@ -78,7 +79,8 @@ Companies, Alerts and Log. Adding a site a visitor reported is the Add button of
     the signed-out, not-admin and check-failed states.
 - [ ] 1.3 The log: `public.admin_log(id bigint generated always as identity primary key, ts timestamptz not null default
   now(), action text not null, target text)`. It is written only by the trigger of 3.1 and by `admin-account` (5.2),
-  and readable when `is_admin()`; no role has insert, update or delete. `target` is a company name or a table name,
+  and readable when `is_admin()`; no public role has insert, update or delete (the function writes with the service
+  role). `target` is a company name or a table name,
   never an address and never a user id. The Log area (a `ul` of time, a plain-English action and the target, the last
   50 rows, empty text "No changes yet.") ships in step 3, when the first rows appear.
 - Done when: the maintainer signs in on the dashboard, opens `admin.html` and sees the empty areas; a second Google
@@ -95,10 +97,10 @@ The data is already in Supabase, so this step adds no table and no pipeline chan
   a `grant select` to `authenticated` and the same policy. The lawyer's rule of 2026-11-16 stays: the admin page never
   shows posting text.
 - [ ] 2.2 The Crawl area. PostgREST returns 1000 rows at most by default and `crawl_log` holds about 24,000 (90 days of
-  267 companies), so a client-side streak would be wrong without a warning. Use a view or a `security invoker` function
+  267 companies), so a count made in the browser would stop at 1000 rows. Use a view or a `security invoker` function
   `admin_crawl_health()` gated by `is_admin()`, with one row per company. Terms, from `run.py` and `common.py`:
-  - failing: the last run has `ok = 0`; last good crawl: the last row with `ok = 1`;
-  - streak: the number of consecutive days whose last run has `ok = 0`;
+  - failing: the last two crawls have `ok = 0` (`FAILING_RUNS`), not counting robots.txt skips; last good crawl: the last row with `ok = 1`;
+  - streak: the number of consecutive days whose last run has `ok = 0`, robots.txt skips left out;
   - held: the day's last note starts with `DROP_NOTE` (`run.sharp_drop`);
   - skipped for robots.txt: the note carries `ROBOTS_NOTE`;
   - open jobs: `crawl_log.n_jobs` now and 30 days ago, as two numbers and no chart (`jobs` keeps no daily snapshot).
@@ -138,7 +140,7 @@ Decisions made before 3.1:
   nothing else, `domain` included. Excluding sets every other field to null in the same write, and `domain` may be null
   only on an excluded record. A company that asked to be removed and was never in the list gets this minimal record.
   The checks of D3 are: a name of 2 characters or more, a name unique ignoring case, a reason that is not blank, a date
-  in ISO form, at most 200 excluded records, and the shape above. The database refuses a record that breaks them.
+  in ISO form, at most 200 excluded records, and the shape above. The database refuses a record that breaks them (the limit of 200 needs a trigger).
   `load_excluded` keeps every guard it has today and still raises `ExclusionError` on a pulled file that does not
   load, so a record nobody can trust stops the run. `MAX_PURGE_COMPANIES` and `check_spelling` are unchanged.
 - **D4. A pull that cannot reach Supabase stops the run (the same as today).** `sync_supabase.py --pull` already does
@@ -151,40 +153,40 @@ Steps:
   `excluded` are `jsonb`.
   - Checks, each with a stable name: `name` and `domain` unique ignoring case; exactly one of `crawl` is true, `gap`
     is not null, `excluded` is not null; the checks of D3; a gap reason in the migration's list, with a test that fails
-    when that list differs from the keys of `REASONS` in `build_dashboard.py`; a careers link that starts with
-    `https://`.
+    when that list differs from the keys of `REASONS` in `build_dashboard.py`; a careers link that is empty or
+    starts with `https://` (the one `http://` record of the file is fixed in the same migration).
   - RLS (see the lint of 1.1): the policy of D1 for reading; `select, insert, update, delete` for `is_admin()`; a
     trigger writes `admin_log`. The same migration loads the records of the file at that commit.
-  - SQL tests for each denial and each check. "Move to gaps" asks for a gap reason and a note; "Include again" asks
-    for either a gap reason or "Start crawling".
+  - SQL tests for each denial and each check. The editor (3.3) asks for a gap reason and a
+    note when a record goes on the card, and for a gap reason or crawling when an excluded record is included again.
 - [ ] 3.2 Before the switch, reload the table from the file of that day (edits to `companies.json` between 3.1 and 3.2
   would be lost). Then `sync_supabase.py --pull` also writes `data/companies.json` from the table (sorted by name, the
   format of `discover.py`, refusing an empty table as it refuses an empty `jobs`); `--push-companies` writes back the
   discovered fields of crawled records. The pulled file carries the excluded records, and `load_excluded` reads them
   from it (the CSV and `EXCLUDED_COLUMNS` are removed). `common.RECORD_KEYS` gains `excluded`; this is a change to
-  `common.py` (version bump), and until it lands `discover.py` drops `excluded`. `run.py`, `discover.py`,
+  `common.py` (version bump), and until then `discover.py` drops an excluded record's key. `run.py`, `discover.py`,
   `build_dashboard.py` and the sync keep calling `load_excluded` as they do today. `.gitignore` lists the file. The
   discover-and-push workflow of D2 is added here. Tests, including the refusal of an empty table.
 - [ ] 3.3 The editor.
   - **List.** A searchable `ul` with "Showing n of 347" in `role="status"`, chips Crawled, On the card (a company with a
-    gap, shown with its reason, why and career link, which replaces the old gap area) and Excluded, and an Edit button
+    gap, shown with its reason, note and career link) and Excluded, and an Edit button
     on each row. Rows edited since the last crawl say "applies at the next run".
   - **Editor.** One shared modal `dialog` (`dialog.css`, corner x, Cancel, Save; a sticky action bar on a phone with
     the `sheet-head` and `sheet-foot` styles; focus returns to the row's Edit button). Status is a fieldset of
     radios (Crawling, On the coverage card, Excluded) that shows the fields of the choice: a gap reason select from
-    `REASONS` and a note. A checkbox "Choose the job feed by hand" shows `ats` and `slug` (this replaces "Pin"). One Save.
+    `REASONS` and a note. A checkbox "Choose the job feed by hand" shows `ats` and `slug`. One Save.
     "Include again" shows only on an excluded record. A small `components/choice.css` is needed (add it to
     `design-system/index.html` and `CHANGELOG.md` as the design README says).
-  - **Fields.** Name; domain; careers URL; three URL inputs for `links` (not JSON); a segment select; checkboxes
-    `israel_only` and `verify`; the five discovered fields read-only; an `ats` list from a database check that a test
+  - **Fields.** Name; domain; two URL inputs for `links`, Israel and global (not JSON); a segment select; checkboxes
+    `israel_only` and `verify`; the five discovered fields (careers URL included) read-only; an `ats` list from a database check that a test
     keeps equal to `adapters.py`.
   - **Exclude.** A separate button opens its own confirm dialog (focus on Cancel, `btn-danger`, `role="alert"`
     errors). The date defaults to today. The reason hint is "Write why, not who asked. No names or email addresses."
   - **Errors.** A map from each constraint name to one plain sentence, shown as a `.field-error` with `aria-invalid`
     where a field is named, else in a `role="alert"` notice.
-  - **Preview.** A count query runs when the confirm opens and has three states (counting, a number, "Could not count",
-    with the action still allowed). "Move to gaps": "N open jobs will be closed at the next daily run" (`run.py` closes
-    them with `close_uncrawled`; the rows stay as history). "Exclude": "N jobs will be deleted at the next daily run"
+  - **Preview.** A confirm dialog opens when a save takes a crawled company off the crawl or excludes it, and runs a count query and has three states (counting, a number, "Could not count",
+    with the action still allowed). Off the crawl: "N open jobs will be closed at the next daily run" (`run.py` closes
+    them with `close_uncrawled`; the rows stay as history). Exclude: "N jobs will be deleted at the next daily run"
     (every job, open and closed, and the company's crawl log rows). The run stops when more than `MAX_PURGE_COMPANIES`
     (3) companies wait to be purged, so the page shows how many wait.
   - **Saved.** "Saved. Takes effect at the next daily run." in a status region. Optional and cheap: `updated_at` on
@@ -196,9 +198,9 @@ Steps:
     until `discover.py` runs. A new company is therefore crawled after the next discover-and-push run (D2); every other
     change takes effect at the next daily run. The page says which of the two applies.
 - [ ] 3.4 One source of truth for the company rules: the SQL checks of 3.1 are the rules.
-  - `tests/test_companies_data.py` stops checking the real list; the Python side only checks that the pulled file loads
+  - `tests/test_companies_data.py` stops checking the rules; the Python side only checks that the pulled file loads
     and that `load_excluded` still raises `ExclusionError`. The tests of `load_excluded` and the purge
-    (`tests/test_politeness.py`, `tests/conftest.py`) are ported case for case from the CSV to excluded records.
+    (`tests/test_politeness.py`, `tests/conftest.py`, and the other tests that write `data/excluded_companies.csv`: `test_companies_covered`, `test_descriptions_flow`, `test_discover`, `test_sync_supabase`, `test_build_dashboard`) are ported case for case from the CSV to excluded records.
   - The tests that read the real file move to the frozen fixture: `test_build_dashboard`, `test_companies_covered`,
     `test_dashboard_page`, `test_report_site` and `test_companies_data`. `test_todo_counts` would no longer check
     `TODO.md` against reality; drop it or rethink it in this PR.
@@ -228,8 +230,7 @@ maintainer would do by hand. It shows counts, never lists.
 
 - [ ] 5.1 The Alerts counts, from a view or a `security definer` function gated by `is_admin()` that returns numbers
   only: subscriptions by state (pending, confirmed, off), and the number of distinct users emailed in each of the last 7
-  days (from `emailed`; not the number of jobs). No address and no user id in the result. The report daily cap is not
-  shown.
+  days (from `emailed`; not the number of jobs). No address and no user id in the result.
 - [ ] 5.2 The Edge Function `admin-account`, which first checks `is_admin()` with the caller's token and answers 404
   otherwise. It takes an address the maintainer types (from a support email) and does one of two things.
   - End job alerts: the same as the unsubscribe link (`PRIVACY.md`, "Email settings"). `unsubscribe_subscription` takes
