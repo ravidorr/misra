@@ -590,7 +590,7 @@ match and no list or search of accounts. Every answer but the 404 is JSON with `
 - 409 `ambiguous`: `delete_account` found more than one account with that sign-in email; nothing was done or logged.
 - 502 `delete_failed` (the Admin API refused; the account is still there) or `delete_unconfirmed` (a timeout or a 5xx; it
   may or may not be gone). Never "Done.".
-- 503 `service_unavailable`: the admin check could not be made. It is the same for an admin and for anyone else, so it
+- 503 `service_unavailable`: the admin check or the session check could not be made. It is the same for an admin and for anyone else, so it
   tells nothing about who is an admin; nothing was done.
 
 A 404 for a real admin can also mean an expired session (the database answers 401 to the check, and that is read as "not an
@@ -602,8 +602,10 @@ The CORS preflight (OPTIONS) answers 204 for `https://ravidorr.github.io` only; 
 
 ### How it decides, what it writes, what it never does
 
-1. It asks `public.is_admin()` through PostgREST with the caller's token and the public key. The service-role key is not used
-   until the answer is `true`.
+1. It asks `public.is_admin()` through PostgREST with the caller's token and the public key. Then it asks Supabase Auth
+   (`GET /auth/v1/user`, the same check as `delete-account`) whether the session is still live, because PostgREST checks only
+   the token's signature and expiry; a signed-out or revoked session is a bare 404, and an Auth that cannot be reached is a 503.
+   The order is token, `is_admin()`, live session; the service-role key does no work (lookup, log, action) before all three pass.
 2. It finds the accounts with `public.admin_account_ids(p_address, p_login_only)`, called with the service role (the
    address travels in a request body, never in a URL, which the platform's request log would keep). An account uses an
    address when it is the email the person signs in with (`profiles.email`) or, for `end_alerts` only, the address the digest

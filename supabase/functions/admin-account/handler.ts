@@ -3,13 +3,14 @@
 // their account (what "Delete my account" does). Everything that touches the outside world comes in through `Deps`, so the
 // vitest suite runs this file as it is; `index.ts` is the only file that knows Deno.
 //
-// Who may call it. The first thing the function does is ask the database `public.is_admin()` WITH THE CALLER'S TOKEN (the
+// Who may call it. The first thing the function does (after it has a token) is ask the database `public.is_admin()` WITH THE CALLER'S TOKEN (the
 // public key as `apikey`, the caller's token as `Authorization`), never with the service-role key: the answer is about the
 // caller. Everything else (a missing or malformed token, a token that is not an admin's, a method other than POST, an
 // origin other than the dashboard's) is answered 404 with no body, the same for all of them, so the function does not say
 // that it exists. The one other answer before the check is the CORS preflight (204; it carries no token and nothing in it
 // depends on who asks), and a check that could not be made is 503 (not an oracle: it is the same for an admin and for
-// anyone else). Only after the check does the service-role key come into play.
+// anyone else). Then it asks Supabase Auth whether the session is still live (`identify`, as delete-account does), so a signed-out or
+// revoked session is a 404 too. Only after both checks does the service-role key do any work.
 //
 // What the request is (POST, JSON, at most 2 KB): { "address": "<the address>", "action": "end_alerts" | "delete_account" }.
 // What the answers are, for the admin only (every body is JSON; each has `ok`):
@@ -36,7 +37,7 @@
 // What it never does: log the address (nothing is logged but function names and status codes), return a row or an id,
 // or email the person.
 
-import { bearerToken } from '../_shared/identity.ts';
+import { bearerToken, identify } from '../_shared/identity.ts';
 import { deleteAuthUser, isUserId } from '../_shared/delete-user.ts';
 import {
   ALLOWED_ORIGIN,
@@ -200,6 +201,11 @@ export async function handleAdminAccount(request: Request, deps: Deps): Promise<
   const admin = await isAdmin(deps, config, token);
   if (admin === 'down') return fail(origin, 503, 'service_unavailable', 'The admin check did not answer. Nothing was done.');
   if (!admin) return notFound(origin);
+  // PostgREST checks the token's signature and expiry only. Ask Auth too, so a signed-out or revoked session is refused
+  // as well (the same check as delete-account), before anything is looked up, logged or done.
+  const session = await identify(deps, config, token, NAME);
+  if (session === 'down') return fail(origin, 503, 'service_unavailable', 'The admin check did not answer. Nothing was done.');
+  if (session === 'refused') return notFound(origin);
 
   try {
     const asked = await readRequest(request);

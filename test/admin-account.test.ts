@@ -20,7 +20,7 @@ const BOB_LOGIN = 'bob.private@example.test';
 const BOB_DIGEST = 'bob.digest@example.test';
 const TWIN = 'twin@example.test';
 
-type Fault = 'none' | 'admin-down' | 'admin-5xx' | 'admin-garbage' | 'ids-fail' | 'ids-garbage' | 'log-fail' | 'unsubscribe-fail' | 'delete-down' | 'delete-5xx' | 'delete-4xx';
+type Fault = 'none' | 'admin-down' | 'admin-5xx' | 'admin-garbage' | 'ids-fail' | 'ids-garbage' | 'log-fail' | 'unsubscribe-fail' | 'session-revoked' | 'session-down' | 'session-5xx' | 'delete-down' | 'delete-5xx' | 'delete-4xx';
 
 interface Call {
   url: string;
@@ -62,6 +62,13 @@ function world(fault: Fault = 'none'): World {
       const token = (headers.authorization ?? '').replace('Bearer ', '');
       if (token !== ADMIN_TOKEN && token !== USER_TOKEN) return Promise.resolve(new Response('{}', { status: 401 }));
       return Promise.resolve(Response.json(token === ADMIN_TOKEN));
+    }
+    if (rest === '/auth/v1/user') {
+      if (fault === 'session-down') return Promise.reject(new Error('connection refused'));
+      if (fault === 'session-5xx') return Promise.resolve(new Response('no', { status: 502 }));
+      if (fault === 'session-revoked') return Promise.resolve(Response.json({ error_code: 'session_not_found' }, { status: 403 }));
+      const token = (headers.authorization ?? '').replace('Bearer ', '');
+      return Promise.resolve(token === ADMIN_TOKEN ? Response.json({ id: ANN_ID, role: 'authenticated' }) : new Response('{}', { status: 401 }));
     }
     if (!asService) return Promise.resolve(new Response('{}', { status: 401 }));
     if (rest === '/rest/v1/rpc/admin_account_ids') {
@@ -204,6 +211,35 @@ describe('who may call it: everyone else gets a bare 404', () => {
     }
   });
 
+  it('answers a bare 404 to a revoked or expired session, and looks up, logs and deletes nothing', async () => {
+    for (const action of ['end_alerts', 'delete_account'] as const) {
+      const w = world('session-revoked');
+      const response = await handleAdminAccount(ask({ address: ANN_ADDRESS, action }), w.deps);
+      expect(response.status).toBe(404);
+      expect(await response.text()).toBe('');
+      expect(w.calls.map((c) => c.url.replace(config.supabaseUrl, ''))).toEqual(['/rest/v1/rpc/is_admin', '/auth/v1/user']);
+      expect(w.log).toEqual([]);
+      expect(w.unsubscribed).toEqual([]);
+      expect(w.deleted).toEqual([]);
+    }
+  });
+
+  it('says 503 when the session check cannot be made, and does nothing', async () => {
+    for (const fault of ['session-down', 'session-5xx'] as const) {
+      const w = world(fault);
+      const response = await handleAdminAccount(ask({ address: ANN_ADDRESS, action: 'delete_account' }), w.deps);
+      expect(response.status, fault).toBe(503);
+      expect(w.calls.map((c) => c.url.replace(config.supabaseUrl, ''))).toEqual(['/rest/v1/rpc/is_admin', '/auth/v1/user']);
+      expect(w.deleted).toEqual([]);
+    }
+  });
+
+  it('does not ask Auth for a caller who is not an admin', async () => {
+    const w = world();
+    await handleAdminAccount(ask({ address: ANN_ADDRESS, action: 'end_alerts' }, USER_TOKEN), w.deps);
+    expect(w.calls.map((c) => c.url)).toEqual([`${config.supabaseUrl}/rest/v1/rpc/is_admin`]);
+  });
+
   it('treats an answer of the check that is not `true` as not an admin', async () => {
     const w = world('admin-garbage');
     expect((await handleAdminAccount(ask({ address: ANN_ADDRESS, action: 'delete_account' }), w.deps)).status).toBe(404);
@@ -293,10 +329,10 @@ describe('the two answers for the admin', () => {
     const steps = (w: World): string[] => w.calls.map((c) => `${c.method} ${c.url.replace(config.supabaseUrl, '')}`);
     const a = world();
     await handleAdminAccount(ask({ address: ANN_ADDRESS, action: 'end_alerts' }), a.deps);
-    expect(steps(a)).toEqual(['POST /rest/v1/rpc/is_admin', 'POST /rest/v1/rpc/admin_account_ids', 'POST /rest/v1/admin_log', 'POST /rest/v1/rpc/unsubscribe_user']);
+    expect(steps(a)).toEqual(['POST /rest/v1/rpc/is_admin', 'GET /auth/v1/user', 'POST /rest/v1/rpc/admin_account_ids', 'POST /rest/v1/admin_log', 'POST /rest/v1/rpc/unsubscribe_user']);
     const d = world();
     await handleAdminAccount(ask({ address: ANN_ADDRESS, action: 'delete_account' }), d.deps);
-    expect(steps(d)).toEqual(['POST /rest/v1/rpc/is_admin', 'POST /rest/v1/rpc/admin_account_ids', 'POST /rest/v1/admin_log', `DELETE /auth/v1/admin/users/${ANN_ID}`]);
+    expect(steps(d)).toEqual(['POST /rest/v1/rpc/is_admin', 'GET /auth/v1/user', 'POST /rest/v1/rpc/admin_account_ids', 'POST /rest/v1/admin_log', `DELETE /auth/v1/admin/users/${ANN_ID}`]);
   });
 
   it('trims the address it is given', async () => {
@@ -360,7 +396,7 @@ describe('what goes wrong', () => {
       const response = await handleAdminAccount(ask(body), w.deps);
       expect(response.status, JSON.stringify(body).slice(0, 60)).toBe(400);
       expect((await answer(response)).error?.code).toBe('bad_request');
-      expect(w.calls.map((c) => c.url.replace(config.supabaseUrl, ''))).toEqual(['/rest/v1/rpc/is_admin']);
+      expect(w.calls.map((c) => c.url.replace(config.supabaseUrl, ''))).toEqual(['/rest/v1/rpc/is_admin', '/auth/v1/user']);
     }
   });
 
@@ -386,7 +422,7 @@ describe('what goes wrong', () => {
   });
 
   it('never logs the address, a token, a key or a user id, whatever fails', async () => {
-    const faults: Fault[] = ['none', 'admin-down', 'admin-5xx', 'ids-fail', 'ids-garbage', 'log-fail', 'unsubscribe-fail', 'delete-down', 'delete-5xx', 'delete-4xx'];
+    const faults: Fault[] = ['none', 'admin-down', 'admin-5xx', 'session-revoked', 'session-down', 'ids-fail', 'ids-garbage', 'log-fail', 'unsubscribe-fail', 'delete-down', 'delete-5xx', 'delete-4xx'];
     for (const fault of faults) {
       for (const action of ['end_alerts', 'delete_account'] as const) {
         await handleAdminAccount(ask({ address: ANN_ADDRESS, action }), world(fault).deps);
