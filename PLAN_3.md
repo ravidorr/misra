@@ -1,8 +1,7 @@
 # Plan 3: more companies
 
 Step plan to close the coverage gap users reported: too few startups and too few large multinationals. Drafted
-2026-11-18, revised the same day after two reviews; A1, A2, B1 and B3 are done, B2 waits for the maintainer; the rest is not built yet. Targets are proposals for the
-maintainer to confirm.
+2026-11-18, revised the same day after two reviews; A1, A2, B1, B3 and D3 are done, B2 waits for the maintainer; the rest is not built yet. Targets are proposals for the
 
 Conventions are those of `PLAN.md`: a change to a listed Python module bumps `package.json` and `pyproject.toml`
 together and adds a `CHANGELOG.md` entry; a new Python module is registered in `RELEASE_TRIGGER_PATHS` (`ci.yml`,
@@ -242,12 +241,16 @@ Target: +60 crawled that return jobs from the runner.
   - User reports (step F).
   - Israeli job boards as a source of employer names: only after the maintainer has checked each site's terms with the
     lawyer. Skipped until then.
-- **D3. Candidate script.** A dev tool in `survey.py` or `survey2.py` (typed, with tests, 100% coverage; the network
+- [x] **D3. Candidate script.** A dev tool in `survey.py` or `survey2.py` (typed, with tests, 100% coverage; the network
   calls faked as the other tests do). For each name it skips excluded (`is_excluded`) and already-listed domains, probes
   the career page link scan (`ATS_LINK`) and then the ATS list in `PROBE_ORDER`, counts Israel jobs with `israel_count`,
   and prints a keep or skip table. It needs a `sync_supabase.py --pull` with the service-role key first (see "Respect
   the limits"); never paste the key in a PR or chat. Output goes to the scratchpad. Done when: 100 names run in one
   command.
+  Status: built in `survey.py` (`python3 survey.py --candidates FILE [--limit N] [--keep OUT.json]`, `CONTRIBUTING.md`,
+  "Trying candidate companies"). It also skips excluded records by domain, checks the board's company name against the
+  candidate and marks a Workday or Oracle board `needs-yes` with its runner risk. About 100 names take roughly 10
+  minutes (one request a second per host).
 - **D4. Accept rule.** Keep a candidate that has Israel jobs on its own board. A candidate with only a career page and
   no feed becomes a browser crawl and counts against the crawl-time budget, so it needs the maintainer's yes. Skip
   everything else and record nothing.
