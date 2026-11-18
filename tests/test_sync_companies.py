@@ -159,6 +159,22 @@ def test_an_empty_table_is_refused_and_the_old_file_is_left_alone(tmp_path: Path
     assert not (tmp_path / "companies.json.part").exists()
 
 
+def test_a_table_that_lost_more_than_half_of_the_last_pull_is_refused_and_the_file_is_left_alone(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "companies.json"
+    sync_supabase.pull_companies(source(CompanyPages([company_row(f"C{n}") for n in range(10)])), str(path))
+    before = path.read_text(encoding="utf-8")
+    with pytest.raises(SyncError, match=r"holds 4 companies and the last pull had 10"):
+        sync_supabase.pull_companies(source(CompanyPages([company_row(f"C{n}") for n in range(4)])), str(path))
+    assert path.read_text(encoding="utf-8") == before
+    sync_supabase.pull_companies(
+        source(CompanyPages([company_row(f"C{n}") for n in range(5)])), str(path)
+    )  # half is fine
+    (tmp_path / "companies.pulled.json").write_text("cut", encoding="utf-8")  # an unreadable baseline: no yardstick
+    assert sync_supabase.pull_companies(source(CompanyPages([company_row("A")])), str(path)) == 1
+
+
 def test_a_table_that_cannot_be_read_leaves_no_file(tmp_path: Path) -> None:
     class Down:
         def request(self, *_a: Any, **_k: Any) -> Any:
@@ -218,7 +234,7 @@ def test_only_the_discovered_fields_that_changed_are_sent_and_nothing_a_person_o
     ]
     edited = found("Acme", ats="lever", slug="acme", israel_only=True, verify=False, links={"global": "x"}, segment="s")
     done, fake = push(rows, [edited, found("Same")], tmp_path)
-    assert done == (1, 0, 0)
+    assert done == (1, 0, 0, 0)
     (patch,) = fake.patches()
     assert patch["json"] == {"ats": "lever", "slug": "acme", "source": "page"}  # careers_url and status agree
     assert set(patch["json"]) <= set(discover.DISCOVERED)
@@ -241,17 +257,17 @@ def test_a_value_the_pull_left_out_is_matched_as_null_and_an_empty_string_equals
 ) -> None:
     rows = [company_row("Acme", ats=None, slug=None, source=None, careers_url=None, status=None)]
     record = {"name": "Acme", "crawl": True, "careers_url": "", "ats": "", "slug": "", "source": "", "status": ""}
-    assert push(rows, [record], tmp_path)[0] == (0, 0, 0)
-    assert push(rows, [{"name": "Acme", "crawl": True}], tmp_path)[0] == (0, 0, 0)  # keys the record lacks
+    assert push(rows, [record], tmp_path)[0] == (0, 0, 0, 0)
+    assert push(rows, [{"name": "Acme", "crawl": True}], tmp_path)[0] == (0, 0, 0, 0)  # keys the record lacks
     done, fake = push(rows, [{**record, "slug": "s"}], tmp_path)
-    assert done == (1, 0, 0)
+    assert done == (1, 0, 0, 0)
     assert fake.patches()[0]["params"]["ats"] == "is.null" and fake.patches()[0]["json"] == {"slug": "s"}
     assert rows[0]["slug"] == "s"
 
 
 def test_a_careers_address_that_is_http_is_sent_as_https(tmp_path: Path) -> None:
     rows = [company_row("Acme", careers_url="")]
-    record = found("Acme", careers_url="http://acme.test/jobs", ats="", slug="", source="", status="x")
+    record = found("Acme", careers_url="http://acme.test/jobs", ats="", slug="", source="", status="ok")
     done, fake = push(rows, [record], tmp_path)
     assert done[0] == 1
     assert fake.patches()[0]["json"]["careers_url"] == "https://acme.test/jobs"
@@ -265,7 +281,7 @@ def test_a_company_that_is_not_crawled_or_excluded_or_new_is_left_alone(tmp_path
     ]
     records = [found("Card"), found("Gone"), found("Missing"), found("Acme", slug="new"), found("Out", crawl=False)]
     done, fake = push(rows, records, tmp_path)
-    assert done == (1, 3, 0)  # a record of the file that is not crawled is not counted at all
+    assert done == (1, 3, 0, 0)  # a record of the file that is not crawled is not counted at all
     assert [p["params"]["name"] for p in fake.patches()] == ["eq.Acme"]
 
 
@@ -285,23 +301,51 @@ def test_a_row_an_editor_changed_since_the_pull_is_left_alone(tmp_path: Path, ed
     edited = [dict(rows[0])]
     edit(edited)  # what the editor alone leaves
     done, _fake = push(rows, [found("Acme", slug="new", source="page")], tmp_path, edit=edit)
-    assert done == (0, 1, 0)
+    assert done == (0, 1, 0, 0)
     assert rows == edited
 
 
 def test_two_pins_with_a_corrected_ats_and_slug_keep_the_correction(tmp_path: Path) -> None:
     """Discovery keeps a pin's ats and slug as pulled; the push must not write them back over a correction."""
-    rows = [company_row("Pinned", ats="lever", slug="wrong", source="override")]
-    record = found("Pinned", ats="lever", slug="wrong", source="override", status="ats_failed")
+    rows = [company_row("Pinned", ats="lever", slug="wrong", source="override", status="ats_failed")]
+    record = found("Pinned", ats="lever", slug="wrong", source="override", status="not_found")
     done, fake = push(rows, [record], tmp_path, edit=lambda r: r[0].update(slug="right"))
-    assert (done, rows[0]["slug"]) == ((0, 1, 0), "right")
+    assert (done, rows[0]["slug"]) == ((0, 1, 0, 0), "right")
     assert len(fake.patches()) == 1  # it asked, and the row did not match
     done, _ = push(
-        [pinned := company_row("Pinned", ats="lever", slug="s", source="override")],
-        [found("Pinned", ats="lever", slug="s", source="override", status="ats_failed")],
+        [pinned := company_row("Pinned", ats="lever", slug="s", source="override", status="ats_failed")],
+        [found("Pinned", ats="lever", slug="s", source="override", status="not_found")],
         tmp_path,
     )
-    assert (done, pinned["status"]) == ((1, 0, 0), "ats_failed")  # the status discovery found is still written
+    assert (done, pinned["status"]) == ((1, 0, 0, 0), "not_found")  # a feed that was not ok is rewritten
+
+
+def test_a_working_feed_that_discovery_no_longer_finds_is_held_back_with_a_counts_only_warning(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    rows = [
+        company_row(n, ats="lever", slug=n.lower(), source="page", careers_url="") for n in ("Down", "Blank", "Fine")
+    ]
+    gone = {"ats": "", "slug": "", "source": "", "status": "not_found"}
+    blank = {"ats": "", "slug": "", "source": "", "status": "ok"}  # still ok, but a value turned blank
+    records = [found("Down", **gone), found("Blank", **blank), found("Fine", slug="new")]
+    done, fake = push(rows, records, tmp_path)
+    assert done == (1, 0, 0, 2)
+    assert [p["params"]["name"] for p in fake.patches()] == ["eq.Fine"]
+    assert (rows[0]["ats"], rows[1]["slug"]) == ("lever", "blank")
+    assert capsys.readouterr().out == (
+        "::warning::2 companies with a working feed were left as they are: discovery found nothing for them\n"
+    )
+
+
+def test_a_company_that_was_not_ok_may_stay_blank_or_change_to_any_status(tmp_path: Path) -> None:
+    rows = [company_row("Was", ats="", slug="", source="", status="not_found", careers_url=None)]
+    done, _ = push(
+        rows,
+        [found("Was", ats="", slug="", source="", status="careers_page_only", careers_url="https://w.test")],
+        tmp_path,
+    )
+    assert done == (1, 0, 0, 0)
 
 
 def test_a_request_that_fails_is_counted_and_the_next_one_still_goes_and_the_log_holds_no_cell(
@@ -309,7 +353,7 @@ def test_a_request_that_fails_is_counted_and_the_next_one_still_goes_and_the_log
 ) -> None:
     rows = [company_row("Bad"), company_row("Good")]
     done, _fake = push(rows, [found("Bad", slug="x"), found("Good", slug="y")], tmp_path, fail_patch_of="Bad")
-    assert done == (1, 0, 1)
+    assert done == (1, 0, 1, 0)
     out = capsys.readouterr().out
     assert out.endswith("::warning::a company could not be updated: PATCH companies failed: HTTP 400\n")
     assert SECRET_TEXT not in out
@@ -327,7 +371,7 @@ def test_an_answer_that_is_not_a_list_is_a_failure(tmp_path: Path) -> None:
     path = tmp_path / "c.json"
     sync_supabase.pull_companies(source(fake), str(path))
     write_json(path, [found("Acme", slug="new")])
-    assert sync_supabase.push_companies(client(fake), str(path)) == (0, 0, 1)
+    assert sync_supabase.push_companies(client(fake), str(path)) == (0, 0, 1, 0)
 
 
 def test_an_empty_baseline_is_refused_and_nothing_is_sent(tmp_path: Path) -> None:
@@ -358,7 +402,7 @@ def test_main_push_prints_counts_only(
     fake = Companies(rows)
     run_push(monkeypatch, fake)
     out = capsys.readouterr().out
-    assert out == "Supabase: 1 companies updated, 1 left alone (changed or removed since the pull)\n"
+    assert out == "Supabase: 1 companies updated, 1 left alone (changed or removed since the pull), 0 held back\n"
     assert KEY not in out
     assert fake.patches()[0]["headers"]["apikey"] == KEY
 

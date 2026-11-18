@@ -96,7 +96,7 @@ def load_excluded(path: str = COMPANIES) -> list[str]:
         if len(name) < EXCLUDED_MIN_NAME:
             raise ExclusionError(f"{where}: the company name is blank or shorter than {EXCLUDED_MIN_NAME}")
         if name.casefold() in {n.casefold() for n in names}:
-            raise ExclusionError(f"{where}: {name!r} is on the list twice")
+            raise ExclusionError(f"{where}: a name is on the list twice")  # not which: the log is public
         why = record["excluded"]
         if not isinstance(why, dict) or not isinstance(why.get("reason"), str) or not why["reason"].strip():
             raise ExclusionError(f"{where}: the reason is blank")

@@ -591,7 +591,7 @@ def test_names_are_stripped_and_read_in_order_and_only_excluded_records_count(tm
         ([("", "r", "2026-11-20")], "record 2: the company name is blank"),
         ([("   ", "r", "2026-11-20")], "blank or shorter"),
         ([("A", "r", "2026-11-20")], "blank or shorter"),
-        ([("Acme", "r", "2026-11-20"), ("acme", "r", "2026-11-20")], "record 3: 'acme' is on the list twice"),
+        ([("Acme", "r", "2026-11-20"), ("acme", "r", "2026-11-20")], "record 3: a name is on the list twice"),
         ([("Acme", "", "2026-11-20")], "the reason is blank"),
         ([("Acme", "  ", "2026-11-20")], "the reason is blank"),
         ([("Acme", "r", "")], "not a YYYY-MM-DD date"),
