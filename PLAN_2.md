@@ -271,9 +271,9 @@ maintainer would do by hand. It shows counts, never lists.
 - Done when: a request to stop alerts or delete an account is done on the admin page with the two answers above, the
   log shows the action and the time, and no address is stored or shown anywhere.
 
-Status: every box of steps 1 to 5 is ticked, so the code of PLAN_2 is complete. What remains is not code: the maintainer
-checks the live admin page once against the real project (sign in, read the Crawl, Alerts and Log areas, and try the two
-"End job alerts" on an address of his own, and "Delete an account" only on a throwaway account or on an address no account uses, expecting "No account uses that address."), and keeps `PLAN_3.md` as the next work.
+Status: every box of steps 1 to 5 is ticked, so the code of PLAN_2 is complete. The maintainer did the live check of
+both Alerts forms on the real project on 2026-11-18 and they behaved as expected, so PLAN_2 is complete. `PLAN_3.md` is
+the next work.
 
 ## Out of scope
 
