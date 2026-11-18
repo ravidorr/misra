@@ -54,9 +54,14 @@ A1 regenerates this table from the data; the numbers below are the ones to check
   or, for a known company, sent as a flood.
 - **Count only what the runner can read.** A target counts a company only if it returns jobs from the GitHub runner,
   not from a normal network. Test a Workday or Oracle pin from a daily run before counting it.
-- **Batches.** At most 25 records per data PR. Before each batch, check the three budgets below. After it, review its
-  first daily run (jobs per company, new failures, new entries on the coverage card and in the maintainer alert) before
-  the next batch starts.
+- **Batches.** At most 25 new names per data PR (steps D and E). Before each batch, check the three budgets below.
+  After it, review its first daily run (jobs per company, new failures, new entries on the coverage card and in the
+  maintainer alert) before the next batch starts. Pinning a researched record (step C) is the exception: one company
+  per PR, as `TODO.md` ("How to research a company", step 4) says, so a bad pin is easy to drop.
+- **Counts in `TODO.md`.** `tests/test_todo_counts.py` fails when the counts quoted in the `TODO.md` research item (the
+  total, the four segment counts, the no-careers-URL count and the "crawled today" count) disagree with
+  `data/companies.json`. Every PR that unlocks, pins or parks a researched record updates those numbers in the same
+  PR. This is the one allowed edit of `TODO.md` by this plan; nothing else there is changed for it.
 - **Lawyer's files.** `ABOUT.md`, `PRIVACY.md`, `TERMS.md` and `ASSISTANT.md` are not touched by this plan.
 - **Track in `TODO.md`.** This plan is the design; open items go to `TODO.md`.
 
@@ -100,7 +105,9 @@ A1 regenerates this table from the data; the numbers below are the ones to check
 
 ## Step C: unlock the 80 researched records
 
-Each unlocked company changes `crawl` to `true`, drops its `gap`, and runs through `discover.py`. Target: 30. Read
+Each unlocked company is one PR: set `crawl` to `true`, `source` to `override` with its `ats` and `slug`, `status` to
+`ok` (and `israel_only` for a multinational), remove its `gap` and `segment`, and update the `TODO.md` counts. Do not
+rerun `discover.py` for a pin: it re-probes every crawled company and keeps a pinned record as it is. Target: 30. Read
 the "Prior findings" first; do not repeat a checked path.
 
 - **C1. `no_careers_url` (23).** Find the real career page by hand (company site, LinkedIn page, VC portfolio page),
