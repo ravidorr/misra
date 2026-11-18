@@ -387,11 +387,19 @@ def pull_companies(source: Source, path: str = COMPANIES) -> int:
     records.sort(key=lambda record: str(record["name"]).casefold())
     part = Path(path + ".part")
     part.parent.mkdir(parents=True, exist_ok=True)  # data/ holds nothing else in a fresh checkout
-    text = json.dumps(records, indent=1, ensure_ascii=False) + "\n"
-    Path(baseline_path(path)).write_text(text, encoding="utf-8")  # what --push-companies compares with
-    part.write_text(text, encoding="utf-8")
+    Path(baseline_path(path)).write_text(dump(records), encoding="utf-8")  # as the table holds it: nulls left out
+    # a company added with a name and a domain has no discovered field yet: the readers get empty ones (not found
+    # yet, as discover.py writes them) so such a record waits for discovery and never stops a run
+    filled = [
+        {k: r.get(k, "") for k in RECORD_KEYS if k in r or (k in DISCOVERED and "excluded" not in r)} for r in records
+    ]
+    part.write_text(dump(filled), encoding="utf-8")
     part.replace(path)
     return len(records)
+
+
+def dump(records: list[dict[str, Any]]) -> str:
+    return json.dumps(records, indent=1, ensure_ascii=False) + "\n"
 
 
 def baseline_path(path: str = COMPANIES) -> str:

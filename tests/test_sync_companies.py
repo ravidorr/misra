@@ -2,6 +2,8 @@
 --push-companies sends back the discovered fields of the records that discovery changed, and nothing else."""
 
 import json
+import sqlite3
+import sys
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
@@ -9,14 +11,17 @@ from typing import Any
 import pytest
 import requests
 
+import build_dashboard
 import common
 import discover
 import export_accounts
+import run
 import sync_supabase
 from common import ExclusionError, load_excluded
 from sync_supabase import SyncError
 from tests.conftest import excluded_record, write_json
 from tests.fakes import FakeHttpResponse
+from tests.test_build_dashboard import prepare, read_payload
 from tests.test_sync_supabase import KEY, URL, company_row, job_row
 from tests.test_sync_supabase import Pages as HistoryPages
 
@@ -119,7 +124,13 @@ def test_the_pull_writes_the_list_sorted_in_the_format_of_discover_without_the_k
         assert None not in record.values()
     assert records[2] == excluded_record("Gone")  # an excluded record carries the name, crawl and the exclusion only
     assert load_excluded(str(path)) == ["Gone"]
-    assert (tmp_path / "companies.pulled.json").read_text(encoding="utf-8") == path.read_text(encoding="utf-8")
+    baseline = json.loads((tmp_path / "companies.pulled.json").read_text(encoding="utf-8"))
+    assert baseline[1] == {"name": "beta", "domain": "beta.test", "crawl": True, "careers_url": "", "ats": "lever"} | {
+        "slug": "b",
+        "source": "page",
+        "status": "ok",
+        "israel_only": True,
+    }  # the table as it is: a null is a key left out
     assert not (tmp_path / "companies.json.part").exists()
 
 
@@ -449,3 +460,39 @@ def test_a_pulled_file_with_a_record_nobody_can_trust_stops_the_run(tmp_path: Pa
     sync_supabase.pull_companies(source(CompanyPages(rows)), str(path))
     with pytest.raises(ExclusionError, match="the reason is blank"):
         load_excluded(str(path))
+
+
+# ---- a company added with only a name and a domain ----
+
+
+def test_a_company_added_with_only_a_name_and_a_domain_waits_for_discovery_and_stops_nothing(
+    db: sqlite3.Connection, workdir: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The table accepts it (every discovered field is null). The pull gives the readers empty ones, so the crawl and
+    the dashboard skip it, discover.py finds it, and the push writes the result over the nulls."""
+    prepare(workdir)  # the templates the build needs (and a list of its own, which the pull replaces)
+    new = company_row("New", status=None)
+    rows = [company_row("Zed", ats="fake", slug="z", source="page", careers_url=""), new]
+    path = workdir / "data" / "companies.json"
+    sync_supabase.pull_companies(source(Companies(rows)), str(path))
+    (pulled,) = (r for r in json.loads(path.read_text(encoding="utf-8")) if r["name"] == "New")
+    assert pulled == {"name": "New", "domain": "new.test", "crawl": True} | dict.fromkeys(discover.DISCOVERED, "")
+    db.close()
+    crawled: list[str] = []
+    monkeypatch.setitem(run.ADAPTERS, "fake", lambda slug: crawled.append(slug) or [])
+    run.main()  # selects the companies to crawl: a missing `status` used to raise KeyError here
+    assert crawled == ["z"]
+    build_dashboard.main()  # and builds the card of the companies without a feed
+    assert read_payload(workdir)["covered"] == 1
+    monkeypatch.setattr(sys, "argv", ["discover.py"])
+    monkeypatch.setattr(
+        discover,
+        "discover",
+        lambda row: {"careers_url": "", "ats": "lever", "slug": "new", "source": "guess", "status": "ok"},
+    )
+    discover.main()
+    fake = Companies(rows)
+    assert sync_supabase.push_companies(client(fake), str(path)) == (2, 0, 0, 0)  # discovery (stubbed) changed both
+    patches = {p["params"]["name"]: p for p in fake.patches()}
+    assert patches["eq.New"]["params"]["ats"] == "is.null"  # the baseline holds the null, so the filter still matches
+    assert (new["ats"], new["status"]) == ("lever", "ok")
