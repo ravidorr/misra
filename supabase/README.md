@@ -148,6 +148,39 @@ everyone else gets a permission error (`anon`) or no rows. It is not in the dail
 and the plan names the backup of `companies` as the history of edits). `supabase/tests/admin_log.sql` checks all of it
 (`all admin log checks passed`), and the migration lint pins it.
 
+## Crawl health
+
+Migration `20261129100000_admin_crawl_health.sql` (PLAN_2.md steps 2.1 and 2.2) lets a signed-in admin read the crawl
+history and adds `public.admin_crawl_health()`, one row per company. `crawl_log` gets `grant select` for `authenticated`
+and a policy `using (public.is_admin())`; `jobs` gets a second select policy with the same test, so an admin reads closed
+jobs too. The column grant of `jobs` is unchanged: `description` and `details` stay closed to every browser role, an admin
+included, and the lint still refuses any grant of either. The function is `security invoker`, so those policies are its
+gate: `anon` gets a permission error (execute is granted to `authenticated` only) and a signed-in non-admin gets zero rows.
+It does the counting in SQL because PostgREST returns 1000 rows at most and `crawl_log` holds about 24,000. Call it with
+`supabase.rpc('admin_crawl_health')`; rows come ordered by company and the page sorts them worst first.
+
+Companies listed: those with a log row in the 7 days up to the newest crawl day (`GAP_STALE_DAYS`, as in the coverage gaps
+of `run.py`), so a company that is no longer crawled drops out. Columns, in order:
+
+| Column | Type | Meaning |
+| --- | --- | --- |
+| `company` | text | the company name |
+| `last_crawl` | text | `ts` of its last log row (ISO local time) |
+| `last_good` | text | `ts` of its last row with `ok = 1`; null when none in the 90 days kept |
+| `last_ok` | boolean | the last row's result |
+| `last_note` | text | the last row's note; null when empty |
+| `streak` | integer | consecutive crawl days whose last run has `ok = 0`, robots.txt skips left out (a day with only skips neither counts nor breaks it) |
+| `failing` | boolean | the last `FAILING_RUNS` (2) crawls that are not robots.txt skips all have `ok = 0`, and the last row is neither a skip nor a held crawl |
+| `held` | boolean | the last row's note starts with `DROP_NOTE` (a sharp drop, nothing closed) |
+| `robots_skipped` | boolean | the last row's note starts with `ROBOTS_NOTE` |
+| `open_jobs` | integer | rows of `jobs` with `status = 'open'` now |
+| `fetched_30d_ago` | integer | `n_jobs` of its last row 30 to 37 days ago; null when there is none (the log may read short). It is a fetched count: 0 after a failed fetch or a skip, and the fetched count of a held crawl, not the open jobs of that day |
+
+The four literals of the `const` CTE are copies of `DROP_NOTE` and `ROBOTS_NOTE` (`common.py`) and `FAILING_RUNS` and
+`GAP_STALE_DAYS` (`run.py`); `tests/test_migrations.py` fails when they differ. `supabase/tests/admin_crawl_health.sql`
+checks the denial first (`anon`, a signed-in non-admin), the admin's reads, that the text of a posting stays unreadable,
+and each column on seeded logs (`all admin crawl health checks passed`); the migration lint pins the function and the policies.
+
 ## Stars and discards
 
 `user_jobs` holds one row per user and job with a single `state`, so a job is starred or discarded, never both. A star
