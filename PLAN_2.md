@@ -249,7 +249,7 @@ maintainer would do by hand. It shows counts, never lists.
 - [ ] 5.1 The Alerts counts, from a view or a `security definer` function gated by `is_admin()` that returns numbers
   only: subscriptions by state (pending, confirmed, off), and the number of distinct users emailed in each of the last 7
   days (from `emailed`; not the number of jobs). No address and no user id in the result.
-- [x] 5.2 (done: PR #220, `supabase/functions/admin-account/`, migration `20261201100000_admin_account_ids.sql`, not yet deployed or applied; request and answers in `supabase/README.md`.) The Edge Function `admin-account`, which first checks `is_admin()` with the caller's token and answers 404
+- [x] 5.2 (done: PR #220, `supabase/functions/admin-account/`, migration `20261202100000_admin_account_ids.sql`, not yet deployed or applied; request and answers in `supabase/README.md`.) The Edge Function `admin-account`, which first checks `is_admin()` with the caller's token and answers 404
   otherwise. It takes an address the maintainer types (from a support email) and does one of two things.
   - End job alerts: the same as the unsubscribe link (`PRIVACY.md`, "Email settings"). `unsubscribe_subscription` takes
     a token hash, so this is a new path by address, not a reuse.

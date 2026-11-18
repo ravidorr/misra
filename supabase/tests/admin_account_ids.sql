@@ -1,4 +1,4 @@
--- Tests for supabase/migrations/20261201100000_admin_account_ids.sql (PLAN_2.md step 5.2): the lookup behind the
+-- Tests for supabase/migrations/20261202100000_admin_account_ids.sql (PLAN_2.md step 5.2): the lookup behind the
 -- `admin-account` function finds an account by an address (ignoring case, whole address only), answers ids and nothing
 -- else, finds a digest address only when asked to, and may be run by the service role alone. Run it against a TEST
 -- database, never production.

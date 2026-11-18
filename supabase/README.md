@@ -562,7 +562,7 @@ redirect URLs set). Signed in on the dashboard with the throwaway account, star 
 PLAN_2.md step 5.2. The maintainer, signed in on the admin page, types the address from a support email and either ends
 that person's job alerts (what the unsubscribe link does) or deletes their account (what "Delete my account" does). Files:
 `supabase/functions/admin-account/` (`index.ts` starts the server, `handler.ts` holds the logic), `supabase/functions/_shared/delete-user.ts`
-(the Admin API call, now shared with `delete-account`), the migration `supabase/migrations/20261201100000_admin_account_ids.sql`
+(the Admin API call, now shared with `delete-account`), the migration `supabase/migrations/20261202100000_admin_account_ids.sql`
 and `supabase/config.toml` (`verify_jwt = false`: a CORS preflight carries no token; the function checks the caller itself).
 No new secret: `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` and `SUPABASE_ANON_KEY` are supplied to every function.
 
@@ -630,7 +630,7 @@ and the migration lint in `tests/test_migrations.py` pins it whole and checks th
 
 ### Apply and deploy admin-account (the maintainer; nothing here is done by the pull request)
 
-1. Apply `20261201100000_admin_account_ids.sql` once, as in "Apply the migrations".
+1. Apply `20261202100000_admin_account_ids.sql` once, as in "Apply the migrations".
 2. `supabase functions deploy admin-account --project-ref dncodqeqpoqwcxdctzco` (`config.toml` sets `verify_jwt = false`), and
    redeploy `delete-account`, which now imports the shared deletion. Logs:
    [Edge Functions, admin-account](https://supabase.com/dashboard/project/dncodqeqpoqwcxdctzco/functions/admin-account/logs).

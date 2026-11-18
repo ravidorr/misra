@@ -1097,7 +1097,7 @@ def test_admin_log_holds_no_user_id_and_no_address() -> None:
     assert set(body) == {"id", "ts", "action", "target"}
 
 
-ADMIN_ACCOUNT_FILE = MIGRATION_DIR / "20261201100000_admin_account_ids.sql"
+ADMIN_ACCOUNT_FILE = MIGRATION_DIR / "20261202100000_admin_account_ids.sql"
 ADMIN_ACCOUNT_SQL = ADMIN_ACCOUNT_FILE.read_text(encoding="utf-8")
 
 
