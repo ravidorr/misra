@@ -12,6 +12,12 @@ All notable changes are documented here. Format follows [Keep a Changelog](https
 
 - A Copy button under every code block of the legal pages (the address on "Connect your assistant", the command for Claude Code), in `templates/theme.js`.
 
+## [0.67.4] - 2026-11-18
+
+### Fixed
+
+- A company that is no longer crawled (`crawl` set to false, kept for the coverage gap card) had its open jobs frozen as open for good, because nothing crawled it to close them. `run.py` now closes them at the start of the run and keeps the rows as history. Freightos, Weebit Nano and Xtend move to the gap card (bot protection).
+
 ## [0.67.3] - 2026-11-18
 
 ### Changed
