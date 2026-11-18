@@ -3,6 +3,7 @@ Extracts JSON-LD JobPosting, else job-looking links. Returns list of jobs, or No
 
 import asyncio
 import contextlib
+import itertools
 import json
 import os
 import re
@@ -15,17 +16,20 @@ from common import ISRAEL, ROBOTS_NOTE, USER_AGENT, host_of, reserve_slot, robot
 from descriptions import attach, html_to_text, jsonld_description
 
 JOBLINK = re.compile(
-    r"/(jobs?|positions?|careers?|openings?|vacanc\w+|job-?post\w*)/[^/?#]{4,}|[?&]job_id=[^&#]+", re.I
+    r"/(jobs?|(?:open-)?positions?|careers?|details|cmcareer|openings?|vacanc\w+|job-?post\w*)/[^/?#]{4,}"
+    r"|[?&]job_id=[^&#]+",
+    re.I,
 )
 JOB_ID = re.compile(r"[?&](job_id=[^&#]+)", re.I)  # Tower: /job-description/?job_id=9672, the query is the job
 NOT_JOB = re.compile(
-    r"/(department|departments|category|team|teams|locations?|working-at|life-at|benefits|students?|early-careers?|login|search|saved|talent-network)\b|#",
+    r"/(department|departments|category|team|teams|locations?|working-at|life-at|benefits|students?|early-careers?|login|search|saved|talent-network|choose-country\S*)\b|#",
     re.I,
 )
 NEXT_SELS = [
     'a[title="Next" i]',
     "a.link-next",
     'a[aria-label="Next page" i]',
+    'button[aria-label="Next page" i]',
     'button[title="Next" i]',
     'body a[rel="next"]',
     'a[aria-label="Next" i]',
@@ -78,17 +82,19 @@ CARD_JS = r"""(els, cfg) => {
         return h.split('?')[0].replace(/\/+$/, '') + (m ? '?' + m[1] : '');
     };
     const text = n => (n.innerText || '').trim();
-    const many = n => {  // does n hold the title links of two or more jobs?
+    const jobLink = a => job.test(href(a)) && !skip.test(href(a));
+    const titled = a => jobLink(a) && text(a) && !button.test(text(a));
+    const many = n => {  // does n hold the links of two or more jobs? An icon-only link is one too.
         const seen = new Set();
         for (const a of n.querySelectorAll('a[href]')) {
-            const h = href(a), t = text(a);
-            if (job.test(h) && !skip.test(h) && t && !button.test(t)) {
-                seen.add(key(h));
+            if (jobLink(a) && (!text(a) || titled(a))) {
+                seen.add(key(href(a)));
                 if (seen.size > 1) return true;
             }
         }
         return false;
     };
+    const heading = n => (n && /^H[1-6]$/.test(n.tagName) ? text(n) : '');
     return els.map(e => {
         let n = e;
         for (let i = 0; i < 4 && n.parentElement; i++) {
@@ -96,7 +102,20 @@ CARD_JS = r"""(els, cfg) => {
             if ((up.innerText || '').length > cfg.max || many(up)) break;
             n = up;
         }
-        return [href(e), text(e), text(n).slice(0, cfg.max + 1)];
+        const own = e.querySelector('h1, h2, h3, h4, h5, h6');  // a title heading inside the link
+        let section = '';  // the nearest heading above the card, such as an office name over its list of jobs
+        for (let up = e, i = 0; up && !section && i < 6; up = up.parentElement, i++) {
+            for (let s = up.previousElementSibling; s && !section; s = s.previousElementSibling) section = heading(s);
+        }
+        const others = [...n.querySelectorAll('a[href]')].some(a => a !== e && titled(a));
+        const leaves = [];  // one line per text node: a card whose parts sit side by side prints them on one line
+        const walk = document.createTreeWalker(n, NodeFilter.SHOW_TEXT);
+        for (let t = walk.nextNode(); t; t = walk.nextNode()) {
+            const s = t.textContent.trim(), p = t.parentElement;
+            if (s && p && !/^(SCRIPT|STYLE|NOSCRIPT)$/.test(p.tagName) && p.checkVisibility()) leaves.push(s);
+        }
+        const card = text(n).slice(0, cfg.max + 1);
+        return [href(e), text(e), card, own ? text(own) : '', section, others, leaves.join('\n')];
     });
 }"""  # the card: the widest ancestor, up to 4 levels, with one job's title link and a card's worth of text
 CARD_ARGS = {"job": JOBLINK.pattern, "skip": NOT_JOB.pattern, "id": JOB_ID.pattern, "max": CARD_MAX}
@@ -104,8 +123,11 @@ CARD_LINE_MAX = 120  # a longer card line is a job description, not a title, pla
 CARD_BEFORE = 2  # lines above the title that can still be its place or team
 CARD_AFTER = 3  # and below it
 CARD_CHROME = frozenset({"save job", "share job", "apply", "apply now"})
-BUTTON_LINES = frozenset({"view position", "view role", "view job", "view full details", "learn more", "read more"})
-LINK_NOISE = CARD_CHROME | BUTTON_LINES | {"location", "location:", "department"}
+BUTTON_LINES = frozenset(
+    {"view position", "view role", "view job", "view full details", "learn more", "read more", "details"}
+)
+LOCATION_LABELS = frozenset({"location", "location:"})
+LINK_NOISE = CARD_CHROME | BUTTON_LINES | LOCATION_LABELS | {"department"}
 
 WHY: dict[str, str] = {}  # url -> reason, filled for failed or empty crawls, printed by run.py
 
@@ -147,7 +169,7 @@ _COUNTRIES = (
     "|japan|australia|netherlands|ireland|italy|mexico|argentina|colombia|south africa|south korea|korea|china"
     "|hong kong|ukraine|serbia|bulgaria|portugal|sweden|denmark|norway|finland|switzerland|austria|belgium"
     "|czech republic|turkey|uae|united arab emirates|philippines|vietnam|thailand|malaysia|indonesia|new zealand"
-    "|chile|peru|costa rica|greece|hungary|lithuania|estonia|croatia|egypt|taiwan"
+    "|chile|peru|costa rica|greece|hungary|lithuania|estonia|croatia|egypt|taiwan|iceland|cyprus|luxembourg|malta"
 )
 _CODES = (
     "IL|US|UK|GB|DE|IN|CA|FR|ES|PL|RO|BR|SG|JP|AU|NL|IE|IT|MX|AR|CO|ZA|KR|CN|HK|UA|RS|BG|PT|SE|DK|NO|FI|CH|AT|BE|CZ"
@@ -161,7 +183,11 @@ _ENDS_IN_COUNTRY = re.compile(rf",\s*(?:{_COUNTRIES})\s*$", re.I)
 _REMOTE = re.compile(r"\b(remote|hybrid|on-?site|worldwide|anywhere)\b", re.I)
 _COUNTRY_ONLY = re.compile(rf"(?:{_COUNTRIES})", re.I)
 MAX_LOCATION_LEN = 60
+_WORD = re.compile(r"\w")  # a line with no letter or digit is an icon or an arrow
+_OFFICE = re.compile(r"\s+offices?$", re.I)
+_WORK_MODE = re.compile(r"(?:remote|hybrid|on-?site)", re.I)
 MAX_TEAM_WORDS = 2
+MIN_CARD_TITLE_WORDS = 2  # a title read from a card, not from the link, has a role word or this many words
 MAX_ACRONYM_LEN = 4
 MAX_REMOTE_WORDS = 4
 
@@ -182,18 +208,26 @@ def _is_location(line: str) -> bool:
     )
 
 
-def _parse_card(lines: list[str]) -> tuple[str, str, str] | None:
+def _parse_card(lines: list[str], heading_first: bool = False) -> tuple[str, str, str] | None:
     """Title, location and team from the text lines of a job card, in whatever order the site prints them
-    ([location, title, type], [team, title, location], [title, location]). None when there is no title."""
+    ([location, title, type], [team, title, location], [title, location]). None when there is no title.
+    With `heading_first` the first line is a title the page marks with a heading: the team and wrapped-title guesses
+    are skipped."""
     # split table cells ("title<tab>team") and "Cyprus · Full-time" into their parts, and collapse padding
     parts = [p for ln in lines for p in re.split(r"\t+|\s+·\s+", ln)]
     lines = [" ".join(p.split()) for p in parts]
+    # the line under a "Location" label is a place, whether or not it names a country ("Location" / "Herzliya")
+    labelled = {b for a, b in itertools.pairwise(lines) if a.lower() in LOCATION_LABELS}
     lines = [ln for ln in lines if ln and ln.lower() not in CARD_NOISE]
-    places = list(dict.fromkeys(ln for ln in lines if _is_location(ln)))
+    places = list(
+        dict.fromkeys(ln for ln in lines if _is_location(ln) or (ln in labelled and len(ln) <= MAX_LOCATION_LEN))
+    )
     rest = list(dict.fromkeys(ln for ln in lines if ln not in places))  # a table row repeats its title cell
     if not rest:
         return None
     title, others = rest[0], rest[1:]
+    if heading_first:
+        return _with_places(title, others, places)
     # a title wrapped over two lines ("Senior Backend" / "Engineer"): a lone role word after a short line with no
     # role word of its own finishes that line, it is not a title under a team name. An acronym ("CISO") stays a title.
     if (
@@ -207,6 +241,10 @@ def _parse_card(lines: list[str]) -> tuple[str, str, str] | None:
     # a short leading line with no role word is a team name when the next line has one ("Analytics" / "... Engineer")
     if others and len(title.split()) <= MAX_TEAM_WORDS and not ROLE_WORD.search(title) and ROLE_WORD.search(others[0]):
         title, others = others[0], [title, *others[1:]]
+    return _with_places(title, others, places)
+
+
+def _with_places(title: str, others: list[str], places: list[str]) -> tuple[str, str, str]:
     if places:
         return title[:140], " | ".join(places)[:100], others[0] if others else ""
     return title[:140], " | ".join(others[:2])[:100], ""
@@ -215,15 +253,39 @@ def _parse_card(lines: list[str]) -> tuple[str, str, str] | None:
 def _card_extras(card: str, title: str) -> list[str]:
     """The lines of a job card around its title that can hold the place and team, in the order the card prints
     them: up to two above the title and three below. A card can reach up to headings and badges that sit further
-    away, so a window keeps them out while `_parse_card` still finds the place wherever it is printed."""
+    away, so a window keeps them out while `_parse_card` still finds the place wherever it is printed. A "Location"
+    label and the place under it count as one line, so a date or a team before them cannot push the place out."""
     low = title.lower()
     lines = [ln.strip() for ln in card.split("\n")]
     lines = [ln for ln in lines if ln and len(ln) <= CARD_LINE_MAX and ln.lower() not in CARD_CHROME | BUTTON_LINES]
-    at = next((i for i, ln in enumerate(lines) if ln.lower() == low), None)
+    fused: list[str] = []
+    for ln in lines:
+        if fused and fused[-1].lower() in LOCATION_LABELS:
+            fused[-1] += f"\n{ln}"
+        else:
+            fused.append(ln)
+    at = next((i for i, ln in enumerate(fused) if ln.lower() == low), None)
     if at is None:
-        return lines[:2]
-    after = [ln for ln in lines[at + 1 :] if ln.lower() != low]
-    return [*lines[max(0, at - CARD_BEFORE) : at], *after[:CARD_AFTER]]
+        window = fused[:2]
+    else:
+        after = [ln for ln in fused[at + 1 :] if ln.lower() != low]
+        window = [*fused[max(0, at - CARD_BEFORE) : at], *after[:CARD_AFTER]]
+    return [part for ln in window for part in ln.split("\n")]
+
+
+def _card_lines(leaves: str) -> list[str]:
+    """The text of a card whose job link has no title of its own (an icon, "Details"), one line for each element,
+    without the button labels."""
+    lines = [ln.strip() for ln in leaves.split("\n")]
+    return [ln for ln in lines if ln and len(ln) <= CARD_LINE_MAX and ln.lower() not in LINK_NOISE and _WORD.search(ln)]
+
+
+def _section_place(heading: str) -> str:
+    """The place an office heading names ("Tel Aviv Office" gives "Tel Aviv"), or "" for any other heading."""
+    place = _OFFICE.sub("", heading).strip()
+    if not place or len(heading) > MAX_LOCATION_LEN or ROLE_WORD.search(heading):
+        return ""
+    return place if place != heading or _is_location(heading) else ""
 
 
 def _job_key(href: str) -> str:
@@ -408,23 +470,40 @@ async def crawl_one(ctx: Any, url: str, sem: asyncio.Semaphore) -> list[dict[str
                 found = 0
                 links = await page.eval_on_selector_all("a[href]", CARD_JS, CARD_ARGS)
                 link_count = len(links)
-                for href, text, card in links:
+                for href, text, card, head, section, others, leaves in links:
                     key = _job_key(href)
-                    if not text or key in seen or not JOBLINK.search(href) or NOT_JOB.search(href):
+                    if key in seen or not JOBLINK.search(href) or NOT_JOB.search(href):
                         continue
-                    lines = [ln.strip() for ln in text.split("\n") if ln.strip().lower() not in LINK_NOISE | {""}]
+                    lines = [
+                        ln.strip()
+                        for ln in text.split("\n")
+                        if ln.strip().lower() not in LINK_NOISE | {""} and _WORD.search(ln)
+                    ]
+                    heading_first = head in lines
+                    from_card = False
                     if not lines:
+                        # a link that is only an icon or a button label ("Details"): the title is in its card, unless
+                        # the card has a titled link of its own, which this one only repeats
+                        if others or not 0 < len(card) <= CARD_MAX:
+                            continue
+                        lines = _card_lines(leaves)
+                        from_card = True
+                    elif lines[0].lower() in LANGS:
                         continue
-                    if lines[0].lower() in LANGS:
-                        continue
-                    if (
-                        len(lines) == 1 and 0 < len(card) <= CARD_MAX
-                    ):  # bare title link: location sits in the surrounding card
+                    elif heading_first:  # the heading is the title, whatever the lines above it hold (a department)
+                        lines = [head, *(ln for ln in lines if ln != head)]
+                    elif len(lines) == 1 and 0 < len(card) <= CARD_MAX:
+                        # bare title link: location sits in the surrounding card
                         lines = [lines[0], *_card_extras(card, lines[0])]
-                    parsed = _parse_card(lines)
+                    parsed = _parse_card(lines, heading_first)
                     if parsed is None:
                         continue
                     title, loc, team = parsed
+                    if from_card and not (ROLE_WORD.search(title) or len(title.split()) >= MIN_CARD_TITLE_WORDS):
+                        continue  # a card with only a word or two of text is a banner or a place, not a job
+                    place = _section_place(section)
+                    if place and all(_WORK_MODE.fullmatch(p) for p in filter(None, loc.split(" | "))):
+                        loc = " | ".join(filter(None, [place, loc]))  # the office heading above the jobs
                     seen.add(key)
                     found += 1
                     m = re.search(r"myworkdayjobs\.com/(?:[a-z]{2}-[A-Z]{2}/)?[^/]+/job/([^/]+)/", href)

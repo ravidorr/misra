@@ -20,8 +20,8 @@ OVERSIZE = 700
 async def cards(page: Page, html: str) -> dict[str, str]:
     """Card text by link text, for every link on the page."""
     await page.set_content(html)
-    triples: list[list[Any]] = await page.eval_on_selector_all("a[href]", CARD_JS, CARD_ARGS)
-    return {text: card for _href, text, card in triples}
+    rows: list[list[Any]] = await page.eval_on_selector_all("a[href]", CARD_JS, CARD_ARGS)
+    return {row[1]: row[2] for row in rows}
 
 
 def item(path: str, title: str, place: str, cls: str = "item") -> str:
@@ -93,4 +93,86 @@ async def test_a_link_inside_an_svg_does_not_break_the_script(page: Page) -> Non
     html = f'<svg><a href="/icon"><text>icon</text></a></svg><div><a href="{BASE}/jobs/x-role">X Role</a></div>'
     await page.set_content(html)
     triples = await page.eval_on_selector_all("a[href]", CARD_JS, CARD_ARGS)
-    assert [href for href, _text, _card in triples] == ["", f"{BASE}/jobs/x-role"]
+    assert [row[0] for row in triples] == ["", f"{BASE}/jobs/x-role"]
+
+
+async def row_for(page: Page, html: str, path: str) -> list[Any]:
+    """The script's whole row (address, text, card, own heading, section heading, others, leaves) for one link."""
+    await page.set_content(html)
+    rows: list[list[Any]] = await page.eval_on_selector_all("a[href]", CARD_JS, CARD_ARGS)
+    return next(row for row in rows if row[0].endswith(path))
+
+
+def icon_card(path: str, title: str, place: str) -> str:
+    """env0: the title and place are plain text, the link is an arrow with hidden text."""
+    return (
+        f'<div class="card"><div><p>{title}</p></div><div>{place}</div>'
+        f'<a href="{BASE}{path}"><svg width="9" height="9"></svg></a></div>'
+    )
+
+
+async def test_an_icon_only_link_does_not_let_the_card_swallow_the_next_job(page: Page) -> None:
+    first, second = icon_card("/careers/a-role", "A Role", "Haifa"), icon_card("/careers/b-role", "B Role", "Eilat")
+    html = f"<ul><li>{first}</li><li>{second}</li></ul>"
+    row = await row_for(page, html, "/careers/a-role")
+    assert row[1] == ""
+    assert row[2] == "A Role\n\nHaifa"  # the card stops at its own list item
+    assert row[6] == "A Role\nHaifa"
+
+
+async def test_the_text_of_a_card_comes_back_one_line_for_each_element(page: Page) -> None:
+    html = (
+        f'<div><a href="{BASE}/careers/x-role" style="display:inline">Details</a>'
+        '<ul><li style="display:inline">X Role</li><li style="display:inline">Haifa</li></ul>'
+        '<script>var s = 1;</script><style>p { color: red }</style><div style="display:none">hidden</div></div>'
+    )
+    row = await row_for(page, html, "/careers/x-role")
+    assert "X Role" not in row[2].split("\n")  # the page prints the two parts on one line
+    assert row[6] == "Details\nX Role\nHaifa"
+
+
+async def test_a_heading_inside_the_link_is_its_own_title(page: Page) -> None:
+    html = (
+        f'<a href="{BASE}/cmcareer/x-role"><div>Customer Delivery</div><h4>Field Engineer</h4><p>Haifa</p></a>'
+        f'<a href="{BASE}/cmcareer/y-role"><div>Sales</div><p>Sales Manager</p></a>'
+    )
+    assert (await row_for(page, html, "/cmcareer/x-role"))[3] == "Field Engineer"
+    assert (await row_for(page, html, "/cmcareer/y-role"))[3] == ""
+
+
+async def test_the_heading_above_the_card_is_the_section(page: Page) -> None:
+    html = (
+        '<div class="group"><h3>Tel Aviv Office</h3><div><ul>'
+        f'<li><a href="{BASE}/open-position/a-role">A Role</a></li>'
+        f'<li><a href="{BASE}/open-position/b-role">B Role</a></li>'
+        "</ul></div></div>"
+        f'<ul><li><a href="{BASE}/open-position/c-role">C Role</a></li></ul>'
+    )
+    assert (await row_for(page, html, "/open-position/a-role"))[4] == "Tel Aviv Office"
+    assert (await row_for(page, html, "/open-position/b-role"))[4] == "Tel Aviv Office"  # a nearer heading wins
+    assert (await row_for(page, html, "/open-position/c-role"))[4] == ""
+
+
+async def test_a_heading_too_far_above_is_not_the_section(page: Page) -> None:
+    inner = f'<a href="{BASE}/jobs/x-role">X Role</a>'
+    for _ in range(7):
+        inner = f"<div>{inner}</div>"
+    assert (await row_for(page, f"<h2>Far</h2>{inner}", "/jobs/x-role"))[4] == ""
+    assert (
+        await row_for(
+            page, f'<div><h2>Near</h2><div><a href="{BASE}/jobs/y-role">Y Role</a></div></div>', "/jobs/y-role"
+        )
+    )[4] == "Near"
+
+
+async def test_a_card_says_whether_it_has_another_titled_job_link(page: Page) -> None:
+    def html(button: str) -> str:
+        return (
+            f'<div><div><a href="{BASE}/jobs/x-role">X Role</a></div>'
+            f'<div><a href="{BASE}/jobs/x-role/details">{button}</a></div></div>'
+        )
+
+    assert (await row_for(page, html("Details"), "/jobs/x-role/details"))[5] is True
+    assert (await row_for(page, html("Details"), "/jobs/x-role"))[5] is False  # a button is not a title
+    lone = f'<div><a href="{BASE}/jobs/z-role">Details</a></div>'
+    assert (await row_for(page, lone, "/jobs/z-role"))[5] is False

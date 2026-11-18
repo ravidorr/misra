@@ -222,6 +222,8 @@ Target: 30. Read the "Prior findings" first; do not repeat a checked path.
 - **C3. `needs_reader` (20).** Group by platform and check `robots.txt` first. An adapter only for a platform with two
   or more companies that `robots.txt` allows (none qualifies today; the count may change after C1 and C2). The rest use
   `browser` or `comeet_page`, within the crawl-time budget. One adapter per PR, with fixtures and 100% coverage.
+  Reader fixes shipped in 0.74.0 (the `browser` card reader for icon-only and button-label links, the job links of Kornit,
+  Pillar and Apple, the `comeet_page` card of Zesty); the pins of those six records are made by hand afterwards.
 - **C4. `site_unusable` (10) and `no_openings` (6).** Recheck once; a site that is back or a board that reopened moves
   to the crawl. Repeat each quarter (step G).
 - **C5. `bot_protection` (7).** No change. Record the decision once so nobody retries.

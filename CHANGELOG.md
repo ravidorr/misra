@@ -19,6 +19,17 @@ All notable changes are documented here. Format follows [Keep a Changelog](https
 - The Crawl area of the admin page (PLAN_2.md step 2.2): it calls `admin_crawl_health()` when first shown and lists one card per company, worst first, with a headline, chips with counts (Needs attention, Failing, Robots.txt, Held, All), the values of the crawl and a status pill. Loading, empty, error and 401 states. Templates and tests only.
 - A Copy button under every code block of the legal pages (the address on "Connect your assistant", the command for Claude Code), in `templates/theme.js`.
 
+## [0.74.0] - 2026-11-19
+
+### Fixed
+
+- The `browser` reader (`browser_crawl.py`) read the card of a job link that is only an icon or a button label ("Details", "Read more", an arrow) as nothing or as a job titled "Details". The title, place and team now come from the card, one line for each element; a card with only a word of text (a banner, a city page) is still not a job, and a link whose card has a titled job link of its own only repeats it. env0 reads 5 jobs (1 in Israel) and Rapyd 18 (7 in Israel) with their titles. A heading inside the link is the title (Kornit: the department line was read as the title in 3 of 10 jobs); the line under a "Location" label is a place even when it names only a city, and no longer falls out of the window of lines read around the title (Apple); an office heading above the jobs ("Tel Aviv Office") is the place of a card whose only place is "Hybrid" or "Remote" (Pillar). Iceland, Cyprus, Luxembourg and Malta are places.
+- `comeet_page`: a theme whose card has the title outside the link (Zesty: the link says "Tell me more") returned nothing. The title and team are read from the list item around the link, the place from the link (`tel-aviv`, because the visible "Tel &#8211; Aviv" is not a place `common.ISRAEL` knows), and a list the page prints twice gives each job once.
+
+### Added
+
+- The `browser` reader matches the job links `/open-position/<slug>` (Pillar), `/cmcareer/<id>` (Kornit) and `/details/<id>/<slug>` (Apple), presses a "Next Page" button, and no longer reads a "choose your country" page as a job. Apple's search page (134 Israel results over 7 pages) stays far inside the cap of 60 pagination clicks a company, so the cap leaves nothing out. Regression run over the 32 browser and 6 `comeet_page` records of the live list: no job count, title or place changed (see the pull request).
+
 ## [0.72.1] - 2026-11-18
 
 ### Fixed

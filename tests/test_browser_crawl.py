@@ -27,8 +27,12 @@ async def run(page: FakePage) -> list[dict[str, Any]] | None:
     return result
 
 
-def link(path: str, text: str, card: str = "") -> list[str]:
-    return [f"https://x.test{path}", text, card]
+def link(path: str, text: str, card: str = "", **fields: Any) -> list[Any]:
+    """What the page script returns for one link: address, text, card, its own heading (`head`), the heading above
+    it (`section`), whether the card holds another titled job link (`others`) and the card's text one line for each
+    element (`leaves`)."""
+    row = {"head": "", "section": "", "others": False, "leaves": ""} | fields
+    return [f"https://x.test{path}", text, card, row["head"], row["section"], row["others"], row["leaves"]]
 
 
 async def test_http_error_recorded() -> None:
@@ -162,7 +166,7 @@ async def test_collect_link_filters_and_titles() -> None:
         link("/jobs/short-title", "PM\nHerzliya\nIL"),
         link("/jobs/short-alone", "PM"),
         link("/jobs/junk-title", "Read more\nSecond Title\nJerusalem"),
-        [wd, "Workday Job\nElsewhere", ""],
+        [wd, "Workday Job\nElsewhere", "", "", "", False, ""],
     ]
     page = FakePage(link_fn=lambda i: links if i == 1 else [], ld=ld({"@type": "JobPosting", "url": "u0"}))
     jobs = await run(page)
@@ -373,7 +377,7 @@ async def test_pagination_waits_while_the_pager_clears_the_list() -> None:
     el = FakeEl()
     page_two_at = 4  # collect calls: 1 = page one, 2 and 3 = list cleared mid-load, 4 = page two appears
 
-    def links(i: int) -> list[list[str]]:
+    def links(i: int) -> list[list[Any]]:
         if i == 1:
             return [link("/jobs/job-one", "Job One")]
         if i == page_two_at:
@@ -738,3 +742,181 @@ async def test_an_eightfold_search_without_a_domain_gives_no_job_page_to_read() 
     jobs = await run(FakePage(responses=[resp]))
     assert jobs is not None
     assert "detail_url" not in jobs[0]
+
+
+async def test_a_link_that_is_only_an_icon_or_a_button_label_takes_its_title_from_the_card() -> None:
+    """env0 (an arrow), Rapyd ("Details" at the top of the card, the title further down)."""
+    env0 = link(
+        "/careers/senior-full-stack-engineer",
+        "",
+        "Senior Full Stack Engineer\n\nIsrael (Hybrid)\nFull-time",
+        leaves="Senior Full Stack Engineer\nEngineering\nIsrael (Hybrid)\nFull-time\nRead more",
+    )
+    rapyd = link(
+        "/careers/positions/bookkeeper-tel-aviv-israel/",
+        "Details",
+        "DetailsTel Aviv, IsraelJunior BookkeeperFinanceJunior (1-2 years)",
+        leaves="Details\nTel Aviv, Israel\nJunior Bookkeeper\nFinance\nJunior (1-2 years)\nPermanent (Full time)",
+    )
+    arrow = link("/careers/arrow-role", "→", "Product Designer\nHaifa", leaves="→\nProduct Designer\nHaifa")
+    assert await crawl_cards([env0, rapyd, arrow]) == {
+        "Senior Full Stack Engineer": ("Israel (Hybrid)", "Engineering"),
+        "Junior Bookkeeper": ("Tel Aviv, Israel", "Finance"),
+        "Product Designer": ("Haifa", ""),
+    }
+
+
+@pytest.mark.parametrize(
+    "extra",
+    [
+        {
+            "others": True,
+            "card": "X Role\nHaifa",
+            "leaves": "X Role\nHaifa",
+        },  # the card has a titled link: this repeats it
+        {"card": "", "leaves": ""},
+        {"card": "x" * (browser_crawl.CARD_MAX + 1), "leaves": "X Role\nHaifa"},  # not one job's card
+        {
+            "card": "A",
+            "leaves": "Apply\nlocation\n" + "L" * (browser_crawl.CARD_LINE_MAX + 1),
+        },  # only chrome and long text
+    ],
+)
+async def test_a_label_link_without_a_card_of_its_own_is_not_a_job(extra: dict[str, Any]) -> None:
+    kw: dict[str, Any] = {"card": "", "leaves": ""} | extra
+    assert await crawl_cards([link("/careers/x-role", "Details", **kw)]) == {}
+
+
+async def test_a_card_that_reads_as_a_banner_is_not_a_job() -> None:
+    """Syte: a link to a city page, with one letter of text in its card."""
+    banner = link("/careers/tel-aviv/", "", "A", leaves="A")
+    one_word = link("/careers/tel-aviv/", "Details", "Offices", leaves="Offices")  # same key, still a banner
+    two_words = link("/careers/product-role", "Details", "Product Lead", leaves="Product Lead\nHaifa")
+    assert await crawl_cards([banner, one_word, two_words]) == {"Product Lead": ("Haifa", "")}
+
+
+async def test_a_heading_in_the_link_is_the_title_whatever_the_line_order() -> None:
+    """Kornit: department in capitals, then the heading, then the type and the place."""
+    kornit = link(
+        "/cmcareer/68-47a-4f-10e/",
+        "CUSTOMER DELIVERY AND SUCCESS\nField Service Engineer - UK\nIntermediate, Full-time\nBirmingham, UK",
+        head="Field Service Engineer - UK",
+    )
+    short = link("/cmcareer/d5-473/", "Finance\nAccountant\nIsrael, Rosh Haayin", head="Accountant")
+    assert await crawl_cards([kornit, short]) == {
+        "Field Service Engineer - UK": ("Birmingham, UK", "CUSTOMER DELIVERY AND SUCCESS"),
+        "Accountant": ("Israel, Rosh Haayin", "Finance"),  # not read as a title wrapped over two lines
+    }
+
+
+async def test_the_office_heading_above_the_cards_is_the_place_of_a_card_with_only_a_work_mode() -> None:
+    """Pillar: the city is a section heading, each card has only "Hybrid" or "Remote"."""
+    links = [
+        link("/open-position/ae-emea", "Account Executive EMEA\nHybrid\nSales\nApply now", section="Tel Aviv Office"),
+        link("/open-position/sales-eng", "Sales Engineer\nRemote\nSales", section="New York Office"),
+        link("/open-position/no-place", "Support Engineer", section="Tel Aviv Offices"),
+        link("/open-position/has-place", "Data Engineer\nHaifa\nHybrid", section="New York Office"),
+        link("/open-position/remote-us", "Designer\nRemote (US)", section="Tel Aviv Office"),
+        link("/open-position/not-a-place", "Researcher\nHybrid", section="Open Roles"),
+        link("/open-position/a-title", "Tech Writer\nHybrid", section="Head Office"),
+        link("/open-position/israel", "Analyst\nHybrid", section="Israel"),
+        link("/open-position/long", "Recruiter\nHybrid", section="A" * 70 + " Office"),
+    ]
+    assert await crawl_cards(links) == {
+        "Account Executive EMEA": ("Tel Aviv | Hybrid", "Sales"),
+        "Sales Engineer": ("New York | Remote", "Sales"),
+        "Support Engineer": ("Tel Aviv", ""),
+        "Data Engineer": ("Haifa | Hybrid", ""),
+        "Designer": ("Remote (US)", ""),
+        "Researcher": ("Hybrid", ""),
+        "Tech Writer": ("Hybrid", ""),
+        "Analyst": ("Israel | Hybrid", ""),
+        "Recruiter": ("Hybrid", ""),
+    }
+
+
+async def test_a_bare_city_under_a_location_label_is_the_place() -> None:
+    """Apple: title, team, date, then "Location" and the city: past a window of three lines, but kept."""
+    card = "Senior Security Researcher\nHardware\nNov 18, 2026\nLocation\nCupertino\nActions"
+    links = [link("/en-il/details/200695651-0865/senior-security-researcher", "Senior Security Researcher", card)]
+    assert await crawl_cards(links) == {"Senior Security Researcher": ("Cupertino", "Hardware")}
+
+
+@pytest.mark.parametrize(
+    ("card", "expected"),
+    [
+        # a label with nothing under it, a label under the window, and a label before the title
+        ("Pilot\nLocation", ["Pilot", "Location"]),
+        ("Pilot\nA\nB\nC\nD\nLocation\nHaifa", ["Pilot", "A", "B", "C"]),
+        ("Location\nHaifa\nPilot\nA", ["Location", "Haifa", "Pilot", "A"]),
+        ("Pilot\nA\nLocation:\nHaifa\nB\nC", ["Pilot", "A", "Location:", "Haifa", "B"]),
+    ],
+)
+def test_card_extras_keep_a_location_label_with_its_place(card: str, expected: list[str]) -> None:
+    assert [ln for ln in browser_crawl._card_extras(card, "Pilot") if ln != "Pilot"] == [
+        ln for ln in expected if ln != "Pilot"
+    ]
+
+
+def test_parse_card_reads_the_line_under_a_location_label_as_a_place() -> None:
+    assert browser_crawl._parse_card(["Pilot", "Hardware", "Location", "Cupertino"]) == (
+        "Pilot",
+        "Cupertino",
+        "Hardware",
+    )
+    assert browser_crawl._parse_card(["Pilot", "Location", "L" * 61]) == (
+        "Pilot",
+        "L" * 61,
+        "",
+    )  # too long: not a place
+
+
+def test_parse_card_with_a_heading_title_skips_the_team_guesses() -> None:
+    assert browser_crawl._parse_card(["Sales", "Analyst", "Haifa"]) == ("Sales Analyst", "Haifa", "")  # wrapped
+    assert browser_crawl._parse_card(["Sales", "Analyst", "Haifa"], heading_first=True) == ("Sales", "Haifa", "Analyst")
+    assert browser_crawl._parse_card(["Senior", "Engineer", "Haifa"], heading_first=True) == (
+        "Senior",
+        "Haifa",
+        "Engineer",
+    )
+
+
+@pytest.mark.parametrize(
+    ("heading", "place"),
+    [
+        ("Tel Aviv Office", "Tel Aviv"),
+        ("Boston offices", "Boston"),
+        ("Israel", "Israel"),
+        ("Haifa, Israel", "Haifa, Israel"),
+        ("Open Roles", ""),
+        ("Head Office", ""),
+        ("Office", ""),
+        ("", ""),
+    ],
+)
+def test_section_place(heading: str, place: str) -> None:
+    assert browser_crawl._section_place(heading) == place
+
+
+@pytest.mark.parametrize(
+    ("href", "job"),
+    [
+        ("https://x.test/open-position/account-executive", True),
+        ("https://x.test/cmcareer/68-47a/", True),
+        ("https://x.test/en-il/details/200695651-0865/senior-researcher?team=HRDWR", True),
+        ("https://x.test/open-positions/account-executive", True),
+        ("https://x.test/open-position/ab", False),
+        ("https://x.test/open-roles/account-executive", False),
+    ],
+)
+def test_the_job_link_pattern(href: str, job: bool) -> None:
+    assert bool(browser_crawl.JOBLINK.search(href)) is job
+
+
+def test_a_country_chooser_is_not_a_job_link() -> None:
+    assert browser_crawl.NOT_JOB.search("https://jobs.apple.com/careers/choose-country-region.html")
+    assert not browser_crawl.NOT_JOB.search("https://jobs.apple.com/careers/choose-us")
+
+
+def test_apple_next_page_button_is_a_pager() -> None:
+    assert 'button[aria-label="Next page" i]' in browser_crawl.NEXT_SELS
