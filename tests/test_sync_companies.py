@@ -51,6 +51,7 @@ class Companies:
             if row["name"] == name
             and (params["crawl"] != "eq.true" or row["crawl"] is True)
             and (params["excluded"] != "is.null" or row["excluded"] is None)
+            and ("or" not in params or row["source"] != "override")
         ]
         for row in hit:
             row.update(kw["json"])
@@ -206,7 +207,13 @@ def test_only_the_discovered_fields_that_changed_are_sent_and_nothing_a_person_o
     (patch,) = fake.patches()
     assert patch["json"] == {"ats": "lever", "slug": "acme", "source": "page"}  # careers_url and status agree
     assert set(patch["json"]) <= set(discover.DISCOVERED)
-    assert patch["params"] == {"name": "eq.Acme", "crawl": "eq.true", "excluded": "is.null", "select": "name"}
+    assert patch["params"] == {
+        "name": "eq.Acme",
+        "crawl": "eq.true",
+        "excluded": "is.null",
+        "select": "name",
+        "or": "(source.is.null,source.neq.override)",
+    }
     assert rows[0]["links"] == {"global": "https://a.test"} and rows[0]["israel_only"] is None  # untouched
 
 
@@ -246,6 +253,30 @@ def test_a_company_that_an_editor_moved_or_excluded_or_removed_is_left_alone(tmp
     assert [p["params"]["name"] for p in fake.patches()] == ["eq.Acme"]
 
 
+def test_a_feed_an_editor_pinned_while_discovery_ran_is_not_overwritten(tmp_path: Path) -> None:
+    pinned = company_row("Pinned", ats="lever", slug="mine", source="override")
+    done, fake = push([pinned], [found("Pinned", ats="greenhouse", slug="theirs", source="page")], tmp_path)
+    assert (done, fake.patches()) == ((0, 1, 0), [])  # seen at the read
+    rows = [company_row("Racy", source="page")]
+    racy = Companies(rows)
+    write_json(tmp_path / "c.json", [found("Racy", slug="new", source="page")])
+    original = racy.request
+
+    def pin_after_read(method: str, url: str, **kw: Any) -> Any:
+        answer = original(method, url, **kw)
+        if method == "GET":
+            rows[0]["source"] = "override"  # saved after we read, before we write
+        return answer
+
+    racy.request = pin_after_read  # type: ignore[method-assign]
+    assert sync_supabase.push_companies(source(racy), client(racy), str(tmp_path / "c.json")) == (0, 1, 0)
+    assert rows[0]["slug"] is None
+    done, fake = push(
+        [company_row("Mine", source="override", slug="a")], [found("Mine", source="override", slug="b")], tmp_path
+    )
+    assert done[0] == 1 and "or" not in fake.patches()[0]["params"]  # a pin discover checked is its own to update
+
+
 def test_a_company_that_changed_between_the_read_and_the_write_is_counted_as_left_alone(tmp_path: Path) -> None:
     """The request carries the filters, so a row an editor changed in between matches nothing."""
     rows = [company_row("Acme")]
@@ -273,6 +304,18 @@ def test_a_request_that_fails_is_counted_and_the_next_one_still_goes_and_the_log
     assert out == "::warning::a company could not be updated: PATCH companies failed: HTTP 400\n"
     assert SECRET_TEXT not in out
     assert rows[1]["slug"] == "y"
+
+
+def test_an_answer_that_is_not_a_list_is_a_failure(tmp_path: Path) -> None:
+    class Odd(Companies):
+        def request(self, method: str, url: str, **kw: Any) -> Any:
+            if method == "PATCH":
+                return FakeHttpResponse(data={"message": "x"})
+            return super().request(method, url, **kw)
+
+    fake = Odd([company_row("Acme")])
+    write_json(tmp_path / "c.json", [found("Acme", slug="new")])
+    assert sync_supabase.push_companies(source(fake), client(fake), str(tmp_path / "c.json")) == (0, 0, 1)
 
 
 def test_an_empty_table_is_refused_and_nothing_is_sent(tmp_path: Path) -> None:

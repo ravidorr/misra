@@ -400,20 +400,29 @@ def push_companies(source: Source, client: Client, path: str = COMPANIES) -> tup
         if row is None or row["crawl"] is not True or row["excluded"] is not None:
             alone += 1
             continue
+        pinned = record.get("source") == "override"
+        if row["source"] == "override" and not pinned:  # an editor pinned the feed while discovery ran: theirs wins
+            alone += 1
+            continue
         found = {k: record.get(k) or "" for k in DISCOVERED}
         found["careers_url"] = https_only(found["careers_url"])
         fields = {k: v for k, v in found.items() if v != (row[k] or "")}
         if not fields:
             continue
         try:
+            where: dict[str, str | int] = {
+                "name": f"eq.{row['name']}",
+                "crawl": "eq.true",
+                "excluded": "is.null",
+                "select": "name",
+            }
+            if not pinned:  # a pin saved between the read and the write misses the filter
+                where["or"] = "(source.is.null,source.neq.override)"
             done = client.call(
-                "PATCH",
-                {"name": f"eq.{row['name']}", "crawl": "eq.true", "excluded": "is.null", "select": "name"},
-                fields,
-                table="companies",
-                prefer="return=representation",
-                quiet=True,
+                "PATCH", where, fields, table="companies", prefer="return=representation", quiet=True
             ).json()
+            if not isinstance(done, list):
+                raise SyncError("PATCH companies returned something other than a list")
         except SyncError as exc:
             failed += 1
             print(f"::warning::a company could not be updated: {exc}")
