@@ -148,7 +148,7 @@ def test_the_page_is_built_noindex_under_the_csp_with_its_scripts_hashed(site: P
     )
     assert "<script>" not in html
     assert " style=" not in html
-    assert "__" not in re.sub(r"<!--.*?-->", "", html)  # every placeholder was filled
+    assert re.search(r"__[A-Z_]+__", html) is None  # every placeholder was filled
     for name in ("admin.js", "supabase.js", "theme.js", "dashboard.css"):
         assert re.search(rf'(src|href)="{re.escape(name)}" integrity="sha384-[A-Za-z0-9+/]+=*"', html), name
     assert (site / "session.js").is_file()
