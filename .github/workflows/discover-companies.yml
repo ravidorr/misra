@@ -1,0 +1,65 @@
+name: discover-companies
+
+# Finds the career page and the job feed of the companies of the list (discover.py) and writes what it found back to the
+# `companies` table (PLAN_2.md step 3.2, decision D2). Started by hand only: after a company is added in the `companies` table
+# (the admin page gets an editor in PLAN_2 step 3.3), or when a feed moved. It never crawls jobs and sends no email; it writes only the five fields discover.py owns
+# (careers_url, ats, slug, source, status) of the crawled companies it changed, and no other field of any record.
+#
+# discover.py requests career sites and runs third-party answers through its own parsers, so it never holds the
+# service-role key. Only the pull step (the first that runs python) and the last step hold it: the pull reads the list, the last sends the
+# result back. Each
+# step is its own, so the key is in the environment of that step alone. There is no `ssh-key:` on the checkout and no
+# deploy key: nothing here pushes to the repository.
+on:
+  workflow_dispatch: {}
+
+# Its own group: it writes the table, not docs/, so it does not have to wait for the daily run, but two of these must
+# not write together.
+concurrency:
+  group: discover-companies
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  discover:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: main
+          persist-credentials: false
+      - name: Check the branch
+        run: |
+          set -euo pipefail
+          if [ "$GITHUB_REF" != "refs/heads/main" ]; then
+            echo "refusing to run from $GITHUB_REF: the service-role key is exposed to the steps of this workflow; run it from main" >&2
+            exit 1
+          fi
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - run: pip install requests
+      - name: Pull the company list from Supabase
+        timeout-minutes: 5
+        # Holds the service-role key: it reads every record, the excluded ones included (the run must know them). An
+        # empty secret or an empty table fails the step, so nothing after it runs.
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: python sync_supabase.py --pull-companies
+      - name: Discover the career pages and feeds
+        timeout-minutes: 20
+        # No secret in this step: it requests third-party sites. It writes data/companies.json only; a run that would
+        # turn more than discover.MAX_LOST working companies into failures (an offline run) writes nothing and fails.
+        run: python discover.py
+      - name: Send the discovered fields to Supabase
+        timeout-minutes: 5
+        # The last step, and the only other one that holds the key. It sends only the discovered fields of the
+        # records that discovery changed, never a field a person edits (the sync's --push-companies).
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: python sync_supabase.py --push-companies

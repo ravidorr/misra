@@ -198,9 +198,9 @@ def check_spelling(c: sqlite3.Connection, known: list[str], excluded: list[str])
     """Deleting needs the exact name, skipping does not care about case: a list that says `acme` while the data says
     `Acme` would hide the company but leave its rows. That must stop the run, so the list gets the stored spelling."""
     stored = {r[0] for t in ("jobs", "crawl_log") for r in c.execute(f"SELECT company FROM {t}")}
-    for name in sorted(n for n in {*known, *stored} if n and is_excluded(n, excluded) and n not in excluded):
-        raise ExclusionError(
-            f"the exclusion list spells a company differently from the data ({name!r}): use that exact spelling"
+    if any(n and is_excluded(n, excluded) and n not in excluded for n in {*known, *stored}):
+        raise ExclusionError(  # no name: an excluded company's name is private and the log is public
+            "the exclusion list spells a company differently from the data: use the exact stored spelling"
         )
 
 
@@ -336,8 +336,8 @@ def main() -> None:  # noqa: PLR0915
     c = open_history()
     c.executescript(SCHEMA)  # a pulled file has the tables; `touch data/jobs.db` for a local trial does not
     check_spelling(c, [co["name"] for co in every], excluded)
-    for name, n in purge_excluded(c, excluded).items():
-        print(f"exclusion list: deleted {n} jobs of {name}")
+    if purged := purge_excluded(c, excluded):  # counts only: an excluded company's name is private, the log is public
+        print(f"exclusion list: deleted {sum(purged.values())} jobs of {len(purged)} excluded companies")
     if closed := close_uncrawled(c, [x["name"] for x in everyone if x not in every]):
         print(f"closed {closed} open jobs of companies that are no longer crawled")
     print(f"robots.txt: {'enforced' if common.ROBOTS_ENFORCED else 'NOT enforced (ROBOTS_ENFORCED is False)'}")

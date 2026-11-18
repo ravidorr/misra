@@ -1,11 +1,15 @@
-"""Find careers_url + ATS for each crawled company of data/companies.json and write the result back into it.
+"""Find careers_url + ATS for each crawled company of the pulled data/companies.json and write the result back into it.
 
-Only the discovered fields (DISCOVERED) of a record that has `crawl` true are rewritten, in place and in the same order;
-everything a person wrote (`crawl`, `israel_only`, `verify`, `links`, `gap`, `segment`) is left as it is, and so are
-the records of the companies that are not crawled. The records of excluded companies are dropped. The file is
-written through a temporary file, and a run that would turn more than MAX_LOST working companies into failures (an
-offline run) writes nothing unless it is given `--force`. A record whose `source` is `override` is pinned by hand: its
-`ats` and `slug` are kept and only checked. To add a company, add `{"name", "domain", "crawl": true}` and run this."""
+The list lives in the Supabase table `companies`; `sync_supabase.py --pull` (or `--pull-companies`) writes the scratch
+copy this script reads, and `sync_supabase.py --push-companies` sends the result back (the discover-companies workflow
+runs the three). Only the discovered fields (DISCOVERED) of a record that has `crawl` true are rewritten, in place and
+in the same order; everything a person wrote (`crawl`, `israel_only`, `verify`, `links`, `gap`, `excluded`, `segment`)
+is left as it is, and so are the records of the companies that are not crawled, the excluded ones included (they are
+never looked at). A careers address that came out as `http://` is written as `https://` (the table refuses any other).
+The file is written through a temporary file, and a run that would turn more than MAX_LOST working companies into
+failures (an offline run) writes nothing unless it is given `--force`. A record whose `source` is `override` is pinned
+by hand: its `ats` and `slug` are kept and only checked. A company is added in the `companies` table (the admin
+page gets an editor in PLAN_2 step 3.3), never in this file."""
 
 import json
 import os
@@ -16,7 +20,17 @@ from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
 from adapters import ADAPTERS
-from common import COMPANIES, ISRAEL, RECORD_KEYS, get, is_excluded, load_companies, load_excluded, slug_candidates
+from common import (
+    COMPANIES,
+    ISRAEL,
+    RECORD_KEYS,
+    get,
+    https_only,
+    is_excluded,
+    load_companies,
+    load_excluded,
+    slug_candidates,
+)
 
 HTTP_OK = 200
 MAX_LOST = 5  # more companies than this going from ok to not ok in one run is refused without --force
@@ -137,9 +151,9 @@ def discover(row: dict[str, Any]) -> dict[str, Any]:  # noqa: PLR0912
 def main() -> None:
     args = [a for a in sys.argv[1:] if a != "--force"]
     path = args[0] if args else COMPANIES
-    excluded = load_excluded()  # a company that asked to be removed is never looked at again
-    kept = [r for r in load_companies(path) if not is_excluded(r["name"], excluded)]  # its record goes, as its jobs do
-    todo = [r for r in kept if r.get("crawl") is True]
+    excluded = load_excluded(path)  # a company that asked to be removed is never looked at again
+    kept = load_companies(path)  # an excluded record stays in the file as it is: it is never looked at
+    todo = [r for r in kept if r.get("crawl") is True and not is_excluded(r["name"], excluded)]
     with ThreadPoolExecutor(8) as ex:
         found = list(ex.map(discover, todo))
     pairs = list(zip(todo, found, strict=True))
@@ -148,8 +162,9 @@ def main() -> None:
         sys.exit(f"{len(lost)} companies would stop being ok ({', '.join(lost)}); nothing written. Use --force.")
     for record, res in pairs:
         record.update({k: res[k] for k in DISCOVERED})
+        record["careers_url"] = https_only(record["careers_url"])
     records = [{k: r[k] for k in RECORD_KEYS if k in r} for r in kept]  # a key added by update() goes in its place
-    tmp = f"{path}.tmp"  # the file is the only copy of the notes: a failed write must not leave half of it
+    tmp = f"{path}.tmp"  # a failed write must not leave half of the file
     with open(tmp, "w", encoding="utf-8") as fh:
         json.dump(records, fh, indent=1, ensure_ascii=False)
         fh.write("\n")

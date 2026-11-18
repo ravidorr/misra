@@ -725,9 +725,10 @@ def test_the_page_calls_only_the_projects_function_with_no_secret() -> None:
 
 def test_fr7_ac6_contributing_md_says_how_a_reported_site_is_accepted() -> None:
     text = (REPO / "CONTRIBUTING.md").read_text(encoding="utf-8")
-    assert "Reported sites" in text
-    for words in ("data/companies.json", "crawl", "gap", "reason", "note"):
-        assert words in text, words
+    assert "## Reported sites" in text
+    section = text.split("## Reported sites", 1)[1].split("\n## ", 1)[0]
+    for words in ("`companies` table", "discover-companies", "crawl", "gap", "reason", "note"):
+        assert words in section, words
 
 
 def test_privacy_md_says_where_the_form_is() -> None:

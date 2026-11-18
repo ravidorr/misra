@@ -76,12 +76,11 @@ Observations about live sites below come from checks made on 2026-11-14 and may 
 
 ## Research the remaining unresolved companies
 
-- [ ] `data/companies.json` holds 80 researched companies with no usable job feed (as of 2026-11-14: 22
-  multinational, 36 deeptech, 11 cyber_infra, 11 biz_software; they are the records with a `gap`). Each needs
-  its own research; there is no batch fix left. Every observation about a live site below is from the checks of
-  2026-11-14, a crawl of the 105 rows that had a careers URL that day (57 today) and a scan of their rendered pages. The
-  remaining work falls into these groups:
-  - **No careers URL (23).** They have no `careers_url` in `data/companies.json`: Upsolver, Speedata,
+- [ ] The `companies` table holds researched companies with no usable job feed (the records with a `gap`, in four
+  segments: multinational, deeptech, cyber_infra, biz_software). Each needs its own research; there is no batch fix
+  left. Every observation about a live site below is from the checks of 2026-11-14, a crawl of the rows that had a
+  careers URL that day and a scan of their rendered pages. The remaining work falls into these groups:
+  - **No careers URL.** They have no `careers_url` in the `companies` table: Upsolver, Speedata,
     Teramount, X-Globe, Q Factor, Gilat, Siklu, Silicom, Sight Diagnostics, Brainsway, EarlySign, Diagnostic Robotics,
     Tevel Aerobotics, SolarEdge, Watergen, AIR, SAP, eBay,
     Akamai, Ford, Ericsson, Uber, Keysight. Find the real
@@ -268,24 +267,25 @@ Observations about live sites below come from checks made on 2026-11-14 and may 
     3. Read the result before pinning. It needs real titles, distinct links and a location per job that the Israel matcher
        (`discover.ISRAEL`) can recognise, for the jobs that will appear and not only the ones there today. A list of
        navigation links, a worldwide first page or a partial list is not a feed.
-    4. Pin with one edit of the company's record in `data/companies.json` (one company per PR, so a bad pin is easy to
-       drop): set `"crawl": true`, `"ats"`, `"slug"`, `"source": "override"` (that is what pins it: `discover.py`
-       keeps the `ats` and `slug` of a pinned record and only checks them), `"status": "ok"` and, for a large
-       multinational, `"israel_only": true`; remove the `gap` (and the `segment`). Do not rerun `discover.py` for it: it
-       re-probes every crawled company.
+    4. Pin with one edit of the company's row in the `companies` table (Supabase Table Editor; one company at a time, so a
+       bad pin is easy to undo): set `"crawl": true`, `"ats"`, `"slug"`, `"source": "override"` (that is what pins it: `discover.py`
+       keeps the `ats` and `slug` of a pinned record and only checks them), and, for a large
+       multinational, `"israel_only": true`; remove the `gap` (and the `segment`). Then run the `discover-companies`
+       workflow: it checks the pin and sets its `status` (`run.py` crawls only `status` `ok`), and it re-probes the other
+       crawled companies, which never downgrades one that has `status` `ok`.
        A board with no Israel job today is fine to pin: the `israel_only` rule reports the first Israel job it ever
-       lists. Code changes (an adapter, a parser fix) need a version bump and a changelog entry; data-only PRs do not.
+       lists. Code changes (an adapter, a parser fix) need a version bump and a changelog entry.
        Probe a Workday slug with `.venv/bin/python -c "import adapters; print(adapters.workday('visa/wd5/Visa'))"`:
        `None` is a host that did not answer with a job search (Workday tenants go to a maintenance page for hours at a
        time, and answer again later: probe on more than one day before giving up), `[]` is a board with no Israel job.
     5. If a company cannot be done, say why. Set the `reason` (one of the keys of `build_dashboard.REASONS`) and a short `note` in
-       the `gap` of its record in `data/companies.json`: the coverage gap card reads them, and `tests/test_todo_counts.py`
-       fails when the counts quoted here and the records disagree.
+       the `gap` of its row: the coverage gap card reads them. The counts quoted above are a snapshot of 2026-11-14 and
+       nothing checks them any more; refresh them when you touch this item.
   - Tools: `browser_crawl.crawl_many` over every row with a careers URL, and a scan of the rendered pages for ATS links,
     were the two passes behind this list; both were throwaway scripts and are not in the repo. Adding them as a dev tool
     next to `survey.py` and `survey2.py` would make a re-run easy (a new module must be registered as `AGENTS.md`
     describes).
-  - Done when: no record of `data/companies.json` has a `gap`, or every remaining one has a `reason` that says why it cannot be done.
+  - Done when: no row of the `companies` table has a `gap`, or every remaining one has a `reason` that says why it cannot be done.
 
 ## Step 9.1 live checks
 

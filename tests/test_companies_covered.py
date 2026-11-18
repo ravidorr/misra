@@ -1,5 +1,5 @@
-"""The count of companies the dashboard says it covers: computed in build_dashboard.py from data/companies.json at
-build time, put in jobs.json, the page data and the search field, and never typed into a template."""
+"""The count of companies the dashboard says it covers: computed in build_dashboard.py from the pulled list at build
+time, put in jobs.json, the page data and the search field, and never typed into a template."""
 
 import json
 import re
@@ -9,7 +9,7 @@ from pathlib import Path
 import pytest
 
 import build_dashboard
-from tests.conftest import write_json
+from tests.conftest import FROZEN_COMPANIES, exclude, write_json
 from tests.test_build_dashboard import log, prepare, read_payload
 
 REPO = Path(__file__).resolve().parents[1]
@@ -45,9 +45,7 @@ def test_the_count_of_companies_reaches_the_page_and_the_data(db: sqlite3.Connec
             {"name": "Gone", "crawl": True, "status": "ok"},  # excluded below: on no list, so not counted either
         ],
     )
-    (workdir / "data" / "excluded_companies.csv").write_text(
-        "company,reason,date_added\nGone,asked to be removed,2026-01-01\n", encoding="utf-8"
-    )
+    exclude(workdir, "Gone", date_added="2026-01-01")
     log(db, "2024-01-01", "Down", 1)
     log(db, "2024-01-02", "Down", 0, "HTTP 403")
     log(db, "2024-01-03", "Down", 0, None)
@@ -90,11 +88,10 @@ def test_a_researched_company_is_not_covered_and_not_untracked_but_is_on_the_car
     assert sites["Seen"]["to"] == "site"
 
 
-def test_the_count_on_the_real_data_is_the_ok_status_of_companies_json(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_the_count_on_the_frozen_list_is_the_ok_status_of_its_records() -> None:
     """Counted here from the file alone (plain json and the exclusion list), not through the build's own count."""
-    monkeypatch.chdir(REPO)
-    excluded = build_dashboard.load_excluded()
-    everyone = [c for c in json.loads((REPO / "data" / "companies.json").read_text(encoding="utf-8")) if c["crawl"]]
+    excluded = build_dashboard.load_excluded(str(FROZEN_COMPANIES))
+    everyone = [c for c in json.loads(FROZEN_COMPANIES.read_text(encoding="utf-8")) if c["crawl"]]
     ok = [c["name"] for c in everyone if c["status"] == "ok" and not build_dashboard.is_excluded(c["name"], excluded)]
     kept = [c for c in everyone if not build_dashboard.is_excluded(c["name"], excluded)]
     assert build_dashboard.companies_covered(kept) == len(ok)

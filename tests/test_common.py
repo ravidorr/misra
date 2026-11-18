@@ -70,3 +70,18 @@ def test_slug_candidates_dedupes_and_skips_empty() -> None:
     assert common.slug_candidates("Acme", "acme.com") == ["acme", "acmehq", "acmeinc"]
     assert common.slug_candidates("Foo Bar!", "foo.io") == ["foo", "foobar", "foo-bar", "foohq", "fooinc"]
     assert common.slug_candidates("!!!", ".com") == ["hq", "inc"]
+
+
+@pytest.mark.parametrize(
+    ("url", "expected"),
+    [
+        ("http://acme.test/jobs", "https://acme.test/jobs"),
+        ("HTTP://Acme.test/Jobs?x=http://y", "https://Acme.test/Jobs?x=http://y"),
+        ("https://acme.test/jobs", "https://acme.test/jobs"),
+        ("", ""),
+        ("//acme.test/jobs", "//acme.test/jobs"),
+        ("ftp://acme.test", "ftp://acme.test"),
+    ],
+)
+def test_https_only_changes_only_the_scheme_http_to_https(url: str, expected: str) -> None:
+    assert common.https_only(url) == expected

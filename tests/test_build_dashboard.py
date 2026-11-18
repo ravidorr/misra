@@ -11,8 +11,8 @@ from urllib.parse import parse_qs, urlsplit
 import pytest
 
 import build_dashboard
-from common import crawled_companies, load_companies
-from tests.conftest import add_job, write_json
+from common import crawled_companies, load_companies, load_excluded
+from tests.conftest import FROZEN_COMPANIES, add_job, write_json
 
 
 @pytest.mark.parametrize(
@@ -482,9 +482,8 @@ def test_read_unresolved_reads_a_bare_gap_as_an_empty_note_domain_and_address() 
     assert (row["note"], row["domain"], row["careers_url"], row["segment"]) == ("", "", "", "")
 
 
-def test_the_real_gaps_have_only_known_reasons(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.chdir(Path(__file__).resolve().parents[1])
-    assert build_dashboard.read_unresolved(load_companies())
+def test_the_frozen_gaps_have_only_known_reasons() -> None:
+    assert build_dashboard.read_unresolved(load_companies(str(FROZEN_COMPANIES)))
 
 
 def test_the_backend_settings_and_page_data_are_injected_into_the_page(db: sqlite3.Connection, workdir: Path) -> None:
@@ -750,15 +749,19 @@ def test_a_no_careers_page_row_links_to_the_own_site_even_when_it_has_an_address
     assert group["sites"][0]["url"] == "https://a.test"
 
 
-def test_every_site_on_the_real_coverage_gap_card_has_an_https_address(monkeypatch: pytest.MonkeyPatch) -> None:
-    """The card as the daily build draws it, from the real data: a site with no address fails here, so a new row of the
-    CSV, a new failing company or a company that left companies.json cannot reach the page without a link. The failing
-    companies are the ones of the last committed build (docs/jobs.json): the history itself is not in the repository."""
-    monkeypatch.chdir(REPO)
-    excluded = build_dashboard.load_excluded()
-    blocked = json.loads((REPO / "docs" / "jobs.json").read_text(encoding="utf-8"))["gaps"]["blocked"]
-    everyone = [c for c in load_companies() if not build_dashboard.is_excluded(c["name"], excluded)]
+BLOCKED = 5  # companies the frozen card treats as failing
+
+
+def test_every_site_on_the_frozen_coverage_gap_card_has_an_https_address() -> None:
+    """The card as the daily build draws it, from the frozen list: a site with no address fails here, so a new failing
+    company or a company that left the list cannot reach the page without a link. Five crawled companies stand in
+    for the failing ones (the history is not in the repository, and no test reads the live docs/jobs.json)."""
+    excluded = load_excluded(str(FROZEN_COMPANIES))
+    everyone = [
+        c for c in load_companies(str(FROZEN_COMPANIES)) if not build_dashboard.is_excluded(c["name"], excluded)
+    ]
     crawled = crawled_companies(everyone)
+    blocked = [{"c": c["name"], "why": build_dashboard.BLOCKED_WHY, "last": "never"} for c in crawled[:BLOCKED]]
     unfed = [c for c in crawled if c["status"] != "ok"]
     links = build_dashboard.read_career_links(everyone)
     groups = build_dashboard.gap_groups(blocked, unfed, build_dashboard.read_unresolved(everyone), crawled, links)
@@ -769,12 +772,12 @@ def test_every_site_on_the_real_coverage_gap_card_has_an_https_address(monkeypat
     assert [s["c"] for s in sites if not build_dashboard.https_only(s["url"])] == []
 
 
-def test_every_company_in_companies_json_has_an_address_for_the_card() -> None:
-    assert [c["name"] for c in load_companies() if not build_dashboard.careers_address(c)] == []
+def test_every_frozen_company_has_an_address_for_the_card() -> None:
+    assert [c["name"] for c in load_companies(str(FROZEN_COMPANIES)) if not build_dashboard.careers_address(c)] == []
 
 
-def test_every_real_gap_has_an_address() -> None:
-    rows = build_dashboard.read_unresolved(load_companies())
+def test_every_frozen_gap_has_an_address() -> None:
+    rows = build_dashboard.read_unresolved(load_companies(str(FROZEN_COMPANIES)))
     assert rows
     for row in rows:
         assert build_dashboard.own_site(row["domain"]), row["name"]
@@ -786,7 +789,7 @@ def test_every_real_gap_has_an_address() -> None:
             assert not re.search(r"/(blocked|news|press|blog)\b", row["careers_url"]), row["name"]
 
 
-def test_a_blocked_company_that_left_companies_json_links_to_its_csv_row() -> None:
+def test_a_blocked_company_that_left_the_list_links_to_its_own_site() -> None:
     blocked = [{"c": "Gone", "why": build_dashboard.BLOCKED_WHY, "last": "never"}]
     row = {"name": "Gone", "reason": "needs_reader", "note": "", "domain": "gone.test", "careers_url": ""}
     (group,) = build_dashboard.gap_groups(blocked, [], [row], [])
@@ -871,10 +874,10 @@ TRACKING = re.compile(r"^(utm_.*|source|ref|ref_src|fbclid|gclid|mc_cid|mc_eid|c
 HOST = re.compile(r"[a-z0-9-]+(\.[a-z0-9-]+)+")
 
 
-def test_the_real_career_links_are_safe() -> None:
-    """The `links` of data/companies.json are public data a person reviews by hand; the card links them from every
-    visitor's page."""
-    for company in load_companies():
+def test_the_frozen_career_links_are_safe() -> None:
+    """The `links` of the list are public data a person reviews by hand; the card links them from every visitor's page.
+    The rules live in the database checks (supabase/migrations); this keeps the card's assumptions on real shapes."""
+    for company in load_companies(str(FROZEN_COMPANIES)):
         page = company.get("links")
         if page is None:
             continue

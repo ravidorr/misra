@@ -14,6 +14,29 @@ All notable changes are documented here. Format follows [Keep a Changelog](https
 - The Crawl area of the admin page (PLAN_2.md step 2.2): it calls `admin_crawl_health()` when first shown and lists one card per company, worst first, with a headline, chips with counts (Needs attention, Failing, Robots.txt, Held, All), the values of the crawl and a status pill. Loading, empty, error and 401 states. Templates and tests only.
 - A Copy button under every code block of the legal pages (the address on "Connect your assistant", the command for Claude Code), in `templates/theme.js`.
 
+## [0.69.0] - 2026-11-18
+
+### Changed
+
+- The company list now lives in the Supabase table `companies` (PLAN_2.md step 3.2). `sync_supabase.py --pull` writes the git-ignored scratch file `data/companies.json` from it (every row, the excluded ones included, sorted by name, the format of `discover.py`) and refuses an empty table; `run.py`, `build_dashboard.py` and the surveys read that file as before. A pull that cannot reach Supabase stops the run.
+- `common.RECORD_KEYS` gains `excluded`, and `load_excluded` reads the excluded records of the pulled file (`excluded: {reason, date_added}`) with every guard it had; `ExclusionError` still stops a run on a file that does not load. `discover.py` leaves excluded records as they are instead of dropping them, and writes a careers address that came out as `http://` as `https://`.
+- `crawled_companies` skips a record that has an exclusion. The names of excluded companies no longer reach the Actions log (counts only, in `run.py`, the sync and the spelling error).
+- The tests that read the real list read a frozen copy, `tests/fixtures/companies.json`; `tests/test_companies_data.py` no longer checks the rules of a record (the database checks are the rules).
+
+### Added
+
+- `sync_supabase.py --pull-companies` (the list only) and `--push-companies`, which sends the discovered fields (`discover.DISCOVERED`) of the crawled records that discovery changed (the file against the baseline the pull kept, `data/companies.pulled.json`), by exact name and only while the row still holds the values it had at the pull, and never a field a person owns (`crawl`, `gap`, `excluded`, `links`).
+- The manual-dispatch workflow `discover-companies.yml`: it pulls the list, runs `discover.py` without the service-role key, and only its last step holds the key to push.
+
+- The pull keeps a baseline of the list as the table holds it, `data/companies.pulled.json`, and writes it and `data/companies.json` atomically. Every record that is not excluded has its five discovered fields, empty where the table holds null, so a company added with a name and a domain waits for discovery instead of stopping a run.
+- The pull refuses a table with fewer than half of the yardstick (the baseline's records or `covered` in `docs/jobs.json`), and an empty one.
+- `--push-companies` holds back a company that had a working feed when discovery now finds nothing (a status that is not `ok`, or a blank where there was a value; counts only in the log), and warns when no update matched a row.
+- `common.https_only`.
+
+### Removed
+
+- `data/excluded_companies.csv`, `common.EXCLUDED`, `common.EXCLUDED_COLUMNS` and `data/companies.json` from the repository (it is git-ignored now), and `tests/test_todo_counts.py`.
+
 ## [0.68.0] - 2026-11-18
 
 ### Added

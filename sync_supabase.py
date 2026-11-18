@@ -9,6 +9,24 @@ partly hidden table would look like jobs that closed; `--allow-shrink` for a rea
 read fails the pull too). An empty `crawl_log` is a warning (a new project has none). The file is written beside and
 renamed over, so there is never a half-built one, and the crawl and the dashboard build refuse a missing file.
 
+The pull also writes the company list (PLAN_2.md step 3.2): every row of the `companies` table, the excluded ones
+included (the service-role key reads them), into the git-ignored scratch file data/companies.json, sorted by name and
+written the way discover.py writes it. A record carries the keys the table has a value for; every record that is not
+excluded also has its five discovered fields, empty where the table holds null, so a company added with a name and a
+domain waits for discovery and stops no run. Beside it the pull keeps the baseline, data/companies.pulled.json: the same
+list as the table holds it (a null is a key left out). Both files are built beside (`.part`) and renamed over. The pull
+refuses an empty table, as it refuses an empty `jobs` (a run without the list would crawl nobody and, worse, without
+the exclusions), and a table with fewer than half of the yardstick (the larger of the baseline's records and `covered`
+in docs/jobs.json, which a fresh runner has). `--pull-companies` does only this (the discover-companies workflow has no
+use for the history).
+
+`python sync_supabase.py --push-companies` runs after discover.py: it sends back the discovered fields
+(discover.DISCOVERED) that discovery changed, by exact name. What discovery changed is the file against the baseline,
+and each update names the values the row had at the pull, so a row an editor changed since is left alone. It never
+sends a field a person owns (`crawl`, `gap`, `excluded`, `links`, `domain`, `segment`, `israel_only`, `verify`). A
+company that had a working feed is held back when discovery now finds nothing for it (a dead feed stays `ok` in the
+table until someone edits the row), and the counts are logged, never a name.
+
 `python sync_supabase.py` runs after the crawl: it copies the open jobs of data/jobs.db into the Supabase `jobs` table
 (PostgREST over HTTPS), closes the jobs that are no longer open, writes the crawl log rows of this run (the ones with
 no Supabase id yet) and deletes the log older than CRAWL_LOG_DAYS days.
@@ -25,9 +43,9 @@ role may run, delete the rows of every day before today, so a daily non-reversib
 cleanup after its day ends, not only when a later request happens to be handled. A failed cleanup exits non-zero
 like a failed sync, so the privacy notice's promise cannot silently stop being kept.
 
-A company on the exclusion list (`data/excluded_companies.csv`) is deleted before anything is sent: its rows in `jobs`
-and `crawl_log`, and the rows that keep its title and link or its job keys in `user_jobs` (a user's stars and
-discards) and `emailed`.
+A company on the exclusion list (the excluded records of data/companies.json) is deleted before anything is
+sent: its rows in `jobs` and `crawl_log`, and the rows that keep its title and link or its job keys in
+`user_jobs` (a user's stars and discards) and `emailed`.
 Only by exact company name, nothing when the list is empty, nothing at all when the list is bad or names more than
 MAX_PURGE_COMPANIES companies that still have rows. Counts are logged, never the rows.
 
@@ -46,6 +64,7 @@ text until `jobs_text_trim` sets description, details and snippet to null 30 day
 this pass); the removal of an excluded company deletes the whole row, text included. A failure in this pass or in the
 trim is a warning, never a failed step: the jobs are already stored and the day's update goes on."""
 
+import contextlib
 import json
 import os
 import sqlite3
@@ -62,20 +81,25 @@ import classify
 import descriptions
 import regions
 from common import (
+    COMPANIES,
     CRAWL_LOG_DAYS,
     DB,
     EXCLUDED_MIN_NAME,
     MAX_PURGE_COMPANIES,
     PULLED,
+    RECORD_KEYS,
     ROBOTS_MAX_PURGE_COMPANIES,
     ROBOTS_NOTE,
     SCHEMA,
     ExclusionError,
+    https_only,
     is_excluded,
+    load_companies,
     load_excluded,
     open_history,
 )
-from export_accounts import ALLOW_SHRINK, CRAWL_LOG, JOBS, ExportError, Source, fell_by_half
+from discover import DISCOVERED
+from export_accounts import ALLOW_SHRINK, CRAWL_LOG, JOBS, ExportError, Source, Table, fell_by_half
 from export_accounts import HttpSession as ExportSession
 
 BATCH = 500  # rows per upsert request
@@ -88,6 +112,8 @@ OPEN_JOBS = f"SELECT {', '.join(COLUMNS)} FROM jobs WHERE status='open' ORDER BY
 HISTORY_COLUMNS = (*COLUMNS, "status")  # the columns of `jobs` that the scratch history keeps
 LOG_COLUMNS = ("ts", "company", "ats", "ok", "n_jobs", "note")
 PURGE_TABLES = ("user_jobs", "emailed", "jobs", "crawl_log")  # where a company's rows live: stars, emailed keys, jobs
+# The company list, every column of the record, read through the export's Source (exact count, the key's whole view)
+COMPANY_TABLE = Table("companies", ("name",), RECORD_KEYS, account=False)
 PUBLISHED = "docs/jobs.json"  # the dashboard's last published jobs: the pull's yardstick for a partial read
 EMPTY_SECRETS = "SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY is empty: the history lives in Supabase, so nothing can run"
 
@@ -247,7 +273,7 @@ def purge(client: Client, excluded: Sequence[str]) -> int:
     for name in present:
         counts = {table: client.delete_company(table, name) for table in PURGE_TABLES}
         total += sum(counts.values())
-        print(f"Supabase: exclusion list, deleted {counts} for {name}")
+        print(f"Supabase: exclusion list, deleted {counts} for an excluded company")  # no name: the log is public
     return total
 
 
@@ -324,6 +350,7 @@ def pull(source: Source, path: str = DB, allow_shrink: bool = False) -> tuple[in
             f"with {ALLOW_SHRINK}"
         )
     part = Path(path + ".part")
+    part.parent.mkdir(parents=True, exist_ok=True)  # data/ holds nothing else in a fresh checkout
     part.unlink(missing_ok=True)
     conn = sqlite3.connect(part)
     try:
@@ -342,6 +369,150 @@ def pull(source: Source, path: str = DB, allow_shrink: bool = False) -> tuple[in
         conn.close()
     part.replace(path)
     return len(jobs), len(log)
+
+
+def pull_companies(source: Source, path: str = COMPANIES) -> int:
+    """Write the company list of Supabase to `path` and return how many records it holds.
+
+    Every row is read before any file is touched. An empty table is refused, and so is one with fewer than half of the
+    yardstick (see `list_yardstick`): a partly hidden or partly lost table would hide the excluded records and stop
+    the purge. Two files are written, each built beside (`.part`) and renamed over the old one, `path` first and its
+    baseline `data/companies.pulled.json` after it. The baseline is the table as it is, a null being a key left out,
+    sorted by name ignoring case in the format of discover.py, in the order of common.RECORD_KEYS; `path` is the same
+    list for the readers, in which every record that is not excluded also has its five discovered fields, empty where
+    the table holds null (a company added with a name and a domain waits for discovery and stops no run)."""
+    rows = source.read(COMPANY_TABLE)
+    if not rows:
+        raise SyncError(
+            "Supabase holds no companies: refusing to start a run without the list "
+            "(the table has no backup until PLAN_2.md step 3.4)"
+        )
+    before = list_yardstick(path)
+    if fell_by_half(before, len(rows)):
+        raise SyncError(
+            f"Supabase holds {len(rows)} companies and the yardstick is {before}: refusing a list that lost more than "
+            "half of them (a wrong key or a policy change?); if it is real, delete "
+            f"{baseline_path(path)} and lower `covered` in {PUBLISHED}, then pull again"
+        )
+    records = [{k: row[k] for k in RECORD_KEYS if row[k] is not None} for row in rows]
+    records.sort(key=lambda record: str(record["name"]).casefold())
+    # a company added with a name and a domain has no discovered field yet: the readers get empty ones (not found
+    # yet, as discover.py writes them) so such a record waits for discovery and never stops a run
+    filled = [
+        {k: r.get(k, "") for k in RECORD_KEYS if k in r or (k in DISCOVERED and "excluded" not in r)} for r in records
+    ]
+    Path(path).parent.mkdir(parents=True, exist_ok=True)  # data/ holds nothing else in a fresh checkout
+    for target, text in ((path, dump(filled)), (baseline_path(path), dump(records))):
+        part = Path(target + ".part")
+        part.write_text(text, encoding="utf-8")
+        part.replace(target)
+    return len(records)
+
+
+def read_records(path: str) -> list[dict[str, Any]]:
+    """The records of a list file; a file that is not a list of records is a ValueError, like one that is not JSON."""
+    records = load_companies(path)
+    if not isinstance(records, list) or not all(isinstance(r, dict) for r in records):
+        raise ValueError("not a list of records")
+    return records
+
+
+def list_yardstick(path: str) -> int:
+    """What the table must not fall far below: the larger of the records of the last pull here (its baseline, which a
+    fresh runner does not have) and `covered` in docs/jobs.json (the companies with a working feed when the dashboard
+    was last built, committed, so every checkout has it). A baseline that exists and cannot be read is a warning; a
+    missing file is no yardstick."""
+    counts = [0]
+    try:
+        counts.append(len(read_records(baseline_path(path))))
+    except FileNotFoundError:
+        pass
+    except (OSError, ValueError):
+        print("::warning::the baseline of the last pull could not be read, so the list is not compared with it")
+    with contextlib.suppress(OSError, ValueError, KeyError, TypeError):  # no published number: a local trial
+        counts.append(int(json.loads(Path(PUBLISHED).read_text(encoding="utf-8"))["covered"]))
+    return max(counts)
+
+
+def dump(records: list[dict[str, Any]]) -> str:
+    return json.dumps(records, indent=1, ensure_ascii=False) + "\n"
+
+
+def baseline_path(path: str = COMPANIES) -> str:
+    """Where the pull keeps the list as it pulled it (data/companies.pulled.json), for the push to compare with."""
+    return path.removesuffix(".json") + ".pulled.json"
+
+
+def condition(value: Any) -> str:
+    """The PostgREST filter for a column that held exactly this pulled value (a key the pull left out is null)."""
+    return "is.null" if value is None else f"eq.{value}"
+
+
+def push_companies(client: Client, path: str = COMPANIES) -> tuple[int, int, int, int]:
+    """Send the discovered fields that discover.py changed back to the table and return (companies changed, left
+    alone, failed, held back).
+
+    What discovery changed is the file compared with the list as the pull wrote it (the baseline), never with the
+    table as it is now, so a field an editor saved since the pull is not mistaken for a discovery. Only the crawled
+    records are considered and only the five DISCOVERED fields are ever sent, a careers address as https://. Each
+    request names the company and the values the row had at the pull for all five fields, plus `crawl` true and no
+    exclusion: a row an editor changed since (a pin, a correction, off the crawl, excluded) matches nothing and is left
+    alone. A record the baseline does not have is left alone too (a company is added in the `companies` table; the
+    admin page gets an editor in PLAN_2 step 3.3).
+
+    A company that had a working feed (status ok) is held back when discovery now finds nothing for it: a status that
+    is not ok, or a blank where there was a value, is never pushed over it, and one warning counts them (no names). A
+    request that fails is counted and the next one still goes; the log holds the status, never the row."""
+    baseline = {str(r.get("name")): r for r in read_records(baseline_path(path))}
+    if not baseline:
+        raise SyncError("the pulled list is empty: nothing to compare with, nothing written")
+    changed = alone = failed = held = sent = 0
+    for record in read_records(path):
+        if record.get("crawl") is not True:
+            continue
+        pulled = baseline.get(str(record.get("name")))
+        if pulled is None or pulled.get("crawl") is not True:
+            alone += 1
+            continue
+        found = {k: record.get(k) or "" for k in DISCOVERED}
+        found["careers_url"] = https_only(found["careers_url"])
+        fields = {k: v for k, v in found.items() if v != (pulled.get(k) or "")}
+        if not fields:
+            continue
+        if pulled.get("status") == "ok" and (
+            found["status"] != "ok" or any(not v and pulled.get(k) for k, v in fields.items())
+        ):
+            held += 1
+            continue
+        where: dict[str, str | int] = {
+            "name": f"eq.{pulled['name']}",
+            "crawl": "eq.true",
+            "excluded": "is.null",
+            "select": "name",
+            **{k: condition(pulled.get(k)) for k in DISCOVERED},
+        }
+        sent += 1
+        try:
+            done = client.call(
+                "PATCH", where, fields, table="companies", prefer="return=representation", quiet=True
+            ).json()
+            if not isinstance(done, list):
+                raise SyncError("PATCH companies returned something other than a list")
+        except (SyncError, ValueError) as exc:  # a ValueError is an answer that is not JSON
+            failed += 1
+            print(f"::warning::a company could not be updated: {exc if isinstance(exc, SyncError) else 'not JSON'}")
+            continue
+        if done:
+            changed += 1
+        else:  # an editor changed the row since the pull
+            alone += 1
+    if sent and not changed and not failed:  # every update found its row changed, or none matched at all
+        print(f"::warning::none of {sent} updates matched a row: the conditions may not match what the table holds")
+    if held:
+        print(
+            f"::warning::{held} companies with a working feed were left as they are: discovery found nothing for them"
+        )
+    return changed, alone, failed, held
 
 
 def push_crawl_log(conn: sqlite3.Connection, client: Client) -> int:
@@ -528,13 +699,21 @@ def leave_held(client: Client) -> int | None:
         return None
 
 
-def pull_main(url: str, key: str, allow_shrink: bool = False) -> None:
+def pull_main(url: str, key: str, allow_shrink: bool = False, history: bool = True) -> None:
+    """The pull step: the company list, and the job history unless `history` is False. A failure stops the run."""
     session = requests.Session()
+    source = Source(cast("ExportSession", session), url, key)
     try:
-        jobs, log = pull(Source(cast("ExportSession", session), url, key), allow_shrink=allow_shrink)
+        if history:
+            jobs, log = pull(source, allow_shrink=allow_shrink)
+        companies = pull_companies(source)
     except (SyncError, ExportError) as exc:
         sys.exit(f"Supabase pull failed: {exc}")
-    print(f"Supabase: pulled {jobs} jobs and {log} crawl log rows into {DB}")
+    if history:
+        print(f"Supabase: pulled {jobs} jobs and {log} crawl log rows into {DB}")
+    print(f"Supabase: pulled {companies} companies into {COMPANIES}")
+    if not history:
+        return
     held = leave_held(Client(cast("HttpSession", session), url, key))
     if held is not None:
         print(f"Supabase: {held} open jobs already hold a description")
@@ -542,11 +721,31 @@ def pull_main(url: str, key: str, allow_shrink: bool = False) -> None:
         print("::warning::the crawl log is empty: held drops start again")
 
 
+def push_companies_main(url: str, key: str) -> None:
+    """The last step of the discover-companies workflow: send the discovered fields back (see `push_companies`)."""
+    session = requests.Session()
+    try:
+        changed, alone, failed, held = push_companies(Client(cast("HttpSession", session), url, key))
+    except (SyncError, ExportError) as exc:
+        sys.exit(f"Supabase push of the companies failed: {exc}")
+    except (OSError, ValueError) as exc:  # data/companies.json or its baseline cannot be read
+        sys.exit(f"Supabase push of the companies failed: a list file cannot be read ({type(exc).__name__})")
+    print(
+        f"Supabase: {changed} companies updated, {alone} left alone (changed or removed since the pull), "
+        f"{held} held back"
+    )
+    if failed:
+        sys.exit(f"Supabase push of the companies failed for {failed} companies (see the warnings above)")
+
+
 def main(argv: Sequence[str] | None = None) -> None:
     url, key = credentials()
     args = sys.argv[1:] if argv is None else argv
-    if "--pull" in args:
-        pull_main(url, key, ALLOW_SHRINK in args)
+    if "--pull" in args or "--pull-companies" in args:
+        pull_main(url, key, ALLOW_SHRINK in args, history="--pull" in args)
+        return
+    if "--push-companies" in args:
+        push_companies_main(url, key)
         return
     conn = open_history()
     if conn.execute("PRAGMA user_version").fetchone()[0] != PULLED:

@@ -2,7 +2,6 @@
 Fake HTTP only: the conftest replaces the session with one that fails on any real request."""
 
 import asyncio
-import csv
 import json
 import re
 import sqlite3
@@ -22,14 +21,13 @@ import discover
 import run
 import sync_supabase
 from common import ROBOTS_NOTE, ExclusionError
-from tests.conftest import add_crawls, add_job, write_json
+from tests.conftest import add_crawls, add_job, exclude, excluded_record, write_json
 from tests.fakes import FakeCtx, FakeHttpResponse, FakePage, FakeSupabase
 from tests.test_build_dashboard import prepare, read_payload, write_css, write_static
 
 REAL_SESSION = common._s  # the conftest replaces it with one that fails on any request
 REAL_LOAD_ROBOTS = common._load_robots  # the conftest replaces it with "no robots.txt anywhere"
 ROOT = Path(__file__).resolve().parents[1]
-HEADER = "company,reason,date_added\n"
 TEST_DELAY = 5.0
 FAR = 100  # seconds: a host that was used just now, for a wait that cannot be an accident
 ACME_ROWS = 5  # two jobs, one star, one emailed key, one crawl log row
@@ -567,66 +565,77 @@ def test_the_robots_card_has_no_text_per_company_and_no_days(db: sqlite3.Connect
 # --- the exclusion list ---------------------------------------------------------------------------------------
 
 
-def write_list(path: Path, *rows: tuple[str, str, str], header: str = HEADER) -> str:
-    text = header + "".join(f"{c},{r},{d}\n" for c, r, d in rows)
-    path.write_text(text, encoding="utf-8")
+def write_list(path: Path, *rows: tuple[str, str, str]) -> str:
+    """A pulled list holding one excluded record for each (name, reason, date_added), and a company that is not."""
+    records = [{"name": "Kept", "crawl": True}, *(excluded_record(c, r, d) for c, r, d in rows)]
+    path.write_text(json.dumps(records), encoding="utf-8")
     return str(path)
 
 
-def test_the_list_that_ships_loads_and_has_the_right_header() -> None:
-    names = common.load_excluded(str(ROOT / "data" / "excluded_companies.csv"))
-    with open(ROOT / "data" / "excluded_companies.csv", newline="", encoding="utf-8") as fh:
-        assert next(csv.reader(fh)) == ["company", "reason", "date_added"]
-    assert len(names) == len(set(names))
+def test_a_list_with_no_excluded_record_has_no_companies(tmp_path: Path) -> None:
+    assert common.load_excluded(write_list(tmp_path / "x.json")) == []
+    (tmp_path / "y.json").write_text("[]", encoding="utf-8")
+    assert common.load_excluded(str(tmp_path / "y.json")) == []
 
 
-def test_an_empty_list_has_no_companies(tmp_path: Path) -> None:
-    assert common.load_excluded(write_list(tmp_path / "x.csv")) == []
-
-
-def test_names_are_stripped_and_read_in_order(tmp_path: Path) -> None:
-    path = write_list(tmp_path / "x.csv", ("  Acme  ", "asked by email", "2026-11-20"), ("Beta", "asked", "2026-11-21"))
-    assert common.load_excluded(path) == ["Acme", "Beta"]
+def test_names_are_stripped_and_read_in_order_and_only_excluded_records_count(tmp_path: Path) -> None:
+    path = write_list(
+        tmp_path / "x.json", ("  Acme  ", "asked by email", "2026-11-20"), ("Beta", "asked", "2026-11-21")
+    )
+    assert common.load_excluded(path) == ["Acme", "Beta"]  # the record of "Kept" has `excluded` unset: not on the list
 
 
 @pytest.mark.parametrize(
-    ("rows", "header", "message"),
+    ("rows", "message"),
     [
-        ([("", "r", "2026-11-20")], HEADER, "line 2: the company name is blank"),
-        ([("   ", "r", "2026-11-20")], HEADER, "blank or shorter"),
-        ([("A", "r", "2026-11-20")], HEADER, "blank or shorter"),
-        ([("Acme", "r", "2026-11-20"), ("acme", "r", "2026-11-20")], HEADER, "line 3: 'acme' is on the list twice"),
-        ([("Acme", "", "2026-11-20")], HEADER, "the reason is blank"),
-        ([("Acme", "r", "")], HEADER, "not a YYYY-MM-DD date"),
-        ([("Acme", "r", "20/11/2026")], HEADER, "not a YYYY-MM-DD date"),
-        ([("Acme", "r", "2026-13-40")], HEADER, "not a YYYY-MM-DD date"),
-        ([], "company,date_added,reason\n", "the header must be"),
-        ([], "name,reason\n", "the header must be"),
+        ([("", "r", "2026-11-20")], "record 2: the company name is blank"),
+        ([("   ", "r", "2026-11-20")], "blank or shorter"),
+        ([("A", "r", "2026-11-20")], "blank or shorter"),
+        ([("Acme", "r", "2026-11-20"), ("acme", "r", "2026-11-20")], "record 3: a name is on the list twice"),
+        ([("Acme", "", "2026-11-20")], "the reason is blank"),
+        ([("Acme", "  ", "2026-11-20")], "the reason is blank"),
+        ([("Acme", "r", "")], "not a YYYY-MM-DD date"),
+        ([("Acme", "r", "20/11/2026")], "not a YYYY-MM-DD date"),
+        ([("Acme", "r", "2026-13-40")], "not a YYYY-MM-DD date"),
     ],
 )
-def test_a_bad_list_raises_and_says_where(
-    tmp_path: Path, rows: list[tuple[str, str, str]], header: str, message: str
-) -> None:
+def test_a_bad_list_raises_and_says_where(tmp_path: Path, rows: list[tuple[str, str, str]], message: str) -> None:
     with pytest.raises(ExclusionError, match=message):
-        common.load_excluded(write_list(tmp_path / "x.csv", *rows, header=header))
+        common.load_excluded(write_list(tmp_path / "x.json", *rows))
+
+
+@pytest.mark.parametrize(
+    ("text", "message"),
+    [
+        ("{}", "it must be a list of records"),
+        ('["Acme"]', "it must be a list of records"),
+        ("not json", "cannot be read"),
+        ('[{"crawl": false, "excluded": {"reason": "r", "date_added": "2026-11-20"}}]', "the company name is blank"),
+        ('[{"name": 7, "excluded": {"reason": "r", "date_added": "2026-11-20"}}]', "the company name is blank"),
+        ('[{"name": "Acme", "excluded": {"reason": "r"}}]', "not a YYYY-MM-DD date"),
+        ('[{"name": "Acme", "excluded": {"reason": "r", "date_added": 20261120}}]', "not a YYYY-MM-DD date"),
+        ('[{"name": "Acme", "excluded": {"reason": 5, "date_added": "2026-11-20"}}]', "the reason is blank"),
+        ('[{"name": "Acme", "excluded": {}}]', "the reason is blank"),
+        ('[{"name": "Acme", "excluded": "yes"}]', "the reason is blank"),
+    ],
+)
+def test_a_pulled_file_of_another_shape_is_a_bad_list(tmp_path: Path, text: str, message: str) -> None:
+    path = tmp_path / "x.json"
+    path.write_text(text, encoding="utf-8")
+    with pytest.raises(ExclusionError, match=message):
+        common.load_excluded(str(path))
 
 
 def test_a_missing_list_raises(tmp_path: Path) -> None:
     with pytest.raises(ExclusionError, match="cannot be read"):
-        common.load_excluded(str(tmp_path / "nope.csv"))
+        common.load_excluded(str(tmp_path / "nope.json"))
 
 
 def test_a_very_long_list_raises(tmp_path: Path) -> None:
     rows = [(f"Company {n}", "r", "2026-11-20") for n in range(common.EXCLUDED_MAX + 1)]
-    with pytest.raises(ExclusionError, match="more than 200 rows"):
-        common.load_excluded(write_list(tmp_path / "x.csv", *rows))
-
-
-def test_a_short_row_with_a_missing_column_is_a_bad_list(tmp_path: Path) -> None:
-    path = tmp_path / "x.csv"
-    path.write_text(HEADER + "Acme\n", encoding="utf-8")
-    with pytest.raises(ExclusionError, match="the reason is blank"):
-        common.load_excluded(str(path))
+    with pytest.raises(ExclusionError, match="more than 200 excluded records"):
+        common.load_excluded(write_list(tmp_path / "x.json", *rows))
+    assert len(common.load_excluded(write_list(tmp_path / "y.json", *rows[:-1]))) == common.EXCLUDED_MAX
 
 
 def test_is_excluded_ignores_case_and_padding_but_not_other_names() -> None:
@@ -635,10 +644,6 @@ def test_is_excluded_ignores_case_and_padding_but_not_other_names() -> None:
     assert not common.is_excluded("Acme Corp", ["Acme"])
     assert not common.is_excluded("Acm", ["Acme"])
     assert not common.is_excluded("Anything", [])
-
-
-def exclude(workdir: Path, *names: str) -> None:
-    write_list(workdir / "data" / "excluded_companies.csv", *[(n, "asked to be removed", "2026-11-20") for n in names])
 
 
 def test_an_excluded_company_is_never_crawled_and_its_data_is_deleted(
@@ -657,7 +662,9 @@ def test_an_excluded_company_is_never_crawled_and_its_data_is_deleted(
     exclude(workdir, "Acme")
     run.main()
     assert crawled == ["other"]  # Acme is not crawled
-    assert "exclusion list: deleted 1 jobs of Acme" in capsys.readouterr().out
+    out = capsys.readouterr().out
+    assert "exclusion list: deleted 1 jobs of 1 excluded companies" in out
+    assert "Acme" not in out  # an excluded company's name is private and the log is public
     check = sqlite3.connect(run.DB)
     left = {r[0] for r in check.execute("SELECT company FROM jobs")}
     assert left == {"Acme Corp", "Other"}  # deleted by the exact name only
@@ -686,10 +693,14 @@ def test_a_bad_exclusion_list_stops_the_run_before_any_crawl(workdir: Path, monk
     crawled: list[str] = []
     monkeypatch.setitem(run.ADAPTERS, "fake", lambda slug: crawled.append(slug) or [])
     write_json(workdir / "data" / "companies.json", [co("Acme")])
-    (workdir / "data" / "excluded_companies.csv").write_text(HEADER + ",x,2026-11-20\n", encoding="utf-8")
+    exclude(workdir, "")  # an excluded record with no name
     with pytest.raises(ExclusionError):
         run.main()
     assert crawled == []
+
+
+def rows_of(workdir: Path) -> list[dict[str, Any]]:
+    return json.loads((workdir / "data" / "companies.json").read_text())  # type: ignore[no-any-return]
 
 
 def test_discover_skips_an_excluded_seed_row(workdir: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -711,9 +722,9 @@ def test_discover_skips_an_excluded_seed_row(workdir: Path, monkeypatch: pytest.
     monkeypatch.setattr(sys, "argv", ["discover.py"])
     discover.main()
     assert seen == ["Beta"]  # not the excluded one, not the one that is not crawled
-    rows = {r["name"]: r for r in json.loads((workdir / "data" / "companies.json").read_text())}
+    rows = {r["name"]: r for r in rows_of(workdir)}
     assert rows["Beta"]["status"] == "x"
-    assert "Acme" not in rows  # the record of an excluded company goes, as its jobs do
+    assert [r for r in rows_of(workdir) if r["name"] == "Acme" and "status" in r] == []  # nothing is written for it
 
 
 def test_the_dashboard_never_lists_an_excluded_company(db: sqlite3.Connection, workdir: Path) -> None:
@@ -788,7 +799,8 @@ def test_the_purge_deletes_jobs_stars_and_emailed_keys_of_that_company_only(
     assert {r["company"] for r in fake.others["emailed"]} == {"Acme Corp", "acme", "Beta"}
     assert {r["company"] for r in fake.others["crawl_log"]} == {"Acme Corp", "acme", "Beta"}
     out = capsys.readouterr().out
-    assert "deleted {'user_jobs': 1, 'emailed': 1, 'jobs': 2, 'crawl_log': 1} for Acme" in out
+    assert "deleted {'user_jobs': 1, 'emailed': 1, 'jobs': 2, 'crawl_log': 1} for an excluded company" in out
+    assert "Acme" not in out.replace("Acme Corp", "")  # the name of an excluded company never reaches the log
     assert "kept title" not in out and KEY not in out  # counts only, never rows
     deletes = [c for c in fake.calls if c["method"] == "DELETE"]
     assert len(deletes) == FOUR_DELETES
@@ -882,7 +894,7 @@ def test_main_stops_on_a_bad_list_and_touches_nothing(
     local: sqlite3.Connection, workdir: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     local.commit()
-    (workdir / "data" / "excluded_companies.csv").write_text(HEADER + "A,x,2026-11-20\n", encoding="utf-8")
+    exclude(workdir, "A")
     fake = FakeSupabase()
     monkeypatch.setenv("SUPABASE_URL", URL_SUPABASE)
     monkeypatch.setenv("SUPABASE_SERVICE_ROLE_KEY", KEY)
@@ -902,7 +914,9 @@ def test_a_list_that_spells_a_company_differently_stops_the_run_and_deletes_noth
     conn.close()
     write_json(workdir / "data" / "companies.json", [co("Acme")])
     exclude(workdir, "acme")  # skipping ignores case, deleting does not: the run must say so
-    with pytest.raises(ExclusionError, match="spells a company differently"):
+    with pytest.raises(
+        ExclusionError, match=r"spells a company differently from the data: use the exact stored spelling$"
+    ):
         run.main()
     assert crawled == []
     check = sqlite3.connect(run.DB)
@@ -910,16 +924,10 @@ def test_a_list_that_spells_a_company_differently_stops_the_run_and_deletes_noth
     check.close()
 
 
-def test_a_list_saved_by_excel_with_a_byte_order_mark_is_read(tmp_path: Path) -> None:
-    path = tmp_path / "x.csv"
-    path.write_text("\ufeff" + HEADER + "Acme,asked,2026-11-20\n", encoding="utf-8")
-    assert common.load_excluded(str(path)) == ["Acme"]
-
-
 def test_a_list_that_is_not_text_is_a_bad_list(tmp_path: Path) -> None:
-    path = tmp_path / "x.csv"
+    path = tmp_path / "x.json"
     path.write_bytes(b"\xff\xfe\x00bad")
-    with pytest.raises(ExclusionError, match="cannot be read"):
+    with pytest.raises(ExclusionError, match=r"cannot be read \(UnicodeDecodeError\)"):
         common.load_excluded(str(path))
 
 

@@ -1,4 +1,3 @@
-import csv
 import datetime
 import json
 import os
@@ -11,7 +10,7 @@ from urllib.parse import unquote, urlsplit
 
 import requests
 
-VERSION = "0.68.0"  # equal to the version in package.json and pyproject.toml (a test checks it)
+VERSION = "0.69.0"  # equal to the version in package.json and pyproject.toml (a test checks it)
 SITE_URL = "https://ravidorr.github.io/misra/"
 CONTACT = "raanan@avidor.org"
 ROBOTS_TOKEN = "Misra"  # the product token that robots.txt groups name
@@ -60,46 +59,51 @@ API_HOSTS = frozenset({"boards-api.greenhouse.io", "api.lever.co", "api.eu.lever
 )
 API_PATHS = ("/api/v1/widget/", "/wday/cxs/", "/hcmRestApi/", "/widgets")
 
-EXCLUDED = "data/excluded_companies.csv"
-EXCLUDED_COLUMNS = ["company", "reason", "date_added"]
+# The one list of every company: those we crawl, those we only researched, those that asked to be removed. Its home is
+# the Supabase table `companies`; this file is the scratch copy that `sync_supabase.py --pull` writes (git-ignored)
+COMPANIES = "data/companies.json"
 EXCLUDED_MIN_NAME = 2  # a shorter name is a typo, not a company
 EXCLUDED_MAX = 200
 MAX_PURGE_COMPANIES = 3  # a run deletes the data of at most this many companies; more means a mistake in the list
 
 
 class ExclusionError(Exception):
-    """The exclusion list cannot be read or cannot be trusted; the message says which row and why."""
+    """The exclusion list cannot be read or cannot be trusted; the message says which record and why."""
 
 
-def load_excluded(path: str = EXCLUDED) -> list[str]:
-    """The company names on the exclusion list (data/excluded_companies.csv: company, reason, date_added), stripped.
+def load_excluded(path: str = COMPANIES) -> list[str]:
+    """The company names on the exclusion list: the records of the pulled list (data/companies.json) that have an
+    `excluded` field ({reason, date_added}), stripped, in the order of the file.
 
-    A company on the list is never crawled and its data is deleted. A list that is missing, has other columns, holds a
-    blank or very short name, a repeated name, a reason or date that is missing or not a date, or is very long raises
-    ExclusionError: a list nobody can trust must stop the run, not be skipped."""
+    A company on the list is never crawled and its data is deleted. A file that is missing, is not a list of records,
+    holds an excluded record with a blank or very short name, a name twice, a reason that is blank or a date that is
+    not a date, or more than EXCLUDED_MAX excluded records raises ExclusionError: a list nobody can trust must stop
+    the run, not be skipped."""
     try:
-        with open(path, newline="", encoding="utf-8-sig") as fh:  # -sig: Excel writes a byte order mark
-            reader = csv.DictReader(fh)
-            if reader.fieldnames != EXCLUDED_COLUMNS:
-                raise ExclusionError(f"{path}: the header must be {','.join(EXCLUDED_COLUMNS)}")
-            rows = list(reader)
-    except (OSError, UnicodeDecodeError, csv.Error) as exc:
+        with open(path, encoding="utf-8") as fh:
+            records = json.load(fh)
+    except (OSError, ValueError) as exc:  # UnicodeDecodeError and JSONDecodeError are ValueErrors
         raise ExclusionError(f"{path}: cannot be read ({type(exc).__name__})") from None
+    if not isinstance(records, list) or not all(isinstance(r, dict) for r in records):
+        raise ExclusionError(f"{path}: it must be a list of records")
+    rows = [(number, r) for number, r in enumerate(records, start=1) if r.get("excluded") is not None]
     if len(rows) > EXCLUDED_MAX:
-        raise ExclusionError(f"{path}: more than {EXCLUDED_MAX} rows")
+        raise ExclusionError(f"{path}: more than {EXCLUDED_MAX} excluded records")
     names: list[str] = []
-    for number, row in enumerate(rows, start=2):
-        name = (row["company"] or "").strip()
+    for number, record in rows:
+        where, name = f"{path} record {number}", record.get("name")
+        name = name.strip() if isinstance(name, str) else ""
         if len(name) < EXCLUDED_MIN_NAME:
-            raise ExclusionError(f"{path} line {number}: the company name is blank or shorter than {EXCLUDED_MIN_NAME}")
+            raise ExclusionError(f"{where}: the company name is blank or shorter than {EXCLUDED_MIN_NAME}")
         if name.casefold() in {n.casefold() for n in names}:
-            raise ExclusionError(f"{path} line {number}: {name!r} is on the list twice")
-        if not (row["reason"] or "").strip():
-            raise ExclusionError(f"{path} line {number}: the reason is blank")
+            raise ExclusionError(f"{where}: a name is on the list twice")  # not which: the log is public
+        why = record["excluded"]
+        if not isinstance(why, dict) or not isinstance(why.get("reason"), str) or not why["reason"].strip():
+            raise ExclusionError(f"{where}: the reason is blank")
         try:
-            datetime.date.fromisoformat((row["date_added"] or "").strip())
-        except ValueError:
-            raise ExclusionError(f"{path} line {number}: date_added is not a YYYY-MM-DD date") from None
+            datetime.date.fromisoformat(why["date_added"])
+        except (KeyError, TypeError, ValueError):
+            raise ExclusionError(f"{where}: date_added is not a YYYY-MM-DD date") from None
         names.append(name)
     return names
 
@@ -118,12 +122,8 @@ def is_excluded(name: str, excluded: list[str]) -> bool:
     return name.strip().casefold() in {n.casefold() for n in excluded}
 
 
-# The one list of every company: those we crawl, those we only researched, and the notes on both
-COMPANIES = "data/companies.json"
-
-
 def load_companies(path: str = COMPANIES) -> list[dict[str, Any]]:
-    """Every record of data/companies.json, crawled or not (see `crawled_companies`)."""
+    """Every record of the pulled data/companies.json, crawled or not (see `crawled_companies`)."""
     with open(path, encoding="utf-8") as fh:
         return cast("list[dict[str, Any]]", json.load(fh))
 
@@ -143,13 +143,20 @@ RECORD_KEYS = (
     "verify",
     "links",
     "gap",
+    "excluded",
 )
 
 
+def https_only(url: str) -> str:
+    """The address with an `http://` start made `https://` (the table of companies refuses any other address)."""
+    return "https://" + url[len("http://") :] if url[: len("http://")].lower() == "http://" else url
+
+
 def crawled_companies(companies: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """The companies the pipeline crawls: `crawl` is exactly true. The others are researched sites kept for the
-    coverage card (`gap`) and are never requested; a record that does not say `crawl` is not crawled."""
-    return [c for c in companies if c.get("crawl") is True]
+    """The companies the pipeline crawls: `crawl` is exactly true and there is no exclusion. The others are researched
+    sites kept for the coverage card (`gap`) and the companies that asked to be removed (`excluded`, a legal
+    commitment): none is ever requested. A record that does not say `crawl` is not crawled."""
+    return [c for c in companies if c.get("crawl") is True and c.get("excluded") is None]
 
 
 def host_of(url: str) -> str:

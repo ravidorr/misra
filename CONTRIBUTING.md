@@ -28,22 +28,36 @@ GitHub Pages serves the dashboard: Settings, Pages, Deploy from a branch, `main`
 
 ## Adding a company
 
-`data/companies.json` is the one list of every company: the ones we crawl (`"crawl": true`) and the ones we only
-researched (`"crawl": false`, with a `gap`). Nothing about a company lives anywhere else. A record has these fields:
+The Supabase table `companies` is the one list of every company (PLAN_2.md step 3): the ones we crawl
+(`crawl` true), the ones we only researched (`crawl` false, with a `gap`) and the ones that asked to be removed
+(`excluded`). Nothing about a company lives anywhere else. `data/companies.json` is only the scratch copy that
+`python3 sync_supabase.py --pull` writes from the table (git-ignored, like `data/jobs.db`); never edit it, an edit is
+lost at the next pull. A record has these fields:
 
 - Written by a person: `name`, `domain`, `crawl`, `segment` (research only), `israel_only`, `verify`, `links` (the
-  `israel` and `global` career pages the coverage card opens), `gap` (`reason` and `note`: why it is not crawled).
+  `israel` and `global` career pages the coverage card opens), `gap` (`reason` and `note`: why it is not crawled),
+  `excluded` (`reason` and `date_added`: see "Removing a company on request").
 - Written by `discover.py`: `careers_url`, `ats`, `slug`, `source`, `status`. It never touches the others, and never
   touches a record whose `crawl` is not true.
 
-1. Add `{"name": "Acme", "domain": "acme.com", "crawl": true}` to `data/companies.json`, in name order.
-2. Run `python3 discover.py`. It fills in each crawled company's careers URL and job feed. Commit the file.
-3. If `discover.py` finds the wrong feed or none, pin the company: set `"source": "override"` and its `ats` and `slug`
-   (or `"ats": "browser"` and a career page URL as the `slug`). `discover.py` keeps a pinned `ats` and `slug` and only
-   checks them. Remove `source` to let it search again.
+The database checks are the rules of a record (a name and a domain unique ignoring case, exactly one of crawling, a
+gap or an exclusion, a known gap reason and ATS, `https://` addresses): the table refuses a record that breaks one,
+and says which. Until the admin page has its editor (PLAN_2.md step 3.3) the maintainer edits the table in the
+Supabase dashboard (Table Editor, `companies`).
 
-Add `"israel_only": true` to a record to keep only the jobs located in Israel. Use it for large multinational boards.
-Add `"verify": false` to a pin whose board this network cannot reach: it is trusted and checked at crawl time.
+1. Insert a row with `name`, `domain` and `crawl` true.
+2. Run the `discover-companies` workflow from `main` (Actions, Run workflow). It pulls the list, runs `discover.py`,
+   which fills in each crawled company's careers URL and job feed, and sends back only those five fields. A new company
+   is crawled by the daily run after that.
+3. If `discover.py` finds the wrong feed or none, pin the company: set `source` to `override` and its `ats` and `slug`
+   (or `ats` `browser` and a career page URL as the `slug`), then run the `discover-companies` workflow again so the
+   `status` becomes `ok` (`run.py` crawls only `status` `ok`). `discover.py` keeps a pinned `ats` and `slug` and only
+   checks them. Clear `source` to let it search again. A company that has `status` `ok` is never downgraded by the
+   push (a feed that died stays `ok` until someone edits the row): that is the intended trade-off, so a failed
+   discovery run, from a blocked runner for example, cannot switch working companies off.
+
+Set `israel_only` to true on a record to keep only the jobs located in Israel. Use it for large multinational boards.
+Set `verify` to false on a pin whose board this network cannot reach: it is trusted and checked at crawl time.
 
 The slug for the systems where it is not obvious:
 
@@ -66,22 +80,33 @@ never floods the job alerts.
 ## Removing a company on request
 
 The policy (the lawyer's answer, PRD "Before launch"): when a company asks to be removed, its data is deleted at once
-and it goes on an exclusion list, so it is never crawled again. `TERMS.md` promises "removed promptly". It takes minutes.
+and it is excluded, so it is never crawled again. `TERMS.md` promises "removed promptly". It takes minutes.
 
-1. Find the exact name the crawl uses: the `name` of the company in `data/companies.json` (for example `Acme`). A company
-   that appears under two names needs a row for each.
-2. Add one row to `data/excluded_companies.csv`: `company,reason,date_added`, for example
-   `Acme,asked to be removed by email,2026-11-20`. The reason is a few words: no person's name, no address, no copy of the
-   message. The date is `YYYY-MM-DD`. Never delete a row: the list is what keeps a company from coming back.
-3. Merge it through a draft PR (`main` is protected: `gh pr ready` then `gh pr merge --admin --squash`).
-4. Run the daily workflow from `main` (Actions, `daily-job-digest`, Run workflow). It does the rest in one run: the crawl
+1. Find the exact name the crawl uses: the `name` of the company in the `companies` table (for example `Acme`). A
+   company that appears under two names needs a record for each.
+2. Exclude it in the Supabase SQL editor (until the admin page has its editor, step 3.3), in one statement. An excluded
+   record holds the name, `crawl` false and the exclusion, and nothing else, so every other field is set to null in the
+   same write (the table refuses anything else):
+
+   ```sql
+   update public.companies set crawl = false, domain = null, segment = null, careers_url = null, ats = null,
+     slug = null, source = null, status = null, israel_only = null, verify = null, links = null, gap = null,
+     excluded = '{"reason": "asked to be removed by email", "date_added": "2026-11-20"}'
+   where name = 'Acme';
+   ```
+
+   The reason is a few words: no person's name, no address, no copy of the message. The date is `YYYY-MM-DD`. A company
+   that asked to be removed and was never in the list gets the same record with `insert`. Never delete an excluded
+   record: it is what keeps a company from coming back. Until PLAN_2 step 3.4 adds the backup of `companies`, the
+   table is the only copy of who asked, and when.
+3. Run the daily workflow from `main` (Actions, `daily-job-digest`, Run workflow). It does the rest in one run: the crawl
    step skips the company and deletes its jobs and crawl log from the scratch history `data/jobs.db` (pulled from
    Supabase at the start of the run); the sync step deletes its rows from Supabase `jobs` and `crawl_log`,
    and the stars and discards (`user_jobs`, which keep a title and a link) and emailed keys (`emailed`) of every user,
    by exact name; the build drops it from `docs/jobs.json`, `docs/jobs.jsonld` and the coverage gap card; the commit step
    publishes. A user's star for that company is deleted too: the removal is complete, and the star row would keep the
    title and the link.
-5. Verify, and reply to the company the same day.
+4. Verify, and reply to the company the same day.
 
 ### The test of success
 
@@ -103,16 +128,18 @@ All of these hold after the run:
   crawl, so a list that spells a company differently from the data (`acme` for `Acme`) stops the run with a message: use
   the stored spelling. Read the log line: if it says nothing was deleted, the name is not the one in the data. The
   database file is vacuumed after a deletion, so the deleted titles and links do not stay in it.
-- The list is checked on every run. A missing file, a wrong header, a blank or one-letter name, a repeated name, a
-  missing reason or a bad date stops the run, and the failure alert is sent: that is deliberate, because nobody could
-  say who must not be crawled. `tests/test_politeness.py` reads the real file, so CI catches a typo before it merges.
+- The list is checked on every run, in the file the pull wrote. A file that is missing or not a list of records, a blank
+  or one-letter name, a repeated name, a missing reason or a bad date stops the run, and the failure alert is sent: that
+  is deliberate, because nobody could say who must not be crawled. The database refuses the same records when they are
+  written, and `tests/test_politeness.py` pins the guards of `load_excluded`. A pull that cannot reach Supabase stops
+  the run too: a run must not crawl without the exclusions.
 - At most 3 companies that still have data are deleted in one run; more is refused before anything is deleted. Add them
   in separate runs.
 - Earlier commits of `data/jobs.db` (it was committed until step 9.1) and `docs/jobs.json` still hold the old links. A removal request does not rewrite
   history; if a company insists, that is a separate decision.
 - With a non-empty list and empty Supabase secrets the sync step fails on purpose: a removal must not look done.
-- Nothing here is applied to the Supabase project by hand: no migration is involved, and the service-role key that the
-  sync step already has does the deleting.
+- No migration is involved: the exclusion is a row of the `companies` table, and the service-role key that the sync
+  step already has does the deleting.
 - The removal takes the descriptions with it: they are columns of the `jobs` row in Supabase (see "Job descriptions"), and
   the row is deleted. They are in no other place: `data/jobs.db` and the repository never hold a description.
 
@@ -443,7 +470,7 @@ from public.jobs
 where status = 'open';
 ```
 
-Accepted sites are not in Supabase: a report is only an email, and accepting it adds a `"crawl": true` record to `data/companies.json` (see "Reported sites"). Count the additions of the month from git, for example `git log --since=2026-11-01 --until=2026-12-01 -p --format= -- data/companies.json | grep -c '^+  "crawl": true'`, and compare with the number of report emails received.
+Accepted sites are not in Supabase: a report is only an email, and accepting it adds a `crawl` true record to the `companies` table (see "Reported sites"). The table is not in git and has no backup until PLAN_2 step 3.4: count the additions of the month in the Supabase SQL editor, `select count(*) from public.companies where crawl and updated_at >= '2026-11-01'` (an approximation: `updated_at` also moves when a crawl field is rewritten), and compare with the number of report emails received.
 
 ## Backups of the account tables and the job history
 
@@ -559,13 +586,13 @@ Not covered, and said plainly: a real PostgREST and a real Supabase project (the
 
 ## Reported sites
 
-Visitors report a missing company with "Add a company" on the dashboard's coverage gap card (PLAN.md step 5.2). Each report reaches the maintainer by email (company, career page link and why it matters). Nothing is stored about it, so the email is the record: act on it or answer it, then do one of these in a PR:
+Visitors report a missing company with "Add a company" on the dashboard's coverage gap card (PLAN.md step 5.2). Each report reaches the maintainer by email (company, career page link and why it matters). Nothing is stored about it, so the email is the record: act on it or answer it, then do one of these in the `companies` table (no PR: the table is not in git):
 
-1. **Accept it for the crawl.** Check that the link is the company's own career page and that it lists roles in Israel, then add it to `data/companies.json` as in "Adding a company" (`name`, `domain`, `"crawl": true`). Run `python3 discover.py` (it fills in the careers URL and job feed) and commit the result; the daily crawl then reads the company. If `discover.py` finds no feed for it, the next step applies.
-2. **Keep it on the gap card, with a reason.** Add a record to `data/companies.json` with `"crawl": false`, its `name`, `domain` and `careers_url`, `ats`, `slug` and `source` as empty strings, a `status` (`careers_page_only`, or `not_found` when there is no address) and a `gap` of `reason` and `note`. `reason` must be one of the keys of `REASONS` in `build_dashboard.py` (for example `no_feed_found` or `needs_reader`) and `note` says in a few words why we cannot read the site; the dashboard shows both on the coverage gap card. `careers_url` is the company's career page over `https` (leave it empty only for `no_careers_url`, which has none); the card links every site, to the career page, or to `https://<domain>` when there is none, and `tests/test_build_dashboard.py` fails when a record has no usable address.
+1. **Accept it for the crawl.** Check that the link is the company's own career page and that it lists roles in Israel, then add it to the `companies` table as in "Adding a company" (`name`, `domain`, `crawl` true) and run the `discover-companies` workflow (it fills in the careers URL and job feed); the daily crawl then reads the company. If `discover.py` finds no feed for it, the next step applies.
+2. **Keep it on the gap card, with a reason.** Add a record to the `companies` table with `crawl` false, its `name`, `domain` and `careers_url`, `ats`, `slug` and `source` as empty strings, a `status` (`careers_page_only`, or `not_found` when there is no address) and a `gap` of `reason` and `note`. `reason` must be one of the keys of `REASONS` in `build_dashboard.py` (for example `no_feed_found` or `needs_reader`) and `note` says in a few words why we cannot read the site; the dashboard shows both on the coverage gap card. `careers_url` is the company's career page over `https` (leave it empty only for `no_careers_url`, which has none); the card links every site, to the career page, or to `https://<domain>` when there is none, and `tests/test_build_dashboard.py` fails when a record has no usable address.
 3. **Decline it** when the link is not a career page, the company has no roles in Israel, or the report looks like spam. Nothing needs to be recorded.
 
-Records in `data/companies.json` are public, so never copy anything from a report beyond the company and its public site.
+Records of the `companies` table that are not excluded are public (anyone can read them), so never copy anything from a report beyond the company and its public site.
 
 ## The legal pages
 

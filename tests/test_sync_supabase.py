@@ -311,8 +311,8 @@ def test_main_stops_on_a_bad_exclusion_list_before_it_sends_anything(
     monkeypatch.setenv("SUPABASE_URL", URL)
     monkeypatch.setenv("SUPABASE_SERVICE_ROLE_KEY", KEY)
     monkeypatch.setattr(sync_supabase.requests, "Session", lambda: fake)
-    (workdir / "data" / "excluded_companies.csv").write_text("company,reason\n", encoding="utf-8")
-    with pytest.raises(SystemExit, match="header"):
+    (workdir / "data" / "companies.json").write_text("{}", encoding="utf-8")
+    with pytest.raises(SystemExit, match="must be a list of records"):
         sync_supabase.main([])
     assert not fake.calls
 
@@ -636,7 +636,7 @@ class Pages:
     """PostgREST for the pull: the export's `Source` reads ordered pages with a Content-Range total."""
 
     def __init__(self, tables: dict[str, list[dict[str, Any]]]) -> None:
-        self.tables = tables
+        self.tables = {"companies": [company_row("Acme")], **tables}  # the pull reads the list as well
         self.calls: list[dict[str, Any]] = []
 
     def request(self, method: str, url: str, **kw: Any) -> Any:
@@ -653,6 +653,12 @@ class Pages:
                 "json": lambda self_: window,
             },
         )()
+
+
+def company_row(name: str, **more: Any) -> dict[str, Any]:
+    """A row of `companies` as the service-role key reads it: every record key, null where the record has none."""
+    row: dict[str, Any] = dict.fromkeys(common.RECORD_KEYS)
+    return {**row, "name": name, "domain": f"{name.lower()}.test", "crawl": True, "status": "ok", **more}
 
 
 def job_row(company: str, job_id: str, status: str = "open", **more: Any) -> dict[str, Any]:
@@ -755,6 +761,7 @@ def test_main_pull_writes_the_file_and_prints_counts_only(
     out = capsys.readouterr().out
     assert out.splitlines() == [
         "Supabase: pulled 1 jobs and 1 crawl log rows into data/jobs.db",
+        "Supabase: pulled 1 companies into data/companies.json",
         "Supabase: 0 open jobs already hold a description",
     ]
     assert (workdir / "data" / "jobs.db").exists()
@@ -888,6 +895,7 @@ def test_main_pull_warns_when_the_crawl_log_is_empty_and_passes_the_override(
     sync_supabase.main(["--pull", "--allow-shrink"])  # an empty log is a warning with no row counts, never a failure
     assert capsys.readouterr().out.splitlines() == [
         "Supabase: pulled 1 jobs and 0 crawl log rows into data/jobs.db",
+        "Supabase: pulled 1 companies into data/companies.json",
         "Supabase: 0 open jobs already hold a description",
         "::warning::the crawl log is empty: held drops start again",
     ]
@@ -938,7 +946,10 @@ def test_main_pull_stays_quiet_about_the_held_count_when_the_keys_could_not_be_l
     )
     monkeypatch.setattr(sync_supabase, "leave_held", lambda _client: None)
     sync_supabase.main(["--pull"])
-    assert capsys.readouterr().out.splitlines() == ["Supabase: pulled 1 jobs and 1 crawl log rows into data/jobs.db"]
+    assert capsys.readouterr().out.splitlines() == [
+        "Supabase: pulled 1 jobs and 1 crawl log rows into data/jobs.db",
+        "Supabase: pulled 1 companies into data/companies.json",
+    ]
 
 
 def test_an_older_held_file_that_cannot_be_removed_is_a_warning_and_no_keys(

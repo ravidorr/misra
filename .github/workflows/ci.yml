@@ -4,8 +4,8 @@ on:
   pull_request:
   push:
     branches: [main]
-    # The daily pipeline pushes only data/ and docs/ using a deploy key. Unlike GITHUB_TOKEN pushes, that
-    # triggers push workflows, so skip CI for those commits.
+    # The daily pipeline pushes only docs/ using a deploy key (data/ is not in git: the history and the company list
+    # are in Supabase). Unlike GITHUB_TOKEN pushes, that triggers push workflows, so skip CI for those commits.
     paths-ignore:
       - data/**
       - docs/**
