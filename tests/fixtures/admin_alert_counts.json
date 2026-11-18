@@ -1,0 +1,52 @@
+[
+ {
+  "kind": "confirmed",
+  "day": null,
+  "n": 12
+ },
+ {
+  "kind": "emailed",
+  "day": "2026-11-18",
+  "n": 4
+ },
+ {
+  "kind": "emailed",
+  "day": "2026-11-17",
+  "n": 0
+ },
+ {
+  "kind": "emailed",
+  "day": "2026-11-16",
+  "n": 11
+ },
+ {
+  "kind": "emailed",
+  "day": "2026-11-15",
+  "n": 9
+ },
+ {
+  "kind": "emailed",
+  "day": "2026-11-14",
+  "n": 0
+ },
+ {
+  "kind": "emailed",
+  "day": "2026-11-13",
+  "n": 12
+ },
+ {
+  "kind": "emailed",
+  "day": "2026-11-12",
+  "n": 2
+ },
+ {
+  "kind": "off",
+  "day": null,
+  "n": 5
+ },
+ {
+  "kind": "pending",
+  "day": null,
+  "n": 3
+ }
+]

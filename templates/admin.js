@@ -19,13 +19,12 @@ const MESSAGES = {
   failed: 'Could not load this area.',
   retry: 'Try again',
 };
-/* The page title of each area, and what loads it. A loader resolves to true when it showed something. Crawl and
-   Companies ask the database for something; the others are empty until their steps land. */
+/* The page title of each area, and what loads it. A loader resolves to true when it showed something. */
 const AREAS = {
   crawl: { title: 'Crawl', load: loadCrawl },
   companies: { title: 'Companies', load: loadCompanies },
-  alerts: { title: 'Alerts', load: async () => false },
-  log: { title: 'Log', load: async () => false },
+  alerts: { title: 'Alerts', load: loadAlerts },
+  log: { title: 'Log', load: loadLog },
 };
 const FIRST_AREA = 'crawl';
 const PAGE_TITLE = 'Admin';
@@ -596,6 +595,135 @@ async function loadCompanies(box) {
   return true;
 }
 
+/* ---- Alerts: counts of the job alerts, never a list of accounts (PLAN_2.md step 5.1) ----
+   One call to `admin_alert_counts()`, which counts in the database and returns kind, day and n: the subscriptions by
+   state and the distinct users emailed on each of the last 7 UTC days. The answer holds no address and no user id. */
+
+const SUBSCRIPTION_KINDS = [
+  ['confirmed', 'Confirmed'],
+  ['pending', 'Waiting for confirmation'],
+  ['off', 'Turned off'],
+];
+const NOTE_EMAILED =
+  'People who were emailed that day (UTC), one count each however many jobs they got. Someone who turned the email off or deleted the account is no longer counted.';
+
+async function alertRows() {
+  const { data, error, status } = await client.rpc('admin_alert_counts');
+  if (status === HTTP_UNAUTHORIZED) return null;
+  if (error) throw error;
+  if (!Array.isArray(data)) throw new TypeError('admin_alert_counts did not return a list');
+  return data;
+}
+
+function factList(entries) {
+  const list = el('dl', 'crawl-facts');
+  for (const [label, value] of entries) {
+    const group = el('div', 'crawl-fact');
+    group.append(el('dt', '', label), el('dd', '', value));
+    list.append(group);
+  }
+  return list;
+}
+
+function alertCard(title, entries, note) {
+  const card = el('li', 'gap-card crawl-card');
+  card.append(el('h3', 'crawl-name', title), factList(entries));
+  if (note) card.append(el('p', 'crawl-note', note));
+  return card;
+}
+
+function alertsView(rows) {
+  const count = (kind) => rows.find((row) => row.kind === kind && row.day === null)?.n ?? 0;
+  const days = rows.filter((row) => row.kind === 'emailed').sort((a, b) => (a.day < b.day ? 1 : -1));
+  const root = el('div', 'crawl alerts');
+  root.append(
+    el('p', 'crawl-headline', `${count('confirmed')} confirmed, ${count('pending')} waiting, ${count('off')} off.`),
+    el('ul', 'crawl-list'),
+  );
+  root.lastChild.append(
+    alertCard('Job alerts', SUBSCRIPTION_KINDS.map(([kind, label]) => [label, String(count(kind))])),
+    alertCard(
+      'Emailed in the last 7 days',
+      days.map((row) => [day(row.day), plural(row.n, 'person', 'people')]),
+      NOTE_EMAILED,
+    ),
+  );
+  return root;
+}
+
+async function loadAlerts(box) {
+  const rows = await renewing(alertRows, 'admin_alert_counts');
+  if (rows === undefined) return true;
+  if (rows.length === 0) return false;
+  box.removeAttribute('role');
+  box.replaceChildren(alertsView(rows));
+  return true;
+}
+
+/* ---- Log: what the admin changed, newest first (PLAN_2.md step 1.3) ----
+   Read with the admin's own session (row-level security lets only a listed admin read it). The target is a company
+   name or a table name, never an address. PostgREST answers 1000 rows at most; the page asks for the last 50. */
+
+const LOG_LIMIT = 50;
+const LOG_ACTIONS = {
+  'company added': 'Company added',
+  'company changed': 'Company changed',
+  'company removed': 'Company removed',
+};
+
+async function logRows() {
+  const { data, error, status } = await client
+    .from('admin_log')
+    .select('id,ts,action,target')
+    .order('ts', { ascending: false })
+    .order('id', { ascending: false })
+    .limit(LOG_LIMIT);
+  if (status === HTTP_UNAUTHORIZED) return null;
+  if (error) throw error;
+  if (!Array.isArray(data)) throw new TypeError('the admin log did not return a list');
+  return data;
+}
+
+/* An action the page has no sentence for (a later step adds some) is shown as it is, with a capital letter. */
+function logAction(action) {
+  return LOG_ACTIONS[action] ?? `${action.charAt(0).toUpperCase()}${action.slice(1)}`;
+}
+
+function logRow(row) {
+  const item = el('li', 'gap-card log-row');
+  const when = el('time', 'log-time');
+  const moment = new Date(row.ts);
+  if (Number.isNaN(moment.getTime())) {
+    when.textContent = String(row.ts);
+  } else {
+    when.dateTime = moment.toISOString();
+    when.textContent = new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(moment);
+  }
+  const what = el('span', 'log-what');
+  what.append(el('strong', '', logAction(String(row.action))));
+  if (row.target) {
+    const target = el('span', 'log-target', row.target);
+    target.dir = 'auto';
+    what.append(': ', target);
+  }
+  item.append(when, what);
+  return item;
+}
+
+async function loadLog(box) {
+  const rows = await renewing(logRows, 'the admin log');
+  if (rows === undefined) return true;
+  if (rows.length === 0) return false;
+  const root = el('div', 'crawl log');
+  const line = rows.length >= LOG_LIMIT ? `Showing the last ${LOG_LIMIT} changes.` : plural(rows.length, 'change', 'changes') + '.';
+  const list = el('ul', 'log-list');
+  list.append(...rows.map(logRow));
+  root.append(el('p', 'crawl-count', line), list);
+  box.removeAttribute('role');
+  box.replaceChildren(root);
+  return true;
+}
+
 /* ---- the dialogs ---- */
 
 const editorDialog = $('companyEditor');
@@ -780,6 +908,7 @@ function settleRow(saved, previous) {
 }
 
 function finish(...words) {
+  opened.delete('log'); /* the database logged this change: the Log area reads it again when it is next shown */
   confirmDialog.close();
   editorDialog.close();
   board.render();

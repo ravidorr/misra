@@ -255,6 +255,17 @@ ADMIN_HEALTH_COLUMNS = (
     "held boolean, robots_skipped boolean, open_jobs integer, fetched_30d_ago integer"
 )
 GRANT_ADMIN_HEALTH = "grant execute on function public.admin_crawl_health() to authenticated"
+# PLAN_2.md step 5.1: the Alerts counts. A definer (the subscription tables have no admin read and must not get one),
+# so its whole defence is in the body: every branch is gated by `public.is_admin()`, it reads `subscriptions` and
+# `emailed` only, writes nothing, and selects counts and states, never an address, a token or a user id.
+ADMIN_ALERTS_NAME = "admin_alert_counts"
+ADMIN_ALERTS_FUNCTION = re.compile(
+    r"create function public\.admin_alert_counts\(\) returns table \((?P<columns>[^)]*)\) "
+    r"language sql stable security definer set search_path = '' as \$\$(?P<body>.*)\$\$"
+)
+ADMIN_BRANCHES = 2  # the subscription kinds and the emailed days
+ADMIN_ALERTS_COLUMNS = "kind text, day date, n integer"
+GRANT_ADMIN_ALERTS = "grant execute on function public.admin_alert_counts() to authenticated"
 # PLAN_2.md step 3.1: the company list. The two unique indexes (ignoring case) and the load of the records are matched
 # whole, and so are the two trigger functions: the guard (an invoker: it sets `updated_at` and counts the excluded
 # records, 200 at most) and the log (a definer: it writes one `admin_log` row for a change an admin makes, with the
@@ -539,7 +550,15 @@ def problems(stmts: list[str]) -> list[str]:
             or COLUMN_GRANT.fullmatch(s)
             or GRANT_REPORT_FUNCTION.fullmatch(s)
             or GRANT_JOBS_TRIM_FUNCTION.fullmatch(s)
-            or s in {SEARCH_INDEX, GRANT_SEARCH_FUNCTION, GRANT_SEARCH_JOBS, GRANT_IS_ADMIN, GRANT_ADMIN_HEALTH}
+            or s
+            in {
+                SEARCH_INDEX,
+                GRANT_SEARCH_FUNCTION,
+                GRANT_SEARCH_JOBS,
+                GRANT_IS_ADMIN,
+                GRANT_ADMIN_HEALTH,
+                GRANT_ADMIN_ALERTS,
+            }
             or s in COMPANIES_INDEXES
             or COMPANIES_LOAD.fullmatch(s)
             or ADD_JOBS_COLUMN.fullmatch(s)
@@ -647,8 +666,12 @@ def pinned_function(s: str) -> tuple[str, bool, list[str]] | None:
     if m := ADMIN_FUNCTION.fullmatch(s):
         bad = [] if m["body"] == ADMIN_BODY else [f"is_admin may only ask whether the caller is listed: {s}"]
         return "is_admin", True, bad
-    if m := ADMIN_HEALTH_FUNCTION.fullmatch(s):
-        return ADMIN_HEALTH_NAME, False, admin_health_problems(m)
+    for pattern, name, definer, check in (
+        (ADMIN_HEALTH_FUNCTION, ADMIN_HEALTH_NAME, False, admin_health_problems),
+        (ADMIN_ALERTS_FUNCTION, ADMIN_ALERTS_NAME, True, admin_alerts_problems),
+    ):
+        if m := pattern.fullmatch(s):
+            return name, definer, check(m)
     if m := SEARCH_FUNCTION.fullmatch(s):
         return SEARCH_NAME, True, search_problems(m)
     if m := SEARCH_JOBS_FUNCTION.fullmatch(s):
@@ -668,6 +691,30 @@ def admin_health_problems(m: re.Match[str]) -> list[str]:
     found += [f"function {name} may only read"] * bool(re.search(r"\b(?:insert|update|delete|truncate)\b", body))
     found += [f"function {name} must not name the text of a posting"] * bool(
         re.search(r"description|details|snippet", body)
+    )
+    return found
+
+
+def admin_alerts_problems(m: re.Match[str]) -> list[str]:
+    """The Alerts counts: the pinned columns, `subscriptions` and `emailed` only, read only, the admin check in every
+    branch of the query, and no column that holds an address, a token, a filter or a user's choice."""
+    body = " ".join(m["body"].split())
+    name = ADMIN_ALERTS_NAME
+    touched = set(re.findall(r"public\.(\w+)", body)) - {"subscriptions", "emailed", "is_admin"}
+    found = [] if " ".join(m["columns"].split()) == ADMIN_ALERTS_COLUMNS else [f"function {name} has other columns"]
+    found += [f"function {name} may touch only subscriptions and emailed, not {sorted(touched)}"] * bool(touched)
+    found += [f"function {name} reaches outside public"] * bool(re.search(r"\b(?:auth|storage|vault)\.", body))
+    found += [f"function {name} may only read"] * bool(re.search(r"\b(?:insert|update|delete|truncate)\b", body))
+    found += [f"function {name} must have the admin check in each of its two branches"] * (
+        body.count("where public.is_admin()") != ADMIN_BRANCHES
+    )
+    found += [
+        f"function {name} must not name {w}"
+        for w in ("address", "token", "filters", "frequency", "company", "job_id")
+        if w in body
+    ]
+    found += [f"function {name} may count users, never return them"] * bool(
+        re.search(r"select\s+(?:distinct\s+)?(?:\w+\.)?user_id\b", body)
     )
     return found
 
@@ -1229,7 +1276,7 @@ def test_the_report_counters_have_no_policy_and_no_grant_for_anyone_but_the_serv
         and not GRANT_SUBSCRIPTION_FUNCTION.fullmatch(s)
         and not GRANT_SUBSCRIBE_FUNCTION.fullmatch(s)
         and not GRANT_JOBS_TRIM_FUNCTION.fullmatch(s)
-        and s not in {GRANT_SEARCH_FUNCTION, GRANT_SEARCH_JOBS, GRANT_IS_ADMIN, GRANT_ADMIN_HEALTH}
+        and s not in {GRANT_SEARCH_FUNCTION, GRANT_SEARCH_JOBS, GRANT_IS_ADMIN, GRANT_ADMIN_HEALTH, GRANT_ADMIN_ALERTS}
         and s not in HOOK_GRANTS
     ]
 
@@ -1634,3 +1681,48 @@ def test_the_lint_rejects_a_weakened_crawl_health_migration(old: str, new: str) 
 )
 def test_the_lint_rejects_anything_that_opens_the_log_or_the_posting_text(extra: str) -> None:
     assert problems(statements_of(f"{REAL}\n{extra};"))
+
+
+# ---- Alerts counts (PLAN_2.md step 5.1) ----
+
+ALERTS_FILE = MIGRATION_DIR / "20261201100000_admin_alert_counts.sql"
+ALERTS_SQL = ALERTS_FILE.read_text(encoding="utf-8")
+
+
+def test_the_alert_counts_migration_is_one_pinned_function_and_nothing_else() -> None:
+    stmts = statements_of(ALERTS_SQL)
+    assert [bool(ADMIN_ALERTS_FUNCTION.fullmatch(s)) for s in stmts] == [True, False, False]
+    assert stmts[1] == "revoke all on function public.admin_alert_counts() from public, anon, authenticated"
+    assert stmts[2] == GRANT_ADMIN_ALERTS
+    assert problems(statements()) == []
+
+
+def test_the_alert_counts_add_no_table_and_no_column() -> None:
+    assert not any(s.startswith(("create table", "alter table", "create policy")) for s in statements_of(ALERTS_SQL))
+
+
+@pytest.mark.parametrize(
+    ("old", "new"),
+    [
+        ("\nsecurity definer\n", "\nsecurity invoker\n"),
+        ("set search_path = ''\nas $$", "set search_path = public\nas $$"),
+        ("returns table (kind text, day date, n integer)", "returns table (kind text, day date, n integer, a text)"),
+        ("  where public.is_admin()\n  union all", "  union all"),
+        ("  from days d\n  where public.is_admin()", "  from days d"),
+        ("from public.subscriptions\n", "from public.subscriptions, public.profiles\n"),
+        ("select case\n", "select address, case\n"),
+        ("select count(distinct e.user_id)", "select e.user_id, count(distinct e.user_id)"),
+        ("where public.is_admin()\n  union all", "where public.is_admin(); delete from public.emailed\n  union all"),
+        (
+            "grant execute on function public.admin_alert_counts() to authenticated;",
+            "grant execute on function public.admin_alert_counts() to anon, authenticated;",
+        ),
+        (
+            "revoke all on function public.admin_alert_counts() from public, anon, authenticated;",
+            "revoke all on function public.admin_alert_counts() from public, anon;",
+        ),
+    ],
+)
+def test_the_lint_rejects_a_weakened_alert_counts_migration(old: str, new: str) -> None:
+    assert old in ALERTS_SQL, old
+    assert problems(statements_of(REAL.replace(ALERTS_SQL, ALERTS_SQL.replace(old, new))))

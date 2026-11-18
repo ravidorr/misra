@@ -1177,6 +1177,39 @@ html:has(.sheet:modal) {
   text-align: end;
 }
 
+/* The Alerts cards keep their own height instead of stretching to the taller one. */
+.alerts .crawl-list {
+  align-items: start;
+}
+
+/* The Log area: one card per change, the time first and then the sentence, wrapping on a phone. */
+.log-list {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.log-row {
+  flex-flow: row wrap;
+  align-items: baseline;
+  justify-content: flex-start;
+  column-gap: var(--space-3);
+  min-width: 0;
+}
+
+.log-time {
+  color: var(--muted);
+  font-size: var(--text-sm);
+  font-variant-numeric: tabular-nums;
+}
+
+.log-what {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
 /* The Companies area (PLAN_2.md step 3.3): the cards of the Crawl area, with an action row, and the editor, a dialog whose
    head and foot stay in view while the fields scroll (so Save is never off the screen on a phone). */
 .company-toolbar,
