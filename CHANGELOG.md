@@ -19,6 +19,12 @@ All notable changes are documented here. Format follows [Keep a Changelog](https
 - The Crawl area of the admin page (PLAN_2.md step 2.2): it calls `admin_crawl_health()` when first shown and lists one card per company, worst first, with a headline, chips with counts (Needs attention, Failing, Robots.txt, Held, All), the values of the crawl and a status pill. Loading, empty, error and 401 states. Templates and tests only.
 - A Copy button under every code block of the legal pages (the address on "Connect your assistant", the command for Claude Code), in `templates/theme.js`.
 
+## [0.72.1] - 2026-11-18
+
+### Fixed
+
+- The Oracle Fusion HCM adapter missed most Israel requisitions. It asked the public requisition search for the keyword Israel, which matches the text of a posting, not its place: against the full list of two tenants the keyword returned 6 of 16 and 2 of 19 Israel requisitions, and a third tenant's only Israel requisition was missed. It now asks for the location Israel, which returned all of them (every one with country code IL); a requisition is still kept by its country code. Found by the `israel_only` audit of PLAN_3.md step B3.
+
 ## [0.72.0] - 2026-11-18
 
 ### Added

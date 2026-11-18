@@ -918,7 +918,7 @@ def test_oraclehcm_keeps_the_requisitions_located_in_israel(monkeypatch: pytest.
     jobs = adapters.oraclehcm(HCM_SLUG)
     assert len(calls) == 1
     assert calls[0]["url"] == HCM_API
-    assert calls[0]["params"]["finder"] == "findReqs;siteNumber=CX_1,limit=50,offset=0,keyword=Israel"
+    assert calls[0]["params"]["finder"] == "findReqs;siteNumber=CX_1,limit=50,offset=0,location=Israel"
     assert jobs is not None
     assert [(j["job_id"], j["title"], j["location"], j["posted"]) for j in jobs] == [
         ("1", "Backend Engineer", "Herzliya, Tel Aviv, Israel", "2026-11-01"),
@@ -928,6 +928,23 @@ def test_oraclehcm_keeps_the_requisitions_located_in_israel(monkeypatch: pytest.
     ]
     assert jobs[0]["url"] == "https://acme.fa.oraclecloud.com/hcmUI/CandidateExperience/en/sites/CX_1/job/1"
     assert all(discover.ISRAEL.search(j["location"]) for j in jobs)
+
+
+def test_oraclehcm_asks_for_the_location_not_the_word(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The keyword search for the word Israel matches the text of a posting and missed most Israel requisitions of the
+    tenants audited (PLAN_3.md B3); the location filter returns them all. An Israel requisition whose text never says
+    Israel is kept; one in another country that the answer includes is still dropped, by its country code."""
+    reqs = [
+        hcm_req("7", "Software Principal Engineer (Beer-Sheva)", "IL", "Israel"),
+        hcm_req("8", "Engineer", "GB", "READING, United Kingdom"),
+    ]
+    calls = fake_hcm(monkeypatch, hcm_answer(reqs))
+    jobs = adapters.oraclehcm(HCM_SLUG)
+    finder = calls[0]["params"]["finder"]
+    assert "location=Israel" in finder
+    assert "keyword" not in finder
+    assert jobs is not None
+    assert [(j["job_id"], j["location"]) for j in jobs] == [("7", "Israel")]
 
 
 def test_oraclehcm_reads_every_page(monkeypatch: pytest.MonkeyPatch) -> None:

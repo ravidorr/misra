@@ -693,10 +693,10 @@ def _oraclehcm_place(req: dict[str, Any]) -> str | None:
 
 
 def _oraclehcm_page(host: str, site: str, offset: int) -> tuple[int, list[dict[str, Any]]] | None:
-    """The total and one page of requisitions for the word Israel, or None when the answer is not the JSON of a
+    """The total and one page of requisitions located in Israel, or None when the answer is not the JSON of a
     search (a failed request, a wrong site, which answers 200 with something else) or a requisition lacks an id or
     a title."""
-    finder = f"findReqs;siteNumber={site},limit={ORACLEHCM_PAGE},offset={offset},keyword=Israel"
+    finder = f"findReqs;siteNumber={site},limit={ORACLEHCM_PAGE},offset={offset},location=Israel"
     r = get(
         f"https://{host}/hcmRestApi/resources/latest/recruitingCEJobRequisitions",
         params={"onlyData": "true", "expand": "requisitionList.secondaryLocations", "finder": finder},
@@ -718,8 +718,10 @@ def _oraclehcm_page(host: str, site: str, offset: int) -> tuple[int, list[dict[s
 def oraclehcm(slug: str) -> list[Job] | None:
     """slug is '<host>/<site>' of an Oracle Fusion HCM career site, for example 'jpmc.fa.oraclecloud.com/CX_1001' (the
     page is `https://<host>/hcmUI/CandidateExperience/en/sites/<site>`). Only jobs in Israel are read: the public
-    requisition search is asked for the word Israel, which matches the places and the descriptions, and a requisition
-    is kept when its primary or one of its secondary places is in Israel (country code IL). Any failure, including one
+    requisition search is asked for the location Israel and a requisition is kept when its primary or one of its
+    secondary places is in Israel (country code IL). The location filter is used, not a keyword search for the word
+    Israel: the keyword matches the text of a posting, and an audit (PLAN_3.md step B3) found it missed 10 of the 16
+    Israel requisitions of one tenant and 17 of the 19 of another. Any failure, including one
     after the first page, is None: a partial list would close the jobs it lacks."""
     parts = slug.split("/")
     if len(parts) != ORACLEHCM_SLUG_PARTS or "." not in parts[0] or not parts[1]:
