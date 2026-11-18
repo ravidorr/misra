@@ -19,6 +19,12 @@ All notable changes are documented here. Format follows [Keep a Changelog](https
 - The Crawl area of the admin page (PLAN_2.md step 2.2): it calls `admin_crawl_health()` when first shown and lists one card per company, worst first, with a headline, chips with counts (Needs attention, Failing, Robots.txt, Held, All), the values of the crawl and a status pill. Loading, empty, error and 401 states. Templates and tests only.
 - A Copy button under every code block of the legal pages (the address on "Connect your assistant", the command for Claude Code), in `templates/theme.js`.
 
+## [0.73.0] - 2026-11-19
+
+### Added
+
+- `python3 survey.py --candidates FILE`, the candidate script of PLAN_3.md step D3. It reads a CSV (columns `name`, `domain`, `kind`), skips the companies already in the pulled list (`data/companies.json`, written by `sync_supabase.py --pull`; the command stops with that instruction when the file is missing) and the excluded ones (matched by name and by domain, only counted, never printed), and probes the rest politely through the project's own request helpers: `robots.txt` honoured, one request a second per host, the normal User-Agent, a 403 or 429 or a `robots.txt` refusal recorded as `blocked` and never worked around. For each company it scans the career pages for a job board link (`ATS_LINK`), then guesses the board slugs in `PROBE_ORDER` like `discover.py`, checks that the board's own company name matches the candidate (so an unrelated account such as `air` is skipped) and counts the Israel jobs with `israel_count`. It prints a table (ats, slug, Israel jobs, board name, name match, runner risk for Workday and Oracle, verdict, reason) and the counts to stdout: `keep` (Israel jobs and a matching name), `skip`, or `needs-yes` (a career page with no feed of its own, or a Workday or Oracle board: a browser crawl or a pin the maintainer must approve, PLAN_3.md step D4). `--limit N` probes only the first N, `--keep OUT.json` writes the keep rows. It prints no posting text and writes nothing to Supabase. `discover.py` gained `ats_in_text`, the link search of `scan_page` made reusable, with no change of behaviour.
+
 ## [0.72.1] - 2026-11-18
 
 ### Fixed
