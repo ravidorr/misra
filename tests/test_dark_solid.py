@@ -157,3 +157,30 @@ async def test_the_dark_primary_keeps_its_shadow_color_on_hover_and_press(page: 
     assert await rgb(page, await button.evaluate(SECONDARY_SHADOW)) == rest
     assert "1px 1px" in await button.evaluate("e => getComputedStyle(e).boxShadow")
     await page.mouse.up()
+
+
+@pytest.mark.parametrize("mode", ["light", "dark", "forced-dark"])
+@pytest.mark.parametrize("phone", [False, True])
+async def test_the_filters_sheet_is_a_neutral_panel_not_a_warning_surface(
+    page: Page, site: Path, mode: str, phone: bool
+) -> None:
+    """The sheet wears the card's surface (--panel), never --warn-bg: that one painted it brown in dark."""
+    if phone:
+        await page.set_viewport_size({"width": 375, "height": 812})
+    await open_in(page, site, mode)
+    if phone:
+        await page.locator("#filtersOpen").click()
+    sheet = page.locator("#moreFilters")
+    colors = await sheet.evaluate(
+        """(e) => { const s = getComputedStyle(e); const r = getComputedStyle(document.documentElement);
+        return { bg: s.backgroundColor, ink: s.color, warn: r.getPropertyValue('--warn-bg').trim(),
+                 card: getComputedStyle(document.querySelector('#list article')).backgroundColor,
+                 head: getComputedStyle(e.querySelector('.sheet-head')).backgroundColor,
+                 foot: getComputedStyle(e.querySelector('.sheet-foot')).backgroundColor }; }"""
+    )
+    bg, ink, warn = await rgb(page, colors["bg"]), await rgb(page, colors["ink"]), await rgb(page, colors["warn"])
+    assert bg == await rgb(page, colors["card"]) != warn
+    assert contrast(ink, bg) >= LABEL_CONTRAST
+    if phone:  # the sticky head and foot cover the scrolled controls in the same surface
+        assert await rgb(page, colors["head"]) == bg
+        assert await rgb(page, colors["foot"]) == bg
