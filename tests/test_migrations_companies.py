@@ -88,24 +88,18 @@ def test_the_limits_are_the_ones_of_load_excluded() -> None:
     assert f"at most {common.EXCLUDED_MAX} excluded companies" in SQL
 
 
-def test_the_migration_loads_the_records_of_the_file() -> None:
-    """The literal of the load, as written in the file, is the records of data/companies.json at the commit of the
-    migration. Until step 3.2 reloads the table, an edit of the file without a new migration fails here, on purpose:
-    the file is frozen (except for the one https fix of this step) until the table becomes the source."""
+def test_the_migration_loads_the_records_it_says() -> None:
+    """The literal of the load is well formed: 347 records, 267 crawled and 80 on the card at the commit of the
+    migration, keys of common.RECORD_KEYS only, no http address. It is NOT compared with data/companies.json: the file
+    stays the live source until step 3.2, so an added company or a new row in data/excluded_companies.csv (a legal
+    removal, which must never be blocked) must not fail a test. The table loads no exclusion; step 3.2 reloads it from
+    the file of that day and the file then carries the exclusions."""
     raw = re.search(r"jsonb_to_recordset\(\$companies\$(.*?)\$companies\$::jsonb", SQL, flags=re.DOTALL)[1]  # type: ignore[index]
     loaded = json.loads(raw)
-    expected = json.loads((ROOT / common.COMPANIES).read_text(encoding="utf-8"))
-    assert loaded == expected, (
-        "data/companies.json no longer equals the records loaded by 20261130100000_companies.sql; "
-        "the file is frozen until step 3.2 reloads the table from it"
-    )
     assert (len(loaded), sum(r["crawl"] is True for r in loaded), sum("gap" in r for r in loaded)) == COUNTS
     assert all(set(r) <= set(common.RECORD_KEYS) for r in loaded)
     assert not any(r.get("careers_url", "").startswith("http://") for r in loaded)
-
-
-def test_there_are_no_excluded_records_to_load() -> None:
-    assert (ROOT / common.EXCLUDED).read_text(encoding="utf-8").strip() == ",".join(common.EXCLUDED_COLUMNS)
+    assert not any("excluded" in r for r in loaded)
 
 
 def test_every_check_is_named_in_the_migration_and_the_readme() -> None:

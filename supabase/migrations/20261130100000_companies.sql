@@ -25,8 +25,7 @@
 --   companies_excluded_date      the date of an exclusion is YYYY-MM-DD (see below for an impossible date)
 --   companies_excluded_shape     an excluded record has crawl false and every other field null
 --   companies_excluded_limit     at most 200 excluded records (common.EXCLUDED_MAX); a trigger, a count is not a check
--- tests/test_migrations_companies.py fails when the gap reasons, the ats names, the 200, the 2 or the loaded records
--- differ from the code and the file. An impossible date such as 2026-02-30 passes the pattern and is then refused by
+-- tests/test_migrations_companies.py fails when the gap reasons, the ats names, the 200 or the 2 differ from the code. An impossible date such as 2026-02-30 passes the pattern and is then refused by
 -- the cast itself with an error that names no check; the editor's date input cannot send one.
 --
 -- Who may do what: everybody reads the records that are not excluded (decision D1: the list is public, as the dashboard
