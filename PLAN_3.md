@@ -1,7 +1,7 @@
 # Plan 3: more companies
 
 Step plan to close the coverage gap users reported: too few startups and too few large multinationals. Drafted
-2026-11-18, revised the same day after two reviews; A1, A2 and B1 are done, B2 waits for the maintainer; the rest is not built yet. Targets are proposals for the
+2026-11-18, revised the same day after two reviews; A1, A2, B1 and B3 are done, B2 waits for the maintainer; the rest is not built yet. Targets are proposals for the
 maintainer to confirm.
 
 Conventions are those of `PLAN.md`: a change to a listed Python module bumps `package.json` and `pyproject.toml`
@@ -72,6 +72,12 @@ count query with the service role, never printing rows.
   says. A bad pin is reverted by editing the row, and to have a pinned record looked at again its `status` is emptied.
 - **No counts to keep.** `tests/test_todo_counts.py` is deleted, so nothing enforces any number quoted in `TODO.md`.
   The current numbers come from the A1 report and each batch description (A4).
+- **Known companies.** A company with any row in the history (`jobs` or `crawl_log`, closed rows included) is "known"
+  (`run.py` `is_known`). Unlocking, re-pinning or fixing the feed of a known company can email its jobs as new to
+  subscribers, so the maintainer makes those edits, not overnight automation. Only companies with no history are
+  added or unlocked unattended, and their first crawl is baselined silently.
+- **Parking.** Parking a company (`crawl` false) closes its open jobs (`close_uncrawled`); emptying a `status` does
+  not. Park only companies with no open jobs unless the closing is intended.
 - **Lawyer's files.** `ABOUT.md`, `PRIVACY.md`, `TERMS.md` and `ASSISTANT.md` are not touched by this plan.
 - **Track in `TODO.md`.** This plan is the design; open items go to `TODO.md`.
 
@@ -124,8 +130,10 @@ Measured 2026-11-18 with the A1 report and read-only `gh` commands (counts and t
   dashboard filter, that is a separate change with its own test and `AGENTS.md` edit.
 
   Status (2026-11-18): done. The A1 report prints the split: 73 multinational (`israel_only`) and 194 startup.
-- **A3. Targets.** Fix numeric targets from the A1 output. Proposal: +60 startups crawled, +40 multinationals that
-  return jobs from the runner, 30 of the 80 researched records unlocked.
+- [x] **A3. Targets.** Fix numeric targets from the A1 output. Confirmed by the maintainer on 2026-11-18: +60 startups
+  crawled, +40 multinationals that return jobs from the runner, 30 of the 80 researched records unlocked.
+
+  Status (2026-11-18): done. The three targets above are confirmed.
 - **A4. Success metrics.** Per batch and per month: reports received (`CONTRIBUTING.md` has the command), share of
   crawled companies with at least one Israel job, Israel job count before and after. Done when: the numbers appear in
   each batch description.
@@ -166,8 +174,34 @@ Measured 2026-11-18 with the A1 report and read-only `gh` commands (counts and t
   transient failure. None needs a feed change, and each of the 14 has history, so no change is applied. Done when
   stays open until the maintainer decides on the bot-protected browser companies (keep listed, or park) and the
   Workday limitation (accept, or move the crawl to another network).
-- **B3. Audit `israel_only`.** For the 73 pinned records, confirm the filter drops only non-Israel jobs. Spot-check 10
+- [x] **B3. Audit `israel_only`.** For the 73 pinned records, confirm the filter drops only non-Israel jobs. Spot-check 10
   against the career page. Done when: no known Israel posting is dropped; a mismatch gets an adapter test.
+
+  Status (2026-11-18): done. Method: the adapters were run read-only from a laptop (the project's own `get`: its
+  User-Agent, robots.txt enforced, one request a second per host) against the frozen list
+  (`tests/fixtures/companies.json`), and each feed's complete answer was compared with what the pipeline keeps. 29
+  companies on 7 feed types were compared: Datadog, MongoDB, Okta, Zscaler (Greenhouse), Snowflake (Ashby), Splitit
+  (BambooHR), Ceva, DriveNets, Nayax, Papaya Global, Quantum Machines (Comeet), Guesty, Optibus (Comeet pages); for
+  Workday, Intel, KLA, Medtronic, Salesforce, Palo Alto Networks, Philips, CrowdStrike, Marvell and Unity (the facet
+  list against a search for the word Israel); for Oracle HCM, Dell, JPMorgan Chase, Oracle, American Express and Nokia
+  (the keyword route against the location route and, for Dell, against a scan of the whole site by country code).
+  Results:
+
+  - Filtered feeds (Greenhouse, Ashby, Comeet, Comeet pages, BambooHR): the places the filter dropped were all outside
+    Israel (a few postings have no location at all, such as "Future Opportunities", and cannot be placed); the kept
+    ones were all in Israel. No dropped Israel posting, and no spelling or city the matcher lacks, in this data.
+  - Workday: the facet route returned every Israel posting the word search found, and no non-Israel posting; the
+    word search found only extra postings outside Israel or in several places ("2 Locations").
+  - Oracle HCM: a real miss. The keyword Israel matches the text of a posting, not its place: it returned 6 of the 16
+    Israel requisitions of Dell (the full scan by country code is the truth), 2 of 19 at Oracle, 1 of 2 at JPMorgan
+    Chase, 0 of 1 at Nokia (American Express lists no Israel requisition by either route). The location filter returned all of them, every one with country code IL. Fixed in 0.72.1
+    (the adapter asks for the location Israel), with a test that has an Israel and a non-Israel requisition.
+  - Not a filter fault: Unity shows 123 jobs outside Israel in `docs/jobs.json` (first seen 2026-11-13, titles such
+    as a language name). They are old rows of an earlier browser crawl of the company site, not the Workday feed,
+    which returns 8 Israel jobs from a laptop. The runner cannot read Unity's Workday feed (the known block), so the
+    old rows are not closed. Step B2 should close them or settle the block.
+  - Not checked: the browser crawls and Amazon (no public feed to compare with; every job kept in `docs/jobs.json`
+    for them is flagged Israel), and ServiceNow (SmartRecruiters answers nothing from here).
 
 ## Step C: unlock the 80 researched records
 
