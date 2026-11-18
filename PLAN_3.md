@@ -148,8 +148,34 @@ Measured 2026-11-18 with the A1 report and read-only `gh` commands (counts and t
   from the runner (known limitation, see above) and (b) real failures (wrong slug, changed feed). Re-test (a) from a
   daily run once; if still blocked, leave them and say so in `TODO.md`. Fix (b). Done when: every failing company is in
   (a) with a dated note or fixed.
-- **B3. Audit `israel_only`.** For the 73 pinned records, confirm the filter drops only non-Israel jobs. Spot-check 10
+- [x] **B3. Audit `israel_only`.** For the 73 pinned records, confirm the filter drops only non-Israel jobs. Spot-check 10
   against the career page. Done when: no known Israel posting is dropped; a mismatch gets an adapter test.
+
+  Status (2026-11-18): done. Method: the adapters were run read-only from a laptop (the project's own `get`: its
+  User-Agent, robots.txt enforced, one request a second per host) against the frozen list
+  (`tests/fixtures/companies.json`), and each feed's complete answer was compared with what the pipeline keeps. 29
+  companies on 7 feed types were compared: Datadog, MongoDB, Okta, Zscaler (Greenhouse), Snowflake (Ashby), Splitit
+  (BambooHR), Ceva, DriveNets, Nayax, Papaya Global, Quantum Machines (Comeet), Guesty, Optibus (Comeet pages); for
+  Workday, Intel, KLA, Medtronic, Salesforce, Palo Alto Networks, Philips, CrowdStrike, Marvell and Unity (the facet
+  list against a search for the word Israel); for Oracle HCM, Dell, JPMorgan Chase, Oracle, American Express and Nokia
+  (the keyword route against the location route and, for Dell, against a scan of the whole site by country code).
+  Results:
+
+  - Filtered feeds (Greenhouse, Ashby, Comeet, Comeet pages, BambooHR): the places the filter dropped were all outside
+    Israel (a few postings have no location at all, such as "Future Opportunities", and cannot be placed); the kept
+    ones were all in Israel. No dropped Israel posting, and no spelling or city the matcher lacks, in this data.
+  - Workday: the facet route returned every Israel posting the word search found, and no non-Israel posting; the
+    word search found only extra postings outside Israel or in several places ("2 Locations").
+  - Oracle HCM: a real miss. The keyword Israel matches the text of a posting, not its place: it returned 6 of the 16
+    Israel requisitions of Dell (the full scan by country code is the truth), 2 of 19 at Oracle, 1 of 2 at JPMorgan
+    Chase, 0 of 1 at Nokia (American Express lists no Israel requisition by either route). The location filter returned all of them, every one with country code IL. Fixed in 0.72.1
+    (the adapter asks for the location Israel), with a test that has an Israel and a non-Israel requisition.
+  - Not a filter fault: Unity shows 123 jobs outside Israel in `docs/jobs.json` (first seen 2026-11-13, titles such
+    as a language name). They are old rows of an earlier browser crawl of the company site, not the Workday feed,
+    which returns 8 Israel jobs from a laptop. The runner cannot read Unity's Workday feed (the known block), so the
+    old rows are not closed. Step B2 should close them or settle the block.
+  - Not checked: the browser crawls and Amazon (no public feed to compare with; every job kept in `docs/jobs.json`
+    for them is flagged Israel), and ServiceNow (SmartRecruiters answers nothing from here).
 
 ## Step C: unlock the 80 researched records
 
