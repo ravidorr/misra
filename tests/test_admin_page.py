@@ -207,6 +207,15 @@ class Backend:
             await route.abort()
             return
         await self.tables.handle(route)
+        if path == "/rest/v1/companies" and request.method != "GET":  # the trigger of the table logs an admin's write
+            self.log.append(
+                {
+                    "id": len(self.log) + 1,
+                    "ts": "2026-11-18T12:00:00+00:00",
+                    "action": "company changed",
+                    "target": "Acme",
+                }
+            )
 
     async def auth_route(self, route: Route) -> None:
         if route.request.method != "OPTIONS":

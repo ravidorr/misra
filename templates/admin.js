@@ -908,6 +908,7 @@ function settleRow(saved, previous) {
 }
 
 function finish(...words) {
+  opened.delete('log'); /* the database logged this change: the Log area reads it again when it is next shown */
   confirmDialog.close();
   editorDialog.close();
   board.render();

@@ -838,3 +838,18 @@ async def test_the_trust_checkbox_shows_only_for_a_feed_pinned_by_hand(page: Pag
     await expect(page.get_by_role("checkbox", name=re.compile("Trust its job board"))).to_be_checked()
     await page.get_by_role("button", name="Save", exact=True).click()
     assert writes(backend)[1][1]["verify"] is False  # type: ignore[index]
+
+
+async def test_a_change_made_here_shows_in_the_log_when_it_is_next_opened(page: Page, site: Path) -> None:
+    backend = Backend(companies=ROWS, jobs=JOBS)
+    await open_admin(page, site, backend=backend, hash_="#log")
+    await expect(page.locator("#log .admin-state")).to_have_text("No changes yet.")
+    await page.get_by_role("link", name="Companies").click()
+    await expect(page.locator("#companies")).to_have_attribute("data-state", "ready")
+    await open_editor(page, "Acme Robotics")
+    await field(page, "Segment").select_option("multinational")
+    await page.get_by_role("button", name="Save", exact=True).click()
+    await expect(editor(page)).to_be_hidden()
+    await page.get_by_role("link", name="Log").click()
+    await expect(page.locator("#log .log-what")).to_have_text(["Company changed: Acme"])
+    assert backend.log_asked == 2  # noqa: PLR2004  (the first show, and the show after the change)
