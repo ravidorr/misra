@@ -92,8 +92,8 @@ The data is already in Supabase, so this step adds no table and no pipeline chan
 
 - [ ] 2.1 Read access for `is_admin()` only (see the lint of 1.1). On `jobs`, add a select policy
   `using (public.is_admin())`. The column grant that hides `description` and `details` already exists
-  (`20261121100000_jobs_text_not_public.sql`, with `snippet` in `20261122100000_jobs_snippet.sql`) and stays;
-  `tests/test_migrations.py` still refuses any grant of either. On `crawl_log`, which has `revoke all` and no grant, add
+  (`20261121100000_jobs_text_not_public.sql`) and stays, and `tests/test_migrations.py` still refuses any grant of
+  either. The grants of the short `snippet` columns (`20261122100000_jobs_snippet.sql` and later) stay as they are. On `crawl_log`, which has `revoke all` and no grant, add
   a `grant select` to `authenticated` and the same policy. The lawyer's rule of 2026-11-16 stays: the admin page never
   shows posting text.
 - [ ] 2.2 The Crawl area. PostgREST returns 1000 rows at most by default and `crawl_log` holds about 24,000 (90 days of
@@ -103,7 +103,8 @@ The data is already in Supabase, so this step adds no table and no pipeline chan
   - streak: the number of consecutive days whose last run has `ok = 0`, robots.txt skips left out;
   - held: the day's last note starts with `DROP_NOTE` (`run.sharp_drop`);
   - skipped for robots.txt: the note carries `ROBOTS_NOTE`;
-  - open jobs: `crawl_log.n_jobs` now and 30 days ago, as two numbers and no chart (`jobs` keeps no daily snapshot).
+  - open jobs now: counted in `jobs`. Fetched jobs 30 days ago: `crawl_log.n_jobs`, labelled "fetched", since it is
+    zero after a failed fetch and the fetched count in a held crawl. Two numbers, no chart.
 
   Layout: a `ul` of `li` in the `.gap-card` look, the name as a heading (`dir="auto"`, `overflow-wrap: anywhere`), a
   `dl` of the values and a `.pill` for the status. The order is fixed, worst first; no column sort and no data table.
@@ -166,7 +167,14 @@ Steps:
   from it (the CSV and `EXCLUDED_COLUMNS` are removed). `common.RECORD_KEYS` gains `excluded`; this is a change to
   `common.py` (version bump), and until then `discover.py` drops an excluded record's key. `run.py`, `discover.py`,
   `build_dashboard.py` and the sync keep calling `load_excluded` as they do today. `.gitignore` lists the file. The
-  discover-and-push workflow of D2 is added here. Tests, including the refusal of an empty table.
+  discover-and-push workflow of D2 is added here. Tests, including the refusal of an empty table. The test changes land
+  in this same PR, since the suite cannot pass without them once the file and the CSV are gone:
+  - `tests/test_companies_data.py` stops checking the rules; the Python side only checks that the pulled file loads
+    and that `load_excluded` still raises `ExclusionError`. The tests of `load_excluded` and the purge
+    (`tests/test_politeness.py`, `tests/conftest.py`, and the other tests that write `data/excluded_companies.csv`: `test_companies_covered`, `test_descriptions_flow`, `test_discover`, `test_sync_supabase`, `test_build_dashboard`) are ported case for case from the CSV to excluded records.
+  - The tests that read the real file move to the frozen fixture: `test_build_dashboard`, `test_companies_covered`,
+    `test_dashboard_page`, `test_report_site` and `test_companies_data`. `test_todo_counts` would no longer check
+    `TODO.md` against reality; drop it or rethink it in this PR.
 - [ ] 3.3 The editor.
   - **List.** A searchable `ul` with "Showing n of 347" in `role="status"`, chips Crawled, On the card (a company with a
     gap, shown with its reason, note and career link) and Excluded, and an Edit button
@@ -178,7 +186,8 @@ Steps:
     "Include again" shows only on an excluded record. A small `components/choice.css` is needed (add it to
     `design-system/index.html` and `CHANGELOG.md` as the design README says).
   - **Fields.** Name; domain; two URL inputs for `links`, Israel and global (not JSON); a segment select; checkboxes
-    `israel_only` and `verify`; the five discovered fields (careers URL included) read-only; an `ats` list from a database check that a test
+    `israel_only` and `verify`; the five discovered fields (careers URL included) read-only; an `ats` list from a database check (the keys of `adapters.ADAPTERS` plus `browser`, which `run.py` routes to
+    `browser_crawl`, and empty for an undiscovered record) that a test
     keeps equal to `adapters.py`.
   - **Exclude.** A separate button opens its own confirm dialog (focus on Cancel, `btn-danger`, `role="alert"`
     errors). The date defaults to today. The reason hint is "Write why, not who asked. No names or email addresses."
@@ -198,12 +207,6 @@ Steps:
     until `discover.py` runs. A new company is therefore crawled after the next discover-and-push run (D2); every other
     change takes effect at the next daily run. The page says which of the two applies.
 - [ ] 3.4 One source of truth for the company rules: the SQL checks of 3.1 are the rules.
-  - `tests/test_companies_data.py` stops checking the rules; the Python side only checks that the pulled file loads
-    and that `load_excluded` still raises `ExclusionError`. The tests of `load_excluded` and the purge
-    (`tests/test_politeness.py`, `tests/conftest.py`, and the other tests that write `data/excluded_companies.csv`: `test_companies_covered`, `test_descriptions_flow`, `test_discover`, `test_sync_supabase`, `test_build_dashboard`) are ported case for case from the CSV to excluded records.
-  - The tests that read the real file move to the frozen fixture: `test_build_dashboard`, `test_companies_covered`,
-    `test_dashboard_page`, `test_report_site` and `test_companies_data`. `test_todo_counts` would no longer check
-    `TODO.md` against reality; drop it or rethink it in this PR.
   - `companies` is backed up with the `Table(..., account=False)` pattern of `JOBS` and `CRAWL_LOG` in
     `export_accounts.py`, and `restore_accounts.py` restores it.
   - Docs: `AGENTS.md` (the exclusion paragraph, the single-list rule, the key-exposure rule with the D2 step, and one
