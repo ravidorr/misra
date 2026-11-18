@@ -16,7 +16,7 @@ The Supabase table `public.companies` (PLAN_2.md step 3): 347 records, 267 crawl
 (`crawl: false`). `data/companies.json` is no longer in git: `sync_supabase.py --pull` writes a git-ignored scratch copy,
 and `tests/fixtures/companies.json` is the frozen copy the tests use. A1 regenerates this table from the pulled copy;
 the numbers below (as of 2026-11-18) are the ones to check A1 against. To recompute them later, run the A1 report or a
-count query with the service role (or on the admin page), never printing rows.
+count query with the service role, never printing rows.
 
 - Researched-only by `gap.reason`: `no_careers_url` 23, `needs_reader` 20, `no_feed_found` 14, `site_unusable` 10,
   `bot_protection` 7, `no_openings` 6 (total 80).
@@ -25,7 +25,7 @@ count query with the service role (or on the admin page), never printing rows.
   career page: 12 `careers_page_only`, 2 `not_found`).
 - 73 records are pinned `israel_only`.
 - `segment` exists only on researched records (`deeptech` 36, `multinational` 22, `biz_software` 11, `cyber_infra` 11),
-  and `tests/test_companies_data.py` forbids it on crawled ones.
+  and the table's checks and the fixture test (`tests/test_companies_data.py`) forbid it on crawled ones.
 - Crawl step: `timeout-minutes: 20` inside a 30 minute job, 8 threads, 1 second per host (`common.py:24`).
 - `docs/jobs.json` is 2.1 MB. The history is about 9.7k jobs and about 250 `crawl_log` rows a day.
 
@@ -60,14 +60,14 @@ count query with the service role (or on the admin page), never printing rows.
   or, for a known company, sent as a flood.
 - **Count only what the runner can read.** A target counts a company only if it returns jobs from the GitHub runner,
   not from a normal network. Test a Workday or Oracle pin from a daily run before counting it.
-- **Batches.** At most 25 new companies per `discover-companies` run (steps D and E; it resolves only companies with
-  an empty `status` and never downgrades a working one). Before each batch, check the three budgets below. After it,
+- **Batches.** Add at most 25 new companies before each `discover-companies` run (steps D and E; it resolves only
+  crawled companies with an empty `status` and never downgrades a working one). Before each batch, check the three budgets below. After it,
   review the next daily run (jobs per company, new failures, new entries on the coverage card and in the maintainer
   alert) before the next batch starts. Pinning a researched record (step C) is the exception: one pin at a time, as
   `TODO.md` ("How to research a company", step 4) says. A bad pin is reverted by editing the row, and to have a pinned
   record looked at again its `status` is emptied.
-- **No counts to keep.** `tests/test_todo_counts.py` is deleted and `TODO.md` quotes no counts, so nothing enforces them.
-  The numbers live in the A1 report and in each batch description (A4).
+- **No counts to keep.** `tests/test_todo_counts.py` is deleted, so nothing enforces the counts `TODO.md` still quotes
+  as a dated snapshot. The current numbers live in the A1 report and in each batch description (A4).
 - **Lawyer's files.** `ABOUT.md`, `PRIVACY.md`, `TERMS.md` and `ASSISTANT.md` are not touched by this plan.
 - **Track in `TODO.md`.** This plan is the design; open items go to `TODO.md`.
 
@@ -112,8 +112,9 @@ count query with the service role (or on the admin page), never printing rows.
 ## Step C: unlock the 80 researched records
 
 Each unlocked company is one edit of its row, one at a time: set `crawl` to `true`, `source` to `override` with its `ats`
-and `slug`, `status` to `ok` (and `israel_only` for a multinational), and remove its `gap` and `segment`. Do not run
-`discover-companies` for a pin that is already `ok`: it only touches companies with an empty `status`. Target: 30. Read
+and `slug` (and `israel_only` for a multinational), remove its `gap` and `segment`, and empty its `status`. Then run
+`discover-companies`, which checks the pin and sets `status` to `ok` (it touches only crawled companies with an empty
+`status`). Target: 30. Read
 the "Prior findings" first; do not repeat a checked path.
 
 - **C1. `no_careers_url` (23).** Find the real career page by hand (company site, LinkedIn page, VC portfolio page),
@@ -145,7 +146,7 @@ Target: +60 crawled that return jobs from the runner.
   - Israeli job boards as a source of employer names: only after the maintainer has checked each site's terms with the
     lawyer. Skipped until then.
 - **D3. Candidate script.** A dev tool in `survey.py` or `survey2.py` (typed, with tests, 100% coverage; the network
-  calls faked as the other tests do). For each name it skips excluded (`is_excluded`) and already-listed domains, probes the career page
+  calls faked as the other tests do). For each name it skips excluded (`is_excluded`) and already-listed domains (run `sync_supabase.py --pull` first), probes the career page
   link scan (`ATS_LINK`) and then the ATS list in `PROBE_ORDER`, counts Israel jobs with `israel_count`, and prints a
   keep or skip table. Output goes to the scratchpad. Done when: 100 names run in one command.
 - **D4. Accept rule.** Keep a candidate that has Israel jobs on its own board. A candidate with only a career page and
@@ -199,8 +200,7 @@ Israeli R&D centres of global companies. Target: +40 crawled with `israel_only: 
 4. D4, D5 and E1 to E6 in batches of 25 or fewer, each followed by a first-run review before the next.
 5. F1 and F2 start after the first batch; G from the first month.
 
-Roughly 10 PRs (code and docs: 4 for A, adapters and the D3 tool, F1) and about 16 batches of table edits (8 for D, 8 for
-E), plus the unlocks of C and the recurring G. About one batch a week, so about 10 to 12 weeks end to end.
+Roughly 10 PRs (code and docs: 4 for A, adapters and the D3 tool, F1) and about 5 to 8 batches of table edits (D and E), plus the unlocks of C and the recurring G. About one batch a week, so about 10 to 12 weeks end to end.
 
 ## Risks
 
