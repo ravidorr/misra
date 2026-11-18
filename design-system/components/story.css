@@ -11,7 +11,7 @@
 .story {
   position: relative; /* the hidden count (.sr-only) is absolute: without a positioned parent it sits off the page and widens it */
   flex: 0 0 auto;
-  width: 5.5rem; /* wide enough for "monday.com" in one piece; longer names wrap at their spaces */
+  width: 6.5rem; /* wide enough for the longest ordinary word (13 letters, "Semiconductor") in the widest common bold sans (Verdana, Linux fallbacks: 101 px); names wrap at their spaces */
   padding: 0;
   border: 0;
   background: none;

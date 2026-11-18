@@ -84,19 +84,18 @@ EXTREME_NAMES = {
     "Supercalifragilisticexpialidocious": 4,
     "monday.com": 3,
     "Palo Alto Networks": 2,
+    # The longest single words among all the companies the data held on the day this was written (names only,
+    # frozen here so a daily publish never changes the test): none may break inside the word.
+    "Semiconductor Technologies": 1,
+    "DoubleVerify Incredibuild Lifesciences": 1,
 }
 NAME_SETS = {"real": REAL_NAMES, "extremes": EXTREME_NAMES}
 SAME_TOP = 0.5  # px
 TOGGLE_STILL = 1  # px the button may move between "Show all" and "Show fewer"
-NARROWEST = 320
 
 
-@pytest.fixture(params=sorted(NAME_SETS))
-def mixed(
-    request: pytest.FixtureRequest, db: sqlite3.Connection, workdir: Path, monkeypatch: pytest.MonkeyPatch
-) -> Path:
-    """The page built over companies with new roles whose names take one to four lines in "New this week"."""
-    names: dict[str, int] = NAME_SETS[request.param]
+def names_site(names: dict[str, int], db: sqlite3.Connection, workdir: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """The page built over companies with these names, each with an old role and as many new ones as given."""
 
     def fill(conn: sqlite3.Connection) -> None:
         old = (datetime.now(UTC) - timedelta(days=30)).strftime("%Y-%m-%dT00:00:00")
@@ -108,6 +107,20 @@ def mixed(
 
     monkeypatch.setattr(build_dashboard, "DIGEST_SIGNUP_ENABLED", False)
     return build_site(db, workdir, fill)
+
+
+@pytest.fixture(params=sorted(NAME_SETS))
+def mixed(
+    request: pytest.FixtureRequest, db: sqlite3.Connection, workdir: Path, monkeypatch: pytest.MonkeyPatch
+) -> Path:
+    """The page built over companies with new roles whose names take one to four lines in "New this week"."""
+    return names_site(NAME_SETS[request.param], db, workdir, monkeypatch)
+
+
+@pytest.fixture
+def few(db: sqlite3.Connection, workdir: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """Four companies: they fit on one line on a wide screen (no button) and not on a phone (the button)."""
+    return names_site(dict(list(EXTREME_NAMES.items())[:4]), db, workdir, monkeypatch)
 
 
 MANY_COMPANIES = 1234  # the widest the count can be for a long time: four digits and a plural
@@ -277,8 +290,11 @@ async def test_hiring_now_is_reached_and_operated_by_keyboard(page: Page, crowd:
     """The Tab order follows the picture: the heading's button first, then the circles it shows."""
     await open_page(page, crowd, 375)
     shown = len(await visible_stories(page))
-    await page.locator("#filtersOpen").focus()
-    await page.locator("#hiringToggle").focus()
+    await page.locator("#stories .story").first.focus()
+    await page.keyboard.press("Shift+Tab")
+    assert (
+        await page.evaluate("document.activeElement.id") == "hiringToggle"
+    )  # the button comes right before the circles
     await page.keyboard.press("Enter")
     assert await page.locator("#hiringToggle").get_attribute("aria-expanded") == "true"
     assert len(await visible_stories(page)) == HIRING_COMPANIES
@@ -293,6 +309,8 @@ async def test_hiring_now_is_reached_and_operated_by_keyboard(page: Page, crowd:
     for _ in range(shown):  # only the circles on the line are in the Tab order
         await page.keyboard.press("Tab")
         assert await page.evaluate("document.activeElement.classList.contains('story')")
+    await page.keyboard.press("Tab")  # past the last circle on the line: the hidden ones are not in the Tab order
+    assert not await page.evaluate("document.activeElement.classList.contains('story')")
 
 
 async def test_hiring_now_keeps_its_choice_for_the_page_and_follows_the_width(page: Page, crowd: Path) -> None:
@@ -1038,7 +1056,7 @@ async def test_the_strip_is_lined_up_and_no_name_is_cut(
     assert rows
     if state == "collapsed":
         assert len(rows) == 1  # one line, so one top for all of them
-    elif width > NARROWEST:  # at 320 px a row may hold one circle, so there is nothing to line up
+    else:
         assert any(len(set(row["lines"])) > 1 for row in rows)  # a row that mixes one-line and longer labels: the case
     for row in rows:
         assert max(row["tops"]) - min(row["tops"]) <= SAME_TOP
@@ -1098,3 +1116,78 @@ async def test_a_chosen_company_name_is_not_cut_either(page: Page, crowd: Path) 
     assert await page.locator("#stories .story").first.get_attribute("aria-pressed") == "true"
     name = page.locator("#stories .story-name").first
     assert await name.evaluate("e => e.scrollHeight <= e.clientHeight && e.scrollWidth <= e.clientWidth")
+
+
+async def test_the_circles_do_not_move_when_the_button_goes_or_comes(page: Page, few: Path) -> None:
+    """The bug: the heading row was as tall as the button only while the button showed, so a resize across the width
+    where the circles stop fitting on one line moved them by the button's height."""
+    await open_page(page, few, 1650)
+    seen = set()
+    gaps = []
+    for width in (1650, 375, 1650, 768, 320):
+        await page.set_viewport_size({"width": width, "height": 800})
+        await settle(page, f"document.querySelector('#hiringToggle').hidden === {str(width >= WIDE).lower()}")
+        seen.add(await page.locator("#hiringToggle").is_visible())
+        badge = await page.locator("#stories .story-badge").first.bounding_box()
+        heading = await page.locator("#hiring-h").bounding_box()
+        assert badge is not None
+        assert heading is not None
+        gaps.append(badge["y"] - heading["y"])
+    assert seen == {True, False}  # the button was both there and gone
+    assert max(gaps) - min(gaps) <= SAME_TOP
+
+
+SIXTEEN = {**{f"Company {n:02d}": 20 - n for n in range(HIRING_COMPANIES)}, "Zeta Outsider": 1}  # the 16th is not shown
+
+
+@pytest.mark.parametrize("width", [375, 1280])
+async def test_a_chosen_company_outside_the_first_fifteen_shows_on_the_closed_strip(
+    page: Page, db: sqlite3.Connection, workdir: Path, monkeypatch: pytest.MonkeyPatch, width: int
+) -> None:
+    """The bug: it was put last, behind "Show all", so the circle that turns the filter off was out of sight."""
+    await open_page(page, names_site(SIXTEEN, db, workdir, monkeypatch), width)
+    assert await page.locator('#stories .story[data-company="Zeta Outsider"]').count() == 0
+    await page.evaluate(
+        "() => { const c = document.querySelector('#company'); c.value = 'Zeta Outsider';"
+        " c.dispatchEvent(new Event('change', { bubbles: true })); }"
+    )
+    chosen = page.locator('#stories .story[data-company="Zeta Outsider"]')
+    assert await chosen.get_attribute("aria-pressed") == "true"
+    assert await chosen.is_visible()  # on the line while the strip is closed
+    assert await page.locator("#stories .story").first.get_attribute("data-company") == "Zeta Outsider"
+    await chosen.click()  # the visible way to turn the filter off
+    assert await page.evaluate("document.querySelector('#company').value") == ""
+    assert await page.locator('#stories .story[data-company="Zeta Outsider"]').count() == 0
+
+
+async def test_a_chosen_company_among_the_first_fifteen_is_moved_first_not_repeated(
+    page: Page, db: sqlite3.Connection, workdir: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    await open_page(page, names_site(SIXTEEN, db, workdir, monkeypatch), 375)
+    await page.evaluate(
+        "() => { const c = document.querySelector('#company'); c.value = 'Company 07';"
+        " c.dispatchEvent(new Event('change', { bubbles: true })); }"
+    )
+    names = await page.locator("#stories .story").evaluate_all("els => els.map(e => e.dataset.company)")
+    assert names[0] == "Company 07"
+    assert len(names) == len(set(names)) == HIRING_COMPANIES  # still 15, none twice
+
+
+async def test_the_focus_stays_on_the_page_when_a_chosen_circle_goes_behind_the_button(
+    page: Page, db: sqlite3.Connection, workdir: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The bug: a company from beyond the first line, chosen in the Company filter, shows first; clearing it by the
+    keyboard sent it back behind "Show all" and the focus stayed on that hidden circle, that is, fell to the page."""
+    await open_page(page, names_site(SIXTEEN, db, workdir, monkeypatch), 375)
+    await page.evaluate(
+        "() => { const c = document.querySelector('#company'); c.value = 'Company 10';"
+        " c.dispatchEvent(new Event('change', { bubbles: true })); }"
+    )
+    chosen = page.locator('#stories .story[data-company="Company 10"]')
+    assert await chosen.is_visible()
+    await chosen.focus()
+    await page.keyboard.press("Enter")  # turns the filter off: the circle returns to its place, past the first line
+    assert await chosen.is_hidden()
+    assert await page.evaluate("document.activeElement !== document.body")
+    assert await page.evaluate("document.activeElement.id === 'hiringToggle' || document.activeElement.id === 'list-h'")
+    assert await page.evaluate("document.activeElement.getClientRects().length > 0")  # and it shows
