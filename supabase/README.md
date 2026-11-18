@@ -112,6 +112,31 @@ scripts/run-sql-tests.sh postgresql://postgres@localhost:54330/postgres
 docker stop misra-sql
 ```
 
+## The admin check
+
+Migration `20261127100000_admins.sql` (PLAN_2.md step 1.1) adds `public.admins`, one row per person who may use the admin
+page, and `public.is_admin()`, which every later admin policy and function asks. Nobody but the owner (the SQL editor) and
+the service role can read or write `admins`: it has row-level security on, no policy and no grant for `anon` or
+`authenticated`, so a signed-out visitor and a signed-in non-admin get a permission error on it. `is_admin()` is `security
+definer`, `stable`, has an empty search path, may be run by `anon` and `authenticated`, and answers a boolean about the
+caller only. There is no way to become an admin from the page: the first sign in never claims the row.
+`supabase/tests/admins.sql` checks all of it (`all admin check passed`), and the migration lint of
+`tests/test_migrations.py` pins it, and accepts a policy on an admin table only when its `using` and `with check` are `public.is_admin()` (besides the
+existing public read policies of `jobs` and, later, `companies`).
+
+Add the maintainer's own row once, after the migration is applied and after signing in once on the dashboard (the row
+points at `auth.users`, which Google sign-in fills at the first sign in). In the
+[SQL editor](https://supabase.com/dashboard/project/dncodqeqpoqwcxdctzco/sql/new), with the address the maintainer signs in
+with in place of the placeholder `you@example.com`:
+
+```sql
+insert into public.admins select id from auth.users where email = 'you@example.com';
+```
+
+It inserts one row, or none when no account uses that address (`select * from public.admins;` shows the result; it holds
+a user id and no address). Deleting the auth user deletes the row. A restore of the accounts does not bring the row back:
+run the statement again.
+
 ## Stars and discards
 
 `user_jobs` holds one row per user and job with a single `state`, so a job is starred or discarded, never both. A star

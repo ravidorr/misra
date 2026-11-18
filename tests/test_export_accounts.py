@@ -319,7 +319,10 @@ def test_the_tables_are_the_account_tables_and_not_the_public_or_counter_tables(
     assert [table.name for table in TABLES] == ["profiles", "user_prefs", "user_jobs", "subscriptions", "emailed"]
     sql = "\n".join(path.read_text(encoding="utf-8") for path in sorted(MIGRATIONS.glob("*.sql")))
     owned = set(re.findall(r"create table public\.(\w+) \([^;]*?references auth\.users", sql, flags=re.DOTALL))
-    assert owned == {table.name for table in TABLES}, "a table that references auth.users is not in the backup"
+    # `admins` (PLAN_2.md step 1.1) is the one table left out: its only row is the maintainer's user id, inserted by
+    # hand again after a restore (supabase/README.md, "The admin check").
+    assert "admins" in owned
+    assert owned - {"admins"} == {table.name for table in TABLES}, "a table that references auth.users is not backed up"
 
 
 def test_main_prints_counts_only(
