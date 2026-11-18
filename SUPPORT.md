@@ -1,6 +1,7 @@
 # Support
 
-- Bugs, feature requests and questions: open a [GitHub issue](https://github.com/ravidorr/misra/issues/new/choose) with one of the templates.
+- Questions, problems and requests about the data: use the [Contact page](https://ravidorr.github.io/misra/contact.html).
+- Developers: bugs and code can also go to [GitHub issues](https://github.com/ravidorr/misra/issues/new/choose).
 - Security issues: see [SECURITY.md](./SECURITY.md).
 
 ## Troubleshooting
