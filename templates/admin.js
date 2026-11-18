@@ -973,7 +973,8 @@ function notice(id, text) {
 /* Shows a problem in one dialog: at the field it names there, else in the dialog's notice. The focus goes to the field. */
 function showProblem(scope, problem) {
   for (const field of Object.values(FIELD_IDS[scope])) fieldError(field, '');
-  const id = FIELD_IDS[scope][problem.field];
+  let id = FIELD_IDS[scope][problem.field];
+  if (id && $(id).closest('[hidden]')) id = undefined; /* a field the admin cannot see cannot carry the sentence */
   notice(scope === 'editor' ? 'editorNotice' : 'confirmNotice', id ? '' : problem.text);
   if (id) {
     fieldError(id, problem.text);
@@ -1011,7 +1012,8 @@ function unlocking() {
 }
 
 function showPinHint() {
-  $('cPinHint').textContent = PIN_HINTS[$('cPinAts').value] ?? 'Choose the feed first.';
+  const ats = $('cPinAts').value;
+  $('cPinHint').textContent = PIN_HINTS[ats] ?? (ats ? '' : 'Choose the feed first.');
 }
 
 function openEditor(row, back) {
@@ -1077,7 +1079,10 @@ function pinChange() {
   if ($('cUnpin').checked) return { fields: { source: '', ats: '', slug: '', status: '' } };
   const ats = $('cPinAts').value;
   const slug = $('cPinSlug').value.trim();
-  if (!ats && !slug) return { fields: null };
+  if (!ats && !slug) {
+    if (editor.row.source !== 'override') return { fields: null };
+    return { problem: { field: 'pinAts', text: 'To take the pin away, tick Remove the pin.' } }; /* an empty pair must not keep a pin silently */
+  }
   let words = null;
   if (!ats || !slug) words = PIN_WORDS.pair;
   else if (slug.length > PIN_SLUG_MAX) words = PIN_WORDS.long;

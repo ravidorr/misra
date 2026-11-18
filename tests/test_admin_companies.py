@@ -941,7 +941,7 @@ async def test_the_pin_part_says_the_workflow_checks_it_and_a_workday_feed_may_f
     group = page.locator("#pinGroup")
     await expect(group).to_contain_text("discover-companies workflow")
     await expect(group).to_contain_text("Workday or Oracle feed may come back not ok")
-    await expect(group).to_contain_text("never forced to ok")
+    await expect(group).to_contain_text("never sets a feed to ok")
     assert await group.get_by_role("link", name=re.compile("Open the workflow")).get_attribute("href") == WORKFLOW
     await expect(page.locator("#cPinHint")).to_have_text("Choose the feed first.")
     await pin_ats(page).select_option("workday")
@@ -1085,3 +1085,20 @@ async def test_the_pin_of_a_company_is_removed_and_the_company_goes_back_to_disc
     only_empty_status(backend)
     await open_editor(page, "Acme Robotics")
     await expect(page.locator("#unpinRow")).to_be_hidden()  # nothing to remove from a discovered feed
+
+
+async def test_clearing_both_fields_of_a_pinned_company_does_not_keep_the_pin_silently(page: Page, site: Path) -> None:
+    backend = await open_companies(page, site)
+    await open_editor(page, "Gamma Cloud")
+    await pin_ats(page).select_option("")
+    await pin_slug(page).fill("")
+    await save(page)
+    await expect(page.locator("#cPinAtsError")).to_contain_text("tick Remove the pin")
+    assert writes(backend) == []
+
+
+async def test_a_feed_with_no_documented_slug_form_does_not_say_to_choose_the_feed(page: Page, site: Path) -> None:
+    await open_companies(page, site)
+    await open_editor(page, "Acme Robotics")
+    await pin_ats(page).select_option("lever")
+    await expect(page.locator("#cPinHint")).to_have_text("")
