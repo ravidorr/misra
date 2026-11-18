@@ -46,6 +46,33 @@ __HEADER__
   </section>
   <section class="admin-area" id="alerts" aria-labelledby="alertsTitle" data-empty="No counts yet." hidden>
     <h2 id="alertsTitle" tabindex="-1">Alerts</h2>
+    <div class="admin-state"></div>
+    <div class="alert-forms">
+      <form class="gap-card alert-form" id="endForm" aria-labelledby="endTitle" novalidate>
+        <h3 class="alert-name" id="endTitle">End job alerts</h3>
+        <p class="field-hint">Stops the emails to a person who asked, as their unsubscribe link does.</p>
+        <div class="field-group">
+          <label for="endAddress">Email address</label>
+          <input class="field" id="endAddress" type="email" autocomplete="off" spellcheck="false" inputmode="email" maxlength="254" aria-describedby="endAddressError">
+          <p class="field-error" id="endAddressError" hidden></p>
+        </div>
+        <button type="submit" class="btn btn-pill btn-primary alert-go" id="endGo">End job alerts</button>
+        <p class="notice" id="endProblem" role="alert" hidden></p>
+        <p class="alert-answer" id="endStatus" role="status"></p>
+      </form>
+      <form class="gap-card alert-form" id="deleteForm" aria-labelledby="deleteFormTitle" novalidate>
+        <h3 class="alert-name" id="deleteFormTitle">Delete an account</h3>
+        <p class="field-hint">Deletes the account of a person who asked. You confirm first.</p>
+        <div class="field-group">
+          <label for="deleteAddress">Email address</label>
+          <input class="field" id="deleteAddress" type="email" autocomplete="off" spellcheck="false" inputmode="email" maxlength="254" aria-describedby="deleteAddressError">
+          <p class="field-error" id="deleteAddressError" hidden></p>
+        </div>
+        <button type="submit" class="btn btn-pill alert-go" id="deleteGo">Delete an account</button>
+        <p class="notice" id="deleteProblem" role="alert" hidden></p>
+        <p class="alert-answer" id="deleteStatus" role="status"></p>
+      </form>
+    </div>
   </section>
   <section class="admin-area" id="log" aria-labelledby="logTitle" data-empty="No changes yet." hidden>
     <h2 id="logTitle" tabindex="-1">Log</h2>
@@ -119,6 +146,18 @@ __HEADER__
         <button type="submit" class="btn btn-pill btn-primary" id="editorSave">Save</button>
       </div>
     </form>
+  </dialog>
+  <dialog class="dialog" id="accountConfirm" aria-labelledby="accountTitle" aria-describedby="accountText">
+    <button type="button" class="dialog-close" id="accountClose" aria-label="Close"><svg aria-hidden="true" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+    <h2 class="dialog-title" id="accountTitle" tabindex="-1">Delete this account?</h2>
+    <div id="accountText">
+      <p>This deletes the account and its data. It cannot be undone.</p>
+      <p class="delete-email" id="accountAddress"></p>
+    </div>
+    <p class="dialog-actions">
+      <button type="button" class="btn btn-pill" id="accountCancel">Cancel</button>
+      <button type="button" class="btn btn-pill btn-danger" id="accountGo">Delete the account</button>
+    </p>
   </dialog>
   <dialog class="dialog" id="companyConfirm" aria-labelledby="confirmTitle" aria-describedby="confirmText">
     <button type="button" class="dialog-close" id="confirmClose" aria-label="Close"><svg aria-hidden="true" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"/></svg></button>

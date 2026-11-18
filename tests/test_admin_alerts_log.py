@@ -84,7 +84,7 @@ async def test_alerts_asks_only_the_one_function_after_the_check_and_only_on_its
     assert problems == []
 
 
-async def test_alerts_shows_the_counts_and_nothing_to_type_into_or_press(page: Page, site: Path) -> None:
+async def test_alerts_shows_the_counts_and_the_two_forms_and_nothing_else(page: Page, site: Path) -> None:
     backend, problems = await open_area(page, site, "alerts", Backend(alerts=COUNTS))
     assert problems == []
     await expect(page.locator(".alerts .crawl-headline")).to_have_text("12 confirmed, 3 waiting, 5 off.")
@@ -93,9 +93,10 @@ async def test_alerts_shows_the_counts_and_nothing_to_type_into_or_press(page: P
     assert [value for _day, value in emailed] == EMAILED  # a day nobody was emailed says 0, it is not left out
     assert all(DAY.fullmatch(day) for day, _value in emailed)
     await expect(page.locator("#alerts .crawl-note")).to_have_text(re.compile(r"however many jobs"))
-    # read-only: the two forms of step 5.3 come later, and nothing stands in for them
-    controls = "#alerts input, #alerts select, #alerts textarea, #alerts form, #alerts button"
-    assert await page.locator(controls).count() == 0
+    # the two forms of step 5.3 and nothing else to type into or press
+    assert await page.locator("#alerts input, #alerts select, #alerts textarea").count() == 2  # noqa: PLR2004
+    assert await page.locator("#alerts form").count() == 2  # noqa: PLR2004
+    assert await page.locator("#alerts button").all_inner_texts() == ["End job alerts", "Delete an account"]
     text = await page.locator("#alerts").inner_text()
     assert "@" not in text
     assert backend.strays == []
