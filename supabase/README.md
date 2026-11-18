@@ -121,7 +121,8 @@ the service role can read or write `admins`: it has row-level security on, no po
 definer`, `stable`, has an empty search path, may be run by `anon` and `authenticated`, and answers a boolean about the
 caller only. There is no way to become an admin from the page: the first sign in never claims the row.
 `supabase/tests/admins.sql` checks all of it (`all admin check passed`), and the migration lint of
-`tests/test_migrations.py` pins it, and accepts a policy on an admin table only when its `using` is `public.is_admin()`.
+`tests/test_migrations.py` pins it, and accepts a policy on an admin table only when its `using` and `with check` are `public.is_admin()` (besides the
+existing public read policies of `jobs` and, later, `companies`).
 
 Add the maintainer's own row once, after the migration is applied and after signing in once on the dashboard (the row
 points at `auth.users`, which Google sign-in fills at the first sign in). In the

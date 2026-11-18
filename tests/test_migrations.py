@@ -361,7 +361,12 @@ def policy_problem(s: str) -> str | None:
         wrong = command != "select" or check or not roles <= PUBLIC_ROLES
         return f"the {table} public policy must be a select for public roles with no check: {s}" if wrong else None
     if table in ADMIN_TABLES:
-        wrong = roles != {"authenticated"} or (using == IS_ADMIN) != wants_using or (check == IS_ADMIN) != wants_check
+        wrong = (
+            command not in {"select", "insert", "update", "delete"}
+            or roles != {"authenticated"}
+            or (using == IS_ADMIN) != wants_using
+            or (check == IS_ADMIN) != wants_check
+        )
         return f"a policy on {table} must be for authenticated and use only {IS_ADMIN}: {s}" if wrong else None
     checks = [
         (table not in USER_TABLES, f"no policy is allowed on {table}: {s}"),
@@ -952,6 +957,7 @@ def test_the_lint_accepts_an_admin_only_policy_on_an_admin_table(
         ("crawl_log", "select", "public", IS_ADMIN_CLAUSE),
         ("crawl_log", "select", "authenticated", "using (public.is_admin()) with check (public.is_admin())"),
         ("crawl_log", "all", "authenticated", IS_ADMIN_CLAUSE),
+        ("crawl_log", "all", "authenticated", ""),  # a policy with no clause at all
         ("companies", "insert", "authenticated", "with check (true)"),
         ("companies", "insert", "authenticated", IS_ADMIN_CLAUSE),  # insert has no using
         ("companies", "update", "authenticated", IS_ADMIN_CLAUSE),  # update without the check

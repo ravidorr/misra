@@ -321,6 +321,7 @@ def test_the_tables_are_the_account_tables_and_not_the_public_or_counter_tables(
     owned = set(re.findall(r"create table public\.(\w+) \([^;]*?references auth\.users", sql, flags=re.DOTALL))
     # `admins` (PLAN_2.md step 1.1) is the one table left out: its only row is the maintainer's user id, inserted by
     # hand again after a restore (supabase/README.md, "The admin check").
+    assert "admins" in owned
     assert owned - {"admins"} == {table.name for table in TABLES}, "a table that references auth.users is not backed up"
 
 
