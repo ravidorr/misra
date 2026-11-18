@@ -694,10 +694,16 @@ class TokenError extends Error {}
 
 async function accountToken(renew) {
   let result;
+  let timer;
+  const silence = new Promise((_resolve, reject) => {
+    timer = setTimeout(reject, CHECK_TIMEOUT_MS, new TokenError('timeout')); /* the library's own requests have no deadline */
+  });
   try {
-    result = renew ? await client.auth.refreshSession() : await client.auth.getSession();
+    result = await Promise.race([renew ? client.auth.refreshSession() : client.auth.getSession(), silence]);
   } catch {
-    throw new TokenError('session');
+    throw new TokenError('session'); /* the request is never sent after this: postAccount stops at the throw */
+  } finally {
+    clearTimeout(timer);
   }
   const { data, error } = result;
   if (error) throw new TokenError('session');

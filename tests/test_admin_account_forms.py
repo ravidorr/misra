@@ -11,8 +11,9 @@ from collections.abc import Callable
 from pathlib import Path
 
 import pytest
-from playwright.async_api import Locator, Page, expect
+from playwright.async_api import Locator, Page, Route, expect
 
+import build_dashboard
 from tests.test_admin_alerts_log import COUNTS, LOG, open_area
 from tests.test_admin_page import (
     ACCOUNT,
@@ -440,6 +441,37 @@ async def test_a_session_the_service_refuses_to_renew_sends_nothing_a_second_tim
     await end_alerts(page)
     await expect(page.locator("#endProblem")).to_have_text(NOTHING)  # the page's own check found it still ready
     assert len(backend.account_calls) == ONE  # the retry never left the browser
+    assert await values(page) == [ADDRESS, ""]
+
+
+def test_the_session_lookup_before_the_request_has_a_deadline_too() -> None:
+    source = (REPO / "templates" / "admin.js").read_text(encoding="utf-8")
+    assert "Promise.race([renew ? client.auth.refreshSession() : client.auth.getSession(), silence])" in source
+
+
+async def test_a_session_service_that_never_answers_ends_the_wait_and_sends_nothing_late(
+    page: Page, site: Path
+) -> None:
+    backend = backend_with((404, None), (200, DONE))
+    await page.clock.install()
+    await start(page, site, backend)
+    hang = asyncio.Event()
+
+    async def never(route: Route) -> None:
+        await hang.wait()  # the renewal is never answered
+        await route.abort()
+
+    await page.route(f"{build_dashboard.SUPABASE_URL}/auth/v1/token**", never)
+    await end_alerts(page)
+    await until(lambda: len(backend.account_calls) == ONE)  # the first try went out and got its 404
+    await page.clock.fast_forward(20000)  # the deadline of the renewal: nothing is sent, the page's check starts
+    await asyncio.sleep(0.5)
+    await page.clock.fast_forward(20000)  # the check waits on the same stuck renewal and gives up at its own deadline
+    await expect(page.locator("#endProblem")).to_have_text(NOTHING)  # the page's own check found it ready
+    await expect(page.get_by_role("button", name="End job alerts")).not_to_have_attribute("aria-disabled", "true")
+    hang.set()
+    await asyncio.sleep(0.3)
+    assert len(backend.account_calls) == ONE  # nothing was sent after the deadline
     assert await values(page) == [ADDRESS, ""]
 
 
