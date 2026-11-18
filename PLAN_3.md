@@ -53,9 +53,10 @@ count query with the service role, never printing rows.
   and the check passes silently. Never paste the key in a PR or chat.
 - **One list.** No candidate file is committed. Candidate lists live in the scratchpad or the PR description; only
   accepted records reach the `companies` table. Adding a company and excluding one are done on the Companies area of
-  the admin page (`https://ravidorr.github.io/misra/admin.html`, admin only). Pins (`source`, `ats`, `slug`) are not
-  editable there yet: use SQL (`CONTRIBUTING.md`, "Adding a company"). Only admin-page changes are in the admin Log; a
-  SQL edit leaves no log entry, and the daily backup history is the only record of it.
+  the admin page (`https://ravidorr.github.io/misra/admin.html`, admin only). Pins (`source`, `ats`, `slug`) are made
+  there too ("Pin the job feed" in the editor), so every pin is in the admin Log. SQL stays only as a fallback
+  (`CONTRIBUTING.md`, "Adding a company"); a SQL edit leaves no log entry, and the daily backup history is the only
+  record of it.
 - **Adapters need two.** Write an adapter only when two or more companies share a platform that `robots.txt` allows.
   One company gets a pinned `browser` or `comeet_page` record.
 - **First run must return jobs.** A company is added only if its first crawl returns jobs. A company that returned
@@ -114,9 +115,10 @@ count query with the service role, never printing rows.
 
 ## Step C: unlock the 80 researched records
 
-Each unlocked company is one SQL edit of its row (the admin page cannot set `ats` or `slug` yet; see `CONTRIBUTING.md`,
-"Adding a company"), one at a time: set `crawl` to `true`, `source` to `override` with its `ats` and `slug` (and
-`israel_only` for a multinational), remove its `gap` and `segment`, and empty its `status`. Then run
+Each unlocked company is one save in the editor of the admin page, one at a time, so the pin is in the admin Log: open
+the company, choose "Crawl it", pin the job feed (`ats` and `slug`; the page writes `source` `override`, empties the
+`status`, and drops the `gap` and the `segment` in the same write), and tick "Keep only its Israel jobs" for a
+multinational. The page never sets `status` to `ok`. The SQL editor stays as a fallback and is not logged. Then run
 `discover-companies`, which sets `status` to `ok` only when the GitHub runner can read the feed (it touches only crawled
 companies with an empty `status`). Workday and Oracle pins are the known runner-blocked case, and step E has many of
 them. A pin that comes back not `ok` is edited back or parked with a `gap`; never set `status` to `ok` by hand.
@@ -161,7 +163,7 @@ Target: +60 crawled that return jobs from the runner.
   everything else and record nothing.
 - **D5. Batches.** Up to 25 names per batch: add each as `{name, domain, crawl: true}` on the admin page, run the
   `discover-companies` workflow, review each result for a wrong feed (check the board's company name against the
-  record), pin where needed (with SQL, as in step C) and empty its `status` for a second run. Done when: the target is
+  record), pin where needed (on the admin page, as in step C, which empties its `status` for a second run). Done when: the target is
   met and each batch's next daily run is reviewed.
 
 ## Step E: add large multinationals

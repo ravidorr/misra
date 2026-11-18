@@ -55,9 +55,11 @@ through the report form on the coverage gap card or the Contact page; the mainta
    `discover.py --new-only`, which fills in the careers URL and job feed of the crawled companies that have no `status`
    yet (every other record is left as pulled, since a runner cannot rebuild the whole list), and sends back only those
    five fields. A new company is crawled by the daily run after that.
-3. If `discover.py` finds the wrong feed or none, pin the company (the page edits no feed by hand: use the table
-   editor for this step; the page's "Find its job feed again" only empties the `status`): set `source` to `override` and its `ats` and `slug`
-   (or `ats` `browser` and a career page URL as the `slug`), empty its `status`, then run the `discover-companies` workflow
+3. If `discover.py` finds the wrong feed or none, pin the company. On the Companies area open the company and use "Pin the job feed"
+   (the feed, its slug; "Crawl it" first for a company on the coverage card). The page writes `source` `override`, the `ats` and `slug`, and an empty `status`,
+   and every pin is in the admin Log. The page never sets `status` to `ok` and the SQL editor is only a fallback
+   (it is not logged): set the same four fields, with `ats` `browser` and a career page URL as the `slug` for a browser crawl.
+   Then run the `discover-companies` workflow
    again so the `status` becomes `ok` (`run.py` crawls only `status` `ok`). `discover.py` keeps a pinned `ats` and `slug` and only
    checks them. Clear `source` to let it search again. A company that has `status` `ok` is never downgraded by the
    push (a feed that died stays `ok` until someone edits the row): that is the intended trade-off, so a failed

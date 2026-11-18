@@ -1323,6 +1323,14 @@ html:has(.sheet:modal) {
   margin: calc(-1 * var(--space-2)) 0 var(--space-4);
 }
 
+.company-dialog .pin-group {
+  margin-top: var(--space-2);
+}
+
+.company-dialog .pin-group .company-timing {
+  margin: 0;
+}
+
 .company-dialog .field {
   width: 100%;
   min-width: 0;
