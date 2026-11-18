@@ -26,10 +26,10 @@ const MESSAGES = {
   large: 'The message is too large, so nothing was sent. Shorten the text and try again.',
   limited: 'You have sent as many messages as are allowed today, so this one was not sent. Try again tomorrow.',
   paused: 'Messages are paused until tomorrow: we have received as many as we can read today, so this one was not sent. Try again tomorrow.',
-  refused: 'We could not confirm that your message was passed on to us. Try again later, or open an issue on GitHub (see below).',
+  refused: 'We could not confirm that your message was passed on to us. Try again later.',
   server: 'Something went wrong on our side, so nothing was sent. Try again later.',
   fast: 'Your message came too soon, so it was not sent. Wait a few seconds and try again.',
-  closed: 'The contact form is not available right now, so your message was not sent. Open an issue on GitHub (see below).',
+  closed: 'The contact form is not available right now, so your message was not sent.',
 };
 const BY_CODE = {
   invalid_input: 'invalid',

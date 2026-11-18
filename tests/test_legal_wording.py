@@ -138,14 +138,13 @@ def test_the_spam_guard_sentence_is_the_lawyers_in_the_notice_and_the_form_and_a
 def test_the_privacy_notice_contact_is_a_direct_address_not_only_a_public_issue() -> None:
     body = sections(read("PRIVACY.md"))["Contact"]
     assert CONTACT in body
-    assert "do not put personal details" in body
-    assert body.strip() == (  # his text of 2026-11-17 (A3), with the address and the two links kept as they were
+    # the lawyer's text of 2026-11-17 (A3); the maintainer alone made the Contact link a word link and dropped the
+    # GitHub-issue and security-note sentences on 2026-11-18
+    assert body.strip() == (
         f"Raanan Avidor, <{CONTACT}>, for any question, a request to see, correct or delete your data, or a "
-        "complaint. The Contact page <https://ravidorr.github.io/misra/contact.html> lists every way to reach us. Its "
+        "complaint. The [Contact page](https://ravidorr.github.io/misra/contact.html) lists every way to reach us. Its "
         "form emails your message, and your name and email address if you give them, to the maintainer's mailbox "
-        f"through Resend. We do not store them. {SPAM_GUARD} General questions can also go in a "
-        "[GitHub issue](https://github.com/ravidorr/misra/issues); do not put personal details in it. To report a "
-        "security problem, use the private route in [the security note](./SECURITY.md)."
+        f"through Resend. We do not store them. {SPAM_GUARD}"
     )
 
 
@@ -422,7 +421,7 @@ def test_the_lawyers_round_of_2026_11_16_editorial_wording_is_in_the_notice_the_
     )
     assert "Gmail (Google SMTP)" not in privacy
     assert "daily summary email" not in privacy
-    assert "use the private route in [the security note](./SECURITY.md)." in privacy
+    assert "the private route in [the security note]" not in privacy  # the maintainer dropped the pointer, 2026-11-18
     assert "[SECURITY.md]" not in privacy  # a file name is not link text
     assert "stars, discards" not in privacy
     terms = read("TERMS.md")

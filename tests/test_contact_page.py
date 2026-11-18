@@ -78,8 +78,6 @@ async def test_with_the_form_off_the_page_has_only_the_static_routes_and_no_addr
     await open_legal(page, off_site, "contact.html")
     await expect(page.get_by_role("heading", name="Contact", level=1)).to_be_visible()
     for name, href in [
-        ("Open an issue on GitHub", "https://github.com/ravidorr/misra/issues"),
-        ("security note", "security.html"),
         ("privacy notice", "privacy.html#contact"),
     ]:
         assert await page.get_by_role("link", name=name).get_attribute("href") == href
@@ -216,7 +214,7 @@ FAILURES = [
     (413, {"code": "payload_too_large", "message": "x"}, "too large, so nothing was sent"),
     (429, {"code": "rate_limited", "message": "x"}, "as many messages as are allowed today"),
     (503, {"code": "daily_cap_reached", "message": "x"}, "Messages are paused until tomorrow"),
-    (502, {"code": "send_failed", "message": "x"}, "open an issue on GitHub"),
+    (502, {"code": "send_failed", "message": "x"}, "was passed on to us. Try again later."),
     (500, {"code": "server_error", "message": "x"}, "Something went wrong on our side, so nothing was sent"),
     # no code of the function (the platform in front of it answered): the page cannot say whether anything was sent
     (503, {"code": "something_new", "message": "x"}, "could not confirm that your message was sent"),
@@ -302,7 +300,7 @@ async def test_a_second_click_while_sending_does_not_send_twice(page: Page, cont
     assert len(backend.requests) == 1
 
 
-async def test_without_javascript_the_form_stays_hidden_and_the_note_points_to_github(
+async def test_without_javascript_the_form_stays_hidden_and_the_note_is_only_the_javascript_hint(
     page: Page, contact_site: Path
 ) -> None:
     assert page.context.browser
@@ -315,7 +313,6 @@ async def test_without_javascript_the_form_stays_hidden_and_the_note_points_to_g
     await page.goto("https://misra.test/contact.html")
     await expect(page.locator("#contactForm")).to_be_hidden()
     await expect(page.locator("#contactFallback")).to_be_visible()
-    assert await page.locator("#contactFallback a").get_attribute("href") == "https://github.com/ravidorr/misra/issues"
     await context.close()
 
 
