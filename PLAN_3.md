@@ -72,6 +72,12 @@ count query with the service role, never printing rows.
   says. A bad pin is reverted by editing the row, and to have a pinned record looked at again its `status` is emptied.
 - **No counts to keep.** `tests/test_todo_counts.py` is deleted, so nothing enforces any number quoted in `TODO.md`.
   The current numbers come from the A1 report and each batch description (A4).
+- **Known companies.** A company with any row in the history (`jobs` or `crawl_log`, closed rows included) is "known"
+  (`run.py` `is_known`). Unlocking, re-pinning or fixing the feed of a known company can email its jobs as new to
+  subscribers, so the maintainer makes those edits, not overnight automation. Only companies with no history are
+  added or unlocked unattended, and their first crawl is baselined silently.
+- **Parking.** Parking a company (`crawl` false) closes its open jobs (`close_uncrawled`); emptying a `status` does
+  not. Park only companies with no open jobs unless the closing is intended.
 - **Lawyer's files.** `ABOUT.md`, `PRIVACY.md`, `TERMS.md` and `ASSISTANT.md` are not touched by this plan.
 - **Track in `TODO.md`.** This plan is the design; open items go to `TODO.md`.
 
@@ -124,8 +130,10 @@ Measured 2026-11-18 with the A1 report and read-only `gh` commands (counts and t
   dashboard filter, that is a separate change with its own test and `AGENTS.md` edit.
 
   Status (2026-11-18): done. The A1 report prints the split: 73 multinational (`israel_only`) and 194 startup.
-- **A3. Targets.** Fix numeric targets from the A1 output. Proposal: +60 startups crawled, +40 multinationals that
-  return jobs from the runner, 30 of the 80 researched records unlocked.
+- [x] **A3. Targets.** Fix numeric targets from the A1 output. Confirmed by the maintainer on 2026-11-18: +60 startups
+  crawled, +40 multinationals that return jobs from the runner, 30 of the 80 researched records unlocked.
+
+  Status (2026-11-18): done. The three targets above are confirmed.
 - **A4. Success metrics.** Per batch and per month: reports received (`CONTRIBUTING.md` has the command), share of
   crawled companies with at least one Israel job, Israel job count before and after. Done when: the numbers appear in
   each batch description.
