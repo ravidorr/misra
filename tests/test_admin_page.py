@@ -13,6 +13,7 @@ import pytest
 from playwright.async_api import Page, Route, expect
 
 import build_dashboard
+from tests.fake_companies import REST_CORS, FakeTables
 from tests.test_dashboard_page import (
     AXE,
     CORS,
@@ -29,6 +30,7 @@ from tests.test_sign_in import AXE_RUN, STORAGE_KEY
 REPO = Path(__file__).resolve().parents[1]
 RPC = f"{build_dashboard.SUPABASE_URL}/rest/v1/rpc/is_admin"
 HEALTH = f"{build_dashboard.SUPABASE_URL}/rest/v1/rpc/admin_crawl_health"
+REST = f"{build_dashboard.SUPABASE_URL}/rest/v1/**"
 DESKTOP = {"width": 1280, "height": 900}
 AREAS = ["Crawl", "Companies", "Alerts", "Log"]
 CRAWL_EMPTY = "No crawl results yet."
@@ -59,7 +61,7 @@ class Backend:
     set, replaces `answer` for the checks made after the crawl function was refused. Every request to the project is
     recorded."""
 
-    def __init__(
+    def __init__(  # noqa: PLR0913  (each choice is one thing a test varies)
         self,
         answer: str = "admin",
         auth: AuthBackend | None = None,
@@ -67,6 +69,8 @@ class Backend:
         health: list[dict[str, object]] | None = None,
         health_answer: str = "rows",
         recheck_answer: str | None = None,
+        companies: list[dict[str, object]] | None = None,
+        jobs: list[tuple[str, str]] | None = None,
     ) -> None:
         self.answer = answer
         self.health = [] if health is None else health
@@ -76,6 +80,8 @@ class Backend:
         self.health_gate: asyncio.Event | None = None
         self.health_bodies: list[str | None] = []
         self.auth = auth or AuthBackend()
+        self.tables = FakeTables(companies or [], jobs or [])
+        self.strays: list[str] = []
         self.requests: list[tuple[str, str]] = []
         self.asked = 0
         self.gate: asyncio.Event | None = None  # when set, the answer waits for it
@@ -129,6 +135,21 @@ class Backend:
         else:
             await route.fulfill(headers=CORS, body=json.dumps(self.health), content_type="application/json")
 
+    async def rest(self, route: Route) -> None:
+        """Every other request to the project's tables: the fake `companies` and `jobs` (tests/fake_companies.py), and
+        anything else is refused and recorded, so a test never reaches a real project."""
+        request = route.request
+        if request.method == "OPTIONS":
+            await route.fulfill(status=204, headers=REST_CORS)
+            return
+        path = urlparse(request.url).path
+        self.requests.append((request.method, path))
+        if path not in ("/rest/v1/companies", "/rest/v1/jobs"):
+            self.strays.append(path)
+            await route.abort()
+            return
+        await self.tables.handle(route)
+
     async def auth_route(self, route: Route) -> None:
         if route.request.method != "OPTIONS":
             self.requests.append((route.request.method, urlparse(route.request.url).path))
@@ -162,6 +183,7 @@ async def open_admin(  # noqa: PLR0913  (each choice is one thing a test varies)
             await route.fulfill(status=404)
 
     await page.route(f"{ORIGIN}/**", files)
+    await page.route(REST, backend.rest)  # first: a later route wins, so the functions below take their own paths
     await page.route(RPC, backend.rpc)
     await page.route(HEALTH, backend.crawl_health)
     await page.route(f"{build_dashboard.SUPABASE_URL}/auth/v1/**", backend.auth_route)

@@ -17,6 +17,7 @@
 @import "components/field.css";
 @import "components/dialog.css";
 @import "components/sheet.css";
+@import "components/choice.css";
 @import "showcase.css";
 </style>
 </head>
@@ -143,6 +144,17 @@
       <p>This cannot be undone.</p>
       <p class="dialog-actions"><button type="button" class="btn btn-pill">Cancel</button><button type="button" class="btn btn-pill btn-danger">Delete my account permanently</button></p>
     </dialog>
+  </section>
+
+  <section aria-labelledby="choices">
+    <h2 id="choices">Choice</h2>
+    <p>A checkbox or a radio with its words, one 44px target.</p>
+    <fieldset class="choice-group">
+      <legend>At the daily run</legend>
+      <label class="choice"><input type="radio" name="choice-demo" checked> <span>Crawl it</span></label>
+      <label class="choice"><input type="radio" name="choice-demo"> <span>Show it on the coverage card, not crawled</span></label>
+    </fieldset>
+    <div class="choice-group"><label class="choice"><input type="checkbox" checked> <span>Keep only its Israel jobs</span></label></div>
   </section>
 
   <section aria-labelledby="agents">

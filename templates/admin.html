@@ -41,7 +41,7 @@ __HEADER__
   <section class="admin-area" id="crawl" aria-labelledby="crawlTitle" data-empty="No crawl results yet." hidden>
     <h2 id="crawlTitle" tabindex="-1">Crawl</h2>
   </section>
-  <section class="admin-area" id="companies" aria-labelledby="companiesTitle" data-empty="Nothing here yet." hidden>
+  <section class="admin-area" id="companies" aria-labelledby="companiesTitle" data-empty="No companies yet." hidden>
     <h2 id="companiesTitle" tabindex="-1">Companies</h2>
   </section>
   <section class="admin-area" id="alerts" aria-labelledby="alertsTitle" data-empty="Nothing here yet." hidden>
@@ -50,6 +50,108 @@ __HEADER__
   <section class="admin-area" id="log" aria-labelledby="logTitle" data-empty="No changes yet." hidden>
     <h2 id="logTitle" tabindex="-1">Log</h2>
   </section>
+  <dialog class="dialog company-dialog" id="companyEditor" aria-labelledby="editorTitle">
+    <form id="editorForm" novalidate>
+      <div class="sheet-head">
+        <h2 class="sheet-title" id="editorTitle" tabindex="-1">Edit company</h2>
+        <button type="button" class="dialog-close" id="editorClose" aria-label="Close"><svg aria-hidden="true" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+      </div>
+      <div class="company-body">
+        <p class="notice" id="editorNotice" role="alert" hidden></p>
+        <div class="field-group">
+          <label for="cName">Name</label>
+          <input class="field" type="text" id="cName" autocomplete="off" aria-describedby="cNameHint cNameError">
+          <p class="field-hint" id="cNameHint">The name keys the job history, so it cannot change once the company is listed.</p>
+          <p class="field-error" id="cNameError" hidden></p>
+        </div>
+        <div class="field-group">
+          <label for="cDomain">Domain</label>
+          <input class="field" type="text" id="cDomain" autocomplete="off" inputmode="url" aria-describedby="cDomainHint cDomainError">
+          <p class="field-hint" id="cDomainHint">For example example.com, without https://.</p>
+          <p class="field-error" id="cDomainError" hidden></p>
+        </div>
+        <fieldset class="choice-group">
+          <legend>At the daily run</legend>
+          <label class="choice"><input type="radio" name="cState" value="crawl" id="cCrawl"> <span>Crawl it</span></label>
+          <label class="choice"><input type="radio" name="cState" value="card" id="cCard"> <span>Show it on the coverage card, not crawled</span></label>
+        </fieldset>
+        <div class="company-timing" id="timingNote" hidden>
+    <p class="field-hint">Not crawled until discovery has run: the discover-companies workflow finds the job feed of a company that has no status.</p>
+    <a class="admin-link" href="https://github.com/ravidorr/misra/actions/workflows/discover-companies.yml" target="_blank" rel="noopener">Open the workflow<span class="sr-only"> (opens in a new tab)</span></a>
+  </div>
+        <div id="cardFields" hidden>
+          <div class="field-group">
+            <label for="cReason">Why it is not crawled</label>
+            <select class="field" id="cReason" aria-describedby="cReasonError"></select>
+            <p class="field-error" id="cReasonError" hidden></p>
+          </div>
+          <div class="field-group">
+            <label for="cNote">Note for the card</label>
+            <input class="field" type="text" id="cNote" autocomplete="off">
+          </div>
+        </div>
+        <div class="field-group">
+          <label for="cSegment">Segment</label>
+          <select class="field" id="cSegment"></select>
+        </div>
+        <div class="choice-group">
+          <label class="choice"><input type="checkbox" id="cIsrael"> <span>Keep only its Israel jobs</span></label>
+          <label class="choice" id="verifyRow" hidden><input type="checkbox" id="cVerify"> <span>Trust its job board without checking it at discovery (for a board the discovery runner cannot reach; it is checked at crawl time). Discovery honors it only for a feed pinned by hand (source override).</span></label>
+        </div>
+        <div class="field-group">
+          <label for="cLinkIsrael">Israel career page</label>
+          <input class="field" id="cLinkIsrael" type="url" autocomplete="off" aria-describedby="cLinkHint">
+          <p class="field-hint" id="cLinkHint">Starts with https://. The coverage card opens it.</p>
+        </div>
+        <div class="field-group">
+          <label for="cLinkGlobal">Global career page</label>
+          <input class="field" id="cLinkGlobal" type="url" autocomplete="off">
+        </div>
+        <label class="choice" id="requeueRow" hidden><input type="checkbox" id="cRequeue"> <span>Find its job feed again: clears its status, so the next discover-companies run looks at it. Its jobs stay open but are not refreshed until then.</span></label>
+        <dl class="crawl-facts" id="discovered" hidden></dl>
+        <p class="company-more" id="editorMore" hidden>
+          <button type="button" class="btn btn-pill" id="editorExclude">Exclude…</button>
+          <button type="button" class="btn btn-pill" id="editorRemove">Remove…</button>
+        </p>
+      </div>
+      <div class="sheet-foot">
+        <button type="button" class="btn btn-pill" id="editorCancel">Cancel</button>
+        <button type="submit" class="btn btn-pill btn-primary" id="editorSave">Save</button>
+      </div>
+    </form>
+  </dialog>
+  <dialog class="dialog" id="companyConfirm" aria-labelledby="confirmTitle" aria-describedby="confirmText">
+    <button type="button" class="dialog-close" id="confirmClose" aria-label="Close"><svg aria-hidden="true" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+    <h2 class="dialog-title" id="confirmTitle" tabindex="-1">Confirm</h2>
+    <form id="confirmForm" novalidate>
+      <div id="confirmText"></div>
+      <p class="field-hint" id="confirmCount" role="status"></p>
+      <p class="notice" id="confirmNotice" role="alert" hidden></p>
+      <div id="confirmFields" hidden>
+        <div class="field-group" id="xNameGroup">
+          <label for="xName">Company name</label>
+          <input class="field" type="text" id="xName" autocomplete="off" aria-describedby="xNameHint xNameError">
+          <p class="field-hint" id="xNameHint">Exactly as the history spells it (capital letters count).</p>
+          <p class="field-error" id="xNameError" hidden></p>
+        </div>
+        <div class="field-group">
+          <label for="xReason">Reason</label>
+          <input class="field" type="text" id="xReason" autocomplete="off" aria-describedby="xReasonHint xReasonError">
+          <p class="field-hint" id="xReasonHint">Write why, not who asked. No names or email addresses.</p>
+          <p class="field-error" id="xReasonError" hidden></p>
+        </div>
+        <div class="field-group">
+          <label for="xDate">Date</label>
+          <input class="field" id="xDate" type="date" aria-describedby="xDateError">
+          <p class="field-error" id="xDateError" hidden></p>
+        </div>
+      </div>
+      <p class="dialog-actions">
+        <button type="button" class="btn btn-pill" id="confirmCancel">Cancel</button>
+        <button type="submit" class="btn btn-pill btn-danger" id="confirmGo"></button>
+      </p>
+    </form>
+  </dialog>
 </div>
 </main>
 __FOOTER__
