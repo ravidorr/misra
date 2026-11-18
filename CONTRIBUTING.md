@@ -86,6 +86,36 @@ The slug for the systems where it is not obvious:
 A company seen for the first time is baselined silently: its current jobs are recorded but not sent, so adding companies
 never floods the job alerts.
 
+## Trying candidate companies
+
+Before a batch is added (PLAN_3.md step D), `survey.py --candidates` tells which names are worth adding. It is a dev
+tool: it reads a CSV, writes nothing to Supabase, and prints to stdout only.
+
+1. Pull the list with the service-role key in the environment: `python3 sync_supabase.py --pull` (needs
+   `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY`). With any other key the excluded records are invisible and the
+   check passes silently, so the tool warns when it sees none. Never paste the key in a PR, an issue or a chat.
+2. Put the names in a CSV outside the repository (a candidate list is never committed), with the columns
+   `name,domain,kind` on the first line.
+3. Run `python3 survey.py --candidates FILE`. Add `--limit 5` for a trial and `--keep OUT.json` to write the keep rows.
+
+A name or domain already in the list is skipped, and so is an excluded company (by name or domain): both are only
+counted at the end, and an excluded name is never printed. The rest are probed with the crawler's own rules:
+`robots.txt` is honoured, a host sees one request a second, and a refusal (`robots.txt`, 403, 429) of the company's own site ends
+its probe at once with the verdict `blocked` (no board is guessed) and is never worked around. The tool looks for a job board link on the career pages, then guesses the board in
+the order `discover.py` uses, checks that the board's own company name matches the candidate, and counts the Israel
+jobs. The verdicts:
+
+- `keep`: the board has Israel jobs and its name matches (or the company's own page links to it).
+- `needs-yes`: a career page with no feed of its own (a browser crawl, which counts against the crawl-time budget) or a
+  Workday or Oracle board (`runner_risk` yes: it may fail from the GitHub runner). Not added without the maintainer's
+  yes.
+- `blocked`: the company's site refused us. Never in the keep file.
+- `skip`: anything else; the `why` column says `no_israel_jobs`, `name_mismatch`, `name_unknown`, `feed_failed`,
+  or `not_found`. Read `board_name` before trusting a `keep` (a board that adds words to the name still
+  matches).
+
+A batch has at most 25 companies (PLAN_3.md, "Batches"); then add them on the admin page as in "Adding a company".
+
 ## Removing a company on request
 
 The policy (the lawyer's answer, PRD "Before launch"): when a company asks to be removed, its data is deleted at once
