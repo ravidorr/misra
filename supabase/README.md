@@ -258,7 +258,7 @@ only the job's key. Two triggers (migration `20261115180000_job_choices_cap_and_
 
 ### Company not for me
 
-"Company not for me" is one more row of `user_jobs` (migration `20261205100000_user_jobs_company_choice.sql`): the state
+"Company not for me" is one more row of `user_jobs` (migration `20261205110000_user_jobs_company_choice.sql`): the state
 `company`, the company's name and an empty `job_id` (no job has one), with no title, location or link. It uses the table's
 policies (a user reads and writes only their own rows), the cascade on account deletion, the cap of 2,000 rows
 (`limit_user_jobs` counts stars, position choices and company choices together) and the daily backup (`export_accounts.py`

@@ -339,7 +339,7 @@ const SEGMENTS = {
    check `companies_ats_known` of the migration lists them; tests/test_admin_companies.py keeps all three equal. */
 const PIN_ATS = [
   'greenhouse_url', 'greenhouse', 'lever', 'ashby', 'workable', 'smartrecruiters', 'comeet', 'workday', 'jazzhr',
-  'bamboohr', 'oraclehcm', 'amazon', 'phenom', 'comeet_page', 'avature', 'eightfold', 'browser',
+  'bamboohr', 'oraclehcm', 'amazon', 'phenom', 'comeet_page', 'avature', 'eightfold', 'jibe', 'browser',
 ];
 /* The form of the slug, only where CONTRIBUTING.md ("Adding a company") or the adapter's own text documents it. */
 const PIN_HINTS = {
@@ -353,6 +353,7 @@ const PIN_HINTS = {
   phenom: 'host/country/lang, from the search widget, filtered to Israel.',
   avature: 'host/portal?field=value, the Country facet of Israel, for example synopsys.avature.net/careers?2001=21374.',
   eightfold: 'host?domain=domain, the board and its domain, for example careers.micron.com?domain=micron.com. Israel only.',
+  jibe: 'The career site host, for example careers.se.com or www.pepsicojobs.com. Israel only.',
   browser: 'The address of the career page, starting with https://, for example an Eightfold ...careers?location=Israel address.',
 };
 const PIN_ADDRESS = ['browser', 'comeet_page']; /* the slug of these is a career page address */

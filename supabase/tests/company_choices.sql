@@ -1,4 +1,4 @@
--- Tests for supabase/migrations/20261205100000_user_jobs_company_choice.sql ("Company not for me" in the account).
+-- Tests for supabase/migrations/20261205110000_user_jobs_company_choice.sql ("Company not for me" in the account).
 --
 -- Run it against a TEST project (or a local one), never production: it creates fake auth users and jobs, and although
 -- everything happens in one transaction that ends with a rollback, a test project is the safe place for it.

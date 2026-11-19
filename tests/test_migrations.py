@@ -299,7 +299,7 @@ COMPANIES_ATS_ADD = re.compile(
     r"alter table public\.companies add constraint companies_ats_known check \( "
     r"ats is null or ats = '' or ats in \( '[a-z_]+'(?:, '[a-z_]+')* \)\)"
 )
-# The company choice of an account (migration 20261205100000_user_jobs_company_choice.sql): the two checks of
+# The company choice of an account (migration 20261205110000_user_jobs_company_choice.sql): the two checks of
 # `user_jobs` that name the states and the job ids are dropped and added again, each matched whole, so no other
 # alter of the table is allowed and the checks cannot be weakened (another state, another length of a job id).
 USER_JOBS_CHECKS = (
@@ -1211,7 +1211,11 @@ def test_the_lint_rejects_a_weakened_admin_account_migration(old: str, new: str)
     assert problems(statements_of(ADMIN_ACCOUNT_SQL.replace(old, new)))
 
 
-ATS_FILES = ("20261203100000_companies_ats_avature.sql", "20261204100000_companies_ats_eightfold.sql")
+ATS_FILES = (
+    "20261203100000_companies_ats_avature.sql",
+    "20261204100000_companies_ats_eightfold.sql",
+    "20261205100000_companies_ats_jibe.sql",
+)
 ATS_SQL = (MIGRATION_DIR / ATS_FILES[0]).read_text(encoding="utf-8")
 
 
@@ -1856,7 +1860,7 @@ def test_the_lint_rejects_a_weakened_alert_counts_migration(old: str, new: str) 
     assert problems(statements_of(REAL.replace(ALERTS_SQL, ALERTS_SQL.replace(old, new))))
 
 
-COMPANY_CHOICE_SQL = (MIGRATION_DIR / "20261205100000_user_jobs_company_choice.sql").read_text(encoding="utf-8")
+COMPANY_CHOICE_SQL = (MIGRATION_DIR / "20261205110000_user_jobs_company_choice.sql").read_text(encoding="utf-8")
 
 
 def test_the_company_choice_migration_passes_the_lint_and_changes_only_the_two_checks() -> None:
