@@ -31,6 +31,7 @@ from tests.test_job_choices import (
     PM1,
     STARRED,
     ask,
+    company_row,
     discard_row,
     is_saved,
     pending,
@@ -42,6 +43,7 @@ from tests.test_sign_in import AXE_RUN, come_back, start_sign_in, stored
 FILTERS = "il-jobs-filters-v3"
 PENDING_FILTERS = "misra-pending-filters-v1"
 IMPORTED = "misra-imported-v1"
+COMPANIES = "il-jobs-discarded-companies-v1"
 DEFAULTS: dict[str, Any] = {
     "q": "",
     "company": "",
@@ -77,6 +79,7 @@ async def seed(page: Page, **items: Any) -> None:
         {
             {
                 "gone": DISCARDED,
+                "gone_companies": COMPANIES,
                 "starred": STARRED,
                 "filters": FILTERS,
                 "pending_filters": PENDING_FILTERS,
@@ -165,6 +168,40 @@ def mixed_account() -> ChoicesBackend:
             discard_row("Acme", "6"),
         ]
     )
+
+
+async def test_the_browsers_company_choices_are_offered_and_copied_with_the_same_offer(page: Page, site: Path) -> None:
+    # Acme is hidden here; "Nowhere" has no open role (left out); the account has Beta already.
+    choices = ChoicesBackend([company_row("Beta")])
+    local = {"gone_companies": {"Acme": "2026-11-01", "Nowhere": "2026-11-01", "Beta": "2026-11-01"}}
+    await sign_in(page, site, choices, local=local)
+    box = page.locator(BOX)
+    await expect(box).to_be_visible()
+    # the offer's wording is unchanged: a company choice counts as a discard
+    assert (await box.get_attribute("data-discards"), await box.get_attribute("data-companies")) == ("1", "1")
+    assert await page.locator("#importChoicesText").inner_text() == "1 discard and 0 stars"
+    assert choices.writes == []
+    await page.click("#importYes")
+    await until(lambda: choices.writes)
+    [write] = choices.writes
+    assert write["op"] == "import"
+    assert write["ignore_duplicates"] is True
+    assert [(r["company"], r["job_id"], r["state"], r["title"], r["url"]) for r in write["rows"]] == [
+        ("Acme", "", "company", None, None)
+    ]
+    assert choices.state_of("Acme", "") == "company"
+    assert await page.locator("article[data-company=Acme]").count() == 0  # the company is hidden
+    assert json.loads((await stored(page))[COMPANIES]) == {
+        "Acme": "2026-11-01",
+        "Nowhere": "2026-11-01",
+        "Beta": "2026-11-01",
+    }
+
+
+async def test_a_browser_whose_company_choices_the_account_has_offers_nothing(page: Page, site: Path) -> None:
+    choices = ChoicesBackend([company_row("Acme")])
+    await sign_in(page, site, choices, local={"gone_companies": {"Acme": "2026-11-01"}})
+    await expect(page.locator(BOX)).to_be_hidden()
 
 
 # ---- AC 4: the browser's discards are offered once, without duplicates and without overriding the account ----
@@ -663,7 +700,7 @@ async def test_assistants_can_see_the_sync_state_and_answer_the_offer(page: Page
     status = await ask(page, "get_sync_status")
     assert status["signedIn"] is True
     assert status["filters"] == "paused"
-    assert status["offer"] == {"discards": 1, "stars": 1, "filters": "new"}
+    assert status["offer"] == {"discards": 1, "companies": 0, "stars": 1, "filters": "new"}
     assert status["pendingChanges"] == 0
     answer = await ask(page, "import_browser_choices", {"filters": True})
     assert answer["saved"] is True

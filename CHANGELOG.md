@@ -21,6 +21,12 @@ All notable changes are documented here. Format follows [Keep a Changelog](https
 - The Crawl area of the admin page (PLAN_2.md step 2.2): it calls `admin_crawl_health()` when first shown and lists one card per company, worst first, with a headline, chips with counts (Needs attention, Failing, Robots.txt, Held, All), the values of the crawl and a status pill. Loading, empty, error and 401 states. Templates and tests only.
 - A Copy button under every code block of the legal pages (the address on "Connect your assistant", the command for Claude Code), in `templates/theme.js`.
 
+## [0.78.0] - 2026-11-19
+
+### Added
+
+- "Company not for me" for signed-in users (the lawyer approved it on 2026-11-19): the "Not for me" menu is now the same signed in and out. Signed in, the company choice is saved in the account (no expiry; removed by "Restore" or by deleting the account) and syncs across devices; stars of that company go, as signed out. It is one more row of `user_jobs` (state `company`, the company's name, an empty `job_id`), so it is under the same row-level security, the same cascade, the same cap of 2,000 (`limit_user_jobs`) and the same backup, with no new table; migration `20261205110000_user_jobs_company_choice.sql` widens the checks `user_jobs_state_check` and `user_jobs_job_id_check` (not applied by the pull request), tested in `supabase/tests/company_choices.sql` and pinned by the migration lint. The first-sign-in offer also copies the browser's company choices, with the same wording (a company choice counts as a discard in it). `PRIVACY.md` has the lawyer's text for the stars and "Not for me" choices bullet. `templates/dashboard.js`, `design-system/README.md`, `supabase/README.md` and tests. Version 0.78.0.
+
 ## [0.77.0] - 2026-11-19
 
 ### Added
