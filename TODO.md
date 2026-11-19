@@ -6,6 +6,57 @@ delete it and update the counts in the others: the researched count and the segm
 An item with a screenshot in `todo-images/` goes with it: delete the image file in the same PR.
 Observations about live sites below come from checks made on 2026-11-14 and may have changed.
 
+## Dashboard
+
+- [ ] **A list of the roles the user hid, with a way to unhide each.** Trigger: the filters have "Show discarded (N)"
+  (`templates/dashboard.html`, `showGone`). Ticking it shows every discarded role (a hidden company counts as discarded
+  roles) and each card has a "Restore" button (`discardControl` in `templates/dashboard.js`). Nothing lists the hidden roles
+  together, and a discarded role whose posting closed disappears. Where: first a UI/UX plan (Claude Design, the UI/UX expert
+  and the advisor write it before any code, as for the Share button, PR 238), then the list, signed in and out, from the same
+  data as today. No new data is stored, so no `PRIVACY.md` change; if a plan needs new data, the lawyer comes first. Signed
+  out, a discard keeps only the job key and a date, so a closed role can show a title only signed in unless the plan says
+  otherwise. Design this
+  together with the next item. Done when: a user can see all hidden roles in one place and unhide one from there; the tests,
+  the design-system rules (tokens, WCAG AA, 44px targets) and the WebMCP tools stay consistent.
+
+- [ ] **A list of the companies the user hid, with an Unhide button.** Trigger: "Company not for me" hides every role of the
+  company (account: a `user_jobs` row with state `company`; signed out: local storage `il-jobs-discarded-companies-v1`). The
+  only way back is to tick "Show discarded" and press "Restore" on any role of that company, which brings the whole company
+  back. A company with no open roles has no card, so it cannot be unhidden, and nothing lists which companies are hidden.
+  Where: the same UI/UX plan step as the previous item (one design), then a "Hidden companies" list with "Unhide", signed in
+  and out. No new data. Done when: a user sees every hidden company and unhides one without finding one of its roles; a hidden
+  company with no open roles is listed too.
+
+- [ ] **Make the new-tab icon smaller.** Trigger: the icon after every `a[target="_blank"]` link (PR 240,
+  `design-system/components/external-link.css`, mask `design-system/assets/new-tab.svg`) is `0.9em` square, so it is as tall
+  as the job title's cap height or more (title `1.5rem`, `1.25rem` on a phone) and heavy inside the Apply button. Where: that
+  one rule only, after a UI/UX read (Claude Design and the UI/UX expert checked the CSS, the tokens and the 2.5 stroke of the
+  mask): a decorative cue should sit below the x-height of the text it follows, so the base size is `0.75em` (12px in 16px
+  text and in the button) with `margin-inline-start: 0.3em` and `vertical-align: -0.05em`, and the card title link gets
+  `0.6em` (about 14px at `1.5rem`, 12px at `1.25rem`) through one `.card-title a::after` override, because `em` scales with
+  the large title and would stay too big; the Apply button needs no override. The icon stays a visual cue, so the 44px
+  targets (`.btn` `min-height: var(--tap)`, the title link padding) and the "(opens in a new tab)" words are untouched.
+  Keep it one token, `--icon-new-tab-size` in `tokens.css`, if a second value is needed. Done when: the icon is `0.75em` in
+  link lines and the Apply button and `0.6em` in the job title, still readable (3:1 against its background) in light, dark and
+  forced-colors mode, checked on the dashboard at desktop and phone width; the only code touched is that rule, the README
+  line and the tests or snapshots that pin the size (`tests/test_new_tab_icon.py`).
+
+- [ ] **Show a 404 page to anyone who is not an admin on admin.html.** Trigger: today a signed-in non-admin sees an "Admin"
+  card with "This account is not an admin." and a Sign out button, which tells anyone that an admin area exists. GitHub Pages
+  is static, so `admin.html` still answers HTTP 200: the page itself shows the site's 404 words, layout and title ("Page not
+  found - Misra", one line, one "See open roles" link, `noindex`) to a signed-out visitor and to a signed-in non-admin alike,
+  with no admin, account or sign-in word left in its markup or noscript text. Only the admin (the dashboard session, then
+  `is_admin()`) sees the admin page; the loading state shows an empty card (no flash of either); a failed check for a signed-in
+  visitor shows a neutral "could not load, reload" line, not a 404. Where: a shared `templates/parts/not-found.inc`, a real
+  `docs/404.html` built from a template (none exists) with absolute `/misra/` asset paths (in the same PR: it widens
+  `AGENTS.md`'s docs file list, the `publish-docs.yml` trigger paths and the tests that list docs files, needs a version
+  bump and a `CHANGELOG.md` entry because `build_dashboard.py` is a listed module, and stays `noindex` and out of
+  `llms.txt` and `jobs.jsonld`), `templates/admin.html` (the 404 is its default markup, so view-source and no-JavaScript show
+  it) and `templates/admin.js` (states: checking, not-found, check-failed, ready; it swaps in the admin card only after
+  `is_admin()` is true), the admin and "never linked" tests, a new 404 test. This hides nothing for real (the database decides, the script and markup are public); say so in the PR. No new data
+  or logging, so no `PRIVACY.md` change. Done when: a signed-out visitor and a signed-in non-admin see the 404 page (no hint
+  of an admin area), the admin sees the admin page, no flash of either while loading, noindex kept, tests updated.
+
 ## Descriptions
 
 - [ ] **Text for the browser companies that give none.** Trigger: Check Point (231 jobs, bot protection), monday.com (128),
@@ -22,9 +73,6 @@ Observations about live sites below come from checks made on 2026-11-14 and may 
 
 ## Assistant endpoint
 
-- [ ] **Hand-test the assistant connection with someone who is not technical.** Trigger: the endpoint and the page "Connect your
-  assistant" are on since 2026-11-17. How and done when: the hand test plan in `PLAN.md`, step 8.2. Steps 8.1 and 8.2 are
-  ticked when it passes.
 - [ ] **Watch `rpc/search_job_keys` for abnormal query volume.** Standing note, not a task. The lawyer agreed on 2026-11-17
   that there is no per-caller limit and no `PRIVACY.md` change (reasons and what a limit would need: `supabase/README.md`,
   "Why `search_job_keys` has no per-caller limit"). Trigger: abnormal query volume on `rpc/search_job_keys` in the database
@@ -321,7 +369,7 @@ Observations about live sites below come from checks made on 2026-11-14 and may 
 ## Step 9.1 live checks
 
 Added when the history moved to Supabase (v0.53.0; `CONTRIBUTING.md`, "The history lives in Supabase"). What the rehearsal
-could not prove: a real PostgREST, a real Supabase project and a real Actions run.
+could not prove: a real PostgREST, a real Supabase project and a real Actions run. The restore was rehearsed on 2026-11-19 against a local Supabase (`CONTRIBUTING.md`, "Rehearsal, 2026-11-19"); a hosted project and a real Actions run are still unproven.
 
 - [ ] **Check the first daily runs after the move.** Trigger: the PR of step 9.1 is merged and the one-time copy of the
   old history is done. Status (2026-11-17): the 04:30 UTC cron-job.org run was green; two other runs that morning failed
@@ -334,9 +382,6 @@ could not prove: a real PostgREST, a real Supabase project and a real Actions ru
   dashboard, Reports, Database. `crawl_log` keeps 90 days (`CRAWL_LOG_DAYS`, about 250 rows a day), the pull reads all of
   it every run, and the backup exports it; if the pull gets slow or the table is large, shorten it. The same check serves PLAN.md step 7.4 (the size of the description
   text, a month after 2026-11-16). Done when: the numbers are in `CONTRIBUTING.md`, "Real data against the limits".
-- [ ] **Rehearse a restore into a scratch Supabase project.** Trigger: the first `backup` commit with `jobs` and
-  `crawl_log` exists. How: `CONTRIBUTING.md`, "Restore", into a new free project, with `--create-auth-users`; then the
-  pull and a daily run against it. Done when: counts match the backup commit and the run is green.
 - [ ] **Keep the browser crawl's results when the browser crawl itself dies.** Added with the step 9.1 leftovers (v0.53.1).
   `run.py` now commits each company as it is recorded and records the API companies before the browser crawl, so a crash
   while recording loses one company and a crash in the browser crawl keeps the API companies. The browser crawl
