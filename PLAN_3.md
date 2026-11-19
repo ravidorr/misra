@@ -297,9 +297,11 @@ Israeli R&D centres of global companies. Target: +40 crawled with `israel_only: 
 
 ## Step F: feedback loop
 
-- **F1. Make reporting visible.** The "Add a company" flow exists on the coverage gap card (`PLAN.md` step 5.2). Add a
+- [x] **F1. Make reporting visible.** The "Add a company" flow exists on the coverage gap card (`PLAN.md` step 5.2). Add a
   prompt to the empty and low-result states of the dashboard search ("Missing a company? Tell us"). Edit `templates/`,
-  never `docs/`; follow `design-system/README.md`.
+  never `docs/`; follow `design-system/README.md`. Status 2026-11-19: done. One line under the list ("Is a company missing?
+  Tell us which one.") with the existing "Add a company" dialog behind its button; shown when a search text or a company
+  is chosen and fewer than 3 roles match, and when none match; never on the unfiltered view.
 - **F2. Triage routine.** Reports arrive by email only and nothing is stored. Weekly: accept, park or decline each, as in
   `CONTRIBUTING.md`, "Reported sites". Count them per month for A4.
 - **F3. Visible progress.** A `CHANGELOG.md` line per batch. No change to the About page or any lawyer's file.

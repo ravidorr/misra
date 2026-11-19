@@ -1498,6 +1498,18 @@ function drawList(nodes, keepFocus) {
   else $('list-h').focus(); /* it shows a focus ring (.list-heading) and may be out of view: let the browser scroll to it */
 }
 
+/* The prompt under the list that offers the report dialog (PLAN_3.md step F1): with a typed search or a company chosen, when
+   fewer than MISSING_BELOW roles show, and always when none do (the unfiltered view never has none). It waits for the
+   description search to answer, and is not shown without the report dialog's own button (report.js). The button opens
+   that dialog by pressing the card's button, so there is one dialog and one set of words. report.js has run by the first
+   render, which waits for the roles to load. */
+const MISSING_BELOW = 3;
+function renderMissing(count, starredView) {
+  const narrowed = F.q.trim() !== '' || F.company !== '';
+  const few = count === 0 || (narrowed && count < MISSING_BELOW);
+  $('missing').hidden = starredView || searchPending() || !few || $('reportOpen').hidden;
+}
+
 function render(focusIdx) {
   showView();
   const starredView = view === 'starred';
@@ -1518,6 +1530,7 @@ function render(focusIdx) {
     $('filtersDone').textContent = `Show ${res.length} ${res.length === 1 ? 'role' : 'roles'}`;
     renderStories(counts);
   }
+  renderMissing(res.length, starredView);
   const list = $('list');
   if (res.length === 0) {
     drawList([
@@ -1552,6 +1565,8 @@ function update() {
   sync();
   render();
 }
+
+$('missingOpen').addEventListener('click', () => $('reportOpen').click());
 
 $('q').addEventListener('input', (e) => {
   F.q = e.target.value;
