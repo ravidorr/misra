@@ -803,10 +803,10 @@ async def test_a_heading_in_the_link_is_the_title_whatever_the_line_order() -> N
         "CUSTOMER DELIVERY AND SUCCESS\nField Service Engineer - UK\nIntermediate, Full-time\nBirmingham, UK",
         head="Field Service Engineer - UK",
     )
-    short = link("/cmcareer/d5-473/", "Finance\nStaff Accountant\nIsrael, Rosh Haayin", head="Staff Accountant")
+    short = link("/cmcareer/d5-473/", "Finance\nStaff Engineer\nIsrael, Rosh Haayin", head="Staff Engineer")
     assert await crawl_cards([kornit, short]) == {
         "Field Service Engineer - UK": ("Birmingham, UK", "CUSTOMER DELIVERY AND SUCCESS"),
-        "Staff Accountant": ("Israel, Rosh Haayin", "Finance"),  # not read as a title wrapped over two lines
+        "Staff Engineer": ("Israel, Rosh Haayin", "Finance"),  # not read as a title wrapped over two lines
     }
 
 
@@ -979,3 +979,41 @@ async def test_a_location_label_in_a_label_link_card_marks_its_bare_city() -> No
     leaves = "Backend Engineer\nEngineering\nHybrid\nLocation\nCupertino"
     row = link("/jobs/backend-role", "Details", leaves.replace("\n", " "), leaves=leaves)
     assert await crawl_cards([row]) == {"Backend Engineer": ("Hybrid | Cupertino", "Engineering")}
+
+
+@pytest.mark.parametrize(
+    ("text", "head", "card", "expected"),
+    [
+        # what the reader of main gives for the same titled link; a department heading stays a team
+        (
+            "Customer Success\nAccount Manager\nHaifa",
+            "Customer Success",
+            "",
+            ("Account Manager", "Haifa", "Customer Success"),
+        ),
+        ("Finance\nSenior Accountant\nHaifa", "Finance", "", ("Finance", "Haifa", "Senior Accountant")),
+        ("Senior Engineer\nR&D\nHaifa", "Senior Engineer", "", ("Senior Engineer", "Haifa", "R&D")),
+        ("Product\nProduct Manager\nTel Aviv, Israel", "", "", ("Product Manager", "Tel Aviv, Israel", "Product")),
+        ("Senior Backend Engineer\nHaifa", "", "", ("Senior Backend Engineer", "Haifa", "")),
+        (
+            "Backend Engineer",
+            "Backend Engineer",
+            "Backend Engineer\nTel Aviv, Israel",
+            ("Backend Engineer", "Tel Aviv, Israel", ""),
+        ),
+    ],
+)
+async def test_titled_links_read_as_they_always_did(
+    text: str, head: str, card: str, expected: tuple[str, str, str]
+) -> None:
+    """Golden outputs of the reader before the card fallbacks: the heading rule needs a role word in the heading."""
+    got = await crawl_cards([link("/jobs/some-role", text, card or text, head=head)])
+    assert list(got.items()) == [(expected[0], (expected[1], expected[2]))]
+
+
+async def test_a_titled_link_with_a_role_heading_and_a_long_department_reads_the_heading() -> None:
+    """The one deliberate change (Kornit): main read the department line in capitals as the title."""
+    row = link(
+        "/jobs/some-role", "CUSTOMER DELIVERY AND SUCCESS\nField Engineer\nBirmingham, UK", head="Field Engineer"
+    )
+    assert await crawl_cards([row]) == {"Field Engineer": ("Birmingham, UK", "CUSTOMER DELIVERY AND SUCCESS")}

@@ -218,3 +218,14 @@ async def test_adjacent_label_cards_with_numbered_addresses_are_two_cards(page: 
     )
     assert "Berlin" not in (await row_for(page, html, "/jobs/1234"))[2]
     assert "Haifa" not in (await row_for(page, html, "/jobs/12345"))[2]
+
+
+async def test_emphasis_inside_a_title_is_one_line_and_a_br_or_a_block_is_a_boundary(page: Page) -> None:
+    html = (
+        f'<div><a href="{BASE}/careers/x-role">Details</a>'
+        "<h3>Senior <em>Backend</em> <strong>Engineer</strong></h3><p>Haifa<br>Hybrid</p>"
+        "<span>Sales</span><span>R&amp;D</span></div>"
+    )
+    assert (await row_for(page, html, "/careers/x-role"))[
+        6
+    ] == "Details\nSenior Backend Engineer\nHaifa\nHybrid\nSales\nR&D"

@@ -115,12 +115,24 @@ CARD_JS = r"""(els, cfg) => {
             for (let s = up.previousElementSibling; s && !section; s = s.previousElementSibling) section = heading(s);
         }
         const others = [...n.querySelectorAll('a[href]')].some(a => a !== e && titled(a));
-        const leaves = [];  // one line per text node: a card whose parts sit side by side prints them on one line
-        const walk = document.createTreeWalker(n, NodeFilter.SHOW_TEXT);
+        const leaves = [];  // one line for each field: emphasis inside a title is not a boundary, a <br> is
+        let last = null, cur = '';
+        const flush = () => { if (cur.trim()) leaves.push(cur.replace(/\s+/g, ' ').trim()); cur = ''; last = null; };
+        const walk = document.createTreeWalker(n, NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT);
         for (let t = walk.nextNode(); t; t = walk.nextNode()) {
-            const s = t.textContent.trim(), p = t.parentElement;
-            if (s && p && !/^(SCRIPT|STYLE|NOSCRIPT)$/.test(p.tagName) && p.checkVisibility()) leaves.push(s);
+            if (t.nodeType === 1) { if (t.tagName === 'BR') flush(); continue; }
+            const p = t.parentElement;
+            if (!p || /^(SCRIPT|STYLE|NOSCRIPT)$/.test(p.tagName) || !p.checkVisibility()) continue;
+            let field = p;
+            const emphasis = /^(EM|STRONG|B|I|U|MARK|SMALL|SUB|SUP|ABBR|CITE)$/;
+            while (field !== n && field.parentElement && emphasis.test(field.tagName)) {
+                field = field.parentElement;
+            }
+            if (field !== last) flush();
+            last = field;
+            cur += t.textContent;
         }
+        flush();
         const card = text(n).slice(0, cfg.max + 1);
         return [href(e), text(e), card, own ? text(own) : '', section, others, leaves.join('\n')];
     });
@@ -293,8 +305,9 @@ def _card_lines(leaves: str) -> list[str]:
 
 
 def _usable_heading(head: str) -> bool:
-    """A heading in a job link is its title unless it reads as a place or as a team name (a word or two, no role)."""
-    return not _is_location(head) and bool(ROLE_WORD.search(head) or len(head.split()) >= MIN_CARD_TITLE_WORDS)
+    """A heading in a job link is its title only when it has a role word and is not a place: a department heading
+    ("Customer Success") stays a team, as it always did."""
+    return not _is_location(head) and bool(ROLE_WORD.search(head))
 
 
 def _section_place(heading: str) -> str:
