@@ -1530,6 +1530,21 @@ html:has(.sheet:modal) {
   text-align: center;
 }
 
+.missing {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-3);
+  margin: var(--space-5) 0 0;
+  color: var(--muted);
+  text-align: center;
+}
+
+.missing[hidden] {
+  display: none;
+}
+
 .pager {
   display: flex;
   flex-wrap: wrap;
