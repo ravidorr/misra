@@ -2209,7 +2209,8 @@ def test_eightfold_reads_a_board_whose_place_is_only_a_site_code(monkeypatch: py
 def test_eightfold_a_standardized_location_in_israel_is_enough(monkeypatch: pytest.MonkeyPatch) -> None:
     only_code = ef_position(1, locations=["Site 4"], standardizedLocations=["Haifa, Haifa District, IL"])
     other = ef_position(2, locations=["Site 5"], standardizedLocations=["Austin, TX, US"])
-    fake_eightfold(monkeypatch, ef_answer([only_code, other]))
+    illinois = ef_position(3, locations=["Chicago, IL"], standardizedLocations=["Chicago, IL"])
+    fake_eightfold(monkeypatch, ef_answer([only_code, other, illinois]))
     jobs = adapters.eightfold(MICRON_SLUG)
     assert jobs is not None
     assert [j["job_id"] for j in jobs] == ["1"]

@@ -965,7 +965,8 @@ def _eightfold_job(host: str, p: Any) -> tuple[Job, bool] | None:
     """One position of the search answer as (job, located in Israel), or None when it cannot be read: not an object,
     no number, no title, or a `positionUrl` that is not a path of the board. The job has the id, title, place (the
     locations joined by '; ') and address that the browser crawl gives the same board, so a company read by either way
-    keeps its jobs. The place is Israel when a location or a standardized one (`..., IL`) names it."""
+    keeps its jobs. The place is Israel when a location or a standardized one (`..., IL`) names it, by the matcher
+    of the other adapters (a bare IL of Illinois is not Israel)."""
     if not isinstance(p, dict):
         return None
     locations = [str(x) for x in p["locations"]] if isinstance(p.get("locations"), list) else []
@@ -981,7 +982,7 @@ def _eightfold_job(host: str, p: Any) -> tuple[Job, bool] | None:
         team=p.get("department"),
         posted=_eightfold_posted(p.get("postedTs")),
     )
-    return job, any(ISRAEL.search(x) or x.endswith(", IL") for x in [*locations, *standard])
+    return job, any(ISRAEL.search(x) for x in [*locations, *standard])
 
 
 def _eightfold_page(host: str, domain: str, start: int) -> tuple[int, list[Any]] | None:
