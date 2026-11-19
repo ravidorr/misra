@@ -970,3 +970,13 @@ async def test_a_titled_link_with_a_role_heading_and_a_long_department_reads_the
         "/jobs/some-role", "CUSTOMER DELIVERY AND SUCCESS\nField Engineer\nBirmingham, UK", head="Field Engineer"
     )
     assert await crawl_cards([row]) == {"Field Engineer": ("Birmingham, UK", "CUSTOMER DELIVERY AND SUCCESS")}
+
+
+@pytest.mark.parametrize("label", ["Apply", "Apply now", "Save job", "Share job"])
+async def test_adjacent_cards_with_only_an_apply_link_are_ignored_as_on_main(label: str) -> None:
+    both = f"Backend Engineer\nHaifa\n{label}\nProduct Designer\nBerlin, Germany\n{label}"
+    links = [
+        link("/jobs/backend-engineer", label, both, leaves=both),
+        link("/jobs/product-designer", label, both, leaves=both),
+    ]
+    assert await crawl_cards(links) == {}

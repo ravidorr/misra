@@ -500,8 +500,8 @@ async def crawl_one(ctx: Any, url: str, sem: asyncio.Semaphore) -> list[dict[str
                     if not lines:
                         # a link that is only an icon or a button label ("Details"): the title is in its card, unless
                         # the card has a titled link of its own, which this one only repeats
-                        if others or not 0 < len(card) <= CARD_MAX:
-                            continue
+                        if others or not 0 < len(card) <= CARD_MAX or text.strip().lower() in CARD_CHROME:
+                            continue  # an Apply link never starts a card: it only goes with a titled link
                         lines = _card_lines(leaves)
                         from_card = True
                     elif lines[0].lower() in LANGS:
