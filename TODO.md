@@ -268,8 +268,9 @@ Observations about live sites below come from checks made on 2026-11-14 and may 
       api.getro.com/api/v2/collections/<network id>/search/jobs`, and the robots.txt of `api.getro.com` is `Disallow: /`
       for every agent, so no adapter was written. The boards' sitemaps list company pages and job pages with a
       JSON-LD `JobPosting`, but the list is incomplete (Teramount's one job is not in Grove's sitemap), so it is not a
-      feed. Getro's own job link is the employer's page when it has one (`teramount.com/careers/?job=1`). Revisit only
-      if Getro publishes a feed or lifts the API rule. Q Factor's real domain is `q-factor.com` (a one-page site, a
+      feed. Getro's own job link is the employer's page when it has one (`teramount.com/careers/?job=1`). Decided
+      with the lawyer on 2026-11-19: leave Getro and similar talent boards out unless there is written permission, and
+      find portfolio companies by hand and add their own career pages (`PLAN_3.md`, "Decisions on sources"). Q Factor's real domain is `q-factor.com` (a one-page site, a
       neutral-atom quantum company that emerged from stealth in April 2026; its only job route is a `careers@` email
       address, so nothing to pin); the lists now carry the right domain. Teramount was acquired by Molex (completed
       on 2026-05-07; `teramount.com` redirects to a Molex product page), so its jobs would be Molex's worldwide board.

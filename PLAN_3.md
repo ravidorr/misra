@@ -87,7 +87,8 @@ below add up to more than the 66 rows the table grew by.
 - Avature, SuccessFactors, Pinpoint: each found with a single company. Dayforce: one company (PlayStudios), read by the
   browser crawl. Eightfold is covered by `browser` (`CONTRIBUTING.md`, "Job descriptions").
 - Getro boards (Grove, Viola, TLV Partners): `api.getro.com` is `Disallow: /`. Use them for company names only, never as
-  a feed. Getro's own job link points to the employer page when it has one.
+  a feed. Getro's own job link points to the employer page when it has one. Decided with the lawyer on 2026-11-19: see
+  "Decisions on sources" below.
 - Slug guessing for the no-careers-URL group found only an unrelated `air` account on Greenhouse.
 - About 20 pinned Workday tenants (Adobe, Broadcom, Cadence, Salesforce and others) show "request failed" only from
   GitHub's runner addresses. Not worked around: no proxy, no other address, no changed User-Agent.
@@ -298,8 +299,7 @@ Target: +60 crawled that return jobs from the runner.
     Authority grantee lists, the TASE tech listing.
   - Y Combinator and Techstars Israeli cohorts.
   - User reports (step F).
-  - Israeli job boards as a source of employer names: only after the maintainer has checked each site's terms with the
-    lawyer. Skipped until then.
+  - Israeli job boards: left out for good (see "Decisions on sources").
 - [x] **D3. Candidate script.** A dev tool in `survey.py` or `survey2.py` (typed, with tests, 100% coverage; the network
   calls faked as the other tests do). For each name it skips excluded (`is_excluded`) and already-listed domains, probes
   the career page link scan (`ATS_LINK`) and then the ATS list in `PROBE_ORDER`, counts Israel jobs with `israel_count`,
@@ -393,7 +393,22 @@ E), plus the unlocks of C and the recurring G. About one batch a week, so about 
   rule and the first-run review.
 - **Dead or empty boards.** Clutter on the coverage card. Mitigation: the accept rule (D4) and G3.
 - **Wrong feed.** Slug probing can hit an unrelated company (`air`). Mitigation: compare the board's company name.
-- **Legal.** A company may object to being listed; the opt-out stays an `excluded` record in the table. Job board
-  terms are checked with the lawyer before D2 uses them.
+- **Legal.** A company may object to being listed; the opt-out stays an `excluded` record in the table. The sources
+  are settled in "Decisions on sources".
 - **Israel filter errors.** A global company's feed may mix countries. Mitigation: B3 and E6 spot checks, fixtures with
   non-Israel jobs.
+
+## Decisions on sources
+
+The lawyer's answers of 2026-11-19. No change to `PRIVACY.md`, `TERMS.md` or `SECURITY.md` is needed.
+
+- Israeli job boards (AllJobs, Drushim, JobMaster): do not scrape them, as a feed or as a list of employers. Left out
+  for good.
+- Getro and other VC talent boards whose `robots.txt` disallows the job list: left out unless there is written
+  permission. The alternative is to find the portfolio companies by hand and add their own career pages.
+- Vendor-hosted career sites (Jibe, Eightfold, Phenom, TalentBrew): obeying the vendor host's `robots.txt` is enough,
+  with no per-employer approval, provided only intentionally configured employers are read (no spidering of a vendor's
+  other clients) and a removal request is honoured.
+- Removal requests: the current process is sufficient (the `excluded` record is kept, the rows are deleted, the company
+  is never crawled). Keep the written request as a paper trail. The daily sync already purges the `user_jobs`,
+  `emailed`, `jobs` and `crawl_log` rows of an excluded company.
