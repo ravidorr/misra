@@ -9,17 +9,17 @@
 <meta name="robots" content="noindex">
 <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f5f0e6">
 <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#121116">
-<title>Admin</title>
+<title>Page not found - Misra</title>
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="dashboard.css" integrity="sha384-ZKnThSM0CVI2KvF62rZ8lcmFWdakxqHyjtNmlTXqyYKXTj35QN9CctejtWft7/bK">
+<link rel="stylesheet" href="dashboard.css" integrity="sha384-l4qTQBQQ2yP5jfBfYIDCeQGVTGWlGtFfdYu3p2fjDSfdThFlwcrLcB8AycJaVjQh">
 <script src="theme.js" integrity="sha384-7z2KN8CtvARlTfXl2TowUS4HxyeN0rAe6Q516+zOt4eo/dTIOcQvyW4xeRr+6GqC"></script>
 <script src="supabase.js" integrity="sha384-TcHRA3zBbn+Lexh5n+Oil4guNPOS3rjNDpGRAN46u/s/mB2IZ50ceC6TYDU2yvgK" defer></script>
 <link rel="modulepreload" href="session.js" integrity="sha384-FsEWKURtN691ugcpyRrC9xb7SvxuqaiRnxSvtOGlmtmb/tdFHcsFW6p02Mf+LraA">
-<script type="module" src="admin.js" integrity="sha384-k+DIYMiuiB5qhaCLWLEePwZkDWMgwQgvedGCTo/Tz5ZHPSTRgXzWsV/Q79wEkeT8"></script>
+<script type="module" src="admin.js" integrity="sha384-Pcqz4Arr1uimFSlICGQbyirHfw4OHoixphNK/tSCkrV4lo4eDvh7JRbv1Zfmhu0k"></script>
 </head>
 <body>
 <a class="skip" href="#main">Skip to main content</a>
-<div class="page admin-page">
+<div class="page">
 <header class="top">
   <a class="top-home" href="./"><svg class="top-mark" aria-hidden="true" viewBox="0 0 64 64"><circle class="mark-disc" cx="32" cy="32" r="29.5" stroke-width="5"/><path class="mark-pulse" d="M9 35h12l5-15 8 28 6-19 3 6h12" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="top-name"><span class="wordmark">misra</span></span></a>
   <a class="btn btn-pill btn-icon" id="home" href="./" aria-label="Home" title="Home">
@@ -32,16 +32,17 @@
   </button>
 </header>
 
-<main class="card admin" id="main" data-state="checking">
-<noscript><p class="notice">The admin page needs JavaScript.</p></noscript>
-<div class="admin-head" data-when="signed-out not-admin check-failed ready" hidden>
-  <h1 class="admin-title">Admin</h1>
-  <button type="button" class="btn btn-pill" id="adminSignOut" data-when="not-admin check-failed ready" hidden>Sign out</button>
+<main class="card not-found" id="main" data-state="not-found">
+<div class="not-found-body" id="notFound">
+  <h1 class="not-found-title">Page not found</h1>
+  <p class="not-found-line" id="notFoundLine" role="status">There is no page at this address.</p>
+  <a class="btn btn-pill btn-primary" href="./">See open roles</a>
 </div>
-<p class="admin-line" id="adminExpired" role="status" data-when="signed-out" hidden></p>
-<p class="admin-line" data-when="signed-out" hidden><a class="admin-link" href="./">Sign in on the dashboard first.</a></p>
-<p class="admin-line" data-when="not-admin" hidden>This account is not an admin.</p>
-<p class="notice" role="alert" data-when="check-failed" hidden>Could not check your account. Reload the page.</p>
+
+<div class="admin-head" data-when="ready" hidden>
+  <h1 class="admin-title">Admin</h1>
+  <button type="button" class="btn btn-pill" id="adminSignOut">Sign out</button>
+</div>
 <div data-when="ready" hidden>
   <nav class="admin-nav" aria-label="Admin">
     <a class="btn btn-pill" href="#crawl">Crawl</a>
