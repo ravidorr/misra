@@ -415,6 +415,13 @@ def test_the_lawyers_round_of_2026_11_16_editorial_wording_is_in_the_notice_the_
         "if you report a site or use the contact form."
     ) in parts["What we store"]
     assert 'mark "Not for me" (the dashboard also calls them discards)' in parts["The short version"]
+    assert (
+        '- Your **stars and "Not for me" choices**. For a star, we keep the role\'s title, company, location, and '
+        'link, so you can still see it after the role closes. For "Position not for me," we keep only which role it '
+        'was, and that choice is removed when the role closes. For "Company not for me," we keep the company\'s name '
+        'until you clear it or delete your account. An account can keep a limited number of stars and "Not for me" '
+        "choices (2,000)."
+    ) in parts["What we store"]
     assert "Supabase's free plan keeps no backups for us." in parts["How long we keep it"]
     assert (
         "apart from the short-lived spam counter described below if you report a site or use the contact form."

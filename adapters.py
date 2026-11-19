@@ -34,6 +34,7 @@ PHENOM_PAGE = 50
 PHENOM_MAX_PAGES = 100
 PHENOM_SLUG_PARTS = 3
 AVATURE_MAX = 20  # the most jobs an Avature feed gives (it has no paging): a feed this long may be cut short
+JIBE_MAX = 100  # the most jobs of one Jibe search read (one answer): a board with more is not read
 EIGHTFOLD_MAX = 100  # the most positions of one Eightfold search read (ten an answer): a board with more is not read
 
 
@@ -1052,6 +1053,70 @@ def eightfold(slug: str) -> list[Job] | None:
     return [j for j, israel in jobs if israel]
 
 
+_JIBE_HOST = re.compile(r"[a-z0-9-]+(?:\.[a-z0-9-]+)+")
+
+
+def _jibe_posted(text: Any) -> str:
+    """The date of a `posted_date` as YYYY-MM-DD, or '' when it is missing or not a date. A board gives an ISO time
+    (`2026-11-15T12:45:00+0000`) or a long date (`March 24, 2026`)."""
+    if not isinstance(text, str):
+        return ""
+    for day, form in ((text[:10], "%Y-%m-%d"), (text, "%B %d, %Y")):
+        try:
+            return datetime.strptime(day, form).date().isoformat()
+        except ValueError:
+            continue
+    return ""
+
+
+def _jibe_job(host: str, item: Any) -> Job | None:
+    """One job of the answer, or None when it cannot be read: not an object, no number, no title or no place. The
+    place is `full_location`, which lists every place of a job of several (ICE: 'London, United Kingdom; Tel-Aviv,
+    Israel'). The link is the board's own job page, never `apply_url` (that is the applicant system's login page)."""
+    data = item.get("data") if isinstance(item, dict) else None
+    if not isinstance(data, dict):
+        return None
+    slug, title, place, category = data.get("slug"), data.get("title"), data.get("full_location"), data.get("category")
+    if not (isinstance(slug, str) and slug.isdigit() and isinstance(title, str) and title.strip()):
+        return None
+    if not (isinstance(place, str) and place.strip()):
+        return None
+    team = category[0].strip() if isinstance(category, list) and category and isinstance(category[0], str) else ""
+    return _job(
+        slug, title, place, f"https://{host}/jobs/{slug}", team=team, posted=_jibe_posted(data.get("posted_date"))
+    )
+
+
+def jibe(slug: str) -> list[Job] | None:
+    """slug is the host of a Jibe career site (the career site of iCIMS' vendor on the company's own domain), for
+    example 'www.pepsicojobs.com', 'careers.se.com' or 'careers.ice.com'. The site's public search API,
+    `https://<host>/api/jobs`, the call the page makes itself, is asked for the country Israel and up to JIBE_MAX
+    jobs, in one request: only that host is read, never the applicant system (iCIMS, whose robots.txt disallows
+    everything). Each host's robots.txt allows everything (`Allow: /`, `crawl-delay: 5`, read on 2026-11-19), and the
+    request goes through `common.get`: that file's rules, one request a second to a host, the project's User-Agent. The
+    list is trusted only when the answer is the board's JSON, its total is at most JIBE_MAX (a board that ignores the
+    country reports its whole list, and a list that long may be cut short), the jobs add up to that total and no job
+    comes twice: a partial list would close the jobs it lacks. Of those, the jobs whose place names Israel are kept;
+    a job that cannot be read is None too. The answer holds each job's text, which is not read."""
+    if not _JIBE_HOST.fullmatch(slug):
+        return None
+    r = get(f"https://{slug}/api/jobs", params={"country": "Israel", "limit": JIBE_MAX, "page": 1})
+    if r is None or r.status_code != HTTP_OK:
+        return None
+    try:
+        data = r.json()
+        total, items = data["totalCount"], data["jobs"]
+    except (ValueError, KeyError, TypeError):
+        return None
+    if not (isinstance(total, int) and isinstance(items, list)) or total > JIBE_MAX or len(items) != total:
+        return None
+    read = [_jibe_job(slug, i) for i in items]
+    jobs = [j for j in read if j]
+    if len(jobs) != len(items) or len({j["job_id"] for j in jobs}) != len(jobs):
+        return None
+    return [j for j in jobs if ISRAEL.search(j["location"] or "")]
+
+
 ADAPTERS: dict[str, Callable[[str], list[Job] | None]] = {
     "greenhouse_url": greenhouse_url,
     "greenhouse": greenhouse,
@@ -1069,4 +1134,5 @@ ADAPTERS: dict[str, Callable[[str], list[Job] | None]] = {
     "comeet_page": comeet_page,
     "avature": avature,
     "eightfold": eightfold,
+    "jibe": jibe,
 }

@@ -249,7 +249,7 @@ const HTTP_TIMEOUT = 408;
 const HTTP_TOO_MANY = 429;
 const HTTP_SERVER_ERROR = 500;
 const SYNC_MESSAGES = {
-  limit: 'Your account has reached the limit of stars and discards it can keep, so the last choice was not saved. Restore a discarded role or remove a star, then try again.',
+  limit: 'Your account has reached the limit of stars and discards it can keep, so the last choice was not saved. Restore a discarded role or company, or remove a star, then try again.',
   refused: 'The service did not accept the last star or discard, so it was not saved.',
   load: 'Your saved stars and discards could not be loaded, so only the changes made on this device show.',
   filtersLoad: 'Your saved filters could not be loaded, so this device uses its own filters for now.',
@@ -282,12 +282,20 @@ const snapshotOf = (item) => ({
 
 const entryOfRow = (row) => ({ c: row.company, i: row.job_id, state: row.state, t: row.title ?? '', l: row.location ?? '', u: row.url });
 const validEntry = (e) =>
-  typeof e?.c === 'string' && typeof e.i === 'string' && (e.state === 'star' || e.state === 'discard' || e.state === null);
+  typeof e?.c === 'string' &&
+  typeof e.i === 'string' &&
+  (e.state === 'star' || e.state === 'discard' || e.state === 'company' || e.state === null);
+
+/* A company choice is a row of its own: the state 'company', the company's name and an empty job id, so its key is the
+   company's name and a bar, which no job has. */
+const companyKey = (company) => `${company}|`;
+const accountState = (k) => (account.pending.has(k) ? account.pending.get(k) : account.server.get(k))?.state ?? null;
+const companyHidden = (company) => account ? accountState(companyKey(company)) === 'company' : Object.hasOwn(goneCompanies, company);
 
 function choiceOf(k) {
-  if (account) return (account.pending.has(k) ? account.pending.get(k) : account.server.get(k))?.state ?? null;
+  if (account) return accountState(k) ?? (companyHidden(JOB_BY_KEY.get(k)?.c) ? 'discard' : null);
   if (starred[k]) return 'star';
-  return gone[k] || Object.hasOwn(goneCompanies, JOB_BY_KEY.get(k)?.c) ? 'discard' : null;
+  return gone[k] || companyHidden(JOB_BY_KEY.get(k)?.c) ? 'discard' : null;
 }
 const isDiscarded = (k) => choiceOf(k) === 'discard';
 const isStarred = (k) => choiceOf(k) === 'star';
@@ -327,7 +335,6 @@ function savePendingBatch(a, sets, forgets) {
   else Reflect.deleteProperty(all, a.userId);
   lsSet(LS_Q, all);
 }
-const savePending = (a, k, op, acknowledged) => savePendingBatch(a, op ? [[k, op]] : [], op ? [] : [[k, acknowledged]]);
 
 /* A failure worth trying again: no answer, a service error, an expired token (it renews), a timeout or a rate limit.
    Anything else (the row limit, a refused row) will not change by waiting. */
@@ -398,6 +405,11 @@ async function drain(a) {
       a.failure = error.code === LIMIT_CODE ? 'limit' : 'refused';
     }
     const forgets = [];
+    if (error) {
+      /* A change refused for good takes the rest of its group with it (a company choice and the stars it would remove). */
+      const group = batch[0][1].group;
+      for (const entry of group ? a.pending : []) if (entry[1].group === group && !batch.includes(entry)) batch.push(entry);
+    }
     for (const [k, op] of batch) {
       fates.set(op, error ? a.failure : 'saved');
       if (!error) {
@@ -481,13 +493,34 @@ async function loadServer(a) {
   settle(a);
 }
 
+const newId = () => `${Date.now()}-${Math.random()}`;
+
+/* Signed in: puts changes in the queue, in order, and resolves as setChoice does, with the first one that was not saved.
+   Changes made together share a group: if one is refused for good, the others are dropped unsent. */
+function queueChanges(ops) {
+  const a = account;
+  if (a.failure === 'limit' || a.failure === 'refused') a.failure = null;
+  const group = ops.length > 1 ? newId() : undefined;
+  for (const op of ops) {
+    if (group) op.group = group;
+    a.pending.delete(key(op)); /* a later change goes to the end of the queue */
+    a.pending.set(key(op), op);
+  }
+  savePendingBatch(a, ops.map((op) => [key(op), op]), []);
+  return flush().then(() => {
+    const unsaved = ops.map((op) => fates.get(op)).filter((fate) => fate !== 'saved');
+    return unsaved.length === 0 ? { saved: true, failure: null } : { saved: false, failure: unsaved[0] ?? 'later' };
+  });
+}
+
 /* The one way a choice changes: item is a job, or what was kept of a closed starred one; state is 'star', 'discard' or
    null (neither). Resolves with `saved` (true: kept in this browser or in the account) and, when not, `failure`:
-   'limit' or 'refused' (the database refused it, it is undone) or 'later' (still pending, tried again). */
+   'limit' or 'refused' (the database refused it, it is undone) or 'later' (still pending, tried again). Restoring a role
+   that is hidden because its company is hidden brings the company back (signed out and in). */
 function setChoice(item, state) {
   const k = key(item);
   if (!account) {
-    if (state === null && isDiscarded(k)) Reflect.deleteProperty(goneCompanies, item.c); /* Restore brings the company back too */
+    if (state === null && isDiscarded(k)) Reflect.deleteProperty(goneCompanies, item.c);
     Reflect.deleteProperty(gone, k);
     Reflect.deleteProperty(starred, k);
     if (state === 'discard') gone[k] = TODAY;
@@ -497,15 +530,9 @@ function setChoice(item, state) {
     lsSet(LS_S, starred);
     return Promise.resolve({ saved: true, failure: null });
   }
-  const a = account;
-  if (a.failure === 'limit' || a.failure === 'refused') a.failure = null;
-  const op = { ...snapshotOf(item), state, id: `${Date.now()}-${Math.random()}` };
-  a.pending.set(k, op);
-  savePending(a, k, op);
-  return flush().then(() => {
-    const fate = fates.get(op);
-    return { saved: fate === 'saved', failure: fate === 'saved' ? null : (fate ?? 'later') };
-  });
+  const ops = [{ ...snapshotOf(item), state, id: newId() }];
+  if (state === null && isDiscarded(k) && companyHidden(item.c)) ops.push({ ...snapshotOf({ c: item.c, i: '' }), state: null, id: newId() });
+  return queueChanges(ops);
 }
 
 function attach(next) {
@@ -805,7 +832,7 @@ function settle(a) {
   if (account !== a || a.choicesState === 'loading' || a.prefs.state === 'loading') return;
   if (!a.decided && a.choicesState === 'loaded' && a.prefs.state === 'ready') {
     const offer = importOffer(a);
-    if (offer.discards.length + offer.stars.length > 0 || offer.filters) {
+    if (offer.discards.length + offer.companies.length + offer.stars.length > 0 || offer.filters) {
       a.offer = offer;
       a.prefs.paused = true;
       showOffer(a);
@@ -843,6 +870,7 @@ function importOffer(a) {
   if (!isDefaultFilters(browser) && !filtersEqual(browser, remote)) filters = isDefaultFilters(remote) ? 'new' : 'replace';
   return {
     discards: Object.keys(gone).filter((k) => JOB_BY_KEY.has(k) && !mine(k)),
+    companies: Object.keys(goneCompanies).filter((c) => JOBS.some((j) => j.c === c) && !mine(companyKey(c))),
     stars: Object.entries(starred)
       .filter(([k]) => !gone[k] && !mine(k))
       .map(([, entry]) => entry),
@@ -854,15 +882,16 @@ function importOffer(a) {
 const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
 
 function showOffer(a) {
-  const { discards, stars, filters } = a.offer;
+  const { discards, companies: hidden, stars, filters } = a.offer;
   const box = $('importBox');
-  box.dataset.discards = String(discards.length);
+  box.dataset.discards = String(discards.length + hidden.length); /* a company choice is counted as a discard in the offer */
+  box.dataset.companies = String(hidden.length);
   box.dataset.stars = String(stars.length);
   box.dataset.filters = filters ?? 'none';
-  const choices = discards.length + stars.length > 0;
+  const choices = discards.length + hidden.length + stars.length > 0;
   $('importChoicesRow').hidden = !choices;
   $('importChoices').checked = true;
-  $('importChoicesText').textContent = `${plural(discards.length, 'discard', 'discards')} and ${plural(stars.length, 'star', 'stars')}`;
+  $('importChoicesText').textContent = `${plural(discards.length + hidden.length, 'discard', 'discards')} and ${plural(stars.length, 'star', 'stars')}`;
   $('importFiltersRow').hidden = !filters;
   $('importFilters').checked = true;
   $('importFiltersText').textContent =
@@ -919,6 +948,7 @@ function describeBringOver({ saved, kept, refused, left }, from) {
 
 const wantedOf = (offer) => [
   ...offer.discards.map((k) => ({ item: JOB_BY_KEY.get(k), state: 'discard' })),
+  ...offer.companies.map((c) => ({ item: { c, i: '' }, state: 'company' })),
   ...offer.stars.map((item) => ({ item, state: 'star' })),
 ];
 
@@ -1370,18 +1400,18 @@ const seenEl = (j) =>
    sync sets it, see descriptions.snippet_cut). A row without the flag (null) shows nothing. Hidden from screen readers. */
 const cutMark = (j) => j.sc && h('span', { 'aria-hidden': 'true', text: '…' });
 
-/* "Restore" (a plain button) when the role is discarded or the user is signed in (the account holds roles only: PRIVACY.md);
-   else "Not for me", a menu of "Position not for me" and "Company not for me". */
+/* "Restore" (a plain button) when the role is discarded (it brings back the company too, if the company is hidden);
+   else "Not for me", a menu of "Position not for me" and "Company not for me", signed in or not. */
 function discardControl(j, what, discarded) {
   const k = key(j);
-  if (discarded || account) {
+  if (discarded) {
     return h('button', {
       type: 'button',
       class: 'btn btn-pill',
       'data-act': 'toggle',
       'data-k': k,
-      'aria-label': `${discarded ? 'Restore' : 'Not for me'}: ${what}`,
-      text: discarded ? 'Restore' : 'Not for me',
+      'aria-label': `Restore: ${what}`,
+      text: 'Restore',
     });
   }
   const item = (act, text, label) =>
@@ -1703,13 +1733,21 @@ $('next').addEventListener('click', () => {
 /* A job as the page holds it, or, for a starred job that has closed, what was kept of it. */
 const itemFor = (k) => JOB_BY_KEY.get(k) ?? starredItems().find((item) => key(item) === k);
 
-/* "Company not for me", signed out only (the account has no place for it): every role of the company is hidden, and a star
-   on one of them goes, as it does for a discard. */
+/* "Company not for me": every role of the company is hidden, and a star on one of them goes, as it does for a discard.
+   Signed out it is saved in this browser; signed in it is a row of the account (state 'company', no expiry). */
 function discardCompany(company) {
+  if (account) {
+    const stars = starredItems().filter((item) => item.c === company);
+    return queueChanges([
+      { ...snapshotOf({ c: company, i: '' }), state: 'company', id: newId() },
+      ...stars.map((item) => ({ ...snapshotOf(item), state: null, id: newId() })),
+    ]);
+  }
   goneCompanies[company] = TODAY;
   for (const [k, entry] of Object.entries(starred)) if (entry.c === company) Reflect.deleteProperty(starred, k);
   lsSet(LS_DC, goneCompanies);
   lsSet(LS_S, starred);
+  return Promise.resolve({ saved: true, failure: null });
 }
 
 /* The menu of "Not for me" on a card: open or closed, with aria-expanded kept in step. */
@@ -2069,7 +2107,7 @@ const TOOLS = [
           filters: filtersState(),
           pendingChanges: (account?.pending.size ?? 0) + (account?.prefs.pending ? 1 : 0),
           filtersInUse: F,
-          offer: offer ? { discards: offer.discards.length, stars: offer.stars.length, filters: offer.filters } : null,
+          offer: offer ? { discards: offer.discards.length, companies: offer.companies.length, stars: offer.stars.length, filters: offer.filters } : null,
         }),
       );
     },

@@ -21,11 +21,23 @@ All notable changes are documented here. Format follows [Keep a Changelog](https
 - The Crawl area of the admin page (PLAN_2.md step 2.2): it calls `admin_crawl_health()` when first shown and lists one card per company, worst first, with a headline, chips with counts (Needs attention, Failing, Robots.txt, Held, All), the values of the crawl and a status pill. Loading, empty, error and 401 states. Templates and tests only.
 - A Copy button under every code block of the legal pages (the address on "Connect your assistant", the command for Claude Code), in `templates/theme.js`.
 
-## [0.76.2] - 2026-11-19
+## [0.78.1] - 2026-11-19
 
 ### Fixed
 
 - The browser crawl waits for the job list to answer a "Load more" click: it polls the link count for up to 8 seconds (the pagination wait) instead of reading it once after 0.9 s. Priority Software's list loads each further page through `admin-ajax.php`, which took longer than that from the GitHub runner, so the crawl read 9 of 23 roles and the sharp-drop guard held the company back on 2026-11-19. A click that shows nothing within that wait ends the loop, so a button that loads no jobs costs one wait, not one per scroll. Re-listed jobs can show once in the next digest as new.
+
+## [0.78.0] - 2026-11-19
+
+### Added
+
+- "Company not for me" for signed-in users (the lawyer approved it on 2026-11-19): the "Not for me" menu is now the same signed in and out. Signed in, the company choice is saved in the account (no expiry; removed by "Restore" or by deleting the account) and syncs across devices; stars of that company go, as signed out. It is one more row of `user_jobs` (state `company`, the company's name, an empty `job_id`), so it is under the same row-level security, the same cascade, the same cap of 2,000 (`limit_user_jobs`) and the same backup, with no new table; migration `20261205110000_user_jobs_company_choice.sql` widens the checks `user_jobs_state_check` and `user_jobs_job_id_check` (not applied by the pull request), tested in `supabase/tests/company_choices.sql` and pinned by the migration lint. The first-sign-in offer also copies the browser's company choices, with the same wording (a company choice counts as a discard in it). `PRIVACY.md` has the lawyer's text for the stars and "Not for me" choices bullet. `templates/dashboard.js`, `design-system/README.md`, `supabase/README.md` and tests. Version 0.78.0.
+
+## [0.77.0] - 2026-11-19
+
+### Added
+
+- The `jibe` job feed (PLAN_3.md steps E2 and E3), for the Jibe career sites (the career-site product of iCIMS' vendor, on the company's own domain) of PepsiCo, Schneider Electric and Intercontinental Exchange: `adapters.jibe(slug)` asks the site's public search API (`https://<host>/api/jobs`, the call the page makes itself) for the country Israel, up to 100 jobs in one request, and keeps the jobs whose place (`full_location`, which lists every place of a job of several) names Israel. The slug is the host (`www.pepsicojobs.com`, `careers.se.com`, `careers.ice.com`). The link of a job is the site's own page (`https://<host>/jobs/<number>`), never the applicant system's `apply_url`: the iCIMS boards themselves (`Disallow: /`) are not read. Each of the three hosts' `robots.txt` allows everything (`Allow: /`, with `crawl-delay: 5`; the pipeline asks a host once a second at most, in one request here) and every request goes through `common.get` (robots.txt, the project's User-Agent). A total above 100 (a board that ignores the country), jobs that do not add up to the total, a job twice, a job that cannot be read, an answer that is not the site's JSON and a refusal are failures, never a partial list. The answer holds each job's text, which is not read, so these jobs have no description for now. Read on 2026-11-19: PepsiCo 36 Israel jobs, Schneider Electric 9, ICE 3 (two are listed for London and Tel Aviv). A new migration, `20261205100000_companies_ats_jibe.sql`, adds the name to the check `companies_ats_known` (not applied by the pull request), with a SQL test; the admin page's feed list and slug hint have it, and the migration lint test covers it. Frozen minimal fixtures (`tests/fixtures/jibe_*.json`) with job-title strings only. No company is pinned yet.
 
 ## [0.76.1] - 2026-11-19
 
