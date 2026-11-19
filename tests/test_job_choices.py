@@ -42,6 +42,12 @@ PM1 = "article[data-job-id='Acme|1']"
 PM2 = "article[data-job-id='Acme|2']"
 
 
+async def choose_not_for_me(page: Page, card: str, act: str) -> None:
+    """Signed out, "Not for me" is a menu: open it, then choose `toggle` (position) or `company`."""
+    await page.click(f"{card} [data-act=menu]")
+    await page.click(f"{card} [data-act={act}]")
+
+
 def star_row(job_id: str, title: str = "Gone Role", location: str = "Haifa", company: str = "Gone") -> dict[str, Any]:
     """A star the account holds for a job that is not in the feed (it has closed)."""
     return {
@@ -190,7 +196,7 @@ async def test_fr2_ac7_signed_out_a_star_stays_in_this_browser_and_nothing_is_se
 async def test_fr2_ac2_a_job_cannot_be_starred_and_discarded_at_the_same_time(page: Page, site: Path) -> None:
     await serve(page, site)
     await page.click(f"{PM1} [data-act=star]")
-    await page.click(f"{PM1} [data-act=toggle]")  # Not for me: the card goes and the star with it
+    await choose_not_for_me(page, PM1, "toggle")  # Position not for me: the card goes and the star with it
     assert await page.locator(PM1).count() == 0
     assert await starred_count(page) == "Starred (0)"
     assert json.loads((await stored(page))[STARRED]) == {}
@@ -208,7 +214,7 @@ async def test_fr2_ac2_a_job_cannot_be_starred_and_discarded_at_the_same_time(pa
 
 async def test_fr2_ac2_a_discarded_job_stays_hidden_until_it_is_restored(page: Page, site: Path) -> None:
     await serve(page, site)
-    await page.click(f"{PM1} [data-act=toggle]")
+    await choose_not_for_me(page, PM1, "toggle")
     assert await summary(page) == f"Showing {ISRAEL_JOBS - 1} of {ISRAEL_JOBS} open roles in Israel. 1 discarded."
     await page.reload()
     await page.wait_for_selector("#list article")
@@ -804,3 +810,126 @@ async def test_a_newer_change_of_another_tab_to_the_same_job_is_not_erased_by_th
     await until(lambda: choices.state_of("Acme", "1") == "star")
     await expect(page.locator("#syncNote")).to_have_text("")
     assert (await pending(page))["Acme|1"] == newer  # this tab's star was confirmed, the other tab's newer choice stays
+
+
+COMPANY_KEY = "il-jobs-discarded-companies-v1"
+
+
+async def test_company_not_for_me_hides_every_role_of_the_company_and_restore_brings_them_back(
+    page: Page, site: Path
+) -> None:
+    await serve(page, site)
+    await page.click(f"{PM1} [data-act=star]")
+    await page.click(f"{PM2} [data-act=star]")
+    await choose_not_for_me(page, PM1, "company")
+    assert await page.locator("article[data-company=Acme]").count() == 0  # every role of Acme, the starred ones too
+    assert await starred_count(page) == "Starred (0)"
+    assert list(json.loads((await stored(page))[COMPANY_KEY])) == ["Acme"]
+    assert json.loads((await stored(page))[DISCARDED]) == {}  # no per-role discard was written
+    assert (
+        await summary(page) == f"Showing 0 of {ISRAEL_JOBS} open roles in Israel. {ISRAEL_JOBS} discarded."
+    )  # every fixture role is Acme's
+    await page.reload()
+    await page.wait_for_selector("#list .empty")  # every role is hidden, still, after a reload
+    await page.check("#showGone")
+    assert await page.locator(PM1).get_attribute("data-discarded") == "true"
+    assert await page.locator(PM2).get_attribute("data-discarded") == "true"
+    assert await page.locator(f"{PM1} [data-act=toggle]").inner_text() == "Restore"
+    assert await page.locator(f"{PM1} [data-act=menu]").count() == 0
+    await page.click(f"{PM1} [data-act=toggle]")  # Restore: the company comes back, not one role of it
+    assert await page.locator(PM1).get_attribute("data-discarded") == "false"
+    assert await page.locator(PM2).get_attribute("data-discarded") == "false"
+    assert json.loads((await stored(page))[COMPANY_KEY]) == {}
+
+
+async def test_position_not_for_me_hides_one_role_and_restore_brings_it_back(page: Page, site: Path) -> None:
+    await serve(page, site)
+    await choose_not_for_me(page, PM1, "toggle")
+    assert await page.locator(PM1).count() == 0
+    assert await page.locator(PM2).count() == 1  # the company's other role stays
+    assert json.loads((await stored(page))[COMPANY_KEY]) == {}
+    await page.check("#showGone")
+    await page.click(f"{PM1} [data-act=toggle]")
+    assert json.loads((await stored(page))[DISCARDED]) == {}
+
+
+async def test_the_not_for_me_menu_is_a_menu_button_that_the_keyboard_and_screen_readers_can_use(
+    page: Page, site: Path
+) -> None:
+    await serve(page, site)
+    button = page.locator(f"{PM1} [data-act=menu]")
+    panel = page.locator(f"{PM1} .card-menu-panel")
+    assert await button.get_attribute("aria-haspopup") == "true"
+    assert await button.get_attribute("aria-expanded") == "false"
+    assert await panel.is_hidden()
+    await button.focus()
+    await page.keyboard.press("Enter")
+    assert await button.get_attribute("aria-expanded") == "true"
+    assert await panel.get_attribute("role") == "menu"
+    first, second = page.locator(f"{PM1} [role=menuitem]").nth(0), page.locator(f"{PM1} [role=menuitem]").nth(1)
+    assert await first.inner_text() == "Position not for me"
+    assert await second.inner_text() == "Company not for me"
+    assert await first.evaluate("(el) => el === document.activeElement")  # the focus moves into the menu
+    for item in (first, second):
+        box = await item.bounding_box()
+        assert box is not None
+        assert box["height"] >= TAP_MIN
+    await page.keyboard.press("ArrowDown")
+    assert await second.evaluate("(el) => el === document.activeElement")
+    await page.keyboard.press("ArrowDown")  # wraps
+    assert await first.evaluate("(el) => el === document.activeElement")
+    await page.keyboard.press("ArrowUp")
+    assert await second.evaluate("(el) => el === document.activeElement")
+    await page.keyboard.press("Escape")
+    assert await button.get_attribute("aria-expanded") == "false"
+    assert await panel.is_hidden()
+    assert await button.evaluate("(el) => el === document.activeElement")  # the focus returns to the button
+    await button.press("Enter")
+    await page.keyboard.press("Tab")  # one tab stop: Tab leaves the menu and it closes
+    assert await panel.is_hidden()
+    await button.click()
+    await page.click("#q")  # a click elsewhere closes it too
+    assert await panel.is_hidden()
+    await button.click()
+    await button.click()  # the button closes it again
+    assert await panel.is_hidden()
+    await button.click()
+    await page.locator(f"{PM2} [data-act=menu]").click()  # opening another closes the first
+    assert await panel.is_hidden()
+
+
+async def test_the_menu_stays_inside_the_screen_on_a_phone(page: Page, site: Path) -> None:
+    await page.set_viewport_size(PHONE)
+    await serve(page, site)
+    width = PHONE["width"]
+    for card in (PM1, PM2):
+        await page.click(f"{card} [data-act=menu]")
+        box = await page.locator(f"{card} .card-menu-panel").bounding_box()
+        assert box is not None
+        assert box["x"] >= 0
+        assert box["x"] + box["width"] <= width
+
+
+async def test_signed_in_not_for_me_stays_a_plain_button_for_the_position(page: Page, site: Path) -> None:
+    choices = ChoicesBackend()
+    await sign_in(page, site, choices)
+    assert (
+        await page.locator(f"{PM1} .card-menu").count() == 0
+    )  # the account holds roles only (PRIVACY.md): no company choice
+    await page.click(f"{PM1} [data-act=toggle]")
+    await until(lambda: choices.state_of("Acme", "1") == "discard")
+    assert await page.locator(PM2).count() == 1
+
+
+async def test_the_focus_lands_on_a_visible_control_when_the_last_card_is_removed_through_the_menu(
+    page: Page, site: Path
+) -> None:
+    await serve(page, site)
+    await page.click("#next")  # the last page holds two roles
+    card = page.locator("#list li").last.locator("article")
+    job = await card.get_attribute("data-job-id")
+    assert job is not None
+    await choose_not_for_me(page, f"article[data-job-id='{job}']", "toggle")
+    assert await page.evaluate(
+        "document.activeElement.matches('#list [data-act]') && document.activeElement.offsetParent !== null"
+    )

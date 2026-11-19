@@ -203,10 +203,10 @@ async def test_a_search_of_one_or_two_characters_says_three_are_needed_and_the_n
 
 
 def opener(page: Page, job_id: str = "title") -> Locator:
-    return page.locator(f"article[data-job-id='Acme|{job_id}'] [data-act=toggle]")
+    return page.locator(f"article[data-job-id='Acme|{job_id}'] [data-act=menu]")
 
 
-ON_OPENER = "document.activeElement.matches(\"article[data-job-id='Acme|title'] [data-act=toggle]\")"
+ON_OPENER = "document.activeElement.matches(\"article[data-job-id='Acme|title'] [data-act=menu]\")"
 
 
 def with_snippets() -> Backend:
@@ -321,7 +321,7 @@ async def test_a_late_failure_of_an_old_query_does_not_clear_the_note_of_the_one
     await page.fill("#q", "dog")
     await said(page, "Showing 1 of 3 open roles in Israel. 0 discarded. " + FAILED)  # "dog" fails first
     await page.wait_for_timeout(2000)  # then "rust" fails, for a query that is no longer shown
-    await page.locator("#list article").first.locator("[data-act=toggle]").click()  # a redraw
+    await page.locator("#list article").first.locator("[data-act=star]").click()  # a redraw
     await expect(page.locator("#summary")).to_contain_text(FAILED)
 
 
