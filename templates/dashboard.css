@@ -1373,3 +1373,28 @@ html:has(.sheet:modal) {
     border-radius: var(--radius-card) var(--radius-card) 0 0;
   }
 }
+
+/* The "Not for me" menu on a card: a panel under the button, from its start, or from its end when the script finds that
+   it would run past the screen. The items are .account-item. */
+.card-menu {
+  position: relative;
+}
+
+.card-menu-panel {
+  position: absolute;
+  inset: 100% auto auto 0;
+  z-index: 2;
+  box-sizing: border-box;
+  width: max-content;
+  max-width: calc(100vw - 2 * var(--space-4));
+  margin-top: var(--space-2);
+  padding: var(--space-2);
+  border: var(--border-width) solid var(--line);
+  border-radius: var(--radius-card);
+  background: var(--panel);
+  box-shadow: var(--shadow-md);
+}
+
+.card-menu-panel.card-menu-end {
+  inset-inline: auto 0;
+}
