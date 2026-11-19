@@ -58,7 +58,7 @@ Alerts and Log. Adding a site a visitor reported is the Add button of the Compan
 - [x] 1.2 (done: `templates/admin.html`, `admin.js`, `session.js`, `tests/test_admin_page.py`.) `templates/admin.html`, `templates/admin.js`, built into `docs/admin.html` and `docs/admin.js` by
   `build_dashboard.py`, with SRI and the CSP rules of the dashboard. The page lives at `/misra/admin.html`. Add both
   files to the generated-files list in `AGENTS.md`, to the SRI placeholder and page lists in `build_dashboard.py`, and
-  to the source paths of `publish-docs.yml`.
+  to the source paths of `publish-docs.yml`. (Later, v0.80.0: to anyone who is not an admin the page shows the site's 404 page, see `AGENTS.md`; `docs/404.html` is built from `templates/not-found.html`.)
   - **Sign in.** `templates/auth.js` is bound to dashboard ids, and the design README requires the Sign in button to
     open the approved notice word for word, so the admin page builds no sign-in UI. `admin.js` makes its own Supabase
     client with the same storage key and storage wrapper as `auth.js`; the session is shared on the origin. Signed out,

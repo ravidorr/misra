@@ -1023,6 +1023,26 @@ html:has(.sheet:modal) {
   max-width: 1000px;
 }
 
+/* The 404 page (docs/404.html), and what the admin page shows to anyone who is not an admin: one plain card, left aligned,
+   the title, one muted line and one button. The card has a minimum height so that the empty card shown while a
+   signed-in visitor is checked is as tall as the answer, and the footer does not jump. */
+.not-found {
+  min-height: 14rem;
+  padding: var(--space-5);
+}
+
+.not-found-body {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-4);
+}
+
+.not-found-line {
+  margin: 0;
+  color: var(--muted);
+}
+
 .admin {
   display: flex;
   flex-direction: column;
@@ -1030,7 +1050,8 @@ html:has(.sheet:modal) {
   padding: var(--space-5);
 }
 
-.admin [hidden] {
+.admin [hidden],
+.not-found [hidden] {
   display: none;
 }
 
@@ -1043,7 +1064,8 @@ html:has(.sheet:modal) {
 }
 
 /* The title on a lime swipe, like the headline of the dashboard and the legal pages. */
-.admin-title {
+.admin-title,
+.not-found-title {
   width: fit-content;
   max-width: 100%;
   margin: 0;
@@ -1054,17 +1076,6 @@ html:has(.sheet:modal) {
   font-weight: 800;
   letter-spacing: -0.04em;
   line-height: 1.3;
-}
-
-.admin-line,
-.admin > .notice,
-.admin-area h2 {
-  margin: 0;
-}
-
-/* The line that says why the sign-in ended is empty until it does. */
-.admin-line:empty {
-  display: none;
 }
 
 .admin-link {
@@ -1087,6 +1098,7 @@ html:has(.sheet:modal) {
 }
 
 .admin-area h2 {
+  margin: 0;
   font-size: var(--text-xl);
   font-weight: 800;
   line-height: 1.2;

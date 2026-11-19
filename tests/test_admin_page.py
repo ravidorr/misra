@@ -10,7 +10,7 @@ from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
 import pytest
-from playwright.async_api import Page, Route, expect
+from playwright.async_api import Browser, Page, Route, expect
 
 import build_dashboard
 from tests.fake_companies import REST_CORS, FakeTables
@@ -43,7 +43,11 @@ DONE = {"ok": True, "result": "done", "message": "Done."}
 DESKTOP = {"width": 1280, "height": 900}
 AREAS = ["Crawl", "Companies", "Alerts", "Log"]
 CRAWL_EMPTY = "No crawl results yet."
-STATES = ["signed-out", "not-admin", "check-failed", "ready"]
+STATES = ["signed-out", "not-admin", "check-failed", "ready"]  # the visitors; the page shows one of four states
+NOT_FOUND_LINE = "There is no page at this address."
+FAILED_LINE = "This page could not load. Check your connection, then reload the page."
+NOT_FOUND_TITLE = "Page not found - Misra"
+MIN_CARD_HEIGHT = 200  # the 404 card has a minimum height of 14rem; the empty card is as tall
 WIDE_MIN = 761  # wider than the 760px reading width of the other pages
 WIDE_MAX = 1000
 POLL_SECONDS = 0.05
@@ -330,7 +334,7 @@ async def visible_lines(page: Page) -> list[str]:
 def test_the_page_is_built_noindex_under_the_csp_with_its_scripts_hashed(site: Path) -> None:
     html = (site / "admin.html").read_text(encoding="utf-8")
     assert '<meta name="robots" content="noindex">' in html
-    assert "<title>Admin</title>" in html
+    assert f"<title>{NOT_FOUND_TITLE}</title>" in html
     csp = re.search(r'Content-Security-Policy" content="([^"]+)"', html)
     assert csp
     assert csp[1] == (
@@ -374,26 +378,64 @@ def test_the_admin_page_is_among_the_files_the_daily_run_publishes() -> None:
     assert "templates/**" in publish  # the glob that covers the page, its script and the shared session module
 
 
-# ---- the five states ----
+# ---- the four states ----
 
 
-async def test_signed_out_it_points_to_the_dashboard_and_asks_for_nothing(page: Page, site: Path) -> None:
+async def test_the_file_itself_is_the_404_page_before_any_script_runs(site: Path) -> None:
+    """View source, a visitor without JavaScript and a crawler all get the 404 words: no admin word is visible."""
+    html = (site / "admin.html").read_text(encoding="utf-8")
+    markup = re.search(r'<main class="card not-found" id="main" data-state="not-found">(.*?)</main>', html, re.DOTALL)
+    assert markup
+    shown = re.sub(r"<[^>]+ hidden>.*", "", markup[1], flags=re.DOTALL)  # everything after the first hidden part
+    assert 'id="notFound"' in shown
+    assert '<h1 class="not-found-title">Page not found</h1>' in shown
+    assert NOT_FOUND_LINE in shown
+    assert ">See open roles</a>" in shown
+    for word in ("Admin", "admin", "account", "Sign in", "sign in", "Sign out"):
+        assert word not in shown, word
+    assert "<noscript" not in html
+
+
+async def test_without_javascript_the_page_is_the_404(browser: Browser, site: Path) -> None:
+    context = await browser.new_context(java_script_enabled=False)
+    try:
+        page = await context.new_page()
+
+        async def files(route: Route) -> None:
+            name = urlparse(route.request.url).path.lstrip("/")
+            file = site / name
+            await route.fulfill(body=file.read_bytes(), content_type=mimetypes.guess_type(name)[0] or "text/plain")
+
+        await page.route(f"{ORIGIN}/**", files)
+        await page.goto(f"{ORIGIN}/admin.html")
+        await _no_javascript_page(page)
+    finally:
+        await context.close()
+
+
+async def _no_javascript_page(page: Page) -> None:
+    assert await page.title() == NOT_FOUND_TITLE
+    assert await visible_lines(page) == ["Page not found", NOT_FOUND_LINE, "See open roles"]
+
+
+async def test_signed_out_it_is_the_404_and_asks_for_nothing(page: Page, site: Path) -> None:
     backend, problems = await open_admin(page, site, signed_in=False)
     assert problems == []
-    assert await state(page) == "signed-out"
+    assert await state(page) == "not-found"
     assert backend.requests == []
-    link = page.get_by_role("link", name="Sign in on the dashboard first.")
-    await expect(link).to_be_visible()
-    assert await link.get_attribute("href") == "./"
-    assert await page.title() == "Admin"
+    assert await visible_lines(page) == ["Page not found", NOT_FOUND_LINE, "See open roles"]
+    assert await page.title() == NOT_FOUND_TITLE
     assert await page.locator("#adminSignOut").is_hidden()
     assert await page.locator("nav[aria-label='Admin']").is_hidden()
-    assert await page.locator("#adminExpired").inner_text() == ""
     assert await page.evaluate("location.pathname + location.search") == "/admin.html"  # never a redirect
+    assert await page.evaluate("document.querySelector('.page').classList.contains('admin-page')") is False
+    text = (await page.locator("body").inner_text()).lower()
+    for word in ("admin", "account", "sign in"):
+        assert word not in text, word
 
 
-async def test_the_page_shows_nothing_while_it_checks(page: Page, site: Path) -> None:
-    """The default state has every part hidden, so nothing flashes (not even the title) before the answer."""
+async def test_the_page_shows_nothing_while_it_checks_a_saved_session(page: Page, site: Path) -> None:
+    """An empty card, as tall as the 404 card, with no text, no spinner and no title of the admin."""
     backend = Backend()
     backend.gate = asyncio.Event()
     await open_admin(page, site, backend=backend, wait=False)
@@ -401,46 +443,61 @@ async def test_the_page_shows_nothing_while_it_checks(page: Page, site: Path) ->
         await asyncio.sleep(POLL_SECONDS)
     assert await state(page) == "checking"
     assert await visible_text(page) == ""
-    assert await page.title() == "Admin"
+    assert await page.title() == NOT_FOUND_TITLE
+    height = await page.evaluate("document.getElementById('main').getBoundingClientRect().height")
     backend.gate.set()
     await expect(page.locator("main")).to_have_attribute("data-state", "ready")
+    assert height >= MIN_CARD_HEIGHT
 
 
-async def test_a_signed_in_non_admin_sees_one_line_and_only_the_check_was_asked(page: Page, site: Path) -> None:
+async def test_a_signed_in_non_admin_sees_the_404_and_only_the_check_was_asked(page: Page, site: Path) -> None:
     backend, problems = await open_admin(page, site, backend=Backend("not_admin"))
     assert problems == []
-    assert await state(page) == "not-admin"
+    assert await state(page) == "not-found"
     assert backend.requests == [("POST", "/rest/v1/rpc/is_admin")]  # nothing but the check, and no area loaded
-    assert await visible_lines(page) == ["Admin", "Sign out", "This account is not an admin."]
+    assert await visible_lines(page) == ["Page not found", NOT_FOUND_LINE, "See open roles"]
     assert await page.locator("nav[aria-label='Admin']").is_hidden()
     assert await page.locator(".admin-area:visible").count() == 0
-    assert await page.title() == "Admin"
+    assert await page.title() == NOT_FOUND_TITLE
+    assert await page.locator("#notFoundLine").get_attribute("role") == "status"
 
 
 @pytest.mark.parametrize("answer", ["down", "broken"])
-async def test_a_failed_check_is_not_the_same_as_not_an_admin(page: Page, site: Path, answer: str) -> None:
+async def test_a_failed_check_of_a_signed_in_visitor_is_one_neutral_line(page: Page, site: Path, answer: str) -> None:
     _backend, _problems = await open_admin(page, site, backend=Backend(answer))
     assert await state(page) == "check-failed"
-    alert = page.get_by_role("alert")
-    await expect(alert).to_have_text("Could not check your account. Reload the page.")
-    assert "not an admin" not in await visible_text(page)
-    await expect(page.get_by_role("button", name="Sign out")).to_be_visible()
+    line = page.locator("#notFoundLine")
+    await expect(line).to_have_text(FAILED_LINE)
+    assert await line.get_attribute("role") == "status"
+    text = (await visible_text(page)).lower()
+    for word in ("admin", "account", "sign"):
+        assert word not in text, word
     assert await page.locator("nav[aria-label='Admin']").is_hidden()
+    assert await page.title() == NOT_FOUND_TITLE
+    assert await page.locator("#main h1:visible").count() == 1  # no second heading
 
 
-async def test_without_the_sign_in_library_the_check_fails_and_says_so(page: Page, site: Path) -> None:
+async def test_without_the_sign_in_library_a_saved_session_gets_the_failed_line(page: Page, site: Path) -> None:
     (site / "supabase.js").unlink()
     backend, _problems = await open_admin(page, site)
     assert await state(page) == "check-failed"
+    await expect(page.locator("#notFoundLine")).to_have_text(FAILED_LINE)
     assert backend.requests == []
 
 
-async def test_a_saved_session_the_service_will_not_renew_says_it_expired(page: Page, site: Path) -> None:
-    """The token cannot be renewed (the service answers 400): the page is signed out and says why."""
+async def test_without_the_sign_in_library_and_no_session_it_is_the_404(page: Page, site: Path) -> None:
+    (site / "supabase.js").unlink()
+    _backend, _problems = await open_admin(page, site, signed_in=False)
+    assert await state(page) == "not-found"
+    await expect(page.locator("#notFoundLine")).to_have_text(NOT_FOUND_LINE)
+
+
+async def test_a_saved_session_the_service_will_not_renew_shows_the_404_and_is_cleared(page: Page, site: Path) -> None:
+    """The token cannot be renewed (the service answers 400): the page is the 404 and the session is dropped."""
     auth = AuthBackend("bad_code")  # every token request is refused with invalid_grant
     backend, _problems = await open_admin(page, site, backend=Backend(auth=auth), expired=True)
-    assert await state(page) == "signed-out"
-    await expect(page.locator("#adminExpired")).to_have_text("Your sign-in expired.")
+    assert await state(page) == "not-found"
+    await expect(page.locator("#notFoundLine")).to_have_text(NOT_FOUND_LINE)
     assert await page.evaluate("localStorage.getItem('misra-auth')") is None
     assert not any(path.endswith("/rpc/is_admin") for path in backend.paths())  # the check never reached the function
 
@@ -465,22 +522,22 @@ async def test_a_failed_renewal_is_not_a_refused_one_and_keeps_the_session(page:
     await expect(page.locator("main")).to_have_attribute("data-state", "check-failed")
     assert await page.evaluate("localStorage.getItem('misra-auth')") is not None
     assert backend.asked == 1
-    await expect(page.locator("#adminExpired")).to_have_text("")
+    await expect(page.locator("#notFoundLine")).to_have_text(FAILED_LINE)
 
 
-async def test_a_renewal_the_service_refuses_says_the_sign_in_expired(page: Page, site: Path) -> None:
+async def test_a_renewal_the_service_refuses_shows_the_404_without_saying_why(page: Page, site: Path) -> None:
     backend = Backend("unauthorized", auth=AuthBackend("bad_code"))
     await open_admin(page, site, backend=backend)
-    assert await state(page) == "signed-out"
-    await expect(page.locator("#adminExpired")).to_have_text("Your sign-in expired.")
+    assert await state(page) == "not-found"
+    await expect(page.locator("#notFoundLine")).to_have_text(NOT_FOUND_LINE)
     assert await page.evaluate("localStorage.getItem('misra-auth')") is None
 
 
-async def test_an_unauthorized_answer_twice_says_the_sign_in_expired(page: Page, site: Path) -> None:
+async def test_an_unauthorized_answer_twice_shows_the_404(page: Page, site: Path) -> None:
     backend, _problems = await open_admin(page, site, backend=Backend("unauthorized"))
-    assert await state(page) == "signed-out"
+    assert await state(page) == "not-found"
     assert backend.asked == CHECKS_WITH_RENEWAL  # one renewal, then it gives up
-    await expect(page.locator("#adminExpired")).to_have_text("Your sign-in expired.")
+    await expect(page.locator("#notFoundLine")).to_have_text(NOT_FOUND_LINE)
     assert await page.locator("#adminSignOut").is_hidden()
 
 
@@ -584,22 +641,22 @@ async def test_the_first_show_does_not_take_the_focus(page: Page, site: Path) ->
 # ---- the sign-out button ----
 
 
-@pytest.mark.parametrize("answer", ["admin", "not_admin", "broken"])
-async def test_sign_out_ends_the_session_and_shows_the_signed_out_state(page: Page, site: Path, answer: str) -> None:
-    backend, _problems = await open_admin(page, site, backend=Backend(answer))
+async def test_sign_out_ends_the_session_and_shows_the_404(page: Page, site: Path) -> None:
+    backend, _problems = await open_admin(page, site, backend=Backend("admin"))
     await page.get_by_role("button", name="Sign out").click()
-    await expect(page.get_by_role("link", name="Sign in on the dashboard first.")).to_be_visible()
-    assert await state(page) == "signed-out"
+    await expect(page.locator("main")).to_have_attribute("data-state", "not-found")
+    await expect(page.locator("#notFoundLine")).to_have_text(NOT_FOUND_LINE)
     assert any(path.endswith("/logout") for path in backend.paths())
     assert await page.evaluate("localStorage.getItem('misra-auth')") is None
     assert await page.locator("#adminSignOut").is_hidden()
-    assert await page.title() == "Admin"
+    assert await page.title() == NOT_FOUND_TITLE
+    assert await page.evaluate("document.querySelector('.page').classList.contains('admin-page')") is False
 
 
 async def test_sign_out_still_signs_out_here_when_the_service_cannot_end_the_session(page: Page, site: Path) -> None:
     _backend, _problems = await open_admin(page, site, backend=Backend(auth=AuthBackend("logout_fails")))
     await page.get_by_role("button", name="Sign out").click()
-    await expect(page.locator("main")).to_have_attribute("data-state", "signed-out")
+    await expect(page.locator("main")).to_have_attribute("data-state", "not-found")
     assert await page.evaluate("localStorage.getItem('misra-auth')") is None
 
 
@@ -618,7 +675,7 @@ async def test_every_state_is_accessible_fits_the_phone_and_has_44px_targets(
     _backend, problems = await open_admin(
         page, site, backend=Backend(answers.get(which, "admin")), signed_in=which != "signed-out"
     )
-    assert await state(page) == which
+    assert await state(page) == {"signed-out": "not-found", "not-admin": "not-found"}.get(which, which)
     await page.evaluate(AXE.read_text(encoding="utf-8"))
     assert await page.evaluate(AXE_RUN) == []
     if which != "check-failed":  # a failed check is logged to the console on purpose

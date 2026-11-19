@@ -37,6 +37,7 @@ STATIC_FILES = (
     "templates/contact.html",
     "templates/admin.html",
     "templates/admin.js",
+    "templates/not-found.html",
 )
 # The daily-email signup (PLAN.md steps 6.2 and 6.6). While False the page has no "Job alerts" button, no settings
 # dialog and no script for them, and docs/digest.js is not built: everything between `<!--digest-->` and
@@ -68,8 +69,13 @@ ASSISTANT_PAGE_ENABLED = True
 ASSISTANT_REGION = re.compile(r"<!--assistant-->(.*?)<!--/assistant-->", re.DOTALL)
 ASSISTANT_LINE = re.compile(r"^[ \t]*<!--assistant-->.*?<!--/assistant-->[ \t]*\n", re.DOTALL | re.MULTILINE)
 # The built pages that carry __SRI_*__ placeholders.
-PAGES = ("index.html", "email.html", "contact.html", "admin.html")
-OUTPUT_NAMES = {"templates/dashboard.html": "index.html"}
+PAGES = ("index.html", "email.html", "contact.html", "admin.html", "404.html")
+OUTPUT_NAMES = {"templates/dashboard.html": "index.html", "templates/not-found.html": "404.html"}
+# GitHub Pages serves docs/404.html for a missing address at any depth, so its links and assets cannot be relative:
+# this is the path the site is served from (the repository name; one line to change for a custom domain).
+SITE_PATH = "/misra/"
+NOT_FOUND_OUTPUT = "404.html"
+RELATIVE_URL = re.compile(r'\b(href|src)="(?![a-z][a-z0-9+.-]*:|/|#)(?:\./)?([^"]*)"', re.IGNORECASE)
 # Third-party scripts copied byte for byte to docs/ (vendor/README.md says where each one comes from). The page loads
 # them from its own origin, so the Content-Security-Policy needs no CDN.
 VENDORED_FILES = ("vendor/supabase.js",)
@@ -405,6 +411,8 @@ def apply_chrome(text: str, output: str, root: Path = Path(), dashboard: bool = 
         "__HEADER__": (parts / "header.inc").read_text(encoding="utf-8"),
         "__FOOTER__": (parts / "footer.inc").read_text(encoding="utf-8"),
     }
+    if "__NOT_FOUND__" in text:  # the words of the 404, shared by docs/404.html and the default markup of admin.html
+        shared["__NOT_FOUND__"] = (parts / "not-found.inc").read_text(encoding="utf-8")
     for placeholder, (on_dashboard, elsewhere) in SLOTS.items():
         source = on_dashboard if dashboard else elsewhere
         filled = (parts / source).read_text(encoding="utf-8") if source else ""
@@ -415,6 +423,12 @@ def apply_chrome(text: str, output: str, root: Path = Path(), dashboard: bool = 
             raise ValueError(f"{name} of templates/parts has a slot that this build does not fill")
         text = text.replace(name, part.replace(f'href="{here}"', f'href="{here}" aria-current="page"'))
     return text
+
+
+def absolute_paths(text: str) -> str:
+    """Every relative `href` and `src` of the page made absolute under SITE_PATH ("./" is the site's home), for the
+    page that is served at any address."""
+    return RELATIVE_URL.sub(lambda m: f'{m[1]}="{SITE_PATH}{m[2]}"', text)
 
 
 def render_legal(page: LegalPage, root: Path = Path(), docs: Path | None = None) -> str:
@@ -551,6 +565,8 @@ def render_static(source: str, covered: int, page_data: str) -> tuple[str, str]:
     text = Path(source).read_text(encoding="utf-8")
     if output.endswith(".html"):
         text = apply_chrome(text, output, dashboard=output == "index.html")
+        if output == NOT_FOUND_OUTPUT:
+            text = absolute_paths(text)
     text = apply_assistant_switch(apply_contact_switch(apply_digest_switch(text)))
     text = text.replace("__SUPABASE_URL__", SUPABASE_URL).replace("__SUPABASE_ANON_KEY__", SUPABASE_ANON_KEY)
     for placeholder, value in coverage_words(covered).items():
