@@ -32,8 +32,8 @@ count query with the service role, never printing rows.
 ## Status (2026-11-19)
 
 The `companies` table held 347 rows on 2026-11-18 and 413 on 2026-11-19: 328 crawled, 85 researched only, 0 excluded
-(the 328 is also `covered` in `docs/jobs.json`). The counts in "Baseline" above are those of 2026-11-18 and are not
-rewritten; the breakdowns by `ats` and by `gap.reason` of the 413 were not recomputed. Some batch companies were already researched rows that were unlocked, so the batches
+(`docs/jobs.json` of 2026-11-19 12:31 UTC says 328 covered). The counts in "Baseline" above are the A1 snapshot of
+2026-11-18 (267 and 80; B1 then parked 14 records the same day) and are not rewritten; the breakdowns by `ats` and by `gap.reason` of the 413 were not recomputed. Some batch companies were already researched rows that were unlocked, so the batches
 below add up to more than the 66 rows the table grew by.
 
 - **Batches** (a company is named here only because it is a non-excluded row; no excluded company is ever named).
@@ -43,7 +43,7 @@ below add up to more than the 66 rows the table grew by.
     plainid, Tenna, ZyG, Roche, Abbott, Micron, Boston Scientific, Lam Research, Apple, Rapyd, env0, Kornit Digital and
     Zesty. All 24 were `ok` with jobs on the manual run of 2026-11-19.
   - Batch 3 (25): 22 browser pins and the three Jibe companies (PepsiCo 36, Schneider Electric 9, ICE 3 Israel jobs).
-    Verified `ok`.
+    `discover` was `ok` for all of them; the three Jibe companies had jobs on the manual run of 2026-11-19.
   - Batch 4 (7 browser pins): Foundational, Hoopo, Radwin, RiT Technologies, SiteAware, Sola and Visitt. `discover` was
     `ok`; the first real crawl is the 04:23 UTC run of 2026-11-20, so these are not verified yet.
 - **Vetting.** The candidate tool of D3 vetted 197 browser-route candidates: 29 usable (all added in batches 3 and 4)
@@ -55,7 +55,7 @@ below add up to more than the 66 rows the table grew by.
   wait that fixed Priority Software (PR 236).
 - **Holds and decisions.**
   - Google stays a gap. On 2026-11-19 `google.com/robots.txt` disallows the career results pagination (`?page=`);
-    page 1 shows 20 of the 65 Israel rows. The maintainer granted the exception to the "adapters need two" rule, but the
+    page 1 shows 20 of the 65 Israel rows. The maintainer granted an exception to the "adapters need two" rule, but the
     adapter was not built for that reason. Revisit only with an allowed feed or written permission.
   - Uber stays a gap: `jobs.uber.com` answers a Cloudflare challenge (403) to a plain request although its
     `robots.txt` allows everything. Its coverage link now points to `https://jobs.uber.com/`.
@@ -67,13 +67,12 @@ below add up to more than the 66 rows the table grew by.
     bot-protected browser crawls (Nayax, DriveNets, Check Point, Papaya Global) stay listed.
 - **Process.**
   - F2, the weekly triage: run the candidate tool on a new list, review the `crawl_log` failures and the coverage card,
-    add at most 25 companies, verify each batch by the next daily crawl, and revert a failure through the audited helper
-    (the admin editor).
+    add at most 25 companies, verify each batch by the next daily crawl, and revert a failure in the admin editor.
   - The daily workflow has the `allow_backup_shrink` manual input (PR 237, `CONTRIBUTING.md`, "Backups of the account
     tables"). A manual run with `digest_dry_run` ticked crawls without emailing.
-  - The 09:53 UTC scheduled run is only a fallback: its guard skips it when a green run exists the same day. A new
+  - The 09:53 UTC scheduled run is only a fallback: its guard skips it when a green scheduled or cron-job.org run exists the same day. A new
     company's first crawl is therefore the next 04:23 UTC run, unless a manual run is made.
-- **Account.** The maintainer deleted a test account on 2026-11-19 before 11:13 UTC. The daily backup guard (`user_jobs`
+- **Account.** The maintainer deleted a test account on 2026-11-19. The daily backup guard (`user_jobs`
   from 5 rows to 0) failed the run once and was resolved with `allow_backup_shrink`.
 - **Other changes merged the same days.** "Company not for me" saved in the account (PR 235, migration
   `20261205110000`, approved by the lawyer on 2026-11-19), the Share button on the job card (PR 238), the hidden "Not
@@ -271,17 +270,16 @@ Target: 30. Read the "Prior findings" first; do not repeat a checked path.
 - **C2. `no_feed_found` (14).** The page exists, no known feed. Look for a JSON endpoint the page calls (as HiBob and
   Eightfold). Pin with `source: override`. Done when: each is crawled or has a dated note.
 - **C3. `needs_reader` (20).** Group by platform and check `robots.txt` first. An adapter only for a platform with two
-  or more companies that `robots.txt` allows (none qualifies today; the count may change after C1 and C2). The rest use
+  or more companies that `robots.txt` allows (none qualified on 2026-11-18; Avature, Eightfold and Jibe qualified on 2026-11-19, see E3). The rest use
   `browser` or `comeet_page`, within the crawl-time budget. One adapter per PR, with fixtures and 100% coverage.
   Reader fixes shipped in 0.75.0 (the `browser` card reader for icon-only and button-label links, the job links of Kornit
-  and Apple, the `comeet_page` card of Zesty); the pins of those records (env0, Rapyd, Walnut, Kornit, Apple, Zesty) are
+  and Apple, the `comeet_page` card of Zesty); the pins of those records (env0, Rapyd, Walnut, Kornit, Apple, Zesty; Walnut is not in any batch) are
   made by hand afterwards. Pillar is not included: its cards say only "Hybrid" or "Remote" and the city is a section
   heading above them, which the generic reader cannot attach to a job without risking the places of other companies
   (a review found such a rule misplaces cards under their own job-title heading). Needs a dedicated reader if wanted.
   Status (2026-11-19): the Avature adapter is built (Synopsys and Siemens, `robots.txt` allows the filtered RSS feed): slug
   `host/portal?field=value`, Israel facet `2001=21374` (Synopsys) and `42386=811993` (Siemens). The feed cannot be paged and
-  gives 20 jobs at most, so a feed of 20 is a failure (Synopsys 12, Siemens 17 today). Not applied or pinned yet: the
-  migration `20261203100000_companies_ats_avature.sql` is applied after the merge, then the two pins.
+  gives 20 jobs at most, so a feed of 20 is a failure (Synopsys 12, Siemens 17 today). Applied and pinned on 2026-11-19 (migration `20261203100000_companies_ats_avature.sql`, then the two pins).
 - **C4. `site_unusable` (10) and `no_openings` (6).** Recheck once; a site that is back or a board that reopened moves
   to the crawl. Repeat each quarter (step G).
 - **C5. `bot_protection` (7).** No change. Record the decision once so nobody retries.
@@ -328,7 +326,7 @@ Israeli R&D centres of global companies. Target: +40 crawled with `israel_only: 
   22 `multinational` records already researched. Cover big tech, semiconductors, networking, cloud and security,
   fintech, defence electronics, automotive, and pharma and medtech.
 - **E2. Platform map.** Start from the platform list in `TODO.md`, not from scratch. For each candidate, the ATS and
-  whether `robots.txt` allows it. Count per platform. Existing adapters: Workday, Oracle HCM, Phenom, Amazon,
+  whether `robots.txt` allows it. Count per platform. Existing adapters include Workday, Oracle HCM, Phenom, Amazon, Avature, Eightfold, Jibe and
   SmartRecruiters (blocked by `robots.txt` for the five current companies; keep skipping).
 - **E3. Adapters by count.** An adapter only for a platform with two or more allowed companies. Each needs an Israel
   filter, a per-company cap, and fixtures that include non-Israel jobs. One adapter per PR.

@@ -1,7 +1,7 @@
 # TODO
 
 Open work, as of 2026-11-19. Each item says what triggers it, how to do it and when it is done. When one is finished,
-delete it and update the counts in the others: the 85 and the four segment counts in the research item (a pin removes
+delete it and update the counts in the others: the segment counts in the research item (stale since 2026-11-19, see its status note) (a pin removes
 one record from one segment), its "(28)" if the company had no careers URL, else its "(57 today)".
 An item with a screenshot in `todo-images/` goes with it: delete the image file in the same PR.
 Observations about live sites below come from checks made on 2026-11-14 and may have changed.
@@ -127,7 +127,7 @@ Observations about live sites below come from checks made on 2026-11-14 and may 
       Uber is the same (rechecked on 2026-11-19: `jobs.uber.com` answers a Cloudflare challenge, 403, although its
       `robots.txt` allows everything; its coverage link points to `https://jobs.uber.com/`).
     - Other platforms with no adapter yet: AMD and Keysight (iCIMS: `careers-amd.icims.com`,
-      `careers-keysight.icims.com`), Synopsys (Avature: `synopsys.avature.net`), Intuit (Radancy: the search takes a
+      `careers-keysight.icims.com`), Intuit (Radancy: the search takes a
       location only with coordinates and shows "Multiple Locations" for many jobs), Google (the results page embeds
       its data; the crawler read only navigation links on `?location=Israel`; on 2026-11-19 `google.com/robots.txt`
       disallows the results pagination `?page=` and page 1 shows 20 of 65 Israel rows, so it stays a gap until there is
@@ -135,7 +135,7 @@ Observations about live sites below come from checks made on 2026-11-14 and may 
     - Ericsson: `jobs.ericsson.com/careers?location=Israel` is an Eightfold board that shows "0 jobs" in Israel today,
       and the crawler reads its "Join Talent Network" link as a job, so it is not pinned; pin it once it lists one.
     - eBay (`careers.ebayinc.com`), Walmart Global Tech (`careers.walmart.com`, a timeout), Siemens
-      (`jobs.siemens.com`, no DNS answer), Align Technology (`jobs.aligntech.com`) and Rapid7
+      (`jobs.siemens.com`, no DNS answer; crawled since 2026-11-19 through the Avature adapter), Align Technology (`jobs.aligntech.com`) and Rapid7
       (`careers.rapid7.com/jobs/search`): no feed found in the page HTML; Align and Rapid7 were looked at again on
       2026-11-16 (third batch, below).
     - Done on 2026-11-14: new adapters `oraclehcm` (Oracle, JPMorgan Chase, Dell, American Express, Nokia), `amazon`
