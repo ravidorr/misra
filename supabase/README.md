@@ -256,6 +256,17 @@ only the job's key. Two triggers (migration `20261115180000_job_choices_cap_and_
   open in `public.jobs`, so none is left behind for a job that has already closed. It does not clean up discards of jobs that were already closed before it was applied; the table is new and
   empty of such rows.
 
+### Company not for me
+
+"Company not for me" is one more row of `user_jobs` (migration `20261205100000_user_jobs_company_choice.sql`): the state
+`company`, the company's name and an empty `job_id` (no job has one), with no title, location or link. It uses the table's
+policies (a user reads and writes only their own rows), the cascade on account deletion, the cap of 2,000 rows
+(`limit_user_jobs` counts stars, position choices and company choices together) and the daily backup (`export_accounts.py`
+needs no change: the columns are the same). The two triggers on discards only act on the state `discard`, so a company
+choice has no expiry: it goes when the user restores the company or deletes the account. The migration drops and adds again
+the checks `user_jobs_state_check` and `user_jobs_job_id_check` and writes no row; apply it once after the merge (it is
+not applied by the pull request). `supabase/tests/company_choices.sql` checks it (`all company choice checks passed`).
+
 ## Auth settings the page depends on
 
 In the Supabase dashboard, Authentication:

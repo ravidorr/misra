@@ -43,7 +43,7 @@ PM2 = "article[data-job-id='Acme|2']"
 
 
 async def choose_not_for_me(page: Page, card: str, act: str) -> None:
-    """Signed out, "Not for me" is a menu: open it, then choose `toggle` (position) or `company`."""
+    """Signed out or in, "Not for me" is a menu: open it, then choose `toggle` (position) or `company`."""
     await page.click(f"{card} [data-act=menu]")
     await page.click(f"{card} [data-act={act}]")
 
@@ -71,6 +71,11 @@ def discard_row(company: str, job_id: str) -> dict[str, Any]:
         "location": None,
         "url": None,
     }
+
+
+def company_row(company: str) -> dict[str, Any]:
+    """ "Company not for me" as the account keeps it: the company's name, an empty job id, nothing else."""
+    return {**discard_row(company, ""), "state": "company"}
 
 
 async def until(condition: Callable[[], bool | Awaitable[bool]]) -> None:
@@ -336,7 +341,7 @@ async def test_a_star_is_saved_with_what_is_needed_to_show_it_after_the_job_clos
 async def test_a_discard_is_saved_without_the_title_location_or_link(page: Page, site: Path) -> None:
     choices = ChoicesBackend()
     await sign_in(page, site, choices)
-    await page.click(f"{PM1} [data-act=toggle]")
+    await choose_not_for_me(page, PM1, "toggle")
     await until(lambda: choices.writes)
     assert choices.writes[0]["state"] == "discard"
     assert (choices.writes[0]["title"], choices.writes[0]["location"], choices.writes[0]["url"]) == (None, None, None)
@@ -345,14 +350,14 @@ async def test_a_discard_is_saved_without_the_title_location_or_link(page: Page,
 async def test_fr2_ac2_starring_a_discarded_job_changes_its_one_row(page: Page, site: Path) -> None:
     choices = ChoicesBackend()
     await sign_in(page, site, choices)
-    await page.click(f"{PM1} [data-act=toggle]")
+    await choose_not_for_me(page, PM1, "toggle")
     await until(lambda: choices.state_of("Acme", "1") == "discard")
     await page.check("#showGone")
     await page.click(f"{PM1} [data-act=star]")
     await until(lambda: choices.state_of("Acme", "1") == "star")
     assert len(choices.rows) == 1  # one row per job: it cannot be both
     assert [w["state"] for w in choices.writes] == ["discard", "star"]
-    await page.click(f"{PM1} [data-act=toggle]")
+    await choose_not_for_me(page, PM1, "toggle")
     await until(lambda: choices.state_of("Acme", "1") == "discard")
     assert await starred_count(page) == "Starred (0)"
 
@@ -472,7 +477,7 @@ async def test_a_second_change_to_a_job_that_is_still_being_saved_wins(page: Pag
     choices.delay = 0.4
     await page.click(f"{PM1} [data-act=star]")
     await page.click(f"{PM1} [data-act=star]")  # the star is taken off before the first save has finished
-    await page.click(f"{PM2} [data-act=toggle]")
+    await choose_not_for_me(page, PM2, "toggle")
     await until(lambda: choices.state_of("Acme", "2") == "discard")
     await until(lambda: is_saved(page))
     assert [w["op"] for w in choices.writes] == ["upsert", "delete", "upsert"]  # in the order the user made them
@@ -527,7 +532,7 @@ async def test_fr2_ac8_the_kept_choice_survives_a_reload_and_is_saved_when_the_s
     await sign_in(page, site, choices)
     choices.mode = "error"
     await page.click(f"{PM1} [data-act=star]")
-    await page.click(f"{PM2} [data-act=toggle]")
+    await choose_not_for_me(page, PM2, "toggle")
     await expect(page.locator("#syncNote .notice")).to_contain_text("2 changes are not saved")
     await page.reload()  # the tab is closed and opened again while the service is still down
     await page.wait_for_selector("#accountUser:not([hidden])")
@@ -599,7 +604,7 @@ async def test_a_choice_the_row_limit_refuses_is_undone_and_said_so(page: Page, 
     assert await pending(page) == {}  # and it is not retried for ever
     assert await page.locator("#syncRetry").count() == 0
     choices.mode = "ok"
-    await page.click(f"{PM1} [data-act=toggle]")  # a later choice works, and clears the message
+    await choose_not_for_me(page, PM1, "toggle")  # a later choice works, and clears the message
     await until(lambda: choices.state_of("Acme", "1") == "discard")
     await expect(page.locator("#syncNote")).to_have_text("")
 
@@ -608,7 +613,7 @@ async def test_a_choice_the_service_refuses_for_another_reason_is_undone_and_sai
     choices = ChoicesBackend()
     await sign_in(page, site, choices)
     choices.mode = "refused"
-    await page.click(f"{PM1} [data-act=toggle]")
+    await choose_not_for_me(page, PM1, "toggle")
     await expect(page.locator("#syncNote .notice")).to_have_text(
         "The service did not accept the last star or discard, so it was not saved."
     )
@@ -763,7 +768,7 @@ async def test_a_refusal_notice_stays_when_a_later_change_in_the_same_batch_is_s
     await sign_in(page, site, choices)
     choices.mode = "down"
     await page.click(f"{PM1} [data-act=star]")
-    await page.click(f"{PM2} [data-act=toggle]")
+    await choose_not_for_me(page, PM2, "toggle")
     await expect(page.locator("#syncNote .notice")).to_contain_text("2 changes are not saved")
     choices.mode = "limit_star"  # the star is refused, the discard after it is accepted
     await page.click("#syncRetry")
@@ -910,17 +915,6 @@ async def test_the_menu_stays_inside_the_screen_on_a_phone(page: Page, site: Pat
         assert box["x"] + box["width"] <= width
 
 
-async def test_signed_in_not_for_me_stays_a_plain_button_for_the_position(page: Page, site: Path) -> None:
-    choices = ChoicesBackend()
-    await sign_in(page, site, choices)
-    assert (
-        await page.locator(f"{PM1} .card-menu").count() == 0
-    )  # the account holds roles only (PRIVACY.md): no company choice
-    await page.click(f"{PM1} [data-act=toggle]")
-    await until(lambda: choices.state_of("Acme", "1") == "discard")
-    assert await page.locator(PM2).count() == 1
-
-
 async def test_the_focus_lands_on_a_visible_control_when_the_last_card_is_removed_through_the_menu(
     page: Page, site: Path
 ) -> None:
@@ -933,3 +927,86 @@ async def test_the_focus_lands_on_a_visible_control_when_the_last_card_is_remove
     assert await page.evaluate(
         "document.activeElement.matches('#list [data-act]') && document.activeElement.offsetParent !== null"
     )
+
+
+async def test_signed_in_not_for_me_is_the_same_menu_and_a_company_choice_is_one_row_of_the_account(
+    page: Page, site: Path
+) -> None:
+    choices = ChoicesBackend()
+    await sign_in(page, site, choices)
+    assert await page.locator(f"{PM1} .card-menu").count() == 1
+    await page.click(f"{PM1} [data-act=star]")
+    await until(lambda: choices.state_of("Acme", "1") == "star")
+    await choose_not_for_me(page, PM2, "company")
+    await until(
+        lambda: choices.state_of("Acme", "") == "company" and choices.state_of("Acme", "1") is None
+    )  # a star of the company goes, as it does signed out
+    assert choices.rows[("Acme", "")] == company_row("Acme")  # the name only: no title, location or link
+    assert await page.locator("article[data-company=Acme]").count() == 0
+    assert await starred_count(page) == "Starred (0)"
+    assert await pending(page) == {}
+    assert COMPANY_KEY not in await stored(page)  # the browser's own signed-out choices are not touched
+    await page.reload()
+    await page.wait_for_selector("#list[data-choices=loaded], #list[data-choices=failed]")
+    assert await page.locator("article[data-company=Acme]").count() == 0  # it syncs: read back from the account
+    await page.check("#showGone")
+    assert await page.locator(PM1).get_attribute("data-discarded") == "true"
+    assert await page.locator(f"{PM1} [data-act=toggle]").inner_text() == "Restore"
+    await page.click(f"{PM1} [data-act=toggle]")  # Restore: the company, not one role of it
+    await until(lambda: choices.rows == {})
+    assert await page.locator(PM2).get_attribute("data-discarded") == "false"
+    assert await page.locator(PM1).get_attribute("data-discarded") == "false"
+
+
+async def test_a_company_choice_of_the_account_hides_the_company_on_another_device(page: Page, site: Path) -> None:
+    choices = ChoicesBackend([company_row("Acme")])
+    await sign_in(page, site, choices)
+    assert await page.locator("article[data-company=Acme]").count() == 0
+    assert await summary(page) == f"Showing 0 of {ISRAEL_JOBS} open roles in Israel. {ISRAEL_JOBS} discarded."
+
+
+async def test_restoring_a_role_of_a_hidden_company_also_removes_its_own_discard(page: Page, site: Path) -> None:
+    choices = ChoicesBackend([company_row("Acme"), discard_row("Acme", "1")])
+    await sign_in(page, site, choices)
+    await page.check("#showGone")
+    await page.click(f"{PM1} [data-act=toggle]")
+    await until(lambda: choices.rows == {})
+    assert [w["op"] for w in choices.writes] == ["delete", "delete"]
+
+
+async def test_a_position_choice_next_to_a_company_choice_stays_when_the_company_is_restored_from_another_role(
+    page: Page, site: Path
+) -> None:
+    choices = ChoicesBackend([company_row("Acme"), discard_row("Acme", "1")])
+    await sign_in(page, site, choices)
+    await page.check("#showGone")
+    await page.click(f"{PM2} [data-act=toggle]")
+    await until(lambda: ("Acme", "") not in choices.rows)
+    assert choices.state_of("Acme", "1") == "discard"  # only the company came back, as signed out
+
+
+@pytest.mark.parametrize("mode", ["limit", "refused"])
+async def test_a_company_choice_the_database_refuses_is_undone_and_said_so(page: Page, site: Path, mode: str) -> None:
+    choices = ChoicesBackend(mode=mode)
+    await sign_in(page, site, choices)
+    await choose_not_for_me(page, PM1, "company")
+    await expect(page.locator("#syncNote .notice")).to_contain_text(
+        "reached the limit" if mode == "limit" else "did not accept"
+    )
+    assert choices.rows == {}
+    assert await page.locator(PM1).count() == 1  # the company is back in the feed
+    assert await pending(page) == {}
+
+
+async def test_a_company_choice_made_while_the_service_is_down_is_kept_and_saved_later(page: Page, site: Path) -> None:
+    choices = ChoicesBackend(mode="down")
+    await sign_in(page, site, choices)
+    await choose_not_for_me(page, PM1, "company")
+    assert await page.locator("article[data-company=Acme]").count() == 0  # shown at once
+    assert list(await pending(page)) == ["Acme|"]
+    choices.mode = "ok"
+    await expect(page.locator("#syncRetry")).to_be_visible()
+    await page.click("#syncRetry")
+    await until(lambda: choices.state_of("Acme", "") == "company")
+    await expect(page.locator("#syncRetry")).to_have_count(0)
+    assert await pending(page) == {}
