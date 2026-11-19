@@ -1,6 +1,7 @@
 /* Dashboard script. Loaded as a deferred module by docs/index.html; the roles come from Supabase. */
 const $ = (id) => document.getElementById(id);
 const LS_D = 'il-jobs-discarded-v1';
+const LS_DC = 'il-jobs-discarded-companies-v1';
 const LS_S = 'il-jobs-starred-v1';
 const LS_Q = 'misra-pending-choices-v1';
 const LS_F = 'il-jobs-filters-v3';
@@ -148,6 +149,7 @@ let view = 'roles';
    what the page needs to show it later (company, id, title, location, link). Signed in, they live in the account (see
    "Stars and discards" below) and these two are left alone. */
 const gone = lsGet(LS_D, {});
+const goneCompanies = lsGet(LS_DC, {}); /* signed out only: a company name maps to the day the user hid all its roles */
 const starred = Object.fromEntries(
   Object.entries(lsGet(LS_S, {})).filter(([, v]) => typeof v?.c === 'string' && typeof v.i === 'string'),
 );
@@ -284,8 +286,8 @@ const validEntry = (e) =>
 
 function choiceOf(k) {
   if (account) return (account.pending.has(k) ? account.pending.get(k) : account.server.get(k))?.state ?? null;
-  if (gone[k]) return 'discard';
-  return starred[k] ? 'star' : null;
+  if (starred[k]) return 'star';
+  return gone[k] || Object.hasOwn(goneCompanies, JOB_BY_KEY.get(k)?.c) ? 'discard' : null;
 }
 const isDiscarded = (k) => choiceOf(k) === 'discard';
 const isStarred = (k) => choiceOf(k) === 'star';
@@ -485,11 +487,13 @@ async function loadServer(a) {
 function setChoice(item, state) {
   const k = key(item);
   if (!account) {
+    if (state === null && isDiscarded(k)) Reflect.deleteProperty(goneCompanies, item.c); /* Restore brings the company back too */
     Reflect.deleteProperty(gone, k);
     Reflect.deleteProperty(starred, k);
     if (state === 'discard') gone[k] = TODAY;
     if (state === 'star') starred[k] = snapshotOf(item);
     lsSet(LS_D, gone);
+    lsSet(LS_DC, goneCompanies);
     lsSet(LS_S, starred);
     return Promise.resolve({ saved: true, failure: null });
   }
@@ -1366,6 +1370,39 @@ const seenEl = (j) =>
    sync sets it, see descriptions.snippet_cut). A row without the flag (null) shows nothing. Hidden from screen readers. */
 const cutMark = (j) => j.sc && h('span', { 'aria-hidden': 'true', text: '…' });
 
+/* "Restore" (a plain button) when the role is discarded or the user is signed in (the account holds roles only: PRIVACY.md);
+   else "Not for me", a menu of "Position not for me" and "Company not for me". */
+function discardControl(j, what, discarded) {
+  const k = key(j);
+  if (discarded || account) {
+    return h('button', {
+      type: 'button',
+      class: 'btn btn-pill',
+      'data-act': 'toggle',
+      'data-k': k,
+      'aria-label': `${discarded ? 'Restore' : 'Not for me'}: ${what}`,
+      text: discarded ? 'Restore' : 'Not for me',
+    });
+  }
+  const item = (act, text, label) =>
+    h('button', { type: 'button', class: 'account-item', role: 'menuitem', tabindex: '-1', 'data-act': act, 'data-k': k, 'aria-label': label, text });
+  return h('span', { class: 'card-menu' }, [
+    h('button', {
+      type: 'button',
+      class: 'btn btn-pill',
+      'data-act': 'menu',
+      'aria-haspopup': 'true',
+      'aria-expanded': 'false',
+      'aria-label': `Not for me: ${what}`,
+      text: 'Not for me',
+    }),
+    h('span', { class: 'card-menu-panel', role: 'menu', hidden: '' }, [
+      item('toggle', 'Position not for me', `Position not for me: ${what}`),
+      item('company', 'Company not for me', `Company not for me: ${j.c}`),
+    ]),
+  ]);
+}
+
 function cardEl(j) {
   const k = key(j);
   const discarded = isDiscarded(k);
@@ -1429,14 +1466,7 @@ function cardEl(j) {
         h('span', { class: 'sr-only', text: ` to ${what}${NEW_TAB}` }),
       ]),
       starButton(k, what, starredNow),
-      h('button', {
-        type: 'button',
-        class: 'btn btn-pill',
-        'data-act': 'toggle',
-        'data-k': k,
-        'aria-label': `${discarded ? 'Restore' : 'Not for me'}: ${what}`,
-        text: discarded ? 'Restore' : 'Not for me',
-      }),
+      discardControl(j, what, discarded),
     ]),
   );
   return h('li', {}, [art]);
@@ -1553,7 +1583,7 @@ function render(focusIdx) {
   $('next').disabled = page >= pages - 1;
   $('pageInfo').textContent = `Page ${page + 1} of ${pages}`;
   if (focusIdx !== undefined) {
-    const buttons = list.querySelectorAll('[data-act]');
+    const buttons = list.querySelectorAll('[data-act]:not([role="menuitem"])');
     buttons[Math.min(focusIdx, buttons.length - 1)]?.focus();
   }
 }
@@ -1673,6 +1703,25 @@ $('next').addEventListener('click', () => {
 /* A job as the page holds it, or, for a starred job that has closed, what was kept of it. */
 const itemFor = (k) => JOB_BY_KEY.get(k) ?? starredItems().find((item) => key(item) === k);
 
+/* "Company not for me", signed out only (the account has no place for it): every role of the company is hidden, and a star
+   on one of them goes, as it does for a discard. */
+function discardCompany(company) {
+  goneCompanies[company] = TODAY;
+  for (const [k, entry] of Object.entries(starred)) if (entry.c === company) Reflect.deleteProperty(starred, k);
+  lsSet(LS_DC, goneCompanies);
+  lsSet(LS_S, starred);
+}
+
+/* The menu of "Not for me" on a card: open or closed, with aria-expanded kept in step. */
+function setMenu(menu, open) {
+  const panel = menu.querySelector('.card-menu-panel');
+  panel.hidden = !open;
+  menu.querySelector('[data-act="menu"]').setAttribute('aria-expanded', String(open));
+  panel.classList.remove('card-menu-end');
+  /* Hung from the start of the button; from its end when that would run past the screen. */
+  if (open && panel.getBoundingClientRect().right > document.documentElement.clientWidth) panel.classList.add('card-menu-end');
+}
+
 /* Changes a choice and shows it at once; resolves as setChoice does. */
 function choose(item, state) {
   const saving = setChoice(item, state);
@@ -1683,12 +1732,44 @@ function choose(item, state) {
 $('list').addEventListener('click', (e) => {
   const button = e.target.closest('[data-act]');
   if (!button) return;
+  const menu = button.closest('.card-menu');
+  if (button.dataset.act === 'menu') {
+    const open = button.getAttribute('aria-expanded') !== 'true';
+    setMenu(menu, open);
+    if (open) menu.querySelector('[role="menuitem"]').focus();
+    return;
+  }
   const k = button.dataset.k;
   const item = itemFor(k);
-  const index = [...$('list').querySelectorAll('[data-act]')].indexOf(button);
+  const index = [...$('list').querySelectorAll('[data-act]:not([role="menuitem"])')].indexOf(menu ? menu.querySelector('[data-act="menu"]') : button);
   if (button.dataset.act === 'star') setChoice(item, isStarred(k) ? null : 'star');
+  else if (button.dataset.act === 'company') discardCompany(item.c);
   else setChoice(item, isDiscarded(k) ? null : 'discard');
   render(index);
+});
+
+/* A menu closes on a click elsewhere, when the focus leaves it (Tab) and on Escape, which puts the focus back on its
+   button; the arrow keys move between its two items. */
+document.addEventListener('click', (e) => {
+  for (const menu of $('list').querySelectorAll('.card-menu')) if (!menu.contains(e.target)) setMenu(menu, false);
+});
+$('list').addEventListener('focusout', (e) => {
+  const menu = e.target.closest('.card-menu');
+  if (menu && e.relatedTarget && !menu.contains(e.relatedTarget)) setMenu(menu, false);
+});
+$('list').addEventListener('keydown', (e) => {
+  const menu = e.target.closest('.card-menu');
+  if (!menu) return;
+  if (e.key === 'Escape') {
+    setMenu(menu, false);
+    menu.querySelector('[data-act="menu"]').focus();
+    return;
+  }
+  const items = [...menu.querySelectorAll('[role="menuitem"]')];
+  const step = { ArrowDown: 1, ArrowUp: -1 }[e.key];
+  if (step === undefined || !items.includes(e.target)) return;
+  e.preventDefault();
+  items[(items.indexOf(e.target) + step + items.length) % items.length].focus();
 });
 
 $('starredView').addEventListener('click', () => {
