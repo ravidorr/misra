@@ -1,6 +1,6 @@
 # TODO
 
-Open work, as of 2026-11-17. Each item says what triggers it, how to do it and when it is done. When one is finished,
+Open work, as of 2026-11-19. Each item says what triggers it, how to do it and when it is done. When one is finished,
 delete it and update the counts in the others: the 85 and the four segment counts in the research item (a pin removes
 one record from one segment), its "(28)" if the company had no careers URL, else its "(57 today)".
 An item with a screenshot in `todo-images/` goes with it: delete the image file in the same PR.
@@ -80,10 +80,15 @@ Observations about live sites below come from checks made on 2026-11-14 and may 
   segments: multinational, deeptech, cyber_infra, biz_software). Each needs its own research; there is no batch fix
   left. Every observation about a live site below is from the checks of 2026-11-14, a crawl of the rows that had a
   careers URL that day and a scan of their rendered pages. The remaining work falls into these groups:
+  - **Status of 2026-11-19 (PLAN_3).** The table holds 413 rows: 328 crawled, 85 researched only, 0 excluded. Since
+    2026-11-18 the table grew by 66 rows (some batch companies were researched rows that were unlocked) and the Avature, Eightfold and Jibe adapters, the browser reader fixes and the Load
+    more wait were built (`PLAN_3.md`, "Status (2026-11-19)"). Gilat, Synopsys, Siemens, Apple, Micron, Boston Scientific,
+    Lam Research, Rapyd, env0, Kornit Digital, Zesty, PepsiCo, Schneider Electric and ICE below are now crawled. The four
+    segment counts and the number of researched records per reason were not recomputed from the table and are stale.
   - **No careers URL.** They have no `careers_url` in the `companies` table: Upsolver, Speedata,
-    Teramount, X-Globe, Q Factor, Gilat, Siklu, Silicom, Sight Diagnostics, Brainsway, EarlySign, Diagnostic Robotics,
+    Teramount, X-Globe, Q Factor, Siklu, Silicom, Sight Diagnostics, Brainsway, EarlySign, Diagnostic Robotics,
     Tevel Aerobotics, SolarEdge, Watergen, AIR, SAP, eBay,
-    Akamai, Ford, Ericsson, Uber, Keysight. Find the real
+    Akamai, Ford, Ericsson, Keysight. Find the real
     career page first, then continue with the groups below. The large multinationals will need a location-filtered
     address or their ATS (see the last group).
   - **A job board was found but there is no adapter.** Playstudios and Booking.com. Playstudios was listed as a Jobvite
@@ -109,7 +114,7 @@ Observations about live sites below come from checks made on 2026-11-14 and may 
   - **The page returned links, not jobs.** Checked on 2026-11-14: Ex Libris links to `careers.clarivate.com`, a
     worldwide Phenom board of its parent Clarivate (not Ex Libris only); Ormat is pinned on 2026-11-17 (see below); Optibus is a Comeet plugin
     page, done on 2026-11-16 below; REE Automotive is in the next group.
-  - **Large multinational boards that show a worldwide first page.** Google, Intuit, Apple, IBM
+  - **Large multinational boards that show a worldwide first page.** Google, Intuit, IBM
     and others returned jobs, but almost none in Israel (Apple's page had one), because the page is a worldwide search.
     They need a career address filtered to Israel (as `citi.eightfold.ai/careers?location=Israel` is) with `israel_only`,
     or their ATS. Check that the filter works before pinning.
@@ -118,12 +123,15 @@ Observations about live sites below come from checks made on 2026-11-14 and may 
       centre or site name is still unknown: find it from the company's own career page, not by guessing. Intel
       (`intel/wd1/External`) and Autodesk (`autodesk/wd1/Ext`) were pinned on 2026-11-17 from the Workday addresses on
       their career pages.
-    - Bot protection (403 to a plain request, 2026-11-14; not to be bypassed): Akamai, General Motors (`search-careers.gm.com`), Ford, SAP, Uber, Booking.com.
+    - Bot protection (403 to a plain request, 2026-11-14; not to be bypassed): Akamai, General Motors (`search-careers.gm.com`), Ford, SAP, Booking.com.
+      Uber is the same (rechecked on 2026-11-19: `jobs.uber.com` answers a Cloudflare challenge, 403, although its
+      `robots.txt` allows everything; its coverage link points to `https://jobs.uber.com/`).
     - Other platforms with no adapter yet: AMD and Keysight (iCIMS: `careers-amd.icims.com`,
       `careers-keysight.icims.com`), Synopsys (Avature: `synopsys.avature.net`), Intuit (Radancy: the search takes a
       location only with coordinates and shows "Multiple Locations" for many jobs), Google (the results page embeds
-      its data; the crawler read only navigation links on `?location=Israel`), Apple (`jobs.apple.com/en-il/search`
-      is a script app; `/api/role/search` answers a redirect), IBM and Meta (no feed found).
+      its data; the crawler read only navigation links on `?location=Israel`; on 2026-11-19 `google.com/robots.txt`
+      disallows the results pagination `?page=` and page 1 shows 20 of 65 Israel rows, so it stays a gap until there is
+      an allowed feed or written permission), Apple (read by the browser crawl since the reader fix of 2026-11-19), IBM and Meta (no feed found).
     - Ericsson: `jobs.ericsson.com/careers?location=Israel` is an Eightfold board that shows "0 jobs" in Israel today,
       and the crawler reads its "Join Talent Network" link as a job, so it is not pinned; pin it once it lists one.
     - eBay (`careers.ebayinc.com`), Walmart Global Tech (`careers.walmart.com`, a timeout), Siemens
