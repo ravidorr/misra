@@ -22,6 +22,12 @@ All notable changes are documented here. Format follows [Keep a Changelog](https
 - The Crawl area of the admin page (PLAN_2.md step 2.2): it calls `admin_crawl_health()` when first shown and lists one card per company, worst first, with a headline, chips with counts (Needs attention, Failing, Robots.txt, Held, All), the values of the crawl and a status pill. Loading, empty, error and 401 states. Templates and tests only.
 - A Copy button under every code block of the legal pages (the address on "Connect your assistant", the command for Claude Code), in `templates/theme.js`.
 
+## [0.80.1] - 2026-11-19
+
+### Fixed
+
+- `admin.js`: when the check of a signed-in visitor fails, the page says "This page could not load" as its heading above "Check your connection, then reload the page." (it said "Page not found" above a line that contradicted it). Same heading and line slots, so the card does not change size; the 404 keeps "Page not found". Tests: a sign-out from another tab ends on the 404, and `404.html` is among the pages that carry the Home button.
+
 ## [0.80.0] - 2026-11-19
 
 ### Added

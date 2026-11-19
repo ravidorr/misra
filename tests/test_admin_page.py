@@ -50,7 +50,8 @@ STATES = [
     "ready",
 ]  # visitor scenarios; signed-out and not-admin both end in the not-found state
 NOT_FOUND_LINE = "There is no page at this address."
-FAILED_LINE = "This page could not load. Check your connection, then reload the page."
+FAILED_TITLE = "This page could not load"
+FAILED_LINE = "Check your connection, then reload the page."
 NOT_FOUND_TITLE = "Page not found - Misra"
 MIN_CARD_HEIGHT = 200  # under the 14rem (224px) minimum height of the 404 card
 WIDE_MIN = 761  # wider than the 760px reading width of the other pages
@@ -494,6 +495,7 @@ async def test_a_failed_check_of_a_signed_in_visitor_is_one_neutral_line(page: P
     line = page.locator("#notFoundLine")
     await expect(line).to_have_text(FAILED_LINE)
     assert await line.get_attribute("role") == "status"
+    assert await visible_lines(page) == [FAILED_TITLE, FAILED_LINE, "See open roles"]
     text = (await visible_text(page)).lower()
     for word in ("admin", "account", "sign"):
         assert word not in text, word
@@ -507,6 +509,7 @@ async def test_without_the_sign_in_library_a_saved_session_gets_the_failed_line(
     backend, _problems = await open_admin(page, site)
     assert await state(page) == "check-failed"
     await expect(page.locator("#notFoundLine")).to_have_text(FAILED_LINE)
+    assert await page.locator("#main h1:visible").inner_text() == FAILED_TITLE
     assert backend.requests == []
 
 
@@ -683,6 +686,33 @@ async def test_sign_out_still_signs_out_here_when_the_service_cannot_end_the_ses
     await page.get_by_role("button", name="Sign out").click()
     await expect(page.locator("main")).to_have_attribute("data-state", "not-found")
     assert await page.evaluate("localStorage.getItem('misra-auth')") is None
+
+
+@pytest.mark.parametrize("during", ["checking", "ready"])
+async def test_a_sign_out_in_another_tab_ends_on_the_404(page: Page, site: Path, during: str) -> None:
+    """The session event the page listens to (the library's SIGNED_OUT, which another tab's sign-out broadcasts)
+    ends the admin view or the check on the 404."""
+    backend = Backend("admin")
+    if during == "checking":
+        backend.gate = asyncio.Event()
+    await open_admin(page, site, backend=backend, wait=during == "ready")
+    if during == "checking":
+        while backend.asked == 0:
+            await asyncio.sleep(POLL_SECONDS)
+        assert await state(page) == "checking"
+    else:
+        assert await state(page) == "ready"
+    # what the library hears when another tab signs out: its own broadcast channel, named by the storage key
+    await page.evaluate(
+        "() => { const c = new BroadcastChannel('misra-auth');"
+        " c.postMessage({ event: 'SIGNED_OUT', session: null }); c.close(); }"
+    )
+    await expect(page.locator("main")).to_have_attribute("data-state", "not-found")
+    assert await visible_lines(page) == ["Page not found", NOT_FOUND_LINE, "See open roles"]
+    assert await page.locator("#adminSignOut").is_hidden()
+    if backend.gate is not None:
+        backend.gate.set()
+    assert await state(page) == "not-found"  # a late answer does not bring the admin page back
 
 
 # ---- the same checks the other pages pass ----
