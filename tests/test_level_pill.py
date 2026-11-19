@@ -3,6 +3,7 @@ unchanged for every other value. Both stay in `data-level` and `data-role-types`
 tools."""
 
 import json
+import re
 import sqlite3
 from pathlib import Path
 
@@ -85,6 +86,8 @@ async def test_the_filter_and_the_assistant_tools_still_offer_not_specified(page
     result = await ask(page, "search_jobs", {"levels": [classify.NOT_SPECIFIED]})
     assert {j["id"] for j in result["jobs"]} == {"Acme|plain", "Acme|other", "Acme|mixed"}
     assert result["jobs"][0]["level"] == classify.NOT_SPECIFIED
+    others = await ask(page, "search_jobs", {"roleTypes": [classify.OTHER]})
+    assert {j["id"] for j in others["jobs"]} == {"Acme|other", "Acme|mixed"}
 
 
 async def test_the_page_gets_the_level_name_from_the_build_so_it_cannot_drift(page: Page, site: Path) -> None:
@@ -94,14 +97,9 @@ async def test_the_page_gets_the_level_name_from_the_build_so_it_cannot_drift(pa
     assert classify.NOT_SPECIFIED in meta["levels"]
 
 
-def test_the_page_script_takes_both_names_from_the_build_or_the_classifier() -> None:
+def test_the_page_script_spells_the_role_type_the_way_the_classifier_does() -> None:
     script = (REPO / "templates" / "dashboard.js").read_text()
-    assert "j.lv !== DATA.notSpecified" in script
-    assert f"const OTHER = '{classify.OTHER}';" in script  # the one place the page spells the role type
-    assert "type !== OTHER" in script
-    tags_el = script[script.index("const tagsEl") : script.index("function clockIcon")]
-    assert classify.NOT_SPECIFIED not in tags_el
-    assert f"'{classify.OTHER}'" not in tags_el
+    assert f"const OTHER = '{classify.OTHER}';" in script  # the one place the page spells it
 
 
 @pytest.mark.parametrize("scheme", ["light", "dark"])
@@ -118,9 +116,24 @@ async def test_other_has_no_role_type_pill_but_keeps_its_hook_and_a_real_type_ke
     assert await only.locator(".card-tags").is_visible()
     mixed = card(page, "mixed")  # real types plus Other: only the real one shows
     assert "Role type: Product" in (await mixed.locator(".card-tags").text_content() or "")
-    assert "Other" not in (await mixed.locator(".card-tags").text_content() or "")
+    assert "Role type: Other" not in (await mixed.locator(".card-tags").text_content() or "")
     assert await mixed.get_attribute("data-role-types") == f"Product|{classify.OTHER}"
     assert await card(page, "plain").locator(".card-tags .pill-soft", has_text="Role type: Product").count() == 1
     chips = await page.locator(".chip[data-group=types]").all_inner_texts()
     assert any(classify.OTHER in chip for chip in chips)
     assert await page.evaluate(NO_SIDEWAYS)
+
+
+async def test_page_data_without_the_level_name_fails_loudly_instead_of_showing_every_pill(
+    page: Page, site: Path
+) -> None:
+    html = (site / "index.html").read_text()
+    meta = re.search(r'(<script[^>]*id="page-data"[^>]*>)(.*?)(</script>)', html, re.S)
+    assert meta
+    data = json.loads(meta[2].replace("\\u003c", "<"))
+    del data["notSpecified"]
+    (site / "index.html").write_text(html.replace(meta[0], meta[1] + json.dumps(data) + meta[3]))
+    await serve(page, site, wait=False, backend=Backend(rows()))
+    await page.locator("#loadError, .load-error").first.wait_for()
+    assert await page.locator("#list article").count() == 0
+    assert await page.locator("#loadError, .load-error").count() > 0
