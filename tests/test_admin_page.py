@@ -40,6 +40,7 @@ ACCOUNT_CORS = {
     "access-control-allow-methods": "POST, OPTIONS",
 }
 DONE = {"ok": True, "result": "done", "message": "Done."}
+LATE_ANSWER_MS = 500
 DESKTOP = {"width": 1280, "height": 900}
 AREAS = ["Crawl", "Companies", "Alerts", "Log"]
 CRAWL_EMPTY = "No crawl results yet."
@@ -704,15 +705,18 @@ async def test_a_sign_out_in_another_tab_ends_on_the_404(page: Page, site: Path,
         assert await state(page) == "ready"
     # what the library hears when another tab signs out: its own broadcast channel, named by the storage key
     await page.evaluate(
-        "() => { const c = new BroadcastChannel('misra-auth');"
+        "() => { localStorage.removeItem('misra-auth'); const c = new BroadcastChannel('misra-auth');"
         " c.postMessage({ event: 'SIGNED_OUT', session: null }); c.close(); }"
     )
     await expect(page.locator("main")).to_have_attribute("data-state", "not-found")
     assert await visible_lines(page) == ["Page not found", NOT_FOUND_LINE, "See open roles"]
     assert await page.locator("#adminSignOut").is_hidden()
     if backend.gate is not None:
+        asked = backend.asked
         backend.gate.set()
-    assert await state(page) == "not-found"  # a late answer does not bring the admin page back
+        await page.wait_for_timeout(LATE_ANSWER_MS)  # the held answer arrives now
+        assert backend.asked == asked
+    await expect(page.locator("main")).to_have_attribute("data-state", "not-found")  # a late answer changes nothing
 
 
 # ---- the same checks the other pages pass ----
