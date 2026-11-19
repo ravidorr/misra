@@ -1,0 +1,31 @@
+{
+ "totalCount": 2,
+ "jobs": [
+  {
+   "data": {
+    "slug": "104699",
+    "req_id": "104699",
+    "title": "Electrical Service Sales Engineer",
+    "full_location": "Israel",
+    "posted_date": "March 24, 2026",
+    "category": [
+     " Sales"
+    ],
+    "apply_url": "https://example-ats.test/jobs/104699/login"
+   }
+  },
+  {
+   "data": {
+    "slug": "104700",
+    "req_id": "104700",
+    "title": "Finance Analyst",
+    "full_location": "Central, Israel",
+    "posted_date": "June 1, 2026",
+    "category": [
+     " Finance"
+    ],
+    "apply_url": "https://example-ats.test/jobs/104700/login"
+   }
+  }
+ ]
+}

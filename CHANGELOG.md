@@ -21,6 +21,12 @@ All notable changes are documented here. Format follows [Keep a Changelog](https
 - The Crawl area of the admin page (PLAN_2.md step 2.2): it calls `admin_crawl_health()` when first shown and lists one card per company, worst first, with a headline, chips with counts (Needs attention, Failing, Robots.txt, Held, All), the values of the crawl and a status pill. Loading, empty, error and 401 states. Templates and tests only.
 - A Copy button under every code block of the legal pages (the address on "Connect your assistant", the command for Claude Code), in `templates/theme.js`.
 
+## [0.77.0] - 2026-11-19
+
+### Added
+
+- The `jibe` job feed (PLAN_3.md steps E2 and E3), for the Jibe career sites (the career-site product of iCIMS' vendor, on the company's own domain) of PepsiCo, Schneider Electric and Intercontinental Exchange: `adapters.jibe(slug)` asks the site's public search API (`https://<host>/api/jobs`, the call the page makes itself) for the country Israel, up to 100 jobs in one request, and keeps the jobs whose place (`full_location`, which lists every place of a job of several) names Israel. The slug is the host (`www.pepsicojobs.com`, `careers.se.com`, `careers.ice.com`). The link of a job is the site's own page (`https://<host>/jobs/<number>`), never the applicant system's `apply_url`: the iCIMS boards themselves (`Disallow: /`) are not read. Each of the three hosts' `robots.txt` allows everything (`Allow: /`, with `crawl-delay: 5`; the pipeline asks a host once a second at most, in one request here) and every request goes through `common.get` (robots.txt, the project's User-Agent). A total above 100 (a board that ignores the country), jobs that do not add up to the total, a job twice, a job that cannot be read, an answer that is not the site's JSON and a refusal are failures, never a partial list. The answer holds each job's text, which is not read, so these jobs have no description for now. Read on 2026-11-19: PepsiCo 36 Israel jobs, Schneider Electric 9, ICE 3 (two are listed for London and Tel Aviv). A new migration, `20261205100000_companies_ats_jibe.sql`, adds the name to the check `companies_ats_known` (not applied by the pull request), with a SQL test; the admin page's feed list and slug hint have it, and the migration lint test covers it. Frozen minimal fixtures (`tests/fixtures/jibe_*.json`) with job-title strings only. No company is pinned yet.
+
 ## [0.76.1] - 2026-11-19
 
 ### Fixed
