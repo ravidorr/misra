@@ -33,7 +33,7 @@ count query with the service role, never printing rows.
 
 The `companies` table held 347 rows on 2026-11-18 and 413 on 2026-11-19: 328 crawled, 85 researched only, 0 excluded
 (`docs/jobs.json` of 2026-11-19 12:31 UTC says 328 covered). The counts in "Baseline" above are the A1 snapshot of
-2026-11-18 (267 and 80; B1 then parked 14 records the same day) and are not rewritten; the breakdowns by `ats` and by `gap.reason` of the 413 were not recomputed. Some batch companies were already researched rows that were unlocked, so the batches
+2026-11-18 (267 and 80; B1 then parked 14 records the same day) and are not rewritten; the breakdown by `ats` of the 413 was not recomputed. The 85 researched records on 2026-11-19, counted from the live table: by segment, `deeptech` 33, `multinational` 19, `biz_software` 11, `cyber_infra` 10 and no segment 12; by `gap.reason`, `no_careers_url` 22, `no_feed_found` 20, `needs_reader` 16, `bot_protection` 10, `site_unusable` 9 and `no_openings` 8; 24 of the 85 have no `careers_url`. Some batch companies were already researched rows that were unlocked, so the batches
 below add up to more than the 66 rows the table grew by.
 
 - **Batches** (a company is named here only because it is a non-excluded row; no excluded company is ever named).
@@ -208,7 +208,7 @@ Measured 2026-11-18 with the A1 report and read-only `gh` commands (counts and t
   with 3 roles, 2 in Tel Aviv, that the `comeet_page` reader cannot parse) and Rapyd (7 Tel Aviv roles, half the
   titles read "DETAILS"); `no_feed_found` Deel, Hailo, Varonis, Vimeo, Wix, Dynamic Yield (career address is
   Mastercard's) and Imperva (Thales'). The table now has 253 crawled, 94 researched only, none crawled without `ok`.
-  Two may become real work later: a `comeet_page` fix for Zesty, and a better title read for Rapyd.
+  Two became real work: a `comeet_page` fix for Zesty and a better title read for Rapyd (0.75.0, step C3); both are crawled `ok` since 2026-11-19.
 - [x] **B2. "Request failed" companies.** Split the failing list into (a) the Workday and Oracle tenants that fail only
   from the runner (known limitation, see above) and (b) real failures (wrong slug, changed feed). Re-test (a) from a
   daily run once; if still blocked, leave them and say so in `TODO.md`. Fix (b). Done when: every failing company is in
@@ -273,8 +273,8 @@ Target: 30. Read the "Prior findings" first; do not repeat a checked path.
   or more companies that `robots.txt` allows (none qualified on 2026-11-18; Avature, Eightfold and Jibe qualified on 2026-11-19, see E3). The rest use
   `browser` or `comeet_page`, within the crawl-time budget. One adapter per PR, with fixtures and 100% coverage.
   Reader fixes shipped in 0.75.0 (the `browser` card reader for icon-only and button-label links, the job links of Kornit
-  and Apple, the `comeet_page` card of Zesty); the pins of those records (env0, Rapyd, Walnut, Kornit, Apple, Zesty; Walnut is not in any batch) are
-  made by hand afterwards. Pillar is not included: its cards say only "Hybrid" or "Remote" and the city is a section
+  and Apple, the `comeet_page` card of Zesty); the pins of those records (env0, Rapyd, Kornit, Apple, Zesty) were made by hand afterwards and all five were
+  crawled `ok` on 2026-11-19. Walnut was not pinned: it is a researched record, `needs_reader`. Pillar is not included: its cards say only "Hybrid" or "Remote" and the city is a section
   heading above them, which the generic reader cannot attach to a job without risking the places of other companies
   (a review found such a rule misplaces cards under their own job-title heading). Needs a dedicated reader if wanted.
   Status (2026-11-19): the Avature adapter is built (Synopsys and Siemens, `robots.txt` allows the filtered RSS feed): slug
