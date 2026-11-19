@@ -1,8 +1,8 @@
 # TODO
 
 Open work, as of 2026-11-19. Each item says what triggers it, how to do it and when it is done. When one is finished,
-delete it and update the counts in the others: the segment counts in the research item (stale since 2026-11-19, see its status note) (a pin removes
-one record from one segment), its "(28)" if the company had no careers URL, else its "(57 today)".
+delete it and update the counts in the others: the researched count and the segment, reason and no-careers-URL counts in the research item (recounted on
+2026-11-19, see its status note; a pin removes one record from one segment and one reason).
 An item with a screenshot in `todo-images/` goes with it: delete the image file in the same PR.
 Observations about live sites below come from checks made on 2026-11-14 and may have changed.
 
@@ -76,16 +76,23 @@ Observations about live sites below come from checks made on 2026-11-14 and may 
 
 ## Research the remaining unresolved companies
 
-- [ ] The `companies` table holds researched companies with no usable job feed (the records with a `gap`, in four
-  segments: multinational, deeptech, cyber_infra, biz_software). Each needs its own research; there is no batch fix
+- [ ] The `companies` table holds researched companies with no usable job feed (the records with a `gap`; 85 on
+  2026-11-19, in four segments: deeptech, multinational, biz_software, cyber_infra, and some with none). Each needs its own research; there is no batch fix
   left. Every observation about a live site below is from the checks of 2026-11-14, a crawl of the rows that had a
   careers URL that day and a scan of their rendered pages. The remaining work falls into these groups:
-  - **Status of 2026-11-19 (PLAN_3).** The table holds 413 rows: 328 crawled, 85 researched only, 0 excluded. Since
-    2026-11-18 the table grew by 66 rows (some batch companies were researched rows that were unlocked) and the Avature, Eightfold and Jibe adapters, the browser reader fixes and the Load
-    more wait were built (`PLAN_3.md`, "Status (2026-11-19)"). Gilat, Synopsys, Siemens, Apple, Micron, Boston Scientific,
-    Lam Research, Rapyd, env0, Kornit Digital, Zesty, PepsiCo, Schneider Electric and ICE below are now crawled. The four
-    segment counts and the number of researched records per reason were not recomputed from the table and are stale.
-  - **No careers URL.** They have no `careers_url` in the `companies` table: Upsolver, Speedata,
+  - **Status of 2026-11-19 (PLAN_3).** The table holds 413 rows: 328 crawled, 85 researched only (with a `gap`),
+    0 excluded. Since 2026-11-18 the table grew by 66 rows (some batch companies were researched rows that were
+    unlocked) and the Avature, Eightfold and Jibe adapters, the browser reader fixes and the Load more wait were built
+    (`PLAN_3.md`, "Status (2026-11-19)"). The 85 researched records, counted on 2026-11-19 from the live table: by
+    segment, deeptech 33, multinational 19, biz_software 11, cyber_infra 10 and no segment 12; by gap reason,
+    `no_careers_url` 22, `no_feed_found` 20, `needs_reader` 16, `bot_protection` 10, `site_unusable` 9 and
+    `no_openings` 8. 24 of the 85 have no `careers_url`. Gilat, Landa, Synopsys,
+    Siemens, Apple, Micron, Boston Scientific, Lam Research, Rapyd, env0, Kornit Digital, Zesty, PepsiCo, Schneider
+    Electric and ICE are crawled now; the notes below that call one of them "not done" describe 2026-11-14 to 2026-11-16
+    and are kept as history. Walnut and Pillar Security are not pinned: both are researched records with the reason
+    `needs_reader`; Pillar was dropped from the reader work and needs a dedicated reader.
+  - **No careers URL.** A list of 2026-11-14, kept as a snapshot (21 names, neither Gilat nor Landa among them; the table
+    now has 24 researched records with no `careers_url`, and the coverage gap card and the table say which). They had no `careers_url` in the `companies` table: Upsolver, Speedata,
     Teramount, X-Globe, Q Factor, Siklu, Silicom, Sight Diagnostics, Brainsway, EarlySign, Diagnostic Robotics,
     Tevel Aerobotics, SolarEdge, Watergen, AIR, SAP, eBay,
     Akamai, Ford, Ericsson, Keysight. Find the real
@@ -171,14 +178,22 @@ Observations about live sites below come from checks made on 2026-11-14 and may 
     under the name `convergebio` and lists no job today, `israel_only` so the first Israel job is reported as new).
     Optibus (`https://optibus.com/company/careers/jobs/` with `comeet_page`, `israel_only`: the careers page only links
     to this plugin page, which lists 6 jobs, 1 in Tel Aviv).
+    Done on 2026-11-19 (PLAN_3 batches 1 and 2; reader fixes of 0.75.0, `CHANGELOG.md`): Kornit Digital (`browser` pin
+    on `https://careers.kornit.com/all-positions/`, `israel_only`: its own theme, links `/cmcareer/<id>/`, is handled by
+    the browser reader, which also reads a heading in the link as the title), env0 (`browser` pin on
+    `https://www.envzero.com/careers`: the cards link through button labels, which the reader now reads), Zesty
+    (`comeet_page` on `https://zesty.co/careers/`: the title is outside the link, which `comeet_page` now reads from the
+    list item), Landa and Gilat (Comeet), Apple (`browser` pin, `israel_only`: the reader matches `/details/<id>/<slug>`
+    and presses "Next Page") and Rapyd (`browser` pin, `israel_only`: 7 Israel jobs with their titles). Kornit, env0,
+    Zesty, Apple and Rapyd are in the 2026-11-19 PLAN_3 batch 2 (all `ok` with jobs on the manual run); the Comeet
+    slugs of Landa and Gilat are in the table, not here.
     Nano Dimension (`nanodimension/62.003`: the `comeet_uid` is in the source of `nano-di.com/job-openings`, a Comeet
     plugin page the `comeet_page` adapter cannot read; the board holds 4 jobs, none in Israel, `israel_only`).
     Not done, and why (checked on 2026-11-14, or 2026-11-16 where dated; do not repeat):
     - Comeet plugin pages that the `comeet_page` adapter does not read (checked on 2026-11-16): SQream
       (`sqream.com/careers/` lists 1 job, "Controller", whose card names no place, and its `/co/` link holds the
-      department, so the Israel filter would drop it; pin it when its cards show a place) and Kornit
-      (`careers.kornit.com/all-positions/` lists 11 jobs with its own theme and `/cmcareer/<id>/` links, not the
-      plugin's, so it needs its own parser, for one company).
+      department, so the Israel filter would drop it; pin it when its cards show a place). Kornit, in this
+      group on 2026-11-16 (its own theme and `/cmcareer/<id>/` links, not the plugin's), is done: see above.
     - Comeet account valid but not the company's own board: Magic Software (19.00F is Matrix IFS, 23 jobs, none in
       Israel). NeuReality (89.002) answers no job through the `comeet` adapter (its hosted page is not served), but its
       career page is a Comeet plugin page that the `comeet_page` adapter reads: pinned on 2026-11-16, `israel_only`,
@@ -186,7 +201,8 @@ Observations about live sites below come from checks made on 2026-11-14 and may 
     - No openings at all, no feed to pin: Applitools ("No openings
       available"), H2Pro and Madgicx (no open positions; Madgicx takes CVs through a ClickUp form).
     - Own-site pages the crawler's link pattern does not match, no ATS behind them: Pillar Security
-      (`/open-position/<slug>`, 1 Tel Aviv job), Walnut (`/jobs/<slug>`), env0 (`/careers/<slug>`), Deep Instinct (PDF job
+      (`/open-position/<slug>`, 1 Tel Aviv job; still `needs_reader`, it needs a dedicated reader because its city is a
+      section heading above the cards), Walnut (`/jobs/<slug>`; still a researched record, `needs_reader`), Deep Instinct (PDF job
       descriptions, none in Israel), Firefly's own `/positions/` pages (Firefly itself is pinned above), Syte (job list
       by script, no job link), Tyto Care and StoreDot (list or CV form with no job link), Swimm (an email address).
     - Checked on 2026-11-16 (first batch, do not repeat): Stratasys is SuccessFactors (pinned on 2026-11-17, see below); Speedata's jobs are on Viola Group's Getro board and its own page is a Wix site with no feed; Siklu is
@@ -251,8 +267,9 @@ Observations about live sites below come from checks made on 2026-11-14 and may 
       api.getro.com/api/v2/collections/<network id>/search/jobs`, and the robots.txt of `api.getro.com` is `Disallow: /`
       for every agent, so no adapter was written. The boards' sitemaps list company pages and job pages with a
       JSON-LD `JobPosting`, but the list is incomplete (Teramount's one job is not in Grove's sitemap), so it is not a
-      feed. Getro's own job link is the employer's page when it has one (`teramount.com/careers/?job=1`). Revisit only
-      if Getro publishes a feed or lifts the API rule. Q Factor's real domain is `q-factor.com` (a one-page site, a
+      feed. Getro's own job link is the employer's page when it has one (`teramount.com/careers/?job=1`). Decided
+      with the lawyer on 2026-11-19: leave Getro and similar talent boards out unless there is written permission, and
+      find portfolio companies by hand and add their own career pages (`PLAN_3.md`, "Decisions on sources"). Q Factor's real domain is `q-factor.com` (a one-page site, a
       neutral-atom quantum company that emerged from stealth in April 2026; its only job route is a `careers@` email
       address, so nothing to pin); the lists now carry the right domain. Teramount was acquired by Molex (completed
       on 2026-05-07; `teramount.com` redirects to a Molex product page), so its jobs would be Molex's worldwide board.
@@ -263,7 +280,7 @@ Observations about live sites below come from checks made on 2026-11-14 and may 
       MDA Space page), Line 5 (needs a login), lakeFS and Quantum Art (403 or "Access Denied": bot protection), Radware
       and Camtek (an empty page), Elbit Systems (timeout on the news page; its career site `elbitsystemscareer.com` is a
       Hebrew custom site with no feed seen), ReWalk (its list on `golifeward.com/company/careers/` is US jobs, no Israel
-      job), Lumigo, Aniview, AnyClip, Pay-Me, Evogene, Aleph Farms, Remilk, Redefine Meat, Landa, Tabit,
+      job), Lumigo, Aniview, AnyClip, Pay-Me, Evogene, Aleph Farms, Remilk, Redefine Meat, Tabit,
       Cognata: no ATS link, feed or job link in the HTML or the network
       requests; not investigated further.
   - **Bot protection.** Some pages answered 403, "Access Denied" or a browser check. Leave them and record it. Do not try
