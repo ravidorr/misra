@@ -1324,6 +1324,18 @@ function starButton(k, what, on) {
   );
 }
 
+/* The share button (no state, so no aria-pressed): its name stays "Share: ..." until the confirmation replaces it. */
+function shareButton(k, what) {
+  return h('button', {
+    type: 'button',
+    class: 'btn btn-pill btn-share',
+    'data-act': 'share',
+    'data-k': k,
+    'aria-label': `Share: ${what}`,
+    text: 'Share',
+  });
+}
+
 /* A starred job that has closed: what was kept of it (title, company, location, link), marked as no longer listed. There
    is no Apply, since the role is gone; the saved link is the posting as it was. */
 function closedCardEl(e) {
@@ -1496,6 +1508,7 @@ function cardEl(j) {
         h('span', { class: 'sr-only', text: ` to ${what}${NEW_TAB}` }),
       ]),
       starButton(k, what, starredNow),
+      shareButton(k, what),
       discardControl(j, what, discarded),
     ]),
   );
@@ -1767,9 +1780,89 @@ function choose(item, state) {
   return saving;
 }
 
+/* ---- Share ----
+   Hands the role to the visitor's own device on their tap: the operating system's share sheet on a touch device that has
+   one, else the clipboard. What is shared is "Title at Company (Location)" and the employer's own posting link, as the
+   page holds it (the Apply href, nothing added). Nothing is stored, logged or sent by the page, and no choice changes,
+   so the list is not drawn again. */
+const SHARE = {
+  rest: 'Share',
+  copied: 'Copied',
+  failed: "Couldn't copy",
+  announceCopied: (what) => `Copied: ${what}.`,
+  announceFailed: "Couldn't copy. The link is shown under the buttons.",
+  noLink: 'This role has no link to share.',
+  copiedMs: 2000,
+  failedMs: 4000,
+};
+const shareTimers = new WeakMap();
+
+const shareText = (item) => `${item.t} at ${item.c}${item.l ? ` (${item.l.slice(0, MAX_LOCATION)})` : ''}`;
+
+/* The native sheet only on a touch device (a desktop sheet is a poor fit for pasting into a chat). */
+const canShareNatively = () => typeof navigator.share === 'function' && matchMedia('(pointer: coarse)').matches;
+
+/* The button shows the outcome for a moment and then goes back to "Share"; the name follows the visible word (2.5.3).
+   The live region is emptied first so a repeated message is read again. */
+function showShare(button, item, outcome, url) {
+  const what = `${item.t} at ${item.c}`;
+  const ok = outcome === 'copied';
+  clearTimeout(shareTimers.get(button));
+  button.parentElement.querySelector('.share-fallback')?.remove();
+  button.textContent = SHARE[outcome];
+  button.setAttribute('aria-label', `${SHARE[outcome]}: ${what}`);
+  if (!ok) button.parentElement.append(h('span', { class: 'share-fallback', text: url }));
+  const status = $('shareStatus');
+  const message = ok ? SHARE.announceCopied(what) : SHARE.announceFailed;
+  status.textContent = '';
+  setTimeout(() => {
+    status.textContent = message;
+  }, 50);
+  shareTimers.set(
+    button,
+    setTimeout(() => {
+      if (button.isConnected) {
+        button.textContent = SHARE.rest;
+        button.setAttribute('aria-label', `Share: ${what}`);
+      }
+      if (status.textContent === message) status.textContent = ''; /* not another card's newer message */
+    }, ok ? SHARE.copiedMs : SHARE.failedMs),
+  );
+}
+
+async function shareJob(button) {
+  const item = itemFor(button.dataset.k);
+  if (!item) return undefined;
+  const url = safeUrl(item.u);
+  if (url === '#') {
+    $('shareStatus').textContent = SHARE.noLink; /* nothing to copy, so no "Couldn't copy" and no link to show */
+    return undefined;
+  }
+  const text = shareText(item);
+  const data = { title: item.t, text, url };
+  if (canShareNatively() && (typeof navigator.canShare !== 'function' || navigator.canShare(data))) {
+    try {
+      await navigator.share(data);
+      return undefined;
+    } catch (err) {
+      if (err?.name === 'AbortError') return undefined; /* the visitor closed the sheet: nothing to say */
+    }
+  }
+  try {
+    await navigator.clipboard.writeText(`${text}\n${url}`);
+    return showShare(button, item, 'copied', url);
+  } catch {
+    return showShare(button, item, 'failed', url);
+  }
+}
+
 $('list').addEventListener('click', (e) => {
   const button = e.target.closest('[data-act]');
   if (!button) return;
+  if (button.dataset.act === 'share') {
+    shareJob(button);
+    return;
+  }
   const menu = button.closest('.card-menu');
   if (button.dataset.act === 'menu') {
     const open = button.getAttribute('aria-expanded') !== 'true';
