@@ -560,6 +560,16 @@ What was run, against a local Postgres 17 (`postgres:17-alpine` in Docker, datab
 
 Not covered, and said plainly: the real PostgREST endpoint and a real Supabase project were not used (no key was used or printed), so the read path with a real response shape, and `--create-auth-users` against Supabase's real `auth.users` and its sign-in linking, are unproven; the force-push retention step was tested against local bare repositories, not GitHub. First live checks: after the first daily run with `BACKUP_DEPLOY_KEY` set, look at `ravidorr/misra-backups` (one commit per day with changes, files `*.json`), and rehearse a restore into a scratch Supabase project.
 
+### Rehearsal, 2026-11-19
+
+Run against a local Supabase (`supabase start` from the repository, Supabase CLI 3.1.0, Docker; it applied every migration), with the latest backup commit (`backup 2026-11-19: profiles 2, user_prefs 1, user_jobs 0, subscriptions 0, emailed 0, jobs 10078, crawl_log 8690, companies 406`). A hosted scratch project was not used (the free plan has no room for a second project), so a real hosted project and Google sign-in linking are still unproven. No key of the live project was used.
+
+1. `delete from public.companies;` removed the 347 seeded records, then `restore_accounts.py` with `--create-auth-users` and an empty `--exclude-user-ids` file, run with `psql -v ON_ERROR_STOP=1 -1`: profiles 2, user_prefs 1, user_jobs 0, subscriptions 0, emailed 0, jobs 10078, crawl_log 8690, companies 406 and 2 `auth.users` rows, all equal to the backup commit, and no trigger left disabled.
+2. A second run of the same file failed at the `companies is not empty` check and changed nothing.
+3. `sync_supabase.py --pull` against the local stack pulled 10,078 jobs, 8,690 crawl log rows and 406 companies, and `build_dashboard.py` built (7,467 open jobs). No crawl, mail or digest was run.
+
+Two things the steps do not say: the pull refuses a `SUPABASE_URL` that does not start with `https://`, so a local stack needs a TLS front (a throwaway HTTPS reverse proxy with `REQUESTS_CA_BUNDLE` set to its certificate worked); and the script has its own `begin` and `commit`, so `psql -1` prints `WARNING: there is no transaction in progress` at the end, which is harmless.
+
 ## The history lives in Supabase
 
 PLAN.md step 9.1. The crawl's history (`jobs`, open and closed, and `crawl_log`) is in Supabase and nowhere else; `data/jobs.db` is a per-run scratch file that is not committed (it is in `.gitignore`).
