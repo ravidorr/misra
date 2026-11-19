@@ -1,0 +1,38 @@
+{
+ "totalCount": 3,
+ "jobs": [
+  {
+   "data": {
+    "slug": "14033",
+    "req_id": "14033",
+    "title": "Senior Client Support Specialist",
+    "full_location": "London, United Kingdom; Tel-Aviv, Israel",
+    "posted_date": "2026-10-30T13:47:00+0000",
+    "category": [],
+    "apply_url": "https://example-ats.test/jobs/14033/login"
+   }
+  },
+  {
+   "data": {
+    "slug": "13991",
+    "req_id": "13991",
+    "title": "Analyst, Trading Operations",
+    "full_location": "Tel-Aviv, Israel",
+    "posted_date": "2026-10-12T08:00:00+0000",
+    "category": [],
+    "apply_url": "https://example-ats.test/jobs/13991/login"
+   }
+  },
+  {
+   "data": {
+    "slug": "14100",
+    "req_id": "14100",
+    "title": "Support Analyst",
+    "full_location": "London, United Kingdom",
+    "posted_date": "2026-10-30T13:47:00+0000",
+    "category": [],
+    "apply_url": "https://example-ats.test/jobs/14100/login"
+   }
+  }
+ ]
+}

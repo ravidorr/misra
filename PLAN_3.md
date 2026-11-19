@@ -290,6 +290,13 @@ Israeli R&D centres of global companies. Target: +40 crawled with `israel_only: 
   readable and stays unpinned. The seven Eightfold browser records are not moved (the ids would be the same, but the browser reader also gives the descriptions). Not
   applied or pinned yet: the migration `20261204100000_companies_ats_eightfold.sql` is applied after the merge, then the
   three pins.
+  Status (2026-11-19): the Jibe adapter is built (PepsiCo `www.pepsicojobs.com`, Schneider Electric `careers.se.com`, ICE
+  `careers.ice.com`; slug is the host). The hosts are the companies' own domains, whose `robots.txt` allows everything; the
+  iCIMS boards behind them are `Disallow: /` and are never read (the link of a job is the site's own page). The Israel filter
+  is the API's country parameter plus a check of each place; the cap is 100 jobs, and a total that does not add up is a
+  failure. Israel jobs seen today: PepsiCo 36, Schneider Electric 9, ICE 3. McAfee and Medallia are Jibe too but have 0
+  Israel jobs, so they are not pinned. Not applied or pinned yet: the migration `20261205100000_companies_ats_jibe.sql` is
+  applied after the merge, then the three pins.
 - **E4. Runner test.** Before counting a Workday or Oracle pin, confirm it returns jobs from a daily run (the runner
   block above). A pin that fails from the runner is parked with a `gap` note, not counted.
 - **E5. Single companies.** `browser` crawl only inside the crawl-time budget; otherwise park with a `gap` reason.

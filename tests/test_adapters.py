@@ -2416,3 +2416,148 @@ def test_eightfold_the_slugs_are_accepted_by_the_admin_editor() -> None:
 
 def test_eightfold_is_registered() -> None:
     assert adapters.ADAPTERS["eightfold"] is adapters.eightfold
+
+
+SE_SLUG = "careers.se.com"
+ICE_SLUG = "careers.ice.com"
+
+
+def jibe_job(number: Any = 7, **over: Any) -> dict[str, Any]:
+    return {
+        "data": {
+            "slug": str(number),
+            "title": "Engineer",
+            "full_location": "Haifa, Israel",
+            "posted_date": "2026-11-15T12:45:00+0000",
+            "category": [" R&D"],
+            **over,
+        }
+    }
+
+
+def jibe_answer(items: list[Any], total: Any = None) -> FakeHttpResponse:
+    return FakeHttpResponse(data={"totalCount": len(items) if total is None else total, "jobs": items})
+
+
+def test_jibe_reads_the_israel_jobs_with_the_place_of_every_location(monkeypatch: pytest.MonkeyPatch) -> None:
+    data = json.loads((FIXTURES / "jibe_ice.json").read_text("utf-8"))
+    calls = fake_eightfold(monkeypatch, FakeHttpResponse(data=data))
+    jobs = adapters.jibe(ICE_SLUG)
+    assert calls == [
+        {
+            "url": "https://careers.ice.com/api/jobs",
+            "params": {"country": "Israel", "limit": adapters.JIBE_MAX, "page": 1},
+        }
+    ]
+    assert jobs == [  # a job of several places is kept (Israel is one); the job of London only is dropped
+        {
+            "job_id": "14033",
+            "title": "Senior Client Support Specialist",
+            "location": "London, United Kingdom; Tel-Aviv, Israel",
+            "url": "https://careers.ice.com/jobs/14033",
+            "team": "",
+            "posted": "2026-10-30",
+        },
+        {
+            "job_id": "13991",
+            "title": "Analyst, Trading Operations",
+            "location": "Tel-Aviv, Israel",
+            "url": "https://careers.ice.com/jobs/13991",
+            "team": "",
+            "posted": "2026-10-12",
+        },
+    ]
+
+
+def test_jibe_reads_long_dates_and_the_category_as_the_team(monkeypatch: pytest.MonkeyPatch) -> None:
+    data = json.loads((FIXTURES / "jibe_se.json").read_text("utf-8"))
+    fake_eightfold(monkeypatch, FakeHttpResponse(data=data))
+    jobs = adapters.jibe(SE_SLUG)
+    assert jobs is not None
+    assert [(j["job_id"], j["team"], j["posted"], j["url"]) for j in jobs] == [
+        ("104699", "Sales", "2026-03-24", "https://careers.se.com/jobs/104699"),
+        ("104700", "Finance", "2026-06-01", "https://careers.se.com/jobs/104700"),
+    ]
+
+
+@pytest.mark.parametrize("stamp", [None, 5, "soon", "2026-13-45T00:00:00+0000"])
+def test_jibe_a_date_it_cannot_read_is_no_date(monkeypatch: pytest.MonkeyPatch, stamp: Any) -> None:
+    fake_eightfold(monkeypatch, jibe_answer([jibe_job(posted_date=stamp)]))
+    jobs = adapters.jibe(SE_SLUG)
+    assert jobs is not None
+    assert jobs[0]["posted"] == ""
+
+
+@pytest.mark.parametrize("category", [None, [], [5], "R&D"])
+def test_jibe_a_category_it_cannot_read_is_no_team(monkeypatch: pytest.MonkeyPatch, category: Any) -> None:
+    fake_eightfold(monkeypatch, jibe_answer([jibe_job(category=category)]))
+    jobs = adapters.jibe(SE_SLUG)
+    assert jobs is not None
+    assert jobs[0]["team"] == ""
+
+
+def test_jibe_no_job_is_an_empty_board(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls = fake_eightfold(monkeypatch, jibe_answer([]))
+    assert adapters.jibe(SE_SLUG) == []
+    assert len(calls) == 1
+
+
+def test_jibe_a_list_at_the_cap_is_read_and_one_above_it_is_not(monkeypatch: pytest.MonkeyPatch) -> None:
+    fake_eightfold(monkeypatch, jibe_answer([jibe_job(i) for i in range(adapters.JIBE_MAX)]))
+    jobs = adapters.jibe(SE_SLUG)
+    assert jobs is not None
+    assert len(jobs) == adapters.JIBE_MAX
+    fake_eightfold(monkeypatch, jibe_answer([jibe_job(1)], adapters.JIBE_MAX + 1))
+    assert adapters.jibe(SE_SLUG) is None  # a board that ignores the country, or one cut short
+
+
+@pytest.mark.parametrize(
+    "answer",
+    [
+        None,  # no answer
+        FakeHttpResponse(status_code=403, data={}),
+        FakeHttpResponse(status_code=404, data={}),
+        FakeHttpResponse(json_error=True),  # not JSON
+        FakeHttpResponse(data=[]),  # JSON that is not an object
+        FakeHttpResponse(data={"jobs": []}),  # no total
+        FakeHttpResponse(data={"totalCount": 0}),  # no jobs
+        FakeHttpResponse(data={"totalCount": "1", "jobs": []}),
+        FakeHttpResponse(data={"totalCount": 0, "jobs": {}}),
+        jibe_answer([jibe_job(1)], 2),  # fewer jobs than the total
+        jibe_answer([jibe_job(1), jibe_job(2)], 1),  # more jobs than the total
+        jibe_answer([jibe_job(1), jibe_job(1)]),  # a job twice
+        jibe_answer(["x"]),  # not an object
+        jibe_answer([{"data": "x"}]),
+        jibe_answer([jibe_job(1, slug=None)]),
+        jibe_answer([jibe_job(1, slug="abc")]),
+        jibe_answer([jibe_job(1, title="  ")]),
+        jibe_answer([jibe_job(1, title=None)]),
+        jibe_answer([jibe_job(1, full_location="")]),
+        jibe_answer([jibe_job(1, full_location=None)]),
+    ],
+)
+def test_jibe_an_answer_that_is_not_the_whole_readable_list_is_a_failure(
+    monkeypatch: pytest.MonkeyPatch, answer: FakeHttpResponse | None
+) -> None:
+    fake_eightfold(monkeypatch, answer)
+    assert adapters.jibe(SE_SLUG) is None
+
+
+@pytest.mark.parametrize("slug", ["", "careers", "Careers.SE.com", "careers.se.com/x", "careers.se.com?a=b", "a b.com"])
+def test_jibe_a_slug_that_is_not_a_host_is_not_read(monkeypatch: pytest.MonkeyPatch, slug: str) -> None:
+    calls = fake_eightfold(monkeypatch)
+    assert adapters.jibe(slug) is None
+    assert calls == []
+
+
+def test_jibe_reads_nothing_of_the_job_text_or_the_apply_link(monkeypatch: pytest.MonkeyPatch) -> None:
+    item = jibe_job(1, description="TEXT", apply_url="https://x.icims.com/jobs/1/login")
+    fake_eightfold(monkeypatch, jibe_answer([item]))
+    jobs = adapters.jibe(SE_SLUG)
+    assert jobs is not None
+    assert "TEXT" not in json.dumps(jobs)
+    assert "icims" not in jobs[0]["url"]
+
+
+def test_jibe_is_registered() -> None:
+    assert adapters.ADAPTERS["jibe"] is adapters.jibe

@@ -1190,7 +1190,11 @@ def test_the_lint_rejects_a_weakened_admin_account_migration(old: str, new: str)
     assert problems(statements_of(ADMIN_ACCOUNT_SQL.replace(old, new)))
 
 
-ATS_FILES = ("20261203100000_companies_ats_avature.sql", "20261204100000_companies_ats_eightfold.sql")
+ATS_FILES = (
+    "20261203100000_companies_ats_avature.sql",
+    "20261204100000_companies_ats_eightfold.sql",
+    "20261205100000_companies_ats_jibe.sql",
+)
 ATS_SQL = (MIGRATION_DIR / ATS_FILES[0]).read_text(encoding="utf-8")
 
 
