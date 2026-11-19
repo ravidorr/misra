@@ -345,6 +345,14 @@ dialog.sheet[hidden],
   display: none;
 }
 
+/* The link shown when the clipboard refused the copy, on its own line of the action row so it can be selected. */
+.share-fallback {
+  flex: 1 1 100%;
+  font-size: var(--text-sm);
+  overflow-wrap: anywhere;
+  user-select: text;
+}
+
 /* A pressed toggle button (Star) also changes its word and its glyph, so the state is never colour alone. */
 .btn-star {
   gap: var(--space-2);
