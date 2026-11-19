@@ -28,7 +28,7 @@ SCRIPT_SOURCES = sorted((REPO / "templates").glob("*.js"))
 ARROW_GLYPHS = ("↗", "→", "⤴", "⧉")  # the north-east arrow and its likes: the icon replaces them
 LINK = re.compile(r"<a\b[^>]*\btarget=\"_blank\"[^>]*>.*?</a>", re.DOTALL)
 # A script writes `target: '_blank'` in a props object, or `link.target = '_blank'`; the words must follow soon.
-SCRIPT_LINK = re.compile(r"target(?:: | = )'_blank'")
+SCRIPT_LINK = re.compile(r"""target['"]?\s*[:=,]\s*['"]_blank['"]""")
 SCRIPT_WINDOW = 700
 
 
@@ -49,9 +49,12 @@ def test_every_link_a_script_builds_that_opens_a_new_tab_says_so_and_keeps_its_r
     found = 0
     for path in SCRIPT_SOURCES:
         text = path.read_text(encoding="utf-8")
-        for match in SCRIPT_LINK.finditer(text):
+        matches = list(SCRIPT_LINK.finditer(text))
+        for index, match in enumerate(matches):
             found += 1
-            window = text[match.start() : match.start() + SCRIPT_WINDOW]
+            # up to the next link or the cap, so the words of a neighbouring link never count for this one
+            end = matches[index + 1].start() if index + 1 < len(matches) else len(text)
+            window = text[match.start() : min(end, match.start() + SCRIPT_WINDOW)]
             assert "NEW_TAB" in window or WORDS in window, f"{path.name}: no words after {match[0]} at {match.start()}"
             assert "noopener noreferrer" in window, f"{path.name}: rel after {match[0]} at {match.start()}"
     assert found >= 8  # noqa: PLR2004  (dashboard.js 5, admin.js 3)
