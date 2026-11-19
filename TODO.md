@@ -12,8 +12,10 @@ Observations about live sites below come from checks made on 2026-11-14 and may 
   (`templates/dashboard.html`, `showGone`). Ticking it shows every discarded role (a hidden company counts as discarded
   roles) and each card has a "Restore" button (`discardControl` in `templates/dashboard.js`). Nothing lists the hidden roles
   together, and a discarded role whose posting closed disappears. Where: first a UI/UX plan (Claude Design, the UI/UX expert
-  and the advisor write it before any code, as for the Share button), then the list, signed in and out, from the same data as
-  today. No new data is stored, so no `PRIVACY.md` change; if a plan needs new data, the lawyer comes first. Design this
+  and the advisor write it before any code, as for the Share button, PR 238), then the list, signed in and out, from the same
+  data as today. No new data is stored, so no `PRIVACY.md` change; if a plan needs new data, the lawyer comes first. Signed
+  out, a discard keeps only the job key and a date, so a closed role can show a title only signed in unless the plan says
+  otherwise. Design this
   together with the next item. Done when: a user can see all hidden roles in one place and unhide one from there; the tests,
   the design-system rules (tokens, WCAG AA, 44px targets) and the WebMCP tools stay consistent.
 
