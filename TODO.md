@@ -6,6 +6,25 @@ delete it and update the counts in the others: the researched count and the segm
 An item with a screenshot in `todo-images/` goes with it: delete the image file in the same PR.
 Observations about live sites below come from checks made on 2026-11-14 and may have changed.
 
+## Dashboard
+
+- [ ] **A list of the roles the user hid, with a way to unhide each.** Trigger: the filters have "Show discarded (N)"
+  (`templates/dashboard.html`, `showGone`). Ticking it shows every discarded role (a hidden company counts as discarded
+  roles) and each card has a "Restore" button (`discardControl` in `templates/dashboard.js`). Nothing lists the hidden roles
+  together, and a discarded role whose posting closed disappears. Where: first a UI/UX plan (Claude Design, the UI/UX expert
+  and the advisor write it before any code, as for the Share button), then the list, signed in and out, from the same data as
+  today. No new data is stored, so no `PRIVACY.md` change; if a plan needs new data, the lawyer comes first. Design this
+  together with the next item. Done when: a user can see all hidden roles in one place and unhide one from there; the tests,
+  the design-system rules (tokens, WCAG AA, 44px targets) and the WebMCP tools stay consistent.
+
+- [ ] **A list of the companies the user hid, with an Unhide button.** Trigger: "Company not for me" hides every role of the
+  company (account: a `user_jobs` row with state `company`; signed out: local storage `il-jobs-discarded-companies-v1`). The
+  only way back is to tick "Show discarded" and press "Restore" on any role of that company, which brings the whole company
+  back. A company with no open roles has no card, so it cannot be unhidden, and nothing lists which companies are hidden.
+  Where: the same UI/UX plan step as the previous item (one design), then a "Hidden companies" list with "Unhide", signed in
+  and out. No new data. Done when: a user sees every hidden company and unhides one without finding one of its roles; a hidden
+  company with no open roles is listed too.
+
 ## Descriptions
 
 - [ ] **Text for the browser companies that give none.** Trigger: Check Point (231 jobs, bot protection), monday.com (128),
