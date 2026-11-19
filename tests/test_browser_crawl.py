@@ -11,6 +11,9 @@ from tests.fakes import FakeCtx, FakeEl, FakeLoc, FakePage, FakePlaywright, Fake
 
 URL = "https://x.test/careers"
 SCROLL_CAP = 25
+SLOW_ANSWER = 4  # the fourth read of the link count is the first to see the new links
+SETTLE_POLLS = 32
+TWO = 2
 TWO = 2
 THREE = 3
 FOUR = 4
@@ -148,6 +151,25 @@ async def test_scroll_loop_load_more_and_growth() -> None:
     bad = FakeEl(click_error=True)
     page = FakePage(btn=bad, count_fn=lambda _i: 3)
     assert await run(page) == []
+
+
+async def test_load_more_waits_for_a_slow_list() -> None:
+    # the list answers the click late (Priority Software's admin-ajax takes seconds from a runner): the crawl waits
+    # for the link count to change instead of reading it once after a fixed pause
+    btn = FakeEl()
+    page = FakePage(btn=btn, count_fn=lambda i: 9 if i < SLOW_ANSWER else 21)
+    await run(page)
+    # round 1: the count before, three polls (the third sees the new links), the count after; round 2: the count
+    # before, a full wait that sees nothing new (the loop then ends), the count after
+    assert btn.clicks == TWO
+    assert page._count_calls == 1 + SLOW_ANSWER - 1 + 1 + 1 + SETTLE_POLLS + 1
+
+
+async def test_load_more_gives_up_when_the_list_never_grows() -> None:
+    btn = FakeEl()
+    page = FakePage(btn=btn, count_fn=lambda _i: 7)
+    assert await run(page) == []
+    assert btn.clicks == TWO  # one bounded wait per click, then the unchanged count ends the loop
 
 
 async def test_collect_link_filters_and_titles() -> None:

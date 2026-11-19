@@ -43,7 +43,7 @@ NEXT_SELS = [
 EF_SEARCH = "/api/pcsx/search"  # Eightfold career sites: the page's own search request
 EF_NEXT = 'button[aria-label="Next jobs" i]'
 EF_MAX_PAGES = 60  # ten jobs a page
-SETTLE_POLLS = 32  # at 250 ms: wait up to 8 s for a pagination click to show new job links
+SETTLE_POLLS = 32  # at 250 ms: wait up to 8 s for a pagination or a "load more" click to show new job links
 MORE = re.compile(r"load more|show more|see more|view more|more jobs|more positions", re.I)
 LANGS = {
     "english",
@@ -448,9 +448,13 @@ async def crawl_one(ctx: Any, url: str, sem: asyncio.Semaphore) -> list[dict[str
                 with contextlib.suppress(Exception):
                     btn = page.get_by_role("button", name=MORE).first
                     if await btn.is_visible(timeout=300):
+                        before = await page.eval_on_selector_all("a[href]", "e=>e.length")
                         await _polite(page.url)
                         await btn.click(timeout=2000)
-                        await page.wait_for_timeout(900)
+                        for _poll in range(SETTLE_POLLS):  # the list answers from a slow server: wait for new links
+                            await page.wait_for_timeout(250)
+                            if await page.eval_on_selector_all("a[href]", "e=>e.length") != before:
+                                break
                 n = await page.eval_on_selector_all("a[href]", "e=>e.length")
                 if n == prev:
                     break
