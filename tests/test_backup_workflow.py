@@ -31,8 +31,24 @@ def test_the_backup_runs_on_every_run_whatever_the_earlier_steps_did_and_has_no_
     step = steps()["backup"]
     assert "if: ${{ always() && steps.checkout.outcome == 'success' }}" in step
     assert "timeout-minutes: 10" in step
-    assert "inputs." not in step
-    assert "backup" not in HEADER  # nothing at the workflow's head (inputs, env) switches it off
+    assert re.findall(r"inputs\.\w+", step) == ["inputs.allow_backup_shrink"]  # the only input, and it skips nothing
+    assert "inputs." not in script_of(step)  # nothing typed reaches the shell
+    assert not re.search(r"(?m)^\s*(skip|disable)\w*:", HEADER)  # no input at the workflow's head switches it off
+
+
+def test_the_backup_shrink_override_is_a_boolean_input_that_only_adds_the_flag_to_the_publish() -> None:
+    """2026-11-19: a deleted test account tripped the guard, and the scheduled runs could not publish again."""
+    assert re.search(
+        r"(?m)^      allow_backup_shrink:\n(?:        .+\n)*?        type: boolean\n        default: false$", WORKFLOW
+    )
+    step = steps()["backup"]
+    assert "ALLOW_BACKUP_SHRINK_FLAG: ${{ inputs.allow_backup_shrink && '--allow-shrink' || '' }}" in step
+    run = script_of(step)
+    publish = f'python publish_backup.py "$BACKUP_WORK/export" "{REMOTE}" "$BACKUP_WORK/clone"'
+    assert f"{publish} $ALLOW_BACKUP_SHRINK_FLAG\n" in run
+    assert run.count("ALLOW_BACKUP_SHRINK_FLAG") == 1
+    assert "--allow-shrink" not in run
+    assert "ALLOW_BACKUP_SHRINK_FLAG" not in steps()["pull"]
 
 
 def test_the_backup_step_is_the_only_one_with_the_backup_key_and_its_secrets_are_exactly_three() -> None:
@@ -53,7 +69,7 @@ def test_the_backup_step_exports_before_the_key_exists_to_a_directory_outside_th
     )
     assert 'BACKUP_WORK="$(mktemp -d "$RUNNER_TEMP/backup.XXXXXX")"' in run
     assert 'python export_accounts.py "$BACKUP_WORK/export"' in run
-    assert f'python publish_backup.py "$BACKUP_WORK/export" "{REMOTE}" "$BACKUP_WORK/clone"' in run
+    assert f'python publish_backup.py "$BACKUP_WORK/export" "{REMOTE}" "$BACKUP_WORK/clone"' in run  # plus the flag
     assert "GITHUB_WORKSPACE" not in run and "$PWD" not in run
     assert "trap 'rm -rf \"$BACKUP_WORK\"' EXIT" in run  # the data goes even when the export itself fails
     assert "refs/heads/main" in run  # the same guard as the deploy push
