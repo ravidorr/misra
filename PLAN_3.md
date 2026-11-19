@@ -1,7 +1,8 @@
 # Plan 3: more companies
 
 Step plan to close the coverage gap users reported: too few startups and too few large multinationals. Drafted
-2026-11-18, revised the same day after two reviews; A1, A2, B1, B3 and D3 are done, B2 waits for the maintainer; the rest is not built yet. Targets are proposals for the
+2026-11-18, revised the same day after two reviews. The three targets (A3) are confirmed by the maintainer; what the first
+overnight and day run did is in "Status (2026-11-19)" below.
 
 Conventions are those of `PLAN.md`: a change to a listed Python module bumps `package.json` and `pyproject.toml`
 together and adds a `CHANGELOG.md` entry; a new Python module is registered in `RELEASE_TRIGGER_PATHS` (`ci.yml`,
@@ -27,6 +28,56 @@ count query with the service role, never printing rows.
   by convention (it is set only on researched records today; nothing enforces it).
 - Crawl step: `timeout-minutes: 20` inside a 30 minute job, 8 threads, 1 second per host (`common.py:24`).
 - `docs/jobs.json` is 2.1 MB. The history is about 9.7k jobs and about 250 `crawl_log` rows a day.
+
+## Status (2026-11-19)
+
+The `companies` table held 347 rows on 2026-11-18 and 413 on 2026-11-19: 328 crawled, 85 researched only, 0 excluded
+(`docs/jobs.json` of 2026-11-19 12:31 UTC says 328 covered). The counts in "Baseline" above are the A1 snapshot of
+2026-11-18 (267 and 80; B1 then parked 14 records the same day) and are not rewritten; the breakdowns by `ats` and by `gap.reason` of the 413 were not recomputed. Some batch companies were already researched rows that were unlocked, so the batches
+below add up to more than the 66 rows the table grew by.
+
+- **Batches** (a company is named here only because it is a non-excluded row; no excluded company is ever named).
+  - Batch 1 (2026-11-18 and 2026-11-19): 15 startups (tag `plan3-d5-b1`), plus Gilat, Landa, and Synopsys and Siemens
+    (Avature).
+  - Batch 2 (24): K2view, Leverate, SysAid Technologies, ThetaRay, Jiga, Jazz, Scaleops, Youappi, IVIX, Ledge, MDClone,
+    plainid, Tenna, ZyG, Roche, Abbott, Micron, Boston Scientific, Lam Research, Apple, Rapyd, env0, Kornit Digital and
+    Zesty. All 24 were `ok` with jobs on the manual run of 2026-11-19.
+  - Batch 3 (25): 22 browser pins and the three Jibe companies (PepsiCo 36, Schneider Electric 9, ICE 3 Israel jobs).
+    `discover` was `ok` for all of them; the three Jibe companies had jobs on the manual run of 2026-11-19.
+  - Batch 4 (7 browser pins): Foundational, Hoopo, Radwin, RiT Technologies, SiteAware, Sola and Visitt. `discover` was
+    `ok`; the first real crawl is the 04:23 UTC run of 2026-11-20, so these are not verified yet.
+- **Vetting.** The candidate tool of D3 vetted 197 browser-route candidates: 29 usable (all added in batches 3 and 4)
+  and 168 skipped: 124 read zero jobs, 38 had no Israel jobs, 2 were not real lists, 2 were refused by the site, Dazz
+  redirects to Wiz and Fig duplicates Fig Security. The vetting files are outside the repository.
+- **Adapters and fixes merged.** Avature (Synopsys, Siemens), Eightfold (Micron, Boston Scientific, Lam Research),
+  Jibe (PepsiCo, Schneider Electric, ICE; PR 234, migration `20261205100000`), the Oracle HCM location fix (0.72.1), the
+  browser reader fixes (Apple, Rapyd, env0, Kornit and Zesty are readable; Pillar is dropped, see C3) and the Load more
+  wait that fixed Priority Software (PR 236).
+- **Holds and decisions.**
+  - Google stays a gap. On 2026-11-19 `google.com/robots.txt` disallows the career results pagination (`?page=`);
+    page 1 shows 20 of the 65 Israel rows. The maintainer granted an exception to the "adapters need two" rule, but the
+    adapter was not built for that reason. Revisit only with an allowed feed or written permission.
+  - Uber stays a gap: `jobs.uber.com` answers a Cloudflare challenge (403) to a plain request although its
+    `robots.txt` allows everything. Its coverage link now points to `https://jobs.uber.com/`.
+  - Unity: its 123 stale non-Israel rows are accepted. They close when the Workday tenant answers from the runner.
+  - Workday is unchanged: all 25 tenants are runner-blocked.
+  - Xtend, Weebit Nano and Freightos were held back by the sharp-drop guard on 2026-11-18 (a JavaScript interstitial
+    from the site's bot protection that comes and goes) and recovered. Priority Software was a reader gap, fixed in PR 236.
+  - B2 is closed: 25 Workday tenants runner-blocked, 5 SmartRecruiters companies skipped by `robots.txt`, and the
+    bot-protected browser crawls (Nayax, DriveNets, Check Point, Papaya Global) stay listed.
+- **Process.**
+  - F2, the weekly triage: run the candidate tool on a new list, review the `crawl_log` failures and the coverage card,
+    add at most 25 companies, verify each batch by the next daily crawl, and revert a failure in the admin editor.
+  - The daily workflow has the `allow_backup_shrink` manual input (PR 237, `CONTRIBUTING.md`, "Backups of the account
+    tables"). A manual run with `digest_dry_run` ticked crawls without emailing.
+  - The 09:53 UTC scheduled run is only a fallback: its guard skips it when a green scheduled or cron-job.org run exists the same day. A new
+    company's first crawl is therefore the next 04:23 UTC run, unless a manual run is made.
+- **Account.** The maintainer deleted a test account on 2026-11-19. The daily backup guard (`user_jobs`
+  from 5 rows to 0) failed the run once and was resolved with `allow_backup_shrink`.
+- **Other changes merged the same days.** "Company not for me" saved in the account (PR 235, migration
+  `20261205110000`, approved by the lawyer on 2026-11-19), the Share button on the job card (PR 238), the hidden "Not
+  specified" and "Other" pills (PR 241), the new-tab icon after external links (PR 240) and the region-share measure
+  (PR 239).
 
 ## Prior findings: do not repeat
 
@@ -158,7 +209,7 @@ Measured 2026-11-18 with the A1 report and read-only `gh` commands (counts and t
   titles read "DETAILS"); `no_feed_found` Deel, Hailo, Varonis, Vimeo, Wix, Dynamic Yield (career address is
   Mastercard's) and Imperva (Thales'). The table now has 253 crawled, 94 researched only, none crawled without `ok`.
   Two may become real work later: a `comeet_page` fix for Zesty, and a better title read for Rapyd.
-- [ ] **B2. "Request failed" companies.** Split the failing list into (a) the Workday and Oracle tenants that fail only
+- [x] **B2. "Request failed" companies.** Split the failing list into (a) the Workday and Oracle tenants that fail only
   from the runner (known limitation, see above) and (b) real failures (wrong slug, changed feed). Re-test (a) from a
   daily run once; if still blocked, leave them and say so in `TODO.md`. Fix (b). Done when: every failing company is in
   (a) with a dated note or fixed.
@@ -170,9 +221,9 @@ Measured 2026-11-18 with the A1 report and read-only `gh` commands (counts and t
   Atera, Kaltura, Armis; a decision, not a failure); 7 browser crawls behind bot protection from the runner (Nayax,
   DriveNets, Check Point, Papaya Global; Xtend, Weebit Nano, Freightos held back by the sharp-drop guard); and 2
   `comeet_page` companies (Optibus, REE Automotive) that failed on 2 of 4 runs and answer from a normal network, a
-  transient failure. None needs a feed change, and each of the 14 has history, so no change is applied. Done when
-  stays open until the maintainer decides on the bot-protected browser companies (keep listed, or park) and the
-  Workday limitation (accept, or move the crawl to another network).
+  transient failure. None needs a feed change, and each of the 14 has history, so no change is applied.
+  Closed on 2026-11-19: the maintainer's decision is in "Status (2026-11-19)" (the Workday limitation stands, the
+  bot-protected browser crawls stay listed). Xtend, Weebit Nano and Freightos recovered after the guard held them back.
 - [x] **B3. Audit `israel_only`.** For the 73 pinned records, confirm the filter drops only non-Israel jobs. Spot-check 10
   against the career page. Done when: no known Israel posting is dropped; a mismatch gets an adapter test.
 
@@ -198,7 +249,7 @@ Measured 2026-11-18 with the A1 report and read-only `gh` commands (counts and t
   - Not a filter fault: Unity shows 123 jobs outside Israel in `docs/jobs.json` (first seen 2026-11-13, titles such
     as a language name). They are old rows of an earlier browser crawl of the company site, not the Workday feed,
     which returns 8 Israel jobs from a laptop. The runner cannot read Unity's Workday feed (the known block), so the
-    old rows are not closed. Step B2 should close them or settle the block.
+    old rows are not closed. Settled on 2026-11-19: accepted (see "Status (2026-11-19)").
   - Not checked: the browser crawls and Amazon (no public feed to compare with; every job kept in `docs/jobs.json`
     for them is flagged Israel), and ServiceNow (SmartRecruiters answers nothing from here).
 
@@ -219,17 +270,16 @@ Target: 30. Read the "Prior findings" first; do not repeat a checked path.
 - **C2. `no_feed_found` (14).** The page exists, no known feed. Look for a JSON endpoint the page calls (as HiBob and
   Eightfold). Pin with `source: override`. Done when: each is crawled or has a dated note.
 - **C3. `needs_reader` (20).** Group by platform and check `robots.txt` first. An adapter only for a platform with two
-  or more companies that `robots.txt` allows (none qualifies today; the count may change after C1 and C2). The rest use
+  or more companies that `robots.txt` allows (none qualified on 2026-11-18; Avature, Eightfold and Jibe qualified on 2026-11-19, see E3). The rest use
   `browser` or `comeet_page`, within the crawl-time budget. One adapter per PR, with fixtures and 100% coverage.
   Reader fixes shipped in 0.75.0 (the `browser` card reader for icon-only and button-label links, the job links of Kornit
-  and Apple, the `comeet_page` card of Zesty); the pins of those records (env0, Rapyd, Walnut, Kornit, Apple, Zesty) are
+  and Apple, the `comeet_page` card of Zesty); the pins of those records (env0, Rapyd, Walnut, Kornit, Apple, Zesty; Walnut is not in any batch) are
   made by hand afterwards. Pillar is not included: its cards say only "Hybrid" or "Remote" and the city is a section
   heading above them, which the generic reader cannot attach to a job without risking the places of other companies
   (a review found such a rule misplaces cards under their own job-title heading). Needs a dedicated reader if wanted.
   Status (2026-11-19): the Avature adapter is built (Synopsys and Siemens, `robots.txt` allows the filtered RSS feed): slug
   `host/portal?field=value`, Israel facet `2001=21374` (Synopsys) and `42386=811993` (Siemens). The feed cannot be paged and
-  gives 20 jobs at most, so a feed of 20 is a failure (Synopsys 12, Siemens 17 today). Not applied or pinned yet: the
-  migration `20261203100000_companies_ats_avature.sql` is applied after the merge, then the two pins.
+  gives 20 jobs at most, so a feed of 20 is a failure (Synopsys 12, Siemens 17 today). Applied and pinned on 2026-11-19 (migration `20261203100000_companies_ats_avature.sql`, then the two pins).
 - **C4. `site_unusable` (10) and `no_openings` (6).** Recheck once; a site that is back or a board that reopened moves
   to the crawl. Repeat each quarter (step G).
 - **C5. `bot_protection` (7).** No change. Record the decision once so nobody retries.
@@ -276,7 +326,7 @@ Israeli R&D centres of global companies. Target: +40 crawled with `israel_only: 
   22 `multinational` records already researched. Cover big tech, semiconductors, networking, cloud and security,
   fintech, defence electronics, automotive, and pharma and medtech.
 - **E2. Platform map.** Start from the platform list in `TODO.md`, not from scratch. For each candidate, the ATS and
-  whether `robots.txt` allows it. Count per platform. Existing adapters: Workday, Oracle HCM, Phenom, Amazon,
+  whether `robots.txt` allows it. Count per platform. Existing adapters include Workday, Oracle HCM, Phenom, Amazon, Avature, Eightfold, Jibe and
   SmartRecruiters (blocked by `robots.txt` for the five current companies; keep skipping).
 - **E3. Adapters by count.** An adapter only for a platform with two or more allowed companies. Each needs an Israel
   filter, a per-company cap, and fixtures that include non-Israel jobs. One adapter per PR.
@@ -287,16 +337,15 @@ Israeli R&D centres of global companies. Target: +40 crawled with `israel_only: 
   `robots.txt` allows `/api/pcsx` on all three). The Israel filter is the search's location Israel plus a check of each
   position's place; the cap is 100 positions, and a total that does not add up is a failure. Israel jobs seen today:
   Micron 4, Boston Scientific 4, Lam Research 1. NetApp's API answers HTTP 403 ("PCSX is not enabled"), so it is not
-  readable and stays unpinned. The seven Eightfold browser records are not moved (the ids would be the same, but the browser reader also gives the descriptions). Not
-  applied or pinned yet: the migration `20261204100000_companies_ats_eightfold.sql` is applied after the merge, then the
-  three pins.
+  readable and stays unpinned. The seven Eightfold browser records are not moved (the ids would be the same, but the browser reader also gives the descriptions). Applied
+  and pinned on 2026-11-19 (migration `20261204100000_companies_ats_eightfold.sql`, then the three pins).
   Status (2026-11-19): the Jibe adapter is built (PepsiCo `www.pepsicojobs.com`, Schneider Electric `careers.se.com`, ICE
   `careers.ice.com`; slug is the host). The hosts are the companies' own domains, whose `robots.txt` allows everything; the
   iCIMS boards behind them are `Disallow: /` and are never read (the link of a job is the site's own page). The Israel filter
   is the API's country parameter plus a check of each place; the cap is 100 jobs, and a total that does not add up is a
   failure. Israel jobs seen today: PepsiCo 36, Schneider Electric 9, ICE 3. McAfee and Medallia are Jibe too but have 0
-  Israel jobs, so they are not pinned. Not applied or pinned yet: the migration `20261205100000_companies_ats_jibe.sql` is
-  applied after the merge, then the three pins.
+  Israel jobs, so they are not pinned. Applied and pinned on 2026-11-19 (migration `20261205100000_companies_ats_jibe.sql`, then
+  the three pins).
 - **E4. Runner test.** Before counting a Workday or Oracle pin, confirm it returns jobs from a daily run (the runner
   block above). A pin that fails from the runner is parked with a `gap` note, not counted.
 - **E5. Single companies.** `browser` crawl only inside the crawl-time budget; otherwise park with a `gap` reason.
