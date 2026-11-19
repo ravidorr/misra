@@ -1791,6 +1791,7 @@ const SHARE = {
   failed: "Couldn't copy",
   announceCopied: (what) => `Copied: ${what}.`,
   announceFailed: "Couldn't copy. The link is shown under the buttons.",
+  noLink: 'This role has no link to share.',
   copiedMs: 2000,
   failedMs: 4000,
 };
@@ -1812,9 +1813,10 @@ function showShare(button, item, outcome, url) {
   button.setAttribute('aria-label', `${SHARE[outcome]}: ${what}`);
   if (!ok) button.parentElement.append(h('span', { class: 'share-fallback', text: url }));
   const status = $('shareStatus');
+  const message = ok ? SHARE.announceCopied(what) : SHARE.announceFailed;
   status.textContent = '';
   setTimeout(() => {
-    status.textContent = ok ? SHARE.announceCopied(what) : SHARE.announceFailed;
+    status.textContent = message;
   }, 50);
   shareTimers.set(
     button,
@@ -1823,7 +1825,7 @@ function showShare(button, item, outcome, url) {
         button.textContent = SHARE.rest;
         button.setAttribute('aria-label', `Share: ${what}`);
       }
-      status.textContent = '';
+      if (status.textContent === message) status.textContent = ''; /* not another card's newer message */
     }, ok ? SHARE.copiedMs : SHARE.failedMs),
   );
 }
@@ -1832,7 +1834,10 @@ async function shareJob(button) {
   const item = itemFor(button.dataset.k);
   if (!item) return undefined;
   const url = safeUrl(item.u);
-  if (url === '#') return showShare(button, item, 'failed', '');
+  if (url === '#') {
+    $('shareStatus').textContent = SHARE.noLink; /* nothing to copy, so no "Couldn't copy" and no link to show */
+    return undefined;
+  }
   const text = shareText(item);
   const data = { title: item.t, text, url };
   if (canShareNatively() && (typeof navigator.canShare !== 'function' || navigator.canShare(data))) {

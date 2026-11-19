@@ -257,7 +257,9 @@ async def test_a_link_that_is_not_http_shares_nothing(page: Page, site: Path) ->
     )
     await serve(page, site, backend=backend)
     await page.click(f"{ONE} [data-act=share]")
-    await expect(page.locator(f"{ONE} [data-act=share]")).to_have_text("Couldn't copy")
+    await expect(page.locator("#shareStatus")).to_have_text("This role has no link to share.")
+    assert await page.locator(f"{ONE} [data-act=share]").inner_text() == "Share"
+    assert await page.locator(f"{ONE} .share-fallback").count() == 0
     assert await copied(page) == []
 
 
