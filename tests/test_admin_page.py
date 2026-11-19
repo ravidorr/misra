@@ -43,11 +43,16 @@ DONE = {"ok": True, "result": "done", "message": "Done."}
 DESKTOP = {"width": 1280, "height": 900}
 AREAS = ["Crawl", "Companies", "Alerts", "Log"]
 CRAWL_EMPTY = "No crawl results yet."
-STATES = ["signed-out", "not-admin", "check-failed", "ready"]  # the visitors; the page shows one of four states
+STATES = [
+    "signed-out",
+    "not-admin",
+    "check-failed",
+    "ready",
+]  # visitor scenarios; signed-out and not-admin both end in the not-found state
 NOT_FOUND_LINE = "There is no page at this address."
 FAILED_LINE = "This page could not load. Check your connection, then reload the page."
 NOT_FOUND_TITLE = "Page not found - Misra"
-MIN_CARD_HEIGHT = 200  # the 404 card has a minimum height of 14rem; the empty card is as tall
+MIN_CARD_HEIGHT = 200  # under the 14rem (224px) minimum height of the 404 card
 WIDE_MIN = 761  # wider than the 760px reading width of the other pages
 WIDE_MAX = 1000
 POLL_SECONDS = 0.05
@@ -444,10 +449,30 @@ async def test_the_page_shows_nothing_while_it_checks_a_saved_session(page: Page
     assert await state(page) == "checking"
     assert await visible_text(page) == ""
     assert await page.title() == NOT_FOUND_TITLE
+    assert await page.locator("main").get_attribute("aria-busy") == "true"
+    assert await page.evaluate("document.querySelector('.page').classList.contains('admin-page')") is False
     height = await page.evaluate("document.getElementById('main').getBoundingClientRect().height")
     backend.gate.set()
     await expect(page.locator("main")).to_have_attribute("data-state", "ready")
     assert height >= MIN_CARD_HEIGHT
+
+
+async def test_the_card_does_not_change_height_when_the_answer_is_the_404(page: Page, site: Path) -> None:
+    backend = Backend("not_admin")
+    backend.gate = asyncio.Event()
+    await open_admin(page, site, backend=backend, wait=False)
+    while backend.asked == 0:
+        await asyncio.sleep(POLL_SECONDS)
+    measure = (
+        "(() => [document.getElementById('main').getBoundingClientRect().height, "
+        "document.querySelector('footer').getBoundingClientRect().top])()"
+    )
+    waiting = await page.evaluate(measure)
+    backend.gate.set()
+    await expect(page.locator("main")).to_have_attribute("data-state", "not-found")
+    assert await page.evaluate(measure) == waiting  # the footer does not jump
+    assert await page.locator("main").get_attribute("aria-busy") == "false"
+    assert await page.evaluate("document.querySelector('.page').classList.contains('admin-page')") is False
 
 
 async def test_a_signed_in_non_admin_sees_the_404_and_only_the_check_was_asked(page: Page, site: Path) -> None:

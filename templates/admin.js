@@ -43,6 +43,7 @@ let client = null;
 function setState(state) {
   const ready = state === 'ready';
   main.dataset.state = state;
+  main.setAttribute('aria-busy', String(state === 'checking'));
   main.className = ready ? 'card admin' : 'card not-found';
   main.parentElement.classList.toggle('admin-page', ready); /* the wide page only for the admin: the 404 never changes width */
   notFound.hidden = state !== 'not-found' && state !== 'check-failed';
@@ -130,7 +131,7 @@ function refused(error) {
   return error.status >= HTTP_CLIENT_ERROR && error.status < HTTP_SERVER_ERROR;
 }
 
-/* Whether this account is an admin. Resolves with 'ready', 'not-admin', 'check-failed', 'signed-out' or 'expired' (the
+/* Whether this account is an admin. Resolves with the results (not page states) 'ready', 'not-admin', 'check-failed', 'signed-out' or 'expired' (the
    service refused the session); `settle` turns each into what the page shows. */
 async function check(again) {
   const saved = storage.getItem(STORAGE_KEY) !== null;
@@ -1387,7 +1388,7 @@ async function verdict() {
    nothing to check, and a 404 makes no request that could fail. */
 function settle(result) {
   if (result === 'expired') storage.removeItem(STORAGE_KEY);
-  if (result === 'ready') setState('ready');
+  if (result === 'ready' && storage.getItem(STORAGE_KEY) !== null) setState('ready'); /* not after a sign-out meanwhile */
   else if (result === 'check-failed' && storage.getItem(STORAGE_KEY) !== null) setState('check-failed');
   else setState('not-found');
 }

@@ -65,6 +65,7 @@ Alerts and Log. Adding a site a visitor reported is the Add button of the Compan
     the page says "Sign in on the dashboard first." with a link to `./`. A Sign out button sits in the page body in
     every signed-in state. The page never starts a redirect, so the Supabase Auth redirect allow-list is unchanged; any
     change to the production Auth config needs the maintainer's consent.
+  - (Superseded in v0.80.0: the states and messages below, and the signed-out link, are replaced by the 404 page, see `AGENTS.md`.)
   - **Page states** (`data-state` on the page): `checking` (the default; all content hidden), `signed-out`,
     `not-admin` ("This account is not an admin."), `check-failed` ("Could not check your account. Reload the page.";
     a network or backend error, not the same as not admin) and `ready`. A 401 shows "Your sign-in expired" and runs the
