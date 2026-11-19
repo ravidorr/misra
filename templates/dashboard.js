@@ -124,13 +124,16 @@ async function loadData() {
   try {
     const meta = JSON.parse($('page-data').textContent);
     const rows = await fetchJobs();
-    if (![meta.levels, meta.roleTypes, meta.regions].every(Array.isArray)) throw new Error('page data: no filter names');
+    if (![meta.levels, meta.roleTypes, meta.regions].every(Array.isArray) || typeof meta.notSpecified !== 'string') {
+      throw new Error('page data: no filter names');
+    }
     const failing = new Set(meta.gaps.blocked.map((gap) => gap.c));
     return {
       jobs: rows.map((row) => toJob(row, failing, meta.firstDay)),
       gaps: meta.gaps,
       generated: meta.generated,
       names: { levels: meta.levels, roleTypes: meta.roleTypes, regions: meta.regions },
+      notSpecified: meta.notSpecified,
     };
   } catch (error) {
     showLoadError(error);
@@ -1364,15 +1367,17 @@ function closedCardEl(e) {
   return h('li', {}, [art]);
 }
 
-/* The place, level, role types and team of a role: on the card. */
+/* The place, level, role types and team of a role: on the card. The level "Not specified" and the role type "Other"
+   say nothing, so they have no pill (the filters, `data-level` and `data-role-types` still carry them); the build names
+   the level (classify.NOT_SPECIFIED) and OTHER is classify.OTHER (a test keeps them equal). */
 const tagsEl = (j) =>
   h('p', { class: 'card-tags' }, [
     j.l && h('span', { class: 'pill', text: j.l.slice(0, MAX_LOCATION) }),
     ...j.rg.filter((region) => region !== j.l).map((region) => tag('Region', region, 'pill')),
     ...j.lo.filter((place) => place !== j.l).map((place) => tag('Place', place, 'pill')),
     j.ru && tag('Region', REMOTE_NOT_SAID, 'pill'),
-    tag('Level', j.lv, 'pill pill-soft'),
-    ...j.rt.map((type) => tag('Role type', type, 'pill pill-soft')),
+    j.lv !== DATA.notSpecified && tag('Level', j.lv, 'pill pill-soft'),
+    ...j.rt.filter((type) => type !== OTHER).map((type) => tag('Role type', type, 'pill pill-soft')),
     j.m && h('span', { class: 'pill', text: j.m }),
   ]);
 

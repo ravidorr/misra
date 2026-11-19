@@ -238,7 +238,7 @@ Two different things describe a job. The **level** says how senior it is (Intern
 field it is in (Product, R&D, IT, Finance and so on). Today only Product is recognised as a field, and the dashboard
 blends it with the levels. We keep the two apart, and recognise more role types over time.
 
-- AC: Every job has a level and a role type, shown on the card.
+- AC: Every job has a level and a role type, always in `data-level` and `data-role-types`, and shown on the card unless the level is "Not specified" or the role type is "Other" (they say nothing).
 - AC: Level and role type are separate filters, on the dashboard, in the digest settings and for the assistant.
 - AC: The role types are Product, R&D (software, hardware, QA, algorithms), DevOps & SRE, Data & AI, Design, IT,
   Finance, Sales & BD, Customer success & support, and Other. Marketing, HR, Legal and Operations stay in Other until they have

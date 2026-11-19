@@ -28,6 +28,12 @@ All notable changes are documented here. Format follows [Keep a Changelog](https
 
 - Every link that opens in a new tab (`a[target="_blank"]`) now shows the same small box-with-arrow icon after its text, painted by one rule (`design-system/components/external-link.css`, the shape `design-system/assets/new-tab.svg` as a CSS mask in the link's own colour, so it follows light, dark, a button and forced colors). It replaces the arrow character of "Apply" and "Read full description & apply on ..." and the inline `svg.icon-ext` of the sign-in notice, the job alerts consent and the Contact page; no link has two arrows. The legal Markdown files, `templates/email.js` and every approved word are unchanged: the build already adds the screen-reader words "(opens in a new tab)" to a converted link, and the icon is CSS only. `build_dashboard.py` copies the mask to `docs/new-tab.svg` (a file, because `img-src 'self'` refuses a `data:` URI). The admin links and the sign-in notice link now carry `rel="noopener noreferrer"` (they had `noopener`).
 
+## [0.78.3] - 2026-11-19
+
+### Changed
+
+- The job card no longer shows a pill for the level "Not specified" or the role type "Other": they say nothing about the role. The Levels and Role types filters (and their counts), `data-level` and `data-role-types` on `article.card`, the WebMCP tools, `jobs.jsonld` and the digest are unchanged; every other level and role type keeps its pill. The page gets the level's name from the build (`notSpecified` in the page data, from `classify.NOT_SPECIFIED`) and a test keeps the role type's spelling equal to `classify.OTHER`.
+
 ## [0.78.2] - 2026-11-19
 
 ### Fixed
