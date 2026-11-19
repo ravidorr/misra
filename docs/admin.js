@@ -488,7 +488,7 @@ function careerLink(row) {
   const link = el('a', 'admin-link', 'Career page');
   link.href = href;
   link.target = '_blank';
-  link.rel = 'noopener';
+  link.rel = 'noopener noreferrer';
   link.append(el('span', 'sr-only', ' (opens in a new tab)'));
   return link;
 }
@@ -532,7 +532,7 @@ function companiesView() {
   const workflow = el('a', 'btn btn-pill', 'Open the workflow');
   workflow.href = DISCOVER_URL;
   workflow.target = '_blank';
-  workflow.rel = 'noopener';
+  workflow.rel = 'noopener noreferrer';
   workflow.append(el('span', 'sr-only', ' (opens in a new tab)'));
   const add = el('button', 'btn btn-pill btn-primary', 'Add a company');
   add.type = 'button';
@@ -1192,7 +1192,7 @@ function finish(...words) {
     const link = el('a', 'admin-link', 'Open the workflow');
     link.href = DISCOVER_URL;
     link.target = '_blank';
-    link.rel = 'noopener';
+    link.rel = 'noopener noreferrer';
     link.append(el('span', 'sr-only', ' (opens in a new tab)'));
     parts.push(link);
   }

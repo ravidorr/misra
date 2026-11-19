@@ -11,11 +11,11 @@
 <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#121116">
 <title>Admin</title>
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="dashboard.css" integrity="sha384-1XLMex1IvcLXwTdH6QbkmZQHmY/0kvMFjAVU0WbmGmIok39ZhZo03okmeH7kFfmp">
+<link rel="stylesheet" href="dashboard.css" integrity="sha384-ZKnThSM0CVI2KvF62rZ8lcmFWdakxqHyjtNmlTXqyYKXTj35QN9CctejtWft7/bK">
 <script src="theme.js" integrity="sha384-7z2KN8CtvARlTfXl2TowUS4HxyeN0rAe6Q516+zOt4eo/dTIOcQvyW4xeRr+6GqC"></script>
 <script src="supabase.js" integrity="sha384-TcHRA3zBbn+Lexh5n+Oil4guNPOS3rjNDpGRAN46u/s/mB2IZ50ceC6TYDU2yvgK" defer></script>
 <link rel="modulepreload" href="session.js" integrity="sha384-FsEWKURtN691ugcpyRrC9xb7SvxuqaiRnxSvtOGlmtmb/tdFHcsFW6p02Mf+LraA">
-<script type="module" src="admin.js" integrity="sha384-hHtAW2HBIukJgQsFQuhURAB5L4KKa0upQNrM5A+umxMBYnOj9qFLq24Bz0aqq6gK"></script>
+<script type="module" src="admin.js" integrity="sha384-k+DIYMiuiB5qhaCLWLEePwZkDWMgwQgvedGCTo/Tz5ZHPSTRgXzWsV/Q79wEkeT8"></script>
 </head>
 <body>
 <a class="skip" href="#main">Skip to main content</a>
@@ -115,7 +115,7 @@
         </fieldset>
         <div class="company-timing" id="timingNote" hidden>
     <p class="field-hint">Not crawled until discovery has run: the discover-companies workflow finds the job feed of a company that has no status.</p>
-    <a class="admin-link" href="https://github.com/ravidorr/misra/actions/workflows/discover-companies.yml" target="_blank" rel="noopener">Open the workflow<span class="sr-only"> (opens in a new tab)</span></a>
+    <a class="admin-link" href="https://github.com/ravidorr/misra/actions/workflows/discover-companies.yml" target="_blank" rel="noopener noreferrer">Open the workflow<span class="sr-only"> (opens in a new tab)</span></a>
   </div>
         <div id="cardFields" hidden>
           <div class="field-group">
@@ -165,7 +165,7 @@
           </div>
           <div class="company-timing">
             <p class="field-hint">A Workday or Oracle feed may come back not ok, because the GitHub runner cannot read it. Then edit the company back, or put it on the coverage card with a reason. This page never sets a feed to ok; for a board only the crawl can read, tick "Trust its job board" after the pin is saved.</p>
-            <a class="admin-link" href="https://github.com/ravidorr/misra/actions/workflows/discover-companies.yml" target="_blank" rel="noopener">Open the workflow<span class="sr-only"> (opens in a new tab)</span></a>
+            <a class="admin-link" href="https://github.com/ravidorr/misra/actions/workflows/discover-companies.yml" target="_blank" rel="noopener noreferrer">Open the workflow<span class="sr-only"> (opens in a new tab)</span></a>
           </div>
         </fieldset>
         <dl class="crawl-facts" id="discovered" hidden></dl>

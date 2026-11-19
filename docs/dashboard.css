@@ -85,7 +85,7 @@
 }
 /*
  * Button. Use <a> for navigation (Apply) and <button type="button"> for actions.
- *   <a class="btn btn-primary" href="...">Apply ↗</a>
+ *   <a class="btn btn-primary" href="..." target="_blank" rel="noopener noreferrer">Apply</a> (the new-tab icon: external-link.css)
  *   <button type="button" class="btn">Show more</button>
  *   <button type="button" class="btn btn-pill">Not for me</button>
  *   <button type="button" class="btn btn-pill btn-danger">Delete my account permanently</button>
@@ -182,9 +182,9 @@
  *     </div>
  *     <h3 class="card-title"><a href="...">Role</a></h3>
  *     <p class="card-snippet" dir="auto">Start of the posting, up to 255 characters, as written</p>
- *     <p class="card-more"><a href="...">Read full description &amp; apply on Acme ↗</a></p>
+ *     <p class="card-more"><a href="..." target="_blank" rel="noopener noreferrer">Read full description &amp; apply on Acme</a></p>
  *     <p class="card-tags"><span class="pill">Tel Aviv</span></p>
- *     <p class="card-actions"><a class="btn btn-primary" href="...">Apply ↗</a></p>
+ *     <p class="card-actions"><a class="btn btn-primary" href="..." target="_blank" rel="noopener noreferrer">Apply</a></p>
  *   </article>
  */
 .card {
@@ -388,9 +388,8 @@
  * no other change). A form keeps its Cancel button beside it. The filters sheet puts the (x) in its sticky head
  * (see sheet.css), so it stays in view while the controls scroll:
  *   <button type="button" class="dialog-close" aria-label="Close"><svg aria-hidden="true" ...>x</svg></button>
- * A link that opens in a new tab carries the `.icon-ext` arrow and the words "(opens in a new tab)":
- *   <a href="terms.html" target="_blank" rel="noopener">Terms<svg class="icon-ext" aria-hidden="true" ...></svg>
- *   <span class="sr-only"> (opens in a new tab)</span></a>
+ * A link that opens in a new tab gets its icon from external-link.css and carries the words "(opens in a new tab)":
+ *   <a href="terms.html" target="_blank" rel="noopener noreferrer">Terms<span class="sr-only"> (opens in a new tab)</span></a>
  */
 .dialog {
   box-sizing: border-box;
@@ -471,15 +470,32 @@
 .dialog:has(.dialog-close) .dialog-title {
   padding-inline-end: calc(var(--tap) + var(--space-3));
 }
-
-.icon-ext {
-  width: 0.85em;
-  height: 0.85em;
-  margin-inline-start: 0.2em;
-  vertical-align: -0.1em;
+/*
+ * A link that opens in a new tab shows a small "box with an arrow" icon after its text. It is painted for every
+ * `a[target="_blank"]` here, never written into the markup, so the same rule covers a link written by hand, one built
+ * in a script and one a Markdown page is converted into (whose words are never touched):
+ *   <a href="..." target="_blank" rel="noopener noreferrer">Terms<span class="sr-only"> (opens in a new tab)</span></a>
+ * The icon is decorative (empty content, no accessible name): the words "(opens in a new tab)" in `.sr-only` are what
+ * a screen reader reads, and the build adds them to a converted link. The shape is the mask `new-tab.svg`, a file
+ * because the Content-Security-Policy (`img-src 'self'`) refuses a data: URI; it takes the colour of the link text
+ * (`currentColor`), so it follows the theme, a button and the colours Windows forces.
+ * A link that lays its text out in a column (`.gap-link`) puts the icon after its name text, so it never sits on a row of its own.
+ */
+a[target="_blank"]:not(.gap-link)::after,
+.gap-link .gap-name-text::after {
+  display: inline-block;
+  width: 0.9em;
+  height: 0.9em;
+  margin-inline-start: 0.25em;
+  background-color: currentcolor;
+  content: "";
+  forced-color-adjust: none; /* else Windows high contrast paints it with the page colour and it disappears */
+  mask: url("new-tab.svg") center / contain no-repeat;
+  vertical-align: -0.12em;
 }
 
-.icon-ext:dir(rtl) {
+a[target="_blank"]:dir(rtl)::after,
+.gap-link:dir(rtl) .gap-name-text::after {
   transform: scaleX(-1);
 }
 /*
