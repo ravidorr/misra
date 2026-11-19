@@ -885,8 +885,7 @@ async def test_the_not_for_me_menu_is_a_menu_button_that_the_keyboard_and_screen
     assert await panel.is_hidden()
     assert await button.evaluate("(el) => el === document.activeElement")  # the focus returns to the button
     await button.press("Enter")
-    await page.keyboard.press("Tab")
-    await page.keyboard.press("Tab")  # out of the menu: it closes
+    await page.keyboard.press("Tab")  # one tab stop: Tab leaves the menu and it closes
     assert await panel.is_hidden()
     await button.click()
     await page.click("#q")  # a click elsewhere closes it too
@@ -920,3 +919,17 @@ async def test_signed_in_not_for_me_stays_a_plain_button_for_the_position(page: 
     await page.click(f"{PM1} [data-act=toggle]")
     await until(lambda: choices.state_of("Acme", "1") == "discard")
     assert await page.locator(PM2).count() == 1
+
+
+async def test_the_focus_lands_on_a_visible_control_when_the_last_card_is_removed_through_the_menu(
+    page: Page, site: Path
+) -> None:
+    await serve(page, site)
+    await page.click("#next")  # the last page holds two roles
+    card = page.locator("#list li").last.locator("article")
+    job = await card.get_attribute("data-job-id")
+    assert job is not None
+    await choose_not_for_me(page, f"article[data-job-id='{job}']", "toggle")
+    assert await page.evaluate(
+        "document.activeElement.matches('#list [data-act]') && document.activeElement.offsetParent !== null"
+    )

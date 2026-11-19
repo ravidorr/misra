@@ -1385,7 +1385,7 @@ function discardControl(j, what, discarded) {
     });
   }
   const item = (act, text, label) =>
-    h('button', { type: 'button', class: 'account-item', role: 'menuitem', 'data-act': act, 'data-k': k, 'aria-label': label, text });
+    h('button', { type: 'button', class: 'account-item', role: 'menuitem', tabindex: '-1', 'data-act': act, 'data-k': k, 'aria-label': label, text });
   return h('span', { class: 'card-menu' }, [
     h('button', {
       type: 'button',
@@ -1583,7 +1583,7 @@ function render(focusIdx) {
   $('next').disabled = page >= pages - 1;
   $('pageInfo').textContent = `Page ${page + 1} of ${pages}`;
   if (focusIdx !== undefined) {
-    const buttons = list.querySelectorAll('[data-act]');
+    const buttons = list.querySelectorAll('[data-act]:not([role="menuitem"])');
     buttons[Math.min(focusIdx, buttons.length - 1)]?.focus();
   }
 }
@@ -1741,7 +1741,7 @@ $('list').addEventListener('click', (e) => {
   }
   const k = button.dataset.k;
   const item = itemFor(k);
-  const index = [...$('list').querySelectorAll('[data-act]')].indexOf(menu ? menu.querySelector('[data-act="menu"]') : button);
+  const index = [...$('list').querySelectorAll('[data-act]:not([role="menuitem"])')].indexOf(menu ? menu.querySelector('[data-act="menu"]') : button);
   if (button.dataset.act === 'star') setChoice(item, isStarred(k) ? null : 'star');
   else if (button.dataset.act === 'company') discardCompany(item.c);
   else setChoice(item, isDiscarded(k) ? null : 'discard');
