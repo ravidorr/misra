@@ -1,6 +1,6 @@
 /*
  * Button. Use <a> for navigation (Apply) and <button type="button"> for actions.
- *   <a class="btn btn-primary" href="...">Apply ↗</a>
+ *   <a class="btn btn-primary" href="..." target="_blank" rel="noopener noreferrer">Apply</a> (the new-tab icon: external-link.css)
  *   <button type="button" class="btn">Show more</button>
  *   <button type="button" class="btn btn-pill">Not for me</button>
  *   <button type="button" class="btn btn-pill btn-danger">Delete my account permanently</button>

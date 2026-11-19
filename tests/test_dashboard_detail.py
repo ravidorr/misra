@@ -43,7 +43,7 @@ async def test_there_is_no_details_button_and_only_a_card_with_a_snippet_links_t
     assert await page.locator(".card-more").count() == len(ROWS) - 1
     assert await card(page, "none").locator(".card-more").count() == 0
     link = card(page, "whole").locator(".card-more a")
-    assert (await link.text_content() or "").startswith("Read full description & apply on Acme ↗")
+    assert (await link.text_content() or "").startswith("Read full description & apply on Acme")
     assert "opens in a new tab" in (await link.text_content() or "")
     assert await link.get_attribute("href") == "https://x.test/j"
     assert await link.get_attribute("target") == "_blank"

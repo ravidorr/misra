@@ -107,6 +107,9 @@ def write_static(workdir: Path) -> None:
     (workdir / "templates" / "digest.js").write_text("const digest = '__SUPABASE_URL__/digest';\n", encoding="utf-8")
     (workdir / "design-system" / "assets").mkdir(parents=True, exist_ok=True)
     (workdir / "design-system" / "assets" / "mark.svg").write_text("<svg><title>mark</title></svg>", encoding="utf-8")
+    (workdir / "design-system" / "assets" / "new-tab.svg").write_text(
+        "<svg><title>new tab</title></svg>", encoding="utf-8"
+    )
     (workdir / "design-system" / "assets" / "apple-touch-icon.png").write_bytes(b"\x89PNG stand-in")
     (workdir / "templates" / "google0e1aa15dbd543e2f.html").write_bytes(b"google-site-verification: stand-in")
     (workdir / "vendor").mkdir(exist_ok=True)
@@ -155,6 +158,7 @@ def test_main_builds_dashboard(db: sqlite3.Connection, workdir: Path, capsys: py
     build_dashboard.main()
     docs = workdir / "docs"
     assert (docs / "favicon.svg").read_text(encoding="utf-8") == "<svg><title>mark</title></svg>"
+    assert (docs / "new-tab.svg").read_text(encoding="utf-8") == "<svg><title>new tab</title></svg>"
     assert (docs / "apple-touch-icon.png").read_bytes() == b"\x89PNG stand-in"
     payload = read_payload(workdir)
     gaps = payload["gaps"]
@@ -305,6 +309,7 @@ def test_site_files_are_written_next_to_the_page(db: sqlite3.Connection, workdir
         "index.html",
         "jobs.json",
         "jobs.jsonld",
+        "new-tab.svg",
         "privacy.html",
         "report.js",
         "security.html",

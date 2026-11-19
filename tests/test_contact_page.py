@@ -138,7 +138,7 @@ async def test_every_field_has_a_label_a_hint_and_a_tap_target_and_the_trap_is_o
     assert await link.get_attribute("href") == "privacy.html"
     assert await link.get_attribute("target") == "_blank"
     assert await link.get_attribute("rel") == "noopener noreferrer"
-    assert await link.locator("svg.icon-ext").count() == 1
+    assert await link.locator("svg").count() == 0  # the icon is painted by external-link.css
     box = await link.bounding_box()
     assert box
     assert box["height"] >= TAP_MIN

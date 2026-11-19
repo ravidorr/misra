@@ -22,6 +22,12 @@ All notable changes are documented here. Format follows [Keep a Changelog](https
 - The Crawl area of the admin page (PLAN_2.md step 2.2): it calls `admin_crawl_health()` when first shown and lists one card per company, worst first, with a headline, chips with counts (Needs attention, Failing, Robots.txt, Held, All), the values of the crawl and a status pill. Loading, empty, error and 401 states. Templates and tests only.
 - A Copy button under every code block of the legal pages (the address on "Connect your assistant", the command for Claude Code), in `templates/theme.js`.
 
+## [0.79.0] - 2026-11-19
+
+### Changed
+
+- Every link that opens in a new tab (`a[target="_blank"]`) now shows the same small box-with-arrow icon after its text, painted by one rule (`design-system/components/external-link.css`, the shape `design-system/assets/new-tab.svg` as a CSS mask in the link's own colour, so it follows light, dark, a button and forced colors). It replaces the arrow character of "Apply" and "Read full description & apply on ..." and the inline `svg.icon-ext` of the sign-in notice, the job alerts consent and the Contact page; no link has two arrows. The legal Markdown files, `templates/email.js` and every approved word are unchanged: the build already adds the screen-reader words "(opens in a new tab)" to a converted link, and the icon is CSS only. `build_dashboard.py` copies the mask to `docs/new-tab.svg` (a file, because `img-src 'self'` refuses a `data:` URI). The admin links and the sign-in notice link now carry `rel="noopener noreferrer"` (they had `noopener`).
+
 ## [0.78.3] - 2026-11-19
 
 ### Changed

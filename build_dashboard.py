@@ -73,8 +73,10 @@ OUTPUT_NAMES = {"templates/dashboard.html": "index.html"}
 # Third-party scripts copied byte for byte to docs/ (vendor/README.md says where each one comes from). The page loads
 # them from its own origin, so the Content-Security-Policy needs no CDN.
 VENDORED_FILES = ("vendor/supabase.js",)
-# The sources of the icons the pages link: the logo mark and a 180 px render of it on white, copied to docs/.
+# The sources of the icons the pages link: the logo mark and a 180 px render of it on white, copied to docs/. The third
+# is the shape of the "opens in a new tab" icon, which dashboard.css loads as a mask (a data: URI would break the CSP).
 ICON_FILES = {
+    "design-system/assets/new-tab.svg": "new-tab.svg",
     "design-system/assets/mark.svg": "favicon.svg",
     "design-system/assets/apple-touch-icon.png": "apple-touch-icon.png",
 }
