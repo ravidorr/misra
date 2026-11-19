@@ -7,6 +7,7 @@ from urllib.parse import urlparse
 import pytest
 
 import adapters
+import common
 import descriptions
 import discover
 from tests.conftest import COMEET_FEEDS, FROZEN_COMPANIES
@@ -2121,3 +2122,220 @@ def test_avature_the_slugs_of_the_two_companies_are_accepted_by_the_admin_editor
 
 def test_avature_is_registered() -> None:
     assert adapters.ADAPTERS["avature"] is adapters.avature
+
+
+MICRON_SLUG = "careers.micron.com?domain=micron.com"
+LAM_SLUG = "lamresearch.eightfold.ai?domain=lamresearch.com"
+EF_URL = "https://careers.micron.com/api/pcsx/search"
+
+
+def ef_position(job_id: Any = 7, **over: Any) -> dict[str, Any]:
+    return {
+        "id": job_id,
+        "name": "Engineer",
+        "locations": ["Haifa, Israel"],
+        "standardizedLocations": [],
+        "postedTs": 1790000000,
+        "department": "R&D",
+        "positionUrl": f"/careers/job/{job_id}",
+        **over,
+    }
+
+
+def ef_answer(positions: list[Any], count: Any = None) -> FakeHttpResponse:
+    return FakeHttpResponse(
+        data={"status": 200, "data": {"count": len(positions) if count is None else count, "positions": positions}}
+    )
+
+
+def fake_eightfold(monkeypatch: pytest.MonkeyPatch, *answers: FakeHttpResponse | None) -> list[dict[str, Any]]:
+    """Each request gets the next answer; the calls are kept."""
+    calls: list[dict[str, Any]] = []
+    queue = list(answers)
+
+    def _get(url: str, **kw: Any) -> FakeHttpResponse | None:
+        calls.append({"url": url, **kw})
+        return queue.pop(0)
+
+    monkeypatch.setattr(adapters, "get", _get)
+    return calls
+
+
+def test_eightfold_reads_the_israel_jobs_and_drops_the_others_of_the_same_answer(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    data = json.loads((FIXTURES / "eightfold_micron.json").read_text("utf-8"))
+    calls = fake_eightfold(monkeypatch, FakeHttpResponse(data=data))
+    jobs = adapters.eightfold(MICRON_SLUG)
+    assert calls == [{"url": EF_URL, "params": {"domain": "micron.com", "location": "Israel", "start": 0}}]
+    assert jobs == [
+        {
+            "job_id": "100000001",
+            "title": "ASIC Design Engineer",
+            "location": "Israel",
+            "url": "https://careers.micron.com/careers/job/100000001",
+            "team": "Design",
+            "posted": "2026-07-29",
+        },
+        {
+            "job_id": "100000002",
+            "title": "AI Engineering Manager",
+            "location": "Hadera, Israel",
+            "url": "https://careers.micron.com/careers/job/100000002",
+            "team": "IT",
+            "posted": "2026-09-04",
+        },
+        {  # several places: kept, Israel is one of them, and all are the place
+            "job_id": "100000003",
+            "title": "OSINT Analyst",
+            "location": "Hadera, Israel; Boise, ID, United States",
+            "url": "https://careers.micron.com/careers/job/100000003",
+            "team": "IT",
+            "posted": "2026-08-26",
+        },
+    ]
+
+
+def test_eightfold_reads_a_board_whose_place_is_only_a_site_code(monkeypatch: pytest.MonkeyPatch) -> None:
+    data = json.loads((FIXTURES / "eightfold_lam.json").read_text("utf-8"))
+    fake_eightfold(monkeypatch, FakeHttpResponse(data=data))
+    jobs = adapters.eightfold(LAM_SLUG)
+    assert jobs is not None
+    assert [(j["job_id"], j["location"], j["url"]) for j in jobs] == [
+        ("1099556387295", "IL-Israel Intel-02 (2511)", "https://lamresearch.eightfold.ai/careers/job/1099556387295")
+    ]
+
+
+def test_eightfold_a_standardized_location_in_israel_is_enough(monkeypatch: pytest.MonkeyPatch) -> None:
+    only_code = ef_position(1, locations=["Site 4"], standardizedLocations=["Haifa, Haifa District, IL"])
+    other = ef_position(2, locations=["Site 5"], standardizedLocations=["Austin, TX, US"])
+    fake_eightfold(monkeypatch, ef_answer([only_code, other]))
+    jobs = adapters.eightfold(MICRON_SLUG)
+    assert jobs is not None
+    assert [j["job_id"] for j in jobs] == ["1"]
+
+
+def test_eightfold_pages_on_from_the_number_of_positions_read(monkeypatch: pytest.MonkeyPatch) -> None:
+    first = [ef_position(i) for i in range(10)]
+    second = [ef_position(i) for i in range(10, 13)]
+    calls = fake_eightfold(monkeypatch, ef_answer(first, 13), ef_answer(second, 13))
+    jobs = adapters.eightfold(MICRON_SLUG)
+    assert jobs is not None
+    assert [j["job_id"] for j in jobs] == [str(i) for i in range(13)]
+    assert [c["params"]["start"] for c in calls] == [0, 10]
+
+
+def test_eightfold_no_position_is_an_empty_board(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls = fake_eightfold(monkeypatch, ef_answer([]))
+    assert adapters.eightfold(MICRON_SLUG) == []
+    assert len(calls) == 1
+
+
+def test_eightfold_a_list_at_the_cap_is_read_and_one_above_it_is_not(monkeypatch: pytest.MonkeyPatch) -> None:
+    pages = [ef_answer([ef_position(i) for i in range(s, s + 10)], adapters.EIGHTFOLD_MAX) for s in range(0, 100, 10)]
+    fake_eightfold(monkeypatch, *pages)
+    jobs = adapters.eightfold(MICRON_SLUG)
+    assert jobs is not None
+    assert len(jobs) == adapters.EIGHTFOLD_MAX
+    calls = fake_eightfold(monkeypatch, ef_answer([ef_position(1)], adapters.EIGHTFOLD_MAX + 1))
+    assert adapters.eightfold(MICRON_SLUG) is None  # a board that ignores the location: no second request
+    assert len(calls) == 1
+
+
+@pytest.mark.parametrize(
+    "answers",
+    [
+        [None],  # no answer
+        [FakeHttpResponse(status_code=403, data={"message": "PCSX is not enabled for this user."})],  # NetApp
+        [FakeHttpResponse(status_code=404, data={})],
+        [FakeHttpResponse(json_error=True)],  # not JSON
+        [FakeHttpResponse(data=[])],  # JSON that is not an object
+        [FakeHttpResponse(data={"data": None})],
+        [FakeHttpResponse(data={"data": {"positions": []}})],  # no count
+        [FakeHttpResponse(data={"data": {"count": "1", "positions": []}})],
+        [FakeHttpResponse(data={"data": {"count": 1, "positions": {}}})],
+        [ef_answer([ef_position(1)], 2), None],  # the second answer fails
+        [ef_answer([ef_position(1)], 2), ef_answer([], 2)],  # the second has no position and the total is not reached
+        [ef_answer([ef_position(1)], 2), ef_answer([ef_position(2)], 3)],  # the total moved
+        [ef_answer([ef_position(1)], 2), ef_answer([ef_position(1)], 2)],  # a position twice
+        [ef_answer([ef_position(1), ef_position(2)], 1)],  # more positions than the total
+    ],
+)
+def test_eightfold_a_list_that_cannot_be_trusted_is_a_failure(
+    monkeypatch: pytest.MonkeyPatch, answers: list[FakeHttpResponse | None]
+) -> None:
+    fake_eightfold(monkeypatch, *answers)
+    assert adapters.eightfold(MICRON_SLUG) is None
+
+
+@pytest.mark.parametrize(
+    "bad",
+    [
+        "not a position",
+        ef_position(1, name=""),
+        ef_position(1, id="1"),  # the id is a number
+        ef_position(1, positionUrl="https://evil.test/x"),  # a path of the board only
+        ef_position(1, positionUrl=None),
+    ],
+)
+def test_eightfold_a_position_that_cannot_be_read_fails_the_whole_list(
+    monkeypatch: pytest.MonkeyPatch, bad: Any
+) -> None:
+    fake_eightfold(monkeypatch, ef_answer([ef_position(2), bad]))
+    assert adapters.eightfold(MICRON_SLUG) is None
+
+
+def test_eightfold_odd_fields_are_tolerated_not_trusted(monkeypatch: pytest.MonkeyPatch) -> None:
+    odd = ef_position(3, locations="Israel", standardizedLocations=None, postedTs="soon", department=None)
+    israel = ef_position(4, postedTs=10**30, department="")
+    fake_eightfold(monkeypatch, ef_answer([odd, israel]))
+    jobs = adapters.eightfold(MICRON_SLUG)  # `odd` has no place that can be read, so it is not Israel
+    assert jobs is not None
+    assert [(j["job_id"], j["posted"], j["team"]) for j in jobs] == [("4", "", "")]
+
+
+@pytest.mark.parametrize(
+    "slug",
+    [
+        "",
+        "careers.micron.com",
+        "careers.micron.com?",
+        "careers.micron.com?domain=",
+        "careers.micron.com?domain=micron",  # a domain has a dot
+        "careers.micron.com?domain=micron.com&location=Israel",  # one field only
+        "careers.micron.com?location=Israel",
+        "micron?domain=micron.com",  # a host has a dot
+        "careers.micron.com/careers?domain=micron.com",  # the path is fixed, not part of the slug
+        "https://careers.micron.com?domain=micron.com",
+        "Careers.Micron.com?domain=micron.com",
+        "careers.micron.com?domain=micron.com ",
+    ],
+)
+def test_eightfold_a_slug_that_is_not_host_and_domain_is_a_failure_without_a_request(
+    monkeypatch: pytest.MonkeyPatch, slug: str
+) -> None:
+    calls = fake_eightfold(monkeypatch, ef_answer([]))
+    assert adapters.eightfold(slug) is None
+    assert calls == []
+
+
+def test_eightfold_goes_through_the_robots_gate_and_the_polite_get(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The request is common.get's: a robots.txt refusal makes it None, so the list is a failure, never partial."""
+    monkeypatch.setattr(adapters, "get", common.get)
+    monkeypatch.setattr(common, "robots_gate", lambda url: False)
+    assert adapters.eightfold(MICRON_SLUG) is None
+
+
+def test_eightfold_the_slugs_are_accepted_by_the_admin_editor() -> None:
+    admin = (Path(__file__).parent.parent / "templates" / "admin.js").read_text("utf-8")
+    chars = re.search(r"const PIN_SLUG_CHARS = /(.*)/;", admin)
+    longest = re.search(r"const PIN_SLUG_MAX = (\d+);", admin)
+    assert chars
+    assert longest
+    for slug in (MICRON_SLUG, LAM_SLUG, "bostonscientific.eightfold.ai?domain=bostonscientific.com"):
+        assert re.fullmatch(chars[1], slug)
+        assert len(slug) <= int(longest[1])
+
+
+def test_eightfold_is_registered() -> None:
+    assert adapters.ADAPTERS["eightfold"] is adapters.eightfold

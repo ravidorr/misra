@@ -1,0 +1,79 @@
+{
+ "status": 200,
+ "data": {
+  "count": 5,
+  "positions": [
+   {
+    "id": 100000001,
+    "displayJobId": "R1",
+    "name": "ASIC Design Engineer",
+    "locations": [
+     "Israel"
+    ],
+    "standardizedLocations": [
+     "Israel"
+    ],
+    "postedTs": 1785283200,
+    "department": "Design",
+    "positionUrl": "/careers/job/100000001"
+   },
+   {
+    "id": 100000002,
+    "displayJobId": "R2",
+    "name": "AI Engineering Manager",
+    "locations": [
+     "Hadera, Israel"
+    ],
+    "standardizedLocations": [
+     "Hadera, Haifa District, IL"
+    ],
+    "postedTs": 1788480000,
+    "department": "IT",
+    "positionUrl": "/careers/job/100000002"
+   },
+   {
+    "id": 100000003,
+    "displayJobId": "R3",
+    "name": "OSINT Analyst",
+    "locations": [
+     "Hadera, Israel",
+     "Boise, ID, United States"
+    ],
+    "standardizedLocations": [
+     "Hadera, Haifa District, IL"
+    ],
+    "postedTs": 1787702400,
+    "department": "IT",
+    "positionUrl": "/careers/job/100000003"
+   },
+   {
+    "id": 100000004,
+    "displayJobId": "R4",
+    "name": "Process Engineer",
+    "locations": [
+     "Boise, ID, United States"
+    ],
+    "standardizedLocations": [
+     "Boise, ID, US"
+    ],
+    "postedTs": 1787702400,
+    "department": "Manufacturing",
+    "positionUrl": "/careers/job/100000004"
+   },
+   {
+    "id": 100000005,
+    "displayJobId": "R5",
+    "name": "Equipment Technician",
+    "locations": [
+     "Amman, Jordan"
+    ],
+    "standardizedLocations": [
+     "Amman, JO"
+    ],
+    "postedTs": 1787702400,
+    "department": "Manufacturing",
+    "positionUrl": "/careers/job/100000005"
+   }
+  ]
+ }
+}

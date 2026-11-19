@@ -278,6 +278,13 @@ Israeli R&D centres of global companies. Target: +40 crawled with `israel_only: 
   Status (2026-11-19): Avature is the first adapter from this step (see C3). Its Israel filter is the Country facet; the cap is
   the feed's 20 jobs. The fixtures hold postings whose description names another country: a Siemens posting for several
   countries lists Israel among them and is kept, as the board's own Israel filter does.
+  Status (2026-11-19): the Eightfold adapter is built (Micron, Boston Scientific and Lam Research; slug `host?domain=domain`;
+  `robots.txt` allows `/api/pcsx` on all three). The Israel filter is the search's location Israel plus a check of each
+  position's place; the cap is 100 positions, and a total that does not add up is a failure. Israel jobs seen today:
+  Micron 4, Boston Scientific 4, Lam Research 1. NetApp's API answers HTTP 403 ("PCSX is not enabled"), so it is not
+  readable and stays unpinned. The seven Eightfold browser records are not moved (it would change their job ids). Not
+  applied or pinned yet: the migration `20261204100000_companies_ats_eightfold.sql` is applied after the merge, then the
+  three pins.
 - **E4. Runner test.** Before counting a Workday or Oracle pin, confirm it returns jobs from a daily run (the runner
   block above). A pin that fails from the runner is parked with a `gap` note, not counted.
 - **E5. Single companies.** `browser` crawl only inside the crawl-time budget; otherwise park with a `gap` reason.

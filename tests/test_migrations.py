@@ -1190,12 +1190,15 @@ def test_the_lint_rejects_a_weakened_admin_account_migration(old: str, new: str)
     assert problems(statements_of(ADMIN_ACCOUNT_SQL.replace(old, new)))
 
 
-ATS_SQL = (MIGRATION_DIR / "20261203100000_companies_ats_avature.sql").read_text(encoding="utf-8")
+ATS_FILES = ("20261203100000_companies_ats_avature.sql", "20261204100000_companies_ats_eightfold.sql")
+ATS_SQL = (MIGRATION_DIR / ATS_FILES[0]).read_text(encoding="utf-8")
 
 
-def test_the_ats_check_migration_passes_the_lint_and_changes_nothing_else() -> None:
-    assert problems(statements_of(ATS_SQL)) == []
-    assert [s.split(" check")[0] for s in statements_of(ATS_SQL)] == [
+@pytest.mark.parametrize("name", ATS_FILES)
+def test_the_ats_check_migration_passes_the_lint_and_changes_nothing_else(name: str) -> None:
+    sql = (MIGRATION_DIR / name).read_text(encoding="utf-8")
+    assert problems(statements_of(sql)) == []
+    assert [s.split(" check")[0] for s in statements_of(sql)] == [
         "alter table public.companies drop constraint companies_ats_known",
         "alter table public.companies add constraint companies_ats_known",
     ]
