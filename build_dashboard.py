@@ -632,6 +632,7 @@ def main() -> None:
             "firstDay": first,
             # The filters are built from these lists (classify.py and regions.py), in display order.
             "levels": list(classify.LEVELS),
+            "notSpecified": classify.NOT_SPECIFIED,
             "roleTypes": list(classify.ROLE_TYPE_NAMES),
             "regions": list(regions.REGION_NAMES),
         }

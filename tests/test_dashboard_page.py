@@ -969,28 +969,29 @@ async def tags(page: Page, job_id: str) -> str:
     return await page.locator(f"article[data-job-id='Acme|{job_id}'] .card-tags").text_content() or ""
 
 
-async def test_fr9_ac1_every_card_shows_a_level_and_a_role_type(page: Page, site: Path) -> None:
+async def test_fr9_ac1_every_card_shows_a_stated_level_and_a_role_type(page: Page, site: Path) -> None:
     await serve_filters(page, site)
     cards = await page.locator("#list article").all()
     assert len(cards) == len(ISRAEL_IDS)
     for card in cards:
         text = await card.locator(".card-tags").text_content() or ""
-        assert "Level: " in text
-        assert "Role type: " in text
+        assert ("Level: " in text) == (await card.get_attribute("data-level") != "Not specified")
+        assert ("Role type: " in text) == (await card.get_attribute("data-role-types") != "Other")
         assert await card.get_attribute("data-level")
         assert await card.get_attribute("data-role-types")
     assert "Level: Intern" in await tags(page, "fin")
     assert "Role type: Finance" in await tags(page, "fin")
-    assert "Level: Not specified" in await tags(page, "pm")  # a level the title does not state is shown too
+    assert "Level:" not in await tags(page, "pm")  # a level the title does not state says nothing: no pill
+    assert await page.locator("article[data-job-id='Acme|pm']").get_attribute("data-level") == "Not specified"
     assert await page.locator("article[data-job-id='Acme|pd']").get_attribute("data-role-types") == "Product|Design"
     assert "Role type: Product" in await tags(page, "pd")
     assert "Role type: Design" in await tags(page, "pd")
 
 
-async def test_fr9_ac1_a_job_without_a_role_type_shows_other(page: Page, site: Path) -> None:
+async def test_fr9_ac1_a_job_without_a_role_type_is_other_with_no_pill(page: Page, site: Path) -> None:
     await serve(page, site, backend=Backend([job("x", "Mystery", "Haifa, Israel", role_types=[], regions=[NORTH])]))
     assert await page.locator("article[data-job-id='Acme|x']").get_attribute("data-role-types") == "Other"
-    assert "Role type: Other" in await tags(page, "x")
+    assert "Role type:" not in await tags(page, "x")  # "Other" says nothing: no pill
 
 
 async def test_fr9_ac2_level_and_role_type_are_separate_filters(page: Page, site: Path) -> None:

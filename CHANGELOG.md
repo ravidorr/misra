@@ -22,6 +22,12 @@ All notable changes are documented here. Format follows [Keep a Changelog](https
 - The Crawl area of the admin page (PLAN_2.md step 2.2): it calls `admin_crawl_health()` when first shown and lists one card per company, worst first, with a headline, chips with counts (Needs attention, Failing, Robots.txt, Held, All), the values of the crawl and a status pill. Loading, empty, error and 401 states. Templates and tests only.
 - A Copy button under every code block of the legal pages (the address on "Connect your assistant", the command for Claude Code), in `templates/theme.js`.
 
+## [0.78.2] - 2026-11-19
+
+### Changed
+
+- The job card no longer shows a pill for the level "Not specified" or the role type "Other": they say nothing about the role. The Levels and Role types filters (and their counts), `data-level` and `data-role-types` on `article.card`, the WebMCP tools, `jobs.jsonld` and the digest are unchanged; every other level and role type keeps its pill. The page gets the level's name from the build (`notSpecified` in the page data, from `classify.NOT_SPECIFIED`) and a test keeps the role type's spelling equal to `classify.OTHER`.
+
 ## [0.78.1] - 2026-11-19
 
 ### Fixed
