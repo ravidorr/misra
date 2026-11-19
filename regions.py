@@ -32,7 +32,7 @@ PLACES: dict[str, tuple[str, ...]] = {
         r"or yehuda|\bazor\b|givat shmuel|תל אביב|רמת גן|בני ברק|חולון",
     ),
     SHARON: (
-        r"herzliya|raanana|hod ?hasharon|kfar saba|netanya|kfar netter|ramat hasharon|kadima|even yehuda",
+        r"herzliya|raanana|hod ?hasharon|kfar saba|kefar sava|netanya|kfar netter|ramat hasharon|kadima|even yehuda",
         r"הרצליה|רעננה|הוד השרון|כפר סבא|נתניה",
     ),
     CENTER: (
@@ -47,6 +47,7 @@ PLACES: dict[str, tuple[str, ...]] = {
     ),
     SOUTH: (
         r"beer ?sheva|beersheba|ashdod|ashkelon|kiryat gat|eilat|dimona|sderot|netivot|ofakim|yeruham|mitzpe ramon",
+        r"\brahat\b",
         r"באר שבע|אשדוד|אשקלון|אילת",
     ),
 }
@@ -62,7 +63,8 @@ DISTRICTS: dict[str, str] = {
 
 # Words that say "Israel" or "somewhere" but name no city.
 _NO_CITY = re.compile(
-    r"israel|\bisr\b|\bil\b|\bhq\b|hybrid|remote|multiple locations|district|headquarters|\boffices?\b|[^a-z0-9א-ת]",
+    r"israel|\bisr\b|\bil\b|\bhq\b|hybrid|remote|multiple locations|various locations|\b\d+ locations|\bwithin\b"
+    r"|district|headquarters|\boffices?\b|[^a-z0-9א-ת]",
 )
 
 
@@ -150,17 +152,19 @@ def place(location: str | None) -> Place:
 
 
 def report(locations: Iterable[str | None], sample: int = 20) -> str:
-    """Region quality report for the daily log: the share of jobs in Israel that fall into a region, the jobs with no
-    city, and the most common places left unmapped, so the table above can be improved."""
+    """Region quality report for the daily log: the share of jobs in Israel that name a city and fall into a region, the
+    jobs with no city (they cannot be placed, so they are counted apart, not in the share), and the most common places
+    left unmapped, so the table above can be improved."""
     placed = [p for p in (place(location) for location in locations) if p.israel]
-    in_region = sum(1 for p in placed if p.regions)
+    named = [p for p in placed if p.regions or p.locations != (CITY_NOT_GIVEN,)]
+    in_region = sum(1 for p in named if p.regions)
     unmapped: Counter[str] = Counter()
     for p in placed:
         unmapped.update(p.locations)
-    share = in_region / len(placed) if placed else 1.0
-    lines = [f"Regions: {share:.1%} of {len(placed)} jobs in Israel are in a region"]
+    share = in_region / len(named) if named else 1.0
+    lines = [f"Regions: {share:.1%} of {len(named)} jobs in Israel that name a city are in a region"]
     lines.extend(f"  {name}: {sum(1 for p in placed if name in p.regions)}" for name in REGION_NAMES)
-    lines.append(f"  {CITY_NOT_GIVEN}: {unmapped.pop(CITY_NOT_GIVEN, 0)}")
+    lines.append(f"  {CITY_NOT_GIVEN}: {unmapped.pop(CITY_NOT_GIVEN, 0)} (not in the share)")
     if unmapped:
         lines.append(f"  Unmapped places (top {min(sample, len(unmapped))} of {len(unmapped)}):")
         lines.extend(f"    {count} {name}" for name, count in unmapped.most_common(sample))
