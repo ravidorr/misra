@@ -80,7 +80,7 @@ def test_the_rule_is_one_mask_file_that_the_page_policy_allows_and_the_build_cop
     assert 'url("data:' not in css  # the pages' `img-src 'self'` refuses a data: URI (a mask is an image fetch)
     assert "<svg" in MASK.read_text(encoding="utf-8")
     assert build_dashboard.ICON_FILES["design-system/assets/new-tab.svg"] == "new-tab.svg"
-    for name in ("dashboard.html", "legal.html", "email.html", "contact.html", "admin.html"):
+    for name in ("dashboard.html", "legal.html", "email.html", "contact.html", "admin.html", "not-found.html"):
         page = (REPO / "templates" / name).read_text(encoding="utf-8")
         assert "img-src 'self'" in page, name
         assert "dashboard.css" in page, name  # every page loads the one stylesheet that holds the rule

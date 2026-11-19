@@ -135,7 +135,7 @@ async def test_two_small_forms_sit_below_the_counts_each_with_one_labelled_addre
 async def test_the_forms_are_not_there_for_someone_who_is_not_an_admin(page: Page, site: Path) -> None:
     backend = Backend("not_admin")
     await open_area(page, site, "alerts", backend)
-    assert await state(page) == "not-admin"
+    assert await state(page) == "not-found"
     assert await page.locator("#endForm:visible, #deleteForm:visible").count() == 0
     assert backend.account_calls == []
 
@@ -511,28 +511,28 @@ async def test_a_404_twice_with_a_live_session_says_nothing_was_done_and_keeps_t
     assert await values(page) == [ADDRESS, ""]
 
 
-async def test_a_404_twice_for_an_account_that_is_not_an_admin_ends_the_ready_state_and_clears_the_field(
+async def test_a_404_twice_for_an_account_that_is_not_an_admin_shows_the_404_page_and_clears_the_field(
     page: Page, site: Path
 ) -> None:
     backend = backend_with((404, None))
     await start(page, site, backend)
     backend.answer = "not_admin"
     await end_alerts(page)
-    await expect(page.locator("main")).to_have_attribute("data-state", "not-admin")
+    await expect(page.locator("main")).to_have_attribute("data-state", "not-found")
     assert len(backend.account_calls) == TWO
     assert await values(page) == ["", ""]  # the hidden field holds nothing
     assert ADDRESS not in await page.content()
 
 
-async def test_a_404_twice_for_a_session_that_is_over_shows_the_signed_out_page_and_clears_the_field(
+async def test_a_404_twice_for_a_session_that_is_over_shows_the_404_page_and_clears_the_field(
     page: Page, site: Path
 ) -> None:
     backend = backend_with((404, None))
     await start(page, site, backend)
     backend.answer = "unauthorized"
     await end_alerts(page)
-    await expect(page.locator("main")).to_have_attribute("data-state", "signed-out")
-    await expect(page.locator("#adminExpired")).to_have_text("Your sign-in expired.")
+    await expect(page.locator("main")).to_have_attribute("data-state", "not-found")
+    await expect(page.locator("#notFoundLine")).to_have_text("There is no page at this address.")
     assert len(backend.account_calls) == TWO
     assert await values(page) == ["", ""]
 
@@ -542,7 +542,7 @@ async def test_a_deletion_that_ends_in_another_state_closes_the_dialog(page: Pag
     await start(page, site, backend)
     backend.answer = "not_admin"
     await delete_account(page)
-    await expect(page.locator("main")).to_have_attribute("data-state", "not-admin")
+    await expect(page.locator("main")).to_have_attribute("data-state", "not-found")
     assert not await dialog_open(page)
     assert await values(page) == ["", ""]
 
@@ -552,7 +552,7 @@ async def test_signing_out_clears_what_was_typed(page: Page, site: Path) -> None
     await type_into(page, "end")
     await type_into(page, "delete")
     await page.get_by_role("button", name="Sign out").click()
-    await expect(page.locator("main")).to_have_attribute("data-state", "signed-out")
+    await expect(page.locator("main")).to_have_attribute("data-state", "not-found")
     assert await values(page) == ["", ""]
 
 

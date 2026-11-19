@@ -195,7 +195,7 @@ async def test_only_the_check_and_one_read_of_the_list_are_asked_and_nothing_els
 
 async def test_a_non_admin_never_loads_the_list(page: Page, site: Path) -> None:
     backend = await open_companies(page, site, Backend("not_admin", companies=ROWS))
-    assert await state(page) == "not-admin"
+    assert await state(page) == "not-found"
     assert backend.requests == [CHECK]
 
 

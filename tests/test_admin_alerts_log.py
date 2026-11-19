@@ -143,7 +143,7 @@ async def test_alerts_with_a_token_refused_twice_is_an_error_and_does_not_loop(p
 
 async def test_a_non_admin_never_loads_alerts_or_the_log(page: Page, site: Path) -> None:
     backend, _problems = await open_area(page, site, "alerts", Backend("not_admin", alerts=COUNTS, log=LOG))
-    assert await state(page) == "not-admin"
+    assert await state(page) == "not-found"
     assert backend.requests == [CHECK]
     assert await page.locator(".alerts, .log").count() == 0
 

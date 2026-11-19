@@ -22,6 +22,16 @@ All notable changes are documented here. Format follows [Keep a Changelog](https
 - The Crawl area of the admin page (PLAN_2.md step 2.2): it calls `admin_crawl_health()` when first shown and lists one card per company, worst first, with a headline, chips with counts (Needs attention, Failing, Robots.txt, Held, All), the values of the crawl and a status pill. Loading, empty, error and 401 states. Templates and tests only.
 - A Copy button under every code block of the legal pages (the address on "Connect your assistant", the command for Claude Code), in `templates/theme.js`.
 
+## [0.80.0] - 2026-11-19
+
+### Added
+
+- `docs/404.html`, the 404 page of the site ("Page not found", one line and a "See open roles" button, `noindex`), built from `templates/not-found.html` and the words in `templates/parts/not-found.inc`. GitHub Pages serves it for a missing address at any depth, so `build_dashboard.py` makes its links and assets absolute under the new `SITE_PATH` (`/misra/`). It is not linked from anywhere and is in neither `llms.txt` nor `jobs.jsonld`.
+
+### Changed
+
+- `admin.html` shows that 404 page to anyone who is not an admin: signed out, signed in without the role, or without JavaScript (the 404 is the default markup of the file). `admin.js` shows an empty card while a saved session is checked and swaps in the admin page only after `is_admin()` is true; the wide page and the title "Crawl - Admin" apply only then. A signed-in visitor whose check cannot be answered sees "This page could not load. Check your connection, then reload the page." in place of the 404 line. "Your sign-in expired." and "This account is not an admin." are gone. GitHub Pages cannot send a real HTTP 404 for `admin.html` (it answers 200), and hiding adds no security: the database (`is_admin()` and row-level security) decides, and `admin.js` is public.
+
 ## [0.79.0] - 2026-11-19
 
 ### Changed

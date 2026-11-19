@@ -9,7 +9,7 @@
 <meta name="robots" content="noindex">
 <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f5f0e6">
 <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#121116">
-<title>Admin</title>
+<title>Page not found - Misra</title>
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="dashboard.css" integrity="__SRI_DASHBOARD_CSS__">
 <script src="theme.js" integrity="__SRI_THEME_JS__"></script>
@@ -19,18 +19,14 @@
 </head>
 <body>
 <a class="skip" href="#main">Skip to main content</a>
-<div class="page admin-page">
+<div class="page">
 __HEADER__
-<main class="card admin" id="main" data-state="checking">
-<noscript><p class="notice">The admin page needs JavaScript.</p></noscript>
-<div class="admin-head" data-when="signed-out not-admin check-failed ready" hidden>
+<main class="card not-found" id="main" data-state="not-found">
+__NOT_FOUND__
+<div class="admin-head" data-when="ready" hidden>
   <h1 class="admin-title">Admin</h1>
-  <button type="button" class="btn btn-pill" id="adminSignOut" data-when="not-admin check-failed ready" hidden>Sign out</button>
+  <button type="button" class="btn btn-pill" id="adminSignOut">Sign out</button>
 </div>
-<p class="admin-line" id="adminExpired" role="status" data-when="signed-out" hidden></p>
-<p class="admin-line" data-when="signed-out" hidden><a class="admin-link" href="./">Sign in on the dashboard first.</a></p>
-<p class="admin-line" data-when="not-admin" hidden>This account is not an admin.</p>
-<p class="notice" role="alert" data-when="check-failed" hidden>Could not check your account. Reload the page.</p>
 <div data-when="ready" hidden>
   <nav class="admin-nav" aria-label="Admin">
     <a class="btn btn-pill" href="#crawl">Crawl</a>

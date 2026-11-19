@@ -84,6 +84,11 @@ def write_static(workdir: Path) -> None:
     (workdir / "templates" / "admin.html").write_text("<!doctype html><title>a</title>", encoding="utf-8")
     (workdir / "templates" / "admin.js").write_text("const admin = '__SUPABASE_URL__';\n", encoding="utf-8")
     (workdir / "templates" / "contact.html").write_text("<!doctype html><title>c</title>", encoding="utf-8")
+    (workdir / "templates" / "not-found.html").write_text(
+        '<!doctype html><title>n</title><link href="dashboard.css"><a href="#main">s</a>'
+        "__HEADER__<main>__NOT_FOUND__</main>",
+        encoding="utf-8",
+    )
     (workdir / "templates" / "contact.js").write_text("const contact = '__SUPABASE_URL__/contact';\n", encoding="utf-8")
     (workdir / "templates" / "legal.html").write_text(
         "<title>__TITLE__</title>__HEADER__<main>__BODY__</main>__FOOTER__", encoding="utf-8"
@@ -98,6 +103,7 @@ def write_static(workdir: Path) -> None:
         encoding="utf-8",
     )
     (parts / "account.inc").write_text("<div>account</div>\n", encoding="utf-8")
+    (parts / "not-found.inc").write_text('<p>gone</p><a href="./">home</a>\n', encoding="utf-8")
     (parts / "updated.inc").write_text("<p>updated</p>\n", encoding="utf-8")
     (parts / "home-button.inc").write_text('<a id="home" href="./">Home</a>\n', encoding="utf-8")
     (parts / "home-link.inc").write_text('<a href="./">Home</a>\n', encoding="utf-8")
@@ -291,6 +297,7 @@ def test_site_files_are_written_next_to_the_page(db: sqlite3.Connection, workdir
     build_dashboard.main()
     docs = workdir / "docs"
     assert sorted(p.name for p in docs.iterdir()) == [
+        "404.html",
         "about.html",
         "admin.html",
         "admin.js",
@@ -322,6 +329,12 @@ def test_site_files_are_written_next_to_the_page(db: sqlite3.Connection, workdir
     assert (docs / "dashboard.js").read_text(encoding="utf-8") == "const dashboard = 1;\n"
     assert (docs / "theme.js").read_text(encoding="utf-8") == "const theme = 1;\n"
     assert (docs / "email.html").read_text(encoding="utf-8") == "<!doctype html><title>e</title>"
+    # the 404 is served at any depth: its own links and assets are absolute, the in-page link is not touched
+    not_found = (docs / "404.html").read_text(encoding="utf-8")
+    assert '<link href="/misra/dashboard.css">' in not_found
+    assert '<a href="#main">s</a>' in not_found
+    assert '<p>gone</p><a href="/misra/">home</a>' in not_found
+    assert '<header><a href="/misra/">misra</a>' in not_found
     assert (docs / "email.js").read_text(encoding="utf-8") == f"const email = '{build_dashboard.SUPABASE_URL}';\n"
     assert (docs / "auth.js").read_text(encoding="utf-8") == f"const auth = '{build_dashboard.SUPABASE_URL}';\n"
     assert (docs / "report.js").read_text(encoding="utf-8") == (

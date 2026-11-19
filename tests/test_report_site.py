@@ -740,11 +740,10 @@ def test_privacy_md_says_where_the_form_is() -> None:
 def test_the_daily_workflow_publishes_every_file_the_page_loads() -> None:
     workflow = (REPO / ".github" / "workflows" / "daily.yml").read_text(encoding="utf-8")
     names = {
-        Path(s).name
+        build_dashboard.OUTPUT_NAMES.get(s, Path(s).name)  # docs/404.html is built from templates/not-found.html
         for s in (*build_dashboard.STATIC_FILES, *build_dashboard.VENDORED_FILES, *build_dashboard.VERIFICATION_FILES)
     }
     names |= {"dashboard.css", "jobs.json", "jobs.jsonld"}
-    names.discard("dashboard.html")
     for name in names:
         assert f"docs/{name}" in workflow, name
     assert "docs/index.html" in workflow

@@ -174,6 +174,7 @@ def test_the_build_writes_the_pages_from_the_markdown_files(workdir: Path, db: s
     db.close()
     build_dashboard.main()
     assert sorted(p.name for p in (workdir / "docs").glob("*.html")) == [
+        "404.html",
         "about.html",
         "admin.html",
         "assistant.html",

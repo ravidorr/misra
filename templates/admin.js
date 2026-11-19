@@ -1,9 +1,12 @@
 /* The admin page (PLAN_2.md step 1.2). It has no sign-in of its own: the sign-in is on the dashboard, and the session it
    saves is shared on the origin (the same storage key and wrapper, see session.js). This script builds its own client
-   from the vendored supabase.js, asks the database `is_admin()` and shows one of five states in `data-state` of the main
-   element: checking (the default, everything hidden), signed-out, not-admin, check-failed and ready. The page has no
-   power of its own: what an admin may do is decided by row-level security and the database, never by this script, and a
-   page that is not ready asks for nothing more. It never starts a redirect. */
+   from the vendored supabase.js, asks the database `is_admin()` and shows one of four states in `data-state` of the main
+   element: not-found (the default markup of the file, the site's 404 page: what everyone sees who is not an admin, and
+   what a visitor without JavaScript sees), checking (an empty card while a saved session is checked), check-failed (a
+   saved session whose check could not be answered: one neutral line) and ready (the admin page). Hiding the page adds
+   no security: GitHub Pages always answers 200 and this script is public. The page has no power of its own: what an
+   admin may do is decided by row-level security and the database, never by this script, and a page that is not ready
+   asks for nothing more. It never starts a redirect. */
 import { STORAGE_KEY, storage } from './session.js';
 
 const $ = (id) => document.getElementById(id);
@@ -14,7 +17,7 @@ const CHECK_TIMEOUT_MS = 15000; /* the library retries a failing renewal for min
 const HTTP_CLIENT_ERROR = 400;
 const HTTP_SERVER_ERROR = 500;
 const MESSAGES = {
-  expired: 'Your sign-in expired.',
+  unavailable: 'This page could not load. Check your connection, then reload the page.',
   loading: 'Loading…',
   failed: 'Could not load this area.',
   retry: 'Try again',
@@ -30,14 +33,24 @@ const FIRST_AREA = 'crawl';
 const PAGE_TITLE = 'Admin';
 
 const main = $('main');
+const notFound = $('notFound');
+const notFoundLine = $('notFoundLine');
+const NOT_FOUND_LINE = notFoundLine.textContent; /* the 404's own words, as the file has them */
+const NOT_FOUND_TITLE = document.title;
 const opened = new Set(); /* the areas that have started loading */
 let client = null;
 
 function setState(state) {
+  const ready = state === 'ready';
   main.dataset.state = state;
+  main.setAttribute('aria-busy', String(state === 'checking'));
+  main.className = ready ? 'card admin' : 'card not-found';
+  main.parentElement.classList.toggle('admin-page', ready); /* the wide page only for the admin: the 404 never changes width */
+  notFound.hidden = state !== 'not-found' && state !== 'check-failed';
+  notFoundLine.textContent = state === 'check-failed' ? MESSAGES.unavailable : NOT_FOUND_LINE;
   for (const part of main.querySelectorAll('[data-when]')) part.hidden = !part.dataset.when.split(' ').includes(state);
-  if (state === 'ready') showArea(areaName(), false);
-  else document.title = PAGE_TITLE;
+  if (ready) showArea(areaName(), false);
+  else document.title = NOT_FOUND_TITLE;
   if (state !== 'ready') clearAddresses(); /* an address typed is not kept once the page stops being ready */
 }
 
@@ -118,8 +131,8 @@ function refused(error) {
   return error.status >= HTTP_CLIENT_ERROR && error.status < HTTP_SERVER_ERROR;
 }
 
-/* Whether this account is an admin. Resolves with the state to show: 'ready', 'not-admin', 'check-failed', or
-   'signed-out' (with the reason in `expired` when the service refused the session). */
+/* Whether this account is an admin. Resolves with the results (not page states) 'ready', 'not-admin', 'check-failed', 'signed-out' or 'expired' (the
+   service refused the session); `settle` turns each into what the page shows. */
 async function check(again) {
   const saved = storage.getItem(STORAGE_KEY) !== null;
   let session;
@@ -1369,20 +1382,21 @@ async function verdict() {
   return Promise.race([check(true), silence]);
 }
 
-/* Shows what the check said. A session the service refuses is cleared, no use to the dashboard either. */
+/* Shows what the check said. Only an admin sees the admin page; a visitor who is signed out, is not an admin or whose
+   session ended sees the 404, and the same words say nothing about why. A session the service refuses is cleared, no
+   use to the dashboard either. A failed check is a line of its own only when a session is saved: with none there is
+   nothing to check, and a 404 makes no request that could fail. */
 function settle(result) {
-  if (result !== 'expired') {
-    setState(result);
-    return;
-  }
-  storage.removeItem(STORAGE_KEY);
-  setState('signed-out');
-  $('adminExpired').textContent = MESSAGES.expired; /* after the line is shown, so a screen reader announces it */
+  if (result === 'expired') storage.removeItem(STORAGE_KEY);
+  if (result === 'ready' && storage.getItem(STORAGE_KEY) !== null) setState('ready'); /* not after a sign-out meanwhile */
+  else if (result === 'check-failed' && storage.getItem(STORAGE_KEY) !== null) setState('check-failed');
+  else setState('not-found');
 }
 
 async function start() {
+  if (storage.getItem(STORAGE_KEY) !== null) setState('checking'); /* a saved session: an empty card until the answer */
   if (typeof globalThis.supabase?.createClient !== 'function') {
-    setState('check-failed');
+    settle('check-failed');
     return;
   }
   client = globalThis.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
@@ -1390,7 +1404,7 @@ async function start() {
   });
   /* Signing out here or on the dashboard (another tab) ends the admin view; nothing else the library reports matters. */
   client.auth.onAuthStateChange((event) => {
-    if (event === 'SIGNED_OUT') setState('signed-out');
+    if (event === 'SIGNED_OUT') setState('not-found');
   });
   $('adminSignOut').addEventListener('click', async () => {
     try {
@@ -1402,7 +1416,7 @@ async function start() {
          never says "signed out" while the saved session could sign the browser in. */
       storage.removeItem(STORAGE_KEY);
     }
-    setState('signed-out');
+    setState('not-found');
   });
   globalThis.addEventListener('hashchange', () => {
     /* Only a link to an area changes the area: the skip link ("#main") leaves the page where it is. */

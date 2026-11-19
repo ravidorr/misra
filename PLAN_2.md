@@ -58,13 +58,14 @@ Alerts and Log. Adding a site a visitor reported is the Add button of the Compan
 - [x] 1.2 (done: `templates/admin.html`, `admin.js`, `session.js`, `tests/test_admin_page.py`.) `templates/admin.html`, `templates/admin.js`, built into `docs/admin.html` and `docs/admin.js` by
   `build_dashboard.py`, with SRI and the CSP rules of the dashboard. The page lives at `/misra/admin.html`. Add both
   files to the generated-files list in `AGENTS.md`, to the SRI placeholder and page lists in `build_dashboard.py`, and
-  to the source paths of `publish-docs.yml`.
+  to the source paths of `publish-docs.yml`. (Later, v0.80.0: to anyone who is not an admin the page shows the site's 404 page, see `AGENTS.md`; `docs/404.html` is built from `templates/not-found.html`.)
   - **Sign in.** `templates/auth.js` is bound to dashboard ids, and the design README requires the Sign in button to
     open the approved notice word for word, so the admin page builds no sign-in UI. `admin.js` makes its own Supabase
     client with the same storage key and storage wrapper as `auth.js`; the session is shared on the origin. Signed out,
     the page says "Sign in on the dashboard first." with a link to `./`. A Sign out button sits in the page body in
     every signed-in state. The page never starts a redirect, so the Supabase Auth redirect allow-list is unchanged; any
     change to the production Auth config needs the maintainer's consent.
+  - (Superseded in v0.80.0: the states and messages below, and the signed-out link, are replaced by the 404 page, see `AGENTS.md`.)
   - **Page states** (`data-state` on the page): `checking` (the default; all content hidden), `signed-out`,
     `not-admin` ("This account is not an admin."), `check-failed` ("Could not check your account. Reload the page.";
     a network or backend error, not the same as not admin) and `ready`. A 401 shows "Your sign-in expired" and runs the

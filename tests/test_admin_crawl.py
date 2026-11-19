@@ -110,7 +110,7 @@ async def test_nothing_but_the_check_is_asked_before_the_answer_and_the_call_nam
 
 async def test_a_non_admin_never_loads_the_area(page: Page, site: Path) -> None:
     backend, _problems = await open_crawl(page, site, Backend("not_admin", health=ROWS))
-    assert await state(page) == "not-admin"
+    assert await state(page) == "not-found"
     assert backend.requests == [CHECK]
     assert await page.locator(".crawl").count() == 0
 
@@ -358,12 +358,10 @@ async def test_a_token_refused_twice_is_an_area_error_and_does_not_loop(page: Pa
     assert backend.asked == CALLS_WHEN_REFUSED_TWICE
 
 
-async def test_a_refused_token_and_a_check_that_says_not_admin_leaves_the_page_not_admin(
-    page: Page, site: Path
-) -> None:
+async def test_a_refused_token_and_a_check_that_says_not_admin_shows_the_404_page(page: Page, site: Path) -> None:
     backend = Backend(health=ROWS, health_answer="unauthorized", recheck_answer="not_admin")
     await open_crawl(page, site, backend)
-    await expect(page.locator("main")).to_have_attribute("data-state", "not-admin")
+    await expect(page.locator("main")).to_have_attribute("data-state", "not-found")
     assert await page.locator(".crawl:visible").count() == 0
     assert backend.health_asked == 1
 
@@ -373,10 +371,10 @@ async def test_a_refused_token_and_a_check_that_cannot_be_made_says_so(page: Pag
     await expect(page.locator("main")).to_have_attribute("data-state", "check-failed")
 
 
-async def test_a_refused_token_and_an_expired_session_says_signed_out(page: Page, site: Path) -> None:
+async def test_a_refused_token_and_an_expired_session_shows_the_404_page(page: Page, site: Path) -> None:
     await open_crawl(page, site, Backend(health=ROWS, health_answer="unauthorized", recheck_answer="unauthorized"))
-    await expect(page.locator("main")).to_have_attribute("data-state", "signed-out")
-    await expect(page.locator("#adminExpired")).to_have_text("Your sign-in expired.")
+    await expect(page.locator("main")).to_have_attribute("data-state", "not-found")
+    await expect(page.locator("#notFoundLine")).to_have_text("There is no page at this address.")
 
 
 # ---- the same checks the other states pass ----
