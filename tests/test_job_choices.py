@@ -1010,3 +1010,13 @@ async def test_a_company_choice_made_while_the_service_is_down_is_kept_and_saved
     await until(lambda: choices.state_of("Acme", "") == "company")
     await expect(page.locator("#syncRetry")).to_have_count(0)
     assert await pending(page) == {}
+
+
+async def test_a_refused_company_choice_keeps_the_stars_of_that_company(page: Page, site: Path) -> None:
+    choices = ChoicesBackend([star_row("1", "Product Manager 1", "Tel Aviv", "Acme")], mode="limit")
+    await sign_in(page, site, choices)
+    await choose_not_for_me(page, PM2, "company")
+    await expect(page.locator("#syncNote .notice")).to_contain_text("reached the limit")
+    assert choices.state_of("Acme", "1") == "star"  # the star was not deleted: the company choice never happened
+    assert await page.locator(PM1).get_attribute("data-starred") == "true"
+    assert await pending(page) == {}

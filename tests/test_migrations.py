@@ -539,6 +539,16 @@ def parse_function(s: str) -> tuple[str, bool, list[str]] | None:
     return None
 
 
+def user_jobs_pairing_problems(stmts: list[str]) -> list[str]:
+    """A check of `user_jobs` is dropped and added again together, or not at all."""
+    found = []
+    for name in ("user_jobs_state_check", "user_jobs_job_id_check"):
+        drops = f"alter table public.user_jobs drop constraint {name}" in stmts
+        adds = any(x.startswith(f"alter table public.user_jobs add constraint {name} ") for x in stmts)
+        found.extend([f"{name} is dropped and added again together, or not at all"] * (drops != adds))
+    return found
+
+
 def problems(stmts: list[str]) -> list[str]:
     """Everything wrong with a migration, as messages; empty when it is safe by this lint's rules."""
     found: list[str] = []
@@ -604,6 +614,7 @@ def problems(stmts: list[str]) -> list[str]:
     dropped = COMPANIES_ATS_DROP in stmts
     added = any(COMPANIES_ATS_ADD.fullmatch(s) for s in stmts)
     found.extend(["companies_ats_known is dropped and added again together, or not at all"] * (dropped != added))
+    found.extend(user_jobs_pairing_problems(stmts))
     found.extend(f"row-level security not enabled on {t}" for t in sorted(tables - secured))
     found.extend(
         f"all privileges on {t} not revoked from {role}"
@@ -1852,6 +1863,12 @@ def test_the_company_choice_migration_passes_the_lint_and_changes_only_the_two_c
     stmts = statements_of(COMPANY_CHOICE_SQL)
     assert problems(stmts) == []
     assert tuple(stmts) == USER_JOBS_CHECKS
+
+
+@pytest.mark.parametrize("which", [0, 1, 2, 3])
+def test_the_lint_refuses_dropping_a_user_jobs_check_without_adding_it_back(which: int) -> None:
+    stmts = statements_of(COMPANY_CHOICE_SQL)
+    assert problems([s for i, s in enumerate(stmts) if i != which])
 
 
 @pytest.mark.parametrize(

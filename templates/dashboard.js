@@ -405,6 +405,11 @@ async function drain(a) {
       a.failure = error.code === LIMIT_CODE ? 'limit' : 'refused';
     }
     const forgets = [];
+    if (error) {
+      /* A change refused for good takes the rest of its group with it (a company choice and the stars it would remove). */
+      const group = batch[0][1].group;
+      for (const entry of group ? a.pending : []) if (entry[1].group === group && !batch.includes(entry)) batch.push(entry);
+    }
     for (const [k, op] of batch) {
       fates.set(op, error ? a.failure : 'saved');
       if (!error) {
@@ -490,12 +495,17 @@ async function loadServer(a) {
 
 const newId = () => `${Date.now()}-${Math.random()}`;
 
-/* Signed in: puts changes in the queue (all or none are sent in order) and resolves as setChoice does, with the first
-   one that was not saved. */
+/* Signed in: puts changes in the queue, in order, and resolves as setChoice does, with the first one that was not saved.
+   Changes made together share a group: if one is refused for good, the others are dropped unsent. */
 function queueChanges(ops) {
   const a = account;
   if (a.failure === 'limit' || a.failure === 'refused') a.failure = null;
-  for (const op of ops) a.pending.set(key(op), op);
+  const group = ops.length > 1 ? newId() : undefined;
+  for (const op of ops) {
+    if (group) op.group = group;
+    a.pending.delete(key(op)); /* a later change goes to the end of the queue */
+    a.pending.set(key(op), op);
+  }
   savePendingBatch(a, ops.map((op) => [key(op), op]), []);
   return flush().then(() => {
     const unsaved = ops.map((op) => fates.get(op)).filter((fate) => fate !== 'saved');
