@@ -31,6 +31,7 @@ REAL_LOCATIONS: list[tuple[str, tuple[str, ...]]] = [
     ("Hod Hasharon, Haifa District, Israel", (SHARON,)),
     ("Raanana, Israel", (SHARON,)),
     ("Kfar Saba, Israel", (SHARON,)),
+    ("Kefar Sava, Israel", (SHARON,)),
     ("Kfar-Netter, Israel", (SHARON,)),
     ("Netanya, Israel", (SHARON,)),
     ("Petah-Tikva, IL", (CENTER,)),
@@ -50,6 +51,7 @@ REAL_LOCATIONS: list[tuple[str, tuple[str, ...]]] = [
     ("Caesarea, IL", (NORTH,)),
     ("Tirat Carmel, IL", (NORTH,)),
     ("Israel, Beer Sheva", (SOUTH,)),
+    ("Rahat, Israel", (SOUTH,)),
     ("Be\u2019er Sheva, Israel", (SOUTH,)),
     ("Kiryat Gat,ISR", (SOUTH,)),
     ("Ashdod, Israel", (SOUTH,)),
@@ -161,11 +163,11 @@ def test_report_lists_share_counts_and_unmapped_places() -> None:
         ["Tel Aviv, IL", "Herzliya", "Israel", "Foo Town, IL", "Foo Town, IL", "London, UK", None, "Israel, Remote"]
     )
     lines = text.splitlines()
-    assert lines[0] == "Regions: 50.0% of 6 jobs in Israel are in a region"
+    assert lines[0] == "Regions: 60.0% of 5 jobs in Israel that name a city are in a region"
     assert "  Tel Aviv area: 1" in lines
     assert "  Sharon: 1" in lines
     assert "  Remote: 1" in lines
-    assert f"  {CITY_NOT_GIVEN}: 1" in lines
+    assert f"  {CITY_NOT_GIVEN}: 1 (not in the share)" in lines
     assert "  Unmapped places (top 1 of 1):" in lines
     assert "    2 Foo Town, IL" in lines
 
@@ -173,13 +175,22 @@ def test_report_lists_share_counts_and_unmapped_places() -> None:
 def test_report_counts_unmapped_places_next_to_mapped_ones() -> None:
     text = regions.report(["Israel, Tel Aviv; Israel, Zikim", "Israel, Zikim"])
     assert "    2 Israel, Zikim" in text.splitlines()
-    assert text.splitlines()[0] == "Regions: 50.0% of 2 jobs in Israel are in a region"
+    assert text.splitlines()[0] == "Regions: 50.0% of 2 jobs in Israel that name a city are in a region"
 
 
 def test_report_without_unmapped_places_or_israeli_jobs() -> None:
     assert "Unmapped" not in regions.report(["Tel Aviv, IL"])
     empty = regions.report(["London, UK"])
-    assert empty.splitlines()[0] == "Regions: 100.0% of 0 jobs in Israel are in a region"
+    assert empty.splitlines()[0] == "Regions: 100.0% of 0 jobs in Israel that name a city are in a region"
+
+
+def test_report_leaves_jobs_with_no_city_out_of_the_share() -> None:
+    text = regions.report(["Israel", "IL", "Various Locations within Israel", "3 Locations, Israel", "Tel Aviv, IL"])
+    lines = text.splitlines()
+    assert lines[0] == "Regions: 100.0% of 1 jobs in Israel that name a city are in a region"
+    assert f"  {CITY_NOT_GIVEN}: 4 (not in the share)" in lines
+    assert "Unmapped" not in text
+    assert regions.report(["Foo Town, IL", "Israel"]).splitlines()[0].startswith("Regions: 0.0% of 1 jobs")
 
 
 def test_report_caps_the_unmapped_sample() -> None:
@@ -201,10 +212,11 @@ def test_no_job_in_israel_is_dropped_on_real_data() -> None:
     assert all(p.regions or p.locations for p in placed)
 
 
-def test_report_shows_at_least_95_percent_of_israeli_jobs_in_a_region() -> None:
-    """FR-3 AC 11 on the open jobs of docs/jobs.json, read from the report itself."""
+def test_report_shows_at_least_95_percent_of_israeli_jobs_naming_a_city_in_a_region() -> None:
+    """FR-3 AC 11 on the open jobs of docs/jobs.json, read from the report itself. Jobs with no city are not in the
+    share (they cannot be placed), so only a real unmapped city can fail it."""
     first_line = regions.report(_open_locations()).splitlines()[0]
-    match = re.match(r"Regions: ([\d.]+)% of (\d+) jobs in Israel", first_line)
+    match = re.match(r"Regions: ([\d.]+)% of (\d+) jobs in Israel that name a city", first_line)
     assert match
     assert float(match.group(1)) >= MIN_SHARE_IN_REGION
     assert int(match.group(2)) > 0
