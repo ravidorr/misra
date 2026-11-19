@@ -41,7 +41,7 @@ PLACES: dict[str, tuple[str, ...]] = {
     ),
     JERUSALEM: (r"jerusalem|mevaseret|beit shemesh|maale adumim|ירושלים",),
     NORTH: (
-        r"haifa|yokneam|mig(?:dal)? ?ha ?emek|yagur|tirat carmel|caesarea|nazareth|tel hai|kiryat shmona|karmiel",
+        r"haifa|yo[kq]neam|mig(?:dal)? ?ha ?emek|yagur|tirat carmel|caesarea|nazareth|tel hai|kiryat shmona|karmiel",
         r"afula|tiberias|nesher|kiryat (?:ata|bialik|motzkin|yam)|krayot|hadera|zichron|\bacre\b|akko|nahariya|safed",
         r"חיפה|יקנעם|מגדל העמק|נצרת",
     ),

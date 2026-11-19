@@ -21,6 +21,12 @@ All notable changes are documented here. Format follows [Keep a Changelog](https
 - The Crawl area of the admin page (PLAN_2.md step 2.2): it calls `admin_crawl_health()` when first shown and lists one card per company, worst first, with a headline, chips with counts (Needs attention, Failing, Robots.txt, Held, All), the values of the crawl and a status pill. Loading, empty, error and 401 states. Templates and tests only.
 - A Copy button under every code block of the legal pages (the address on "Connect your assistant", the command for Claude Code), in `templates/theme.js`.
 
+## [0.76.1] - 2026-11-19
+
+### Fixed
+
+- `regions.py` places "Yoqneam Illit" (the other spelling of Yokneam) in Haifa and the north. The daily crawl brought the share of Israeli jobs in a region to 94.9%, under the 95% that `tests/test_regions.py` requires, which stopped every push.
+
 ## [0.76.0] - 2026-11-19
 
 ### Added

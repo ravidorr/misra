@@ -43,6 +43,7 @@ REAL_LOCATIONS: list[tuple[str, tuple[str, ...]]] = [
     ("Jerusalem, Israel", (JERUSALEM,)),
     ("Haifa, Haifa District, Israel", (NORTH,)),
     ("Israel, Yokneam", (NORTH,)),
+    ("Yoqneam Illit, North, Israel", (NORTH,)),
     ("Migdal Haemek, ISR", (NORTH,)),
     ("Mig'ha'emek,ISR", (NORTH,)),
     ("Yagur, IL", (NORTH,)),
