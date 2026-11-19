@@ -24,6 +24,10 @@ on:
         description: "Pull step only: pass --allow-shrink, to accept a history with under half of the open jobs the dashboard last published (a real loss; never for a wrong key)"
         type: boolean
         default: false
+      allow_backup_shrink:
+        description: "Backup step only: pass --allow-shrink to publish_backup.py, to accept a table that fell by more than half since the last backup (a known real change such as deleted accounts; never for a wrong key)"
+        type: boolean
+        default: false
       source:
         description: "Leave empty. cron-job.org sends source=cron-job.org: the guard then skips the start if a scheduled or cron-job.org run already succeeded today"
         type: string
@@ -224,6 +228,9 @@ jobs:
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           BACKUP_DEPLOY_KEY: ${{ secrets.BACKUP_DEPLOY_KEY }}
           GH_TOKEN: ${{ github.token }}
+          # "--allow-shrink" for a manual run with allow_backup_shrink ticked (a boolean, so nothing typed reaches the
+          # shell); only publish_backup.py gets it, the export and the step itself always run.
+          ALLOW_BACKUP_SHRINK_FLAG: ${{ inputs.allow_backup_shrink && '--allow-shrink' || '' }}
         run: |
           set -euo pipefail
           [ "$GITHUB_REF" = "refs/heads/main" ] || { echo "refusing to back up from $GITHUB_REF" >&2; exit 1; }
@@ -238,7 +245,7 @@ jobs:
           # then takes over the trap and removes the key, the host keys and the work directory on exit.
           python export_accounts.py "$BACKUP_WORK/export"
           . scripts/backup-key.sh
-          python publish_backup.py "$BACKUP_WORK/export" "git@github.com:ravidorr/misra-backups.git" "$BACKUP_WORK/clone"
+          python publish_backup.py "$BACKUP_WORK/export" "git@github.com:ravidorr/misra-backups.git" "$BACKUP_WORK/clone" $ALLOW_BACKUP_SHRINK_FLAG
       - name: Email an alert if the run failed
         if: ${{ (failure() || cancelled()) && steps.checkout.outcome == 'success' }}
         env:
