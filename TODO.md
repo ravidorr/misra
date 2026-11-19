@@ -321,7 +321,7 @@ Observations about live sites below come from checks made on 2026-11-14 and may 
 ## Step 9.1 live checks
 
 Added when the history moved to Supabase (v0.53.0; `CONTRIBUTING.md`, "The history lives in Supabase"). What the rehearsal
-could not prove: a real PostgREST, a real Supabase project and a real Actions run.
+could not prove: a real PostgREST, a real Supabase project and a real Actions run. The restore was rehearsed on 2026-11-19 against a local Supabase (`CONTRIBUTING.md`, "Rehearsal, 2026-11-19"); a hosted project and a real Actions run are still unproven.
 
 - [ ] **Check the first daily runs after the move.** Trigger: the PR of step 9.1 is merged and the one-time copy of the
   old history is done. Status (2026-11-17): the 04:30 UTC cron-job.org run was green; two other runs that morning failed
@@ -334,9 +334,6 @@ could not prove: a real PostgREST, a real Supabase project and a real Actions ru
   dashboard, Reports, Database. `crawl_log` keeps 90 days (`CRAWL_LOG_DAYS`, about 250 rows a day), the pull reads all of
   it every run, and the backup exports it; if the pull gets slow or the table is large, shorten it. The same check serves PLAN.md step 7.4 (the size of the description
   text, a month after 2026-11-16). Done when: the numbers are in `CONTRIBUTING.md`, "Real data against the limits".
-- [ ] **Rehearse a restore into a scratch Supabase project.** Trigger: the first `backup` commit with `jobs` and
-  `crawl_log` exists. How: `CONTRIBUTING.md`, "Restore", into a new free project, with `--create-auth-users`; then the
-  pull and a daily run against it. Done when: counts match the backup commit and the run is green.
 - [ ] **Keep the browser crawl's results when the browser crawl itself dies.** Added with the step 9.1 leftovers (v0.53.1).
   `run.py` now commits each company as it is recorded and records the API companies before the browser crawl, so a crash
   while recording loses one company and a crash in the browser crawl keeps the API companies. The browser crawl
