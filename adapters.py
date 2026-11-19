@@ -966,7 +966,8 @@ def _eightfold_job(host: str, p: Any) -> tuple[Job, bool] | None:
     no number, no title, or a `positionUrl` that is not a path of the board. The job has the id, title, place (the
     locations joined by '; ') and address that the browser crawl gives the same board, so a company read by either way
     keeps its jobs. The place is Israel when a location or a standardized one (`..., IL`) names it, by the matcher
-    of the other adapters (a bare IL of Illinois is not Israel)."""
+    of the other adapters (a bare IL of Illinois is not Israel). When only the standardized locations name Israel, they
+    are added to the place, so that the place alone shows it (run.py's israel_only filter reads nothing else)."""
     if not isinstance(p, dict):
         return None
     locations = [str(x) for x in p["locations"]] if isinstance(p.get("locations"), list) else []
@@ -974,15 +975,18 @@ def _eightfold_job(host: str, p: Any) -> tuple[Job, bool] | None:
     path = p.get("positionUrl")
     if not (isinstance(p.get("id"), int) and p.get("name") and isinstance(path, str) and path.startswith("/")):
         return None
-    job = _job(
-        p["id"],
-        p["name"],
-        "; ".join(locations),
-        f"https://{host}{path}",
-        team=p.get("department"),
-        posted=_eightfold_posted(p.get("postedTs")),
+    israel = [x for x in standard if ISRAEL.search(x)] if not any(ISRAEL.search(x) for x in locations) else []
+    job = (
+        _job(  # a place only the standardized locations name is added, so the pipeline's own check of the place sees it
+            p["id"],
+            p["name"],
+            "; ".join([*locations, *israel]),
+            f"https://{host}{path}",
+            team=p.get("department"),
+            posted=_eightfold_posted(p.get("postedTs")),
+        )
     )
-    return job, any(ISRAEL.search(x) for x in [*locations, *standard])
+    return job, bool(israel) or any(ISRAEL.search(x) for x in locations)
 
 
 def _eightfold_page(host: str, domain: str, start: int) -> tuple[int, list[Any]] | None:
