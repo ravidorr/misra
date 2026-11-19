@@ -16,7 +16,7 @@ from common import ISRAEL, ROBOTS_NOTE, USER_AGENT, host_of, reserve_slot, robot
 from descriptions import attach, html_to_text, jsonld_description
 
 JOBLINK = re.compile(
-    r"/(jobs?|(?:open-)?positions?|careers?|details|cmcareer|openings?|vacanc\w+|job-?post\w*)/[^/?#]{4,}"
+    r"/(jobs?|positions?|careers?|details|cmcareer|openings?|vacanc\w+|job-?post\w*)/[^/?#]{4,}"
     r"|[?&]job_id=[^&#]+",
     re.I,
 )
@@ -101,7 +101,6 @@ CARD_JS = r"""(els, cfg) => {
         }
         return false;
     };
-    const heading = n => (n && /^H[1-6]$/.test(n.tagName) ? text(n) : '');
     return els.map(e => {
         let n = e;
         for (let i = 0; i < 4 && n.parentElement; i++) {
@@ -110,10 +109,6 @@ CARD_JS = r"""(els, cfg) => {
             n = up;
         }
         const own = e.querySelector('h1, h2, h3, h4, h5, h6');  // a title heading inside the link
-        let section = '';  // the nearest heading above the card, such as an office name over its list of jobs
-        for (let up = e, i = 0; up && !section && i < 6; up = up.parentElement, i++) {
-            for (let s = up.previousElementSibling; s && !section; s = s.previousElementSibling) section = heading(s);
-        }
         const others = [...n.querySelectorAll('a[href]')].some(a => a !== e && titled(a));
         const leaves = [];  // one line for each field: emphasis inside a title is not a boundary, a <br> is
         let last = null, cur = '';
@@ -134,7 +129,7 @@ CARD_JS = r"""(els, cfg) => {
         }
         flush();
         const card = text(n).slice(0, cfg.max + 1);
-        return [href(e), text(e), card, own ? text(own) : '', section, others, leaves.join('\n')];
+        return [href(e), text(e), card, own ? text(own) : '', others, leaves.join('\n')];
     });
 }"""  # the card: the widest ancestor, up to 4 levels, with one job's title link and a card's worth of text
 CARD_ARGS = {"job": JOBLINK.pattern, "skip": NOT_JOB.pattern, "id": JOB_ID.pattern, "max": CARD_MAX}
@@ -203,10 +198,7 @@ _REMOTE = re.compile(r"\b(remote|hybrid|on-?site|worldwide|anywhere)\b", re.I)
 _COUNTRY_ONLY = re.compile(rf"(?:{_COUNTRIES})", re.I)
 MAX_LOCATION_LEN = 60
 _WORD = re.compile(r"\w")  # a line with no letter or digit is an icon or an arrow
-_OFFICE = re.compile(r"\s+offices?$", re.I)
-_WORK_MODE = re.compile(r"(?:remote|hybrid|on-?site)", re.I)
 MAX_TEAM_WORDS = 2
-MAX_OFFICE_WORDS = 3
 MIN_CARD_TITLE_WORDS = 2  # a title read from a card, not from the link, has a role word or this many words
 MAX_ACRONYM_LEN = 4
 MAX_REMOTE_WORDS = 4
@@ -308,17 +300,6 @@ def _usable_heading(head: str) -> bool:
     """A heading in a job link is its title only when it has a role word and is not a place: a department heading
     ("Customer Success") stays a team, as it always did."""
     return not _is_location(head) and bool(ROLE_WORD.search(head))
-
-
-def _section_place(heading: str) -> str:
-    """The place an office heading names ("Tel Aviv Office" gives "Tel Aviv"; a short place, three words at most), a
-    heading that is only a country ("Israel"), or "" for any other heading."""
-    if len(heading) > MAX_LOCATION_LEN or ROLE_WORD.search(heading):
-        return ""
-    place = _OFFICE.sub("", heading).strip()
-    if place != heading:
-        return place if 0 < len(place.split()) <= MAX_OFFICE_WORDS else ""
-    return heading if _COUNTRY_ONLY.fullmatch(heading) else ""
 
 
 def _job_key(href: str) -> str:
@@ -505,7 +486,7 @@ async def crawl_one(ctx: Any, url: str, sem: asyncio.Semaphore) -> list[dict[str
                 link_count = len(links)
                 # links with a title of their own first, so a label link never claims a job before its titled twin
                 links.sort(key=lambda row: not _WORD.search(row[1]) or row[1].strip().lower() in LINK_NOISE)
-                for href, text, card, head, section, others, leaves in links:
+                for href, text, card, head, others, leaves in links:
                     key = _job_key(href)
                     if key in seen or not JOBLINK.search(href) or NOT_JOB.search(href):
                         continue
@@ -536,9 +517,6 @@ async def crawl_one(ctx: Any, url: str, sem: asyncio.Semaphore) -> list[dict[str
                     title, loc, team = parsed
                     if from_card and not (ROLE_WORD.search(title) or len(title.split()) >= MIN_CARD_TITLE_WORDS):
                         continue  # a card with only a word or two of text is a banner or a place, not a job
-                    place = _section_place(section)
-                    if place and loc and all(_WORK_MODE.fullmatch(p) for p in loc.split(" | ")):
-                        loc = " | ".join(filter(None, [place, loc]))  # the office heading above the jobs
                     seen.add(key)
                     found += 1
                     m = re.search(r"myworkdayjobs\.com/(?:[a-z]{2}-[A-Z]{2}/)?[^/]+/job/([^/]+)/", href)

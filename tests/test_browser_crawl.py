@@ -29,11 +29,10 @@ async def run(page: FakePage) -> list[dict[str, Any]] | None:
 
 
 def link(path: str, text: str, card: str = "", **fields: Any) -> list[Any]:
-    """What the page script returns for one link: address, text, card, its own heading (`head`), the heading above
-    it (`section`), whether the card holds another titled job link (`others`) and the card's text one line for each
-    element (`leaves`)."""
-    row = {"head": "", "section": "", "others": False, "leaves": ""} | fields
-    return [f"https://x.test{path}", text, card, row["head"], row["section"], row["others"], row["leaves"]]
+    """What the page script returns for one link: address, text, card, its own heading (`head`), whether the card
+    holds another titled job link (`others`) and the card's text one line for each element (`leaves`)."""
+    row = {"head": "", "others": False, "leaves": ""} | fields
+    return [f"https://x.test{path}", text, card, row["head"], row["others"], row["leaves"]]
 
 
 async def test_http_error_recorded() -> None:
@@ -167,7 +166,7 @@ async def test_collect_link_filters_and_titles() -> None:
         link("/jobs/short-title", "PM\nHerzliya\nIL"),
         link("/jobs/short-alone", "PM"),
         link("/jobs/junk-title", "Read more\nSecond Title\nJerusalem"),
-        [wd, "Workday Job\nElsewhere", "", "", "", False, ""],
+        [wd, "Workday Job\nElsewhere", "", "", False, ""],
     ]
     page = FakePage(link_fn=lambda i: links if i == 1 else [], ld=ld({"@type": "JobPosting", "url": "u0"}))
     jobs = await run(page)
@@ -810,32 +809,6 @@ async def test_a_heading_in_the_link_is_the_title_whatever_the_line_order() -> N
     }
 
 
-async def test_the_office_heading_above_the_cards_is_the_place_of_a_card_with_only_a_work_mode() -> None:
-    """Pillar: the city is a section heading, each card has only "Hybrid" or "Remote"."""
-    links = [
-        link("/open-position/ae-emea", "Account Executive EMEA\nHybrid\nSales\nApply now", section="Tel Aviv Office"),
-        link("/open-position/sales-eng", "Sales Engineer\nRemote\nSales", section="New York Office"),
-        link("/open-position/no-place", "Support Engineer", section="Tel Aviv Offices"),
-        link("/open-position/has-place", "Data Engineer\nHaifa\nHybrid", section="New York Office"),
-        link("/open-position/remote-us", "Designer\nRemote (US)", section="Tel Aviv Office"),
-        link("/open-position/not-a-place", "Researcher\nHybrid", section="Open Roles"),
-        link("/open-position/a-title", "Tech Writer\nHybrid", section="Head Office"),
-        link("/open-position/israel", "Analyst\nHybrid", section="Israel"),
-        link("/open-position/long", "Recruiter\nHybrid", section="A" * 70 + " Office"),
-    ]
-    assert await crawl_cards(links) == {
-        "Account Executive EMEA": ("Tel Aviv | Hybrid", "Sales"),
-        "Sales Engineer": ("New York | Remote", "Sales"),
-        "Support Engineer": ("", ""),  # no place at all: the heading is not borrowed
-        "Data Engineer": ("Haifa | Hybrid", ""),
-        "Designer": ("Remote (US)", ""),
-        "Researcher": ("Hybrid", ""),
-        "Tech Writer": ("Hybrid", ""),
-        "Analyst": ("Israel | Hybrid", ""),
-        "Recruiter": ("Hybrid", ""),
-    }
-
-
 async def test_a_bare_city_under_a_location_label_is_the_place() -> None:
     """Apple: title, team, date, then "Location" and the city: past a window of three lines, but kept."""
     card = "Senior Security Researcher\nHardware\nNov 18, 2026\nLocation\nCupertino\nActions"
@@ -883,32 +856,12 @@ def test_parse_card_with_a_heading_title_skips_the_team_guesses() -> None:
 
 
 @pytest.mark.parametrize(
-    ("heading", "place"),
-    [
-        ("Tel Aviv Office", "Tel Aviv"),
-        ("Boston offices", "Boston"),
-        ("Israel", "Israel"),
-        ("Haifa, Israel", ""),
-        ("Our Israel offices and more", ""),
-        ("Global Offices Of The World", ""),
-        ("Open Roles", ""),
-        ("Head Office", ""),
-        ("Office", ""),
-        ("", ""),
-    ],
-)
-def test_section_place(heading: str, place: str) -> None:
-    assert browser_crawl._section_place(heading) == place
-
-
-@pytest.mark.parametrize(
     ("href", "job"),
     [
-        ("https://x.test/open-position/account-executive", True),
         ("https://x.test/cmcareer/68-47a/", True),
         ("https://x.test/en-il/details/200695651-0865/senior-researcher?team=HRDWR", True),
-        ("https://x.test/open-positions/account-executive", True),
-        ("https://x.test/open-position/ab", False),
+        ("https://x.test/positions/account-executive", True),
+        ("https://x.test/positions/ab", False),
         ("https://x.test/open-roles/account-executive", False),
     ],
 )
