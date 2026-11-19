@@ -11,9 +11,8 @@
  * no other change). A form keeps its Cancel button beside it. The filters sheet puts the (x) in its sticky head
  * (see sheet.css), so it stays in view while the controls scroll:
  *   <button type="button" class="dialog-close" aria-label="Close"><svg aria-hidden="true" ...>x</svg></button>
- * A link that opens in a new tab carries the `.icon-ext` arrow and the words "(opens in a new tab)":
- *   <a href="terms.html" target="_blank" rel="noopener">Terms<svg class="icon-ext" aria-hidden="true" ...></svg>
- *   <span class="sr-only"> (opens in a new tab)</span></a>
+ * A link that opens in a new tab gets its icon from external-link.css and carries the words "(opens in a new tab)":
+ *   <a href="terms.html" target="_blank" rel="noopener noreferrer">Terms<span class="sr-only"> (opens in a new tab)</span></a>
  */
 .dialog {
   box-sizing: border-box;
@@ -93,15 +92,4 @@
 /* The title leaves room for the corner button, so a long one never runs under it. */
 .dialog:has(.dialog-close) .dialog-title {
   padding-inline-end: calc(var(--tap) + var(--space-3));
-}
-
-.icon-ext {
-  width: 0.85em;
-  height: 0.85em;
-  margin-inline-start: 0.2em;
-  vertical-align: -0.1em;
-}
-
-.icon-ext:dir(rtl) {
-  transform: scaleX(-1);
 }

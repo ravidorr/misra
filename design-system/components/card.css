@@ -8,9 +8,9 @@
  *     </div>
  *     <h3 class="card-title"><a href="...">Role</a></h3>
  *     <p class="card-snippet" dir="auto">Start of the posting, up to 255 characters, as written</p>
- *     <p class="card-more"><a href="...">Read full description &amp; apply on Acme ↗</a></p>
+ *     <p class="card-more"><a href="..." target="_blank" rel="noopener noreferrer">Read full description &amp; apply on Acme</a></p>
  *     <p class="card-tags"><span class="pill">Tel Aviv</span></p>
- *     <p class="card-actions"><a class="btn btn-primary" href="...">Apply ↗</a></p>
+ *     <p class="card-actions"><a class="btn btn-primary" href="..." target="_blank" rel="noopener noreferrer">Apply</a></p>
  *   </article>
  */
 .card {

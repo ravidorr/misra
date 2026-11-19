@@ -1,4 +1,11 @@
 /* Layout for design-system/index.html only. Not shipped in the dashboard. */
+
+/* The mask of the new-tab icon is a path relative to the file that holds it: docs/dashboard.css finds new-tab.svg next
+   to itself, but components/external-link.css is one folder deeper than the asset here. */
+a[target="_blank"]:not(.gap-link)::after {
+  mask-image: url("assets/new-tab.svg");
+}
+
 * {
   box-sizing: border-box;
 }

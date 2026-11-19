@@ -261,12 +261,12 @@ def test_the_agreement_line_sits_next_to_the_email_control_and_is_in_the_dialog_
     page = read("templates/dashboard.html")
     region = "".join(build_dashboard.DIGEST_REGION.findall(page))
     new_tab = 'target="_blank" rel="noopener noreferrer"'  # his answer of 2026-11-17 (B4), like the sign-in dialog
-    shown = '<svg class="icon-ext" aria-hidden="true"'
     assert (
         f'By turning this on you agree to the <a href="https://ravidorr.github.io/misra/terms.html" {new_tab}>Terms'
-        f"{shown}"
+        '<span class="sr-only"> (opens in a new tab)</span></a>'
     ) in region
-    assert f'and the <a href="https://ravidorr.github.io/misra/privacy.html" {new_tab}>privacy notice{shown}' in region
+    privacy = 'and the <a href="https://ravidorr.github.io/misra/privacy.html"'
+    assert f'{privacy} {new_tab}>privacy notice<span class="sr-only">' in region
     assert region.count('<span class="sr-only"> (opens in a new tab)</span></a>') == len(("Terms", "privacy notice"))
     assert "Email me new matching roles" not in region  # B1: the heading is cut; the helper text stays whole
     # The lawyer's sentences stay whole and in this order; the script only hides the first two (the confirmation
@@ -540,7 +540,8 @@ def test_the_contact_form_is_on_with_the_lawyers_wording_and_the_page_never_writ
     assert CONTACT not in page + script
     assert (  # his line above the Send button (A4), word for word; the link is the privacy notice in a new tab
         'id="contactPrivacy">Your message (and your name and email address, if given) is emailed to the maintainer. '
-        f'{SPAM_GUARD} <a href="privacy.html" target="_blank" rel="noopener noreferrer">Privacy notice<svg'
+        f'{SPAM_GUARD} <a href="privacy.html" target="_blank" rel="noopener noreferrer">Privacy notice'
+        '<span class="sr-only"> (opens in a new tab)</span></a></p>'
     ) in page
     assert page.index('id="contactPrivacy"') < page.index('id="contactSend"')
     todo = (REPO / "TODO.md").read_text(encoding="utf-8")

@@ -947,7 +947,7 @@ async def test_the_lawyers_wording_is_on_the_control_with_big_links(page: Page, 
     for link in await line.locator("a").all():  # a new tab, like the sign-in dialog, so the dialog stays as it is
         assert await link.get_attribute("target") == "_blank"
         assert await link.get_attribute("rel") == "noopener noreferrer"
-        assert await link.locator("svg.icon-ext").count() == 1
+        assert await link.locator("svg").count() == 0  # the icon is painted by external-link.css
         assert await link.locator(".sr-only").text_content() == " (opens in a new tab)"
         size = await link.bounding_box()
         assert size is not None

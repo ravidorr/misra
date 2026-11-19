@@ -16,6 +16,7 @@
 @import "components/story.css";
 @import "components/field.css";
 @import "components/dialog.css";
+@import "components/external-link.css";
 @import "components/sheet.css";
 @import "components/choice.css";
 @import "showcase.css";
@@ -61,7 +62,7 @@
     <h2 id="buttons">Buttons, chips, stickers</h2>
     <div class="panel">
       <div class="row">
-        <a class="btn btn-primary" href="#buttons">Apply ↗</a>
+        <a class="btn btn-primary" href="#buttons" target="_blank" rel="noopener noreferrer">Apply<span class="sr-only"> (opens in a new tab)</span></a>
         <button type="button" class="btn btn-pill">Show all 15</button>
         <button type="button" class="btn btn-pill">Not for me</button>
         <button type="button" class="btn btn-pill btn-danger">Delete my account permanently</button>
@@ -130,9 +131,9 @@
       </div>
       <h3 class="card-title"><a href="#card-h">Associate Product Manager</a></h3>
       <p class="card-snippet" dir="auto">Start of the posting, up to 255 characters, as written</p>
-      <p class="card-more"><a href="#card-h">Read full description &amp; apply on Acme Robotics ↗</a></p>
+      <p class="card-more"><a href="#card-h" target="_blank" rel="noopener noreferrer">Read full description &amp; apply on Acme Robotics<span class="sr-only"> (opens in a new tab)</span></a></p>
       <p class="card-tags"><span class="pill">Tel Aviv</span><span class="pill pill-soft">Product</span></p>
-      <p class="card-actions"><a class="btn btn-primary" href="#card-h">Apply ↗</a><button type="button" class="btn btn-pill btn-star" aria-pressed="false" aria-label="Star: Associate Product Manager at Acme Robotics"><span aria-hidden="true">☆</span>Star</button><button type="button" class="btn btn-pill">Not for me</button></p>
+      <p class="card-actions"><a class="btn btn-primary" href="#card-h" target="_blank" rel="noopener noreferrer">Apply<span class="sr-only"> (opens in a new tab)</span></a><button type="button" class="btn btn-pill btn-star" aria-pressed="false" aria-label="Star: Associate Product Manager at Acme Robotics"><span aria-hidden="true">☆</span>Star</button><button type="button" class="btn btn-pill">Not for me</button></p>
     </article>
   </section>
 

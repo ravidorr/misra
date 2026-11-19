@@ -431,8 +431,8 @@ async def test_fr1_ac7_pressing_sign_in_shows_the_notice_and_does_not_leave_the_
         "a"
     ).all():  # a new tab, so the dialog and the page stay: the sign and the words say so
         assert await link.get_attribute("target") == "_blank"
-        assert await link.get_attribute("rel") == "noopener"
-        assert await link.locator("svg.icon-ext[aria-hidden=true]").count() == 1
+        assert await link.get_attribute("rel") == "noopener noreferrer"
+        assert await link.locator("svg").count() == 0  # the icon is painted by external-link.css
         assert await link.locator(".sr-only").inner_text() == "(opens in a new tab)"
     await page.wait_for_timeout(300)
     assert page.url == f"{ORIGIN}/index.html"  # nothing was started by the button
