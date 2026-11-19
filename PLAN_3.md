@@ -33,7 +33,7 @@ count query with the service role, never printing rows.
 
 The `companies` table held 347 rows on 2026-11-18 and 413 on 2026-11-19: 328 crawled, 85 researched only, 0 excluded
 (`docs/jobs.json` of 2026-11-19 12:31 UTC says 328 covered). The counts in "Baseline" above are the A1 snapshot of
-2026-11-18 (267 and 80; B1 then parked 14 records the same day) and are not rewritten; the breakdown by `ats` of the 413 was not recomputed. The 85 researched records on 2026-11-19, counted from the live table: by segment, `deeptech` 33, `multinational` 19, `biz_software` 11, `cyber_infra` 10 and no segment 12; by `gap.reason`, `no_careers_url` 22, `no_feed_found` 20, `needs_reader` 16, `bot_protection` 10, `site_unusable` 9 and `no_openings` 8; 24 of the 85 have no `careers_url`. Some batch companies were already researched rows that were unlocked, so the batches
+2026-11-18 (267 and 80; B1 then parked 14 records the same day) and are not rewritten; the breakdown by `ats` of the 413 was not recomputed. The 85 researched records on 2026-11-19, counted from the live table: by segment, `deeptech` 33, `multinational` 19, `biz_software` 11, `cyber_infra` 10 and no segment 12; by `gap.reason`, `no_careers_url` 22, `no_feed_found` 20, `needs_reader` 16, `bot_protection` 10, `site_unusable` 9 and `no_openings` 8; 24 of the 85 have no `careers_url`. The 12 without a segment are new since the baseline (every researched record had one on 2026-11-18); the cause was not checked. Some batch companies were already researched rows that were unlocked, so the batches
 below add up to more than the 66 rows the table grew by.
 
 - **Batches** (a company is named here only because it is a non-excluded row; no excluded company is ever named).

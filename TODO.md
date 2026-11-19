@@ -86,14 +86,13 @@ Observations about live sites below come from checks made on 2026-11-14 and may 
     (`PLAN_3.md`, "Status (2026-11-19)"). The 85 researched records, counted on 2026-11-19 from the live table: by
     segment, deeptech 33, multinational 19, biz_software 11, cyber_infra 10 and no segment 12; by gap reason,
     `no_careers_url` 22, `no_feed_found` 20, `needs_reader` 16, `bot_protection` 10, `site_unusable` 9 and
-    `no_openings` 8. 24 of the 85 have no `careers_url` (the 22 of `no_careers_url` and two more). Gilat, Landa, Synopsys,
+    `no_openings` 8. 24 of the 85 have no `careers_url`. Gilat, Landa, Synopsys,
     Siemens, Apple, Micron, Boston Scientific, Lam Research, Rapyd, env0, Kornit Digital, Zesty, PepsiCo, Schneider
     Electric and ICE are crawled now; the notes below that call one of them "not done" describe 2026-11-14 to 2026-11-16
-    and are kept as history. Walnut and Pillar Security are not pinned: both are researched records (`needs_reader`,
-    status `careers_page_only`); Pillar was dropped from the reader work and needs a dedicated reader.
-  - **No careers URL.** A list of 2026-11-14, kept as a snapshot (21 names; Gilat and Landa have been crawled since
-    2026-11-19, and the table now has 24 researched records with no `careers_url`; the coverage gap card and the table
-    say which). They had no `careers_url` in the `companies` table: Upsolver, Speedata,
+    and are kept as history. Walnut and Pillar Security are not pinned: both are researched records with the reason
+    `needs_reader`; Pillar was dropped from the reader work and needs a dedicated reader.
+  - **No careers URL.** A list of 2026-11-14, kept as a snapshot (21 names, neither Gilat nor Landa among them; the table
+    now has 24 researched records with no `careers_url`, and the coverage gap card and the table say which). They had no `careers_url` in the `companies` table: Upsolver, Speedata,
     Teramount, X-Globe, Q Factor, Siklu, Silicom, Sight Diagnostics, Brainsway, EarlySign, Diagnostic Robotics,
     Tevel Aerobotics, SolarEdge, Watergen, AIR, SAP, eBay,
     Akamai, Ford, Ericsson, Keysight. Find the real
