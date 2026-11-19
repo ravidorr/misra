@@ -22,6 +22,12 @@ All notable changes are documented here. Format follows [Keep a Changelog](https
 - The Crawl area of the admin page (PLAN_2.md step 2.2): it calls `admin_crawl_health()` when first shown and lists one card per company, worst first, with a headline, chips with counts (Needs attention, Failing, Robots.txt, Held, All), the values of the crawl and a status pill. Loading, empty, error and 401 states. Templates and tests only.
 - A Copy button under every code block of the legal pages (the address on "Connect your assistant", the command for Claude Code), in `templates/theme.js`.
 
+## [0.78.2] - 2026-11-19
+
+### Fixed
+
+- The share of Israeli jobs in a region (FR-3 AC 11, the daily log line and `tests/test_regions.py`) is now measured on the jobs in Israel that name a city. A job with only "Israel", "IL" or "Various Locations within Israel" has no city to place, so it is counted apart ("Israel, city not given: N (not in the share)") and no longer lowers the share; before, new companies with many such jobs took it to 93.4% and stopped every push, though only 64 of 3,080 jobs with a city had no region (97.9% now). A real unmapped city still lowers it and fails the test. The log line reads "Regions: X% of N jobs in Israel that name a city are in a region". `regions.py` also places Rahat in the south and "Kefar Sava" in Sharon, and reads "Various Locations" and "N Locations" as no city. `PRD.md` FR-3 words the measure the same way.
+
 ## [0.78.1] - 2026-11-19
 
 ### Fixed

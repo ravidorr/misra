@@ -137,8 +137,8 @@ Jobs outside Israel are not a concern for now.
   outside Israel to any other chosen regions. The daily email never carries them.
 - AC: A user can pick one or more regions, and the choice is remembered when signed in.
 - AC: The region or location is visible on the card and available to AI assistants reading the page.
-- AC: At least 95% of jobs in Israel fall into a region, and the locations we could not group are reported so we can
-  improve.
+- AC: At least 95% of jobs in Israel that name a city fall into a region. A job with only "Israel" has no city to
+  place, so it is counted apart, not in the share. The locations we could not group are reported so we can improve.
 
 ### FR-4: Richer job data
 
@@ -296,7 +296,7 @@ see.
 - **Digest:** the number of subscribers, the share still subscribed after four weeks, and the unsubscribe and bounce
   rates reported by the email sender.
 - **Usefulness:** the share of signed-in users who have starred at least one job.
-- **Data quality:** the share of jobs in Israel that fall into a region (target: above 95%), and the share of jobs with
+- **Data quality:** the share of jobs in Israel that name a city and fall into a region (target: above 95%), and the share of jobs with
   a full description.
 - **Coverage:** the number of sites on the coverage gap card, and the number of sites reported and accepted.
 - **Assistant:** not measured. The assistant reads public data without signing in, so we cannot see who connects or
