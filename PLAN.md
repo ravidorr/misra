@@ -327,11 +327,11 @@ Decisions made in planning (they change the PRD's wording, so update the PRD in 
 
 ## FR-6 (assistant connection)
 
-- [ ] 8.1 Edge Function MCP endpoint, public and read-only: `search_jobs` (region, level, role type, keyword incl. full
+- [x] 8.1 Edge Function MCP endpoint, public and read-only: `search_jobs` (region, level, role type, keyword incl. full
   text; it returns keys, titles and snippets), `get_job` (everything collected, including the full text, for the
   assistant), no user data, rate limited. Same query code path as the dashboard (shared SQL function) so the results
   match. The text is exposed to assistants and search only by this step and 7.3, as the lawyer approved on 2026-11-16. Done when: FR-6 AC 1 to 4 and 8 hold against a real MCP client.
-  **Live since 2026-11-17, not ticked until the hand test (8.2).** The Edge Function `mcp` (MCP over HTTP, JSON answers, no
+  **Live since 2026-11-17, ticked 2026-11-19 after the hand test (8.2).** The Edge Function `mcp` (MCP over HTTP, JSON answers, no
   sessions) has `search_jobs` (the SQL function `search_jobs`, the dashboard's rules, `search_job_keys` for the text) and
   `get_job` (one job by company and job_id, the `details` allowlist and the full text, open or closed for less than 30
   days). Rate limits: per caller 100 searches and 15 job reads a day, 500 job reads a day for everyone, through hashed
@@ -340,11 +340,11 @@ Decisions made in planning (they change the PRD's wording, so update the PRD in 
   `ASSISTANT_ENDPOINT_ENABLED=true`, after the lawyer approved `TERMS.md`, `PRIVACY.md`, `ASSISTANT.md` and `SECURITY.md` on
   2026-11-17. Tested with the protocol over HTTP in vitest and once with the official TypeScript client; the maintainer
   did a live check on 2026-11-17 (tools, a search, one job, the limits, a bad request, the text closed to the public key;
-  not repeated here, only `tools/list` was seen to answer). Left: a real assistant, which is the hand test in 8.2.
-- [ ] 8.2 "Connect your assistant" page on the dashboard with plain step-by-step instructions for the common assistants
+  not repeated here, only `tools/list` was seen to answer). The hand test with a real assistant (8.2) is done.
+- [x] 8.2 "Connect your assistant" page on the dashboard with plain step-by-step instructions for the common assistants
   tested by hand, README cut to a short developer note, `llms.txt` updated. Done when: FR-6 AC 5 to 7 hold; a person with
   no technical skills connects in a couple of minutes (hand test).
-  **Live since 2026-11-17 (#148, on in #154), not ticked until the hand test.** `ASSISTANT.md` (the words, by the technical
+  **Live since 2026-11-17 (#148, on in #154), ticked 2026-11-19 after the hand test (done, as the maintainer reported).** `ASSISTANT.md` (the words, by the technical
   writer, steps for Claude and ChatGPT checked against their current help pages on 2026-11-17, and any other assistant)
   becomes `docs/assistant.html` in the template of the privacy page, with a footer link and a line in `llms.txt`, behind
   `ASSISTANT_PAGE_ENABLED` in `build_dashboard.py` (`True`); the README has a short developer note.
@@ -359,7 +359,7 @@ Decisions made in planning (they change the PRD's wording, so update the PRD in 
   - Result: a dated note under this plan, with the observations.
   - On failure: fix the wording of the page through the technical writer, never the lawyer-approved legal text; a change to
     the wording of `ASSISTANT.md` that the lawyer approved needs the lawyer. Then repeat.
-  Then tick 8.1 and 8.2. Not run yet.
+  Run and passed (reported by the maintainer on 2026-11-19; the dated observations note was not written down).
 
 ## Retire SQLite (last, only when the Supabase path has run clean for a while)
 
@@ -400,8 +400,8 @@ Decisions made in planning (they change the PRD's wording, so update the PRD in 
   AC 4-6: 4.3. FR-3 AC 1-7, 11: 3.2; AC 8-10: 3.4. FR-4 AC 1-3, 9: 7.1; AC 4, 8: 7.2; AC 5, 6: 7.3; AC 7: 8.1;
   AC 10, 12: 7.4; AC 11: policy. FR-5: 1.1. FR-6 AC 1-4, 8: 8.1; AC 5-7: 8.2. FR-7: 5.1 (spam AC), 5.2. FR-8 AC 1-3: 6.2;
   AC 4-6, 8, 9: 6.3; AC 7: 6.1; AC 10: 6.4; AC 11 (consent log): 6.1; AC 12 (footer): 6.3. FR-1 AC 7 (sign-in notice) and the `TERMS.md` disclaimer: 6.6. FR-4 AC 12: also applied in 7.1. FR-9 AC 3-6, 10: 3.1; AC 1, 2, 7, 8: 3.4; AC 9: 6.3. Re-check this when a
-  step is split. Mapping re-checked 2026-11-17 against the merged steps: every AC is named. Not ticked: the steps 7.1, 7.4, 8.1
-  and 8.2 are open (above), so the FR-4 and FR-6 ACs are not all proven yet.
+  step is split. Mapping re-checked 2026-11-17 against the merged steps: every AC is named. Not ticked: the steps 7.1 and 7.4
+  are open (above), so the FR-4 ACs are not all proven yet.
 - [x] ~~Success metrics are read from Supabase tables and Resend reports monthly; add the queries to `CONTRIBUTING.md`
   with step 6.4 (sign-ins, 30-day returns, subscribers, share starring, region and description shares, accepted sites).~~
   Done in v0.28.0 ("Monthly success metrics" in `CONTRIBUTING.md`). Accepted sites are not in a table (a report is an email), so that one is a `git log` count of additions to `data/seed_companies.csv`.
