@@ -5,16 +5,15 @@ from typing import Any
 import pytest
 
 import browser_crawl
-from browser_crawl import WHY, crawl_one
+from browser_crawl import SETTLE_POLLS, WHY, crawl_one
 from common import ISRAEL
 from tests.fakes import FakeCtx, FakeEl, FakeLoc, FakePage, FakePlaywright, FakeResp, Status
 
 URL = "https://x.test/careers"
 SCROLL_CAP = 25
 SLOW_ANSWER = 4  # the fourth read of the link count is the first to see the new links
-SETTLE_POLLS = 32
 TWO = 2
-TWO = 2
+POLL_MS = 250
 THREE = 3
 FOUR = 4
 OLD_CARD_MAX = 250  # the card length limit before the crawler read whole cards
@@ -154,22 +153,28 @@ async def test_scroll_loop_load_more_and_growth() -> None:
 
 
 async def test_load_more_waits_for_a_slow_list() -> None:
-    # the list answers the click late (Priority Software's admin-ajax takes seconds from a runner): the crawl waits
-    # for the link count to change instead of reading it once after a fixed pause
+    # the list answers the click late (Priority Software's admin-ajax takes seconds from a runner): the crawl keeps
+    # waiting until the link count changes, then goes on to press the button again
     btn = FakeEl()
     page = FakePage(btn=btn, count_fn=lambda i: 9 if i < SLOW_ANSWER else 21)
     await run(page)
-    # round 1: the count before, three polls (the third sees the new links), the count after; round 2: the count
-    # before, a full wait that sees nothing new (the loop then ends), the count after
-    assert btn.clicks == TWO
-    assert page._count_calls == 1 + SLOW_ANSWER - 1 + 1 + 1 + SETTLE_POLLS + 1
+    assert btn.clicks == TWO  # the second press finds nothing new within the wait and ends the loop
 
 
-async def test_load_more_gives_up_when_the_list_never_grows() -> None:
+async def test_load_more_that_loads_nothing_is_pressed_once() -> None:
     btn = FakeEl()
+    waits: list[int] = []
     page = FakePage(btn=btn, count_fn=lambda _i: 7)
+    original = page.wait_for_timeout
+
+    async def count_waits(ms: int) -> None:
+        waits.append(ms)
+        await original(ms)
+
+    page.wait_for_timeout = count_waits  # type: ignore[method-assign]
     assert await run(page) == []
-    assert btn.clicks == TWO  # one bounded wait per click, then the unchanged count ends the loop
+    assert btn.clicks == 1
+    assert waits.count(POLL_MS) == SETTLE_POLLS  # one bounded wait, then the loop ends
 
 
 async def test_collect_link_filters_and_titles() -> None:

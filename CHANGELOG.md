@@ -25,7 +25,7 @@ All notable changes are documented here. Format follows [Keep a Changelog](https
 
 ### Fixed
 
-- The browser crawl waits for the job list to answer a "Load more" click: it polls the link count for up to 8 seconds (the pagination wait) instead of reading it once after 0.9 s. Priority Software's list loads each further page through `admin-ajax.php`, which took longer than that from the GitHub runner, so the crawl read 9 of 23 roles and the sharp-drop guard held the company back on 2026-11-19. Re-listed jobs can show once in the next digest as new.
+- The browser crawl waits for the job list to answer a "Load more" click: it polls the link count for up to 8 seconds (the pagination wait) instead of reading it once after 0.9 s. Priority Software's list loads each further page through `admin-ajax.php`, which took longer than that from the GitHub runner, so the crawl read 9 of 23 roles and the sharp-drop guard held the company back on 2026-11-19. A click that shows nothing within that wait ends the loop, so a button that loads no jobs costs one wait, not one per scroll. Re-listed jobs can show once in the next digest as new.
 
 ## [0.76.1] - 2026-11-19
 

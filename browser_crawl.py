@@ -455,6 +455,8 @@ async def crawl_one(ctx: Any, url: str, sem: asyncio.Semaphore) -> list[dict[str
                             await page.wait_for_timeout(250)
                             if await page.eval_on_selector_all("a[href]", "e=>e.length") != before:
                                 break
+                        else:  # the click showed nothing within the wait: this button loads no jobs, stop pressing it
+                            break
                 n = await page.eval_on_selector_all("a[href]", "e=>e.length")
                 if n == prev:
                     break
