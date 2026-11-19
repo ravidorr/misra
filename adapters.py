@@ -325,6 +325,8 @@ _COMEET_NAME = re.compile(r'class="comeet-position-name"[^>]*>(.*?)(?:<br|<span|
 _COMEET_TEAM = re.compile(
     r'<span[^>]*class="[^"]*(?:department|(?<![\w-])position(?![\w-]))[^"]*"[^>]*>(.*?)</span>', re.S | re.I
 )
+_COMEET_DEPT_NAME = re.compile(r'class="comeet-position-dept-name"[^>]*>(.*?)</div>', re.S | re.I)
+_COMEET_ITEM = re.compile(r"<li\b[^>]*>(?:(?!<li\b).)*?</li>", re.S | re.I)
 _COMEET_PLACE = re.compile(r'<span[^>]*class="[^"]*location[^"]*"[^>]*>(.*?)</span>', re.S | re.I)
 _COMEET_EMPTY = re.compile(r"don.t have any open positions", re.I)
 _COMEET_PLUGIN = "comeet-outer-wrapper"
@@ -346,22 +348,30 @@ def comeet_page(slug: str) -> list[Job] | None:
         return None
     page = _COMEET_COMMENT.sub("", r.text)  # the plugin keeps a commented copy of every title link
     out: list[Job] = []
-    for href, place, uid, card in _COMEET_LINK.findall(page):
+    items = [(m.start(), m.end()) for m in _COMEET_ITEM.finditer(page)]
+    for link in _COMEET_LINK.finditer(page):
+        href, place, uid, card = link.groups()
         named = _COMEET_HEADING.search(card) or _COMEET_NAME.search(card)
+        team = _COMEET_TEAM.search(card)
+        where = _COMEET_PLACE.search(card)
+        if not named:
+            # the title is outside the link (a "Tell me more" button): read the list item around it, whose visible
+            # place is not used: "Tel &#8211; Aviv" is not a place `common.ISRAEL` knows, the link's `tel-aviv` is
+            item = next((page[a:b] for a, b in items if a < link.start() and link.end() < b), "")
+            if {u.upper() for u in _COMEET_ANY_UID.findall(item)} != {uid.upper()}:
+                item = ""  # an item that holds other jobs as well has no title of its own to read
+            named = _COMEET_NAME.search(item)
+            team = _COMEET_DEPT_NAME.search(item)
+            where = None
         title = _page_text(named.group(1)) if named else ""
         if not title:
             return None  # a card we cannot read: a partial list would close the jobs we missed
-        team, where = _COMEET_TEAM.search(card), _COMEET_PLACE.search(card)
         location = (_page_text(where.group(1)) if where else "") or place.replace("-", " ")
-        out.append(
-            _job(
-                uid,
-                title,
-                location,
-                urljoin(r.url, html.unescape(href)),
-                team=_page_text(team.group(1)) if team else "",
-            )
+        job = _job(
+            uid, title, location, urljoin(r.url, html.unescape(href)), team=_page_text(team.group(1)) if team else ""
         )
+        if uid.upper() not in {j["job_id"].upper() for j in out}:  # a page that prints its list twice: the first wins
+            out.append(job)
     # job links the card markup did not yield (a changed layout) mean the list is not complete
     if {u.upper() for u in _COMEET_ANY_UID.findall(page)} != {j["job_id"].upper() for j in out}:
         return None

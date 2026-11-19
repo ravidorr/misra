@@ -1948,6 +1948,78 @@ def test_no_request_goes_to_another_host_than_the_career_page(monkeypatch: pytes
     assert urls == []
 
 
+def zesty_card(uid: str, place: str, title: str, dept: str, visible: str) -> str:
+    """A theme whose card has the title outside the link: the link says "Tell me more" and sits in the list item."""
+    href = f"//zesty.test/careers/co/{place}/{uid}/{title.lower().replace(' ', '-')}/all"
+    return (
+        f'<li class="all-loc {place}"><div class="comeet-position-dept-name">{dept}</div>'
+        f'<div class="comeet-position-name">{title}</div>'
+        f'<div class="comeet-position-meta"><div class="location_name">{visible}</div></div>'
+        f'<div class="comeet_view_more"><a class="comeet-position" href="{href}">Tell me more</a></div></li>'
+    )
+
+
+ZESTY = (
+    '<div class="comeet-outer-wrapper"><ul class="comeet-list">'
+    + zesty_card("4C.378", "tel-aviv", "Business Development Representative", "Marketing", "Tel &#8211; Aviv")
+    + zesty_card("A6.47F", "santa-clara", "Account Executive", "Sales", "Santa Clara")
+    + "</ul></div>"
+)
+
+
+def test_comeet_page_reads_the_list_item_when_the_title_is_outside_the_link(monkeypatch: pytest.MonkeyPatch) -> None:
+    fake_get(monkeypatch, FakeHttpResponse(text=ZESTY, url="https://zesty.test/careers/"))
+    jobs = adapters.comeet_page("https://zesty.test/careers/")
+    assert jobs is not None
+    assert [(j["job_id"], j["title"], j["team"], j["location"]) for j in jobs] == [
+        ("4C.378", "Business Development Representative", "Marketing", "tel aviv"),
+        ("A6.47F", "Account Executive", "Sales", "santa clara"),
+    ]
+    assert jobs[0]["url"] == "https://zesty.test/careers/co/tel-aviv/4C.378/business-development-representative/all"
+    # the place of the link is the one `common.ISRAEL` knows; the visible "Tel - Aviv" is not, and a city outside is not
+    assert [bool(discover.ISRAEL.search(j["location"])) for j in jobs] == [True, False]
+    assert not discover.ISRAEL.search("Tel \u2013 Aviv")
+
+
+def test_comeet_page_a_list_printed_twice_gives_each_job_once(monkeypatch: pytest.MonkeyPatch) -> None:
+    page = ZESTY.replace("</ul></div>", "</ul><ul>" + ZESTY.split('<ul class="comeet-list">')[1])
+    fake_get(monkeypatch, FakeHttpResponse(text=page, url="https://zesty.test/careers/"))
+    jobs = adapters.comeet_page("https://zesty.test/careers/")
+    assert jobs is not None
+    assert [j["job_id"] for j in jobs] == ["4C.378", "A6.47F"]
+
+
+@pytest.mark.parametrize(
+    "page",
+    [
+        # the item has no name of its own to read
+        ZESTY.replace('class="comeet-position-name"', 'class="other"'),
+        # the link is in no list item
+        '<div class="comeet-outer-wrapper"><a href="/co/tel-aviv/4C.378/bdr/all">Tell me more</a></div>',
+        # one list item holds two jobs: whose title is it
+        '<ul><li><div class="comeet-position-name">One</div><a href="/co/tel-aviv/4C.378/a/all">More</a>'
+        '<a href="/co/haifa/A6.47F/b/all">More</a></li></ul>',
+    ],
+)
+def test_comeet_page_a_card_with_no_title_anywhere_is_not_a_list(monkeypatch: pytest.MonkeyPatch, page: str) -> None:
+    fake_get(monkeypatch, FakeHttpResponse(text=page, url="https://zesty.test/careers/"))
+    assert adapters.comeet_page("https://zesty.test/careers/") is None
+
+
+def test_comeet_page_a_job_read_two_ways_is_kept_once_with_the_first_reading(monkeypatch: pytest.MonkeyPatch) -> None:
+    again = '<a href="/careers/co/haifa/4C.378/bdr/all">Tell me more</a>'
+    page = ZESTY.replace("</ul>", f'<li><div class="comeet-position-name">BDR</div>{again}</li></ul>')
+    fake_get(monkeypatch, FakeHttpResponse(text=page, url="https://zesty.test/careers/"))
+    jobs = adapters.comeet_page("https://zesty.test/careers/")
+    assert jobs is not None
+    assert (jobs[0]["job_id"], jobs[0]["title"], jobs[0]["location"]) == (
+        "4C.378",
+        "Business Development Representative",
+        "tel aviv",
+    )
+    assert len(jobs) == len({j["job_id"] for j in jobs})
+
+
 FIXTURES = Path(__file__).parent / "fixtures"
 SYNOPSYS_SLUG = "synopsys.avature.net/careers?2001=21374"
 SIEMENS_SLUG = "jobs.siemens.com/en_US/externaljobs?42386=811993"

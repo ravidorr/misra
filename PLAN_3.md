@@ -221,6 +221,11 @@ Target: 30. Read the "Prior findings" first; do not repeat a checked path.
 - **C3. `needs_reader` (20).** Group by platform and check `robots.txt` first. An adapter only for a platform with two
   or more companies that `robots.txt` allows (none qualifies today; the count may change after C1 and C2). The rest use
   `browser` or `comeet_page`, within the crawl-time budget. One adapter per PR, with fixtures and 100% coverage.
+  Reader fixes shipped in 0.75.0 (the `browser` card reader for icon-only and button-label links, the job links of Kornit
+  and Apple, the `comeet_page` card of Zesty); the pins of those records (env0, Rapyd, Walnut, Kornit, Apple, Zesty) are
+  made by hand afterwards. Pillar is not included: its cards say only "Hybrid" or "Remote" and the city is a section
+  heading above them, which the generic reader cannot attach to a job without risking the places of other companies
+  (a review found such a rule misplaces cards under their own job-title heading). Needs a dedicated reader if wanted.
   Status (2026-11-19): the Avature adapter is built (Synopsys and Siemens, `robots.txt` allows the filtered RSS feed): slug
   `host/portal?field=value`, Israel facet `2001=21374` (Synopsys) and `42386=811993` (Siemens). The feed cannot be paged and
   gives 20 jobs at most, so a feed of 20 is a failure (Synopsys 12, Siemens 17 today). Not applied or pinned yet: the
