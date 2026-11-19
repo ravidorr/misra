@@ -48,9 +48,12 @@ Observations about live sites below come from checks made on 2026-11-14 and may 
   with no admin, account or sign-in word left in its markup or noscript text. Only the admin (the dashboard session, then
   `is_admin()`) sees the admin page; the loading state shows an empty card (no flash of either); a failed check for a signed-in
   visitor shows a neutral "could not load, reload" line, not a 404. Where: a shared `templates/parts/not-found.inc`, a real
-  `docs/404.html` built from a template (none exists) with absolute `/misra/` asset paths, `templates/admin.html` and
-  `templates/admin.js` (states: checking, not-found, check-failed, ready), the admin and "never linked" tests, a new 404
-  test. This hides nothing for real (the database decides, the script and markup are public); say so in the PR. No new data
+  `docs/404.html` built from a template (none exists) with absolute `/misra/` asset paths (in the same PR: it widens
+  `AGENTS.md`'s docs file list, the `publish-docs.yml` trigger paths and the tests that list docs files, needs a version
+  bump and a `CHANGELOG.md` entry because `build_dashboard.py` is a listed module, and stays `noindex` and out of
+  `llms.txt` and `jobs.jsonld`), `templates/admin.html` (the 404 is its default markup, so view-source and no-JavaScript show
+  it) and `templates/admin.js` (states: checking, not-found, check-failed, ready; it swaps in the admin card only after
+  `is_admin()` is true), the admin and "never linked" tests, a new 404 test. This hides nothing for real (the database decides, the script and markup are public); say so in the PR. No new data
   or logging, so no `PRIVACY.md` change. Done when: a signed-out visitor and a signed-in non-admin see the 404 page (no hint
   of an admin area), the admin sees the admin page, no flash of either while loading, noindex kept, tests updated.
 
