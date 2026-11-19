@@ -240,7 +240,7 @@ def client_base(url: str) -> str:
 def test_quality_report_has_both_shares(jobs: sqlite3.Connection) -> None:
     report = sync_supabase.quality_report(jobs)
     assert "Role types: " in report
-    assert "jobs in Israel are in a region" in report
+    assert "jobs in Israel that name a city are in a region" in report
 
 
 @pytest.mark.parametrize(

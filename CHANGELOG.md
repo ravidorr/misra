@@ -28,6 +28,12 @@ All notable changes are documented here. Format follows [Keep a Changelog](https
 
 - Every link that opens in a new tab (`a[target="_blank"]`) now shows the same small box-with-arrow icon after its text, painted by one rule (`design-system/components/external-link.css`, the shape `design-system/assets/new-tab.svg` as a CSS mask in the link's own colour, so it follows light, dark, a button and forced colors). It replaces the arrow character of "Apply" and "Read full description & apply on ..." and the inline `svg.icon-ext` of the sign-in notice, the job alerts consent and the Contact page; no link has two arrows. The legal Markdown files, `templates/email.js` and every approved word are unchanged: the build already adds the screen-reader words "(opens in a new tab)" to a converted link, and the icon is CSS only. `build_dashboard.py` copies the mask to `docs/new-tab.svg` (a file, because `img-src 'self'` refuses a `data:` URI). The admin links and the sign-in notice link now carry `rel="noopener noreferrer"` (they had `noopener`).
 
+## [0.78.2] - 2026-11-19
+
+### Fixed
+
+- The share of Israeli jobs in a region (FR-3 AC 11, the daily log line and `tests/test_regions.py`) is now measured on the jobs in Israel that name a city. A job with only "Israel", "IL" or "Various Locations within Israel" has no city to place, so it is counted apart ("Israel, city not given: N (not in the share)") and no longer lowers the share; before, new companies with many such jobs took it to 93.4% and stopped every push, though only 64 of 3,080 jobs with a city had no region (97.9% now). A real unmapped city still lowers it and fails the test. The log line reads "Regions: X% of N jobs in Israel that name a city are in a region". `regions.py` also places Rahat in the south and "Kefar Sava" in Sharon, and reads "Various Locations" and "N Locations" as no city. `PRD.md` FR-3 words the measure the same way.
+
 ## [0.78.1] - 2026-11-19
 
 ### Fixed
