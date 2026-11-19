@@ -1,0 +1,20 @@
+{
+ "status": 200,
+ "data": {
+  "count": 1,
+  "positions": [
+   {
+    "id": 1099556387295,
+    "displayJobId": "R295",
+    "name": "Field Service Engineer",
+    "locations": [
+     "IL-Israel Intel-02 (2511)"
+    ],
+    "standardizedLocations": [],
+    "postedTs": 1791360000,
+    "department": "Field Service",
+    "positionUrl": "/careers/job/1099556387295"
+   }
+  ]
+ }
+}

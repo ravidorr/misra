@@ -7,6 +7,7 @@ import re
 import xml.etree.ElementTree as ET
 from collections import Counter
 from collections.abc import Callable, Iterable, Iterator
+from datetime import UTC, datetime
 from email.utils import parsedate_to_datetime
 from typing import Any
 from urllib.parse import parse_qsl, urljoin, urlparse
@@ -33,6 +34,7 @@ PHENOM_PAGE = 50
 PHENOM_MAX_PAGES = 100
 PHENOM_SLUG_PARTS = 3
 AVATURE_MAX = 20  # the most jobs an Avature feed gives (it has no paging): a feed this long may be cut short
+EIGHTFOLD_MAX = 100  # the most positions of one Eightfold search read (ten an answer): a board with more is not read
 
 
 def _job(  # noqa: PLR0913, PLR0917
@@ -958,6 +960,98 @@ def avature(slug: str) -> list[Job] | None:
     return jobs
 
 
+_EIGHTFOLD_SLUG = re.compile(r"([a-z0-9-]+(?:\.[a-z0-9-]+)+)\?domain=([a-z0-9-]+(?:\.[a-z0-9-]+)+)")
+
+
+def _eightfold_posted(stamp: Any) -> str:
+    """The date of an epoch-seconds `postedTs` as YYYY-MM-DD, or '' when it is missing or not a time."""
+    try:
+        return datetime.fromtimestamp(stamp, tz=UTC).date().isoformat() if isinstance(stamp, int) else ""
+    except (OverflowError, OSError, ValueError):
+        return ""
+
+
+def _eightfold_job(host: str, p: Any) -> tuple[Job, bool] | None:
+    """One position of the search answer as (job, located in Israel), or None when it cannot be read: not an object,
+    no number, no title, or a `positionUrl` that is not a path of the board. The job has the id, title, place (the
+    locations joined by '; ') and address that the browser crawl gives the same board, so a company read by either way
+    keeps its jobs. The place is Israel when a location or a standardized one (`..., IL`) names it, by the matcher
+    of the other adapters (a bare IL of Illinois is not Israel). When only the standardized locations name Israel, they
+    are added to the place, so that the place alone shows it (run.py's israel_only filter reads nothing else)."""
+    if not isinstance(p, dict):
+        return None
+    locations = [str(x) for x in p["locations"]] if isinstance(p.get("locations"), list) else []
+    standard = [str(x) for x in p["standardizedLocations"]] if isinstance(p.get("standardizedLocations"), list) else []
+    path = p.get("positionUrl")
+    if not (isinstance(p.get("id"), int) and p.get("name") and isinstance(path, str) and path.startswith("/")):
+        return None
+    israel = [x for x in standard if ISRAEL.search(x)] if not any(ISRAEL.search(x) for x in locations) else []
+    job = (
+        _job(  # a place only the standardized locations name is added, so the pipeline's own check of the place sees it
+            p["id"],
+            p["name"],
+            "; ".join([*locations, *israel]),
+            f"https://{host}{path}",
+            team=p.get("department"),
+            posted=_eightfold_posted(p.get("postedTs")),
+        )
+    )
+    return job, bool(israel) or any(ISRAEL.search(x) for x in locations)
+
+
+def _eightfold_page(host: str, domain: str, start: int) -> tuple[int, list[Any]] | None:
+    """One answer of the board's search, asked for the location Israel from position `start`: (total, positions), or
+    None when the answer is not the board's JSON."""
+    r = get(f"https://{host}/api/pcsx/search", params={"domain": domain, "location": "Israel", "start": start})
+    if r is None or r.status_code != HTTP_OK:
+        return None
+    try:
+        data = r.json()["data"]
+        total, positions = data["count"], data["positions"]
+    except (ValueError, KeyError, TypeError):
+        return None
+    if not (isinstance(total, int) and isinstance(positions, list)):
+        return None
+    return total, positions
+
+
+def eightfold(slug: str) -> list[Job] | None:
+    """slug is '<host>?domain=<domain>' of an Eightfold career site, for example 'careers.micron.com?domain=micron.com'
+    or 'lamresearch.eightfold.ai?domain=lamresearch.com' (the site is `https://<host>/careers`; the domain is the one
+    its own search call carries). The site's search API, `https://<host>/api/pcsx/search`, the call the page makes
+    itself, is asked for the location Israel, ten positions an answer, from the position `start` on (it ignores `num`).
+    Its robots.txt allows `/api/pcsx` explicitly (`Allow: /api/pcsx` against `Disallow: /`, the longer rule wins; read
+    on 2026-11-19 for Micron, Boston Scientific and Lam Research), and the requests go through `common.get`: that file's
+    rules, one request a second to a host, the project's User-Agent. A board whose API is switched off (NetApp answers
+    HTTP 403, "PCSX is not enabled") is None, with no other way tried. The list is trusted only when every answer is
+    that JSON, the first reports at most EIGHTFOLD_MAX positions (a board that ignores the location reports its whole
+    list, and a list that long may be cut short), the total is the same on every answer, the positions add up to it
+    and no position comes twice: a partial list would close the jobs it lacks. Of those, the jobs located in Israel
+    are kept (the search may list a place near Israel too); a position that cannot be read is None too."""
+    found = _EIGHTFOLD_SLUG.fullmatch(slug)
+    if not found:
+        return None
+    host, domain = found.groups()
+    positions: list[Any] = []
+    total: int | None = None
+    while total is None or len(positions) < total:
+        got = _eightfold_page(host, domain, len(positions))
+        if (
+            got is None
+            or got[0] > EIGHTFOLD_MAX
+            or (total is not None and got[0] != total)
+            or (not got[1] and got[0] > len(positions))  # an answer with no position before the total is reached
+        ):
+            return None
+        total = got[0]
+        positions.extend(got[1])
+    read = [_eightfold_job(host, p) for p in positions]
+    jobs = [r for r in read if r]
+    if len(jobs) != len(positions) or len({j["job_id"] for j, _ in jobs}) != len(jobs) or len(positions) != total:
+        return None
+    return [j for j, israel in jobs if israel]
+
+
 ADAPTERS: dict[str, Callable[[str], list[Job] | None]] = {
     "greenhouse_url": greenhouse_url,
     "greenhouse": greenhouse,
@@ -974,4 +1068,5 @@ ADAPTERS: dict[str, Callable[[str], list[Job] | None]] = {
     "phenom": phenom,
     "comeet_page": comeet_page,
     "avature": avature,
+    "eightfold": eightfold,
 }
