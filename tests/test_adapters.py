@@ -2733,3 +2733,17 @@ def test_a_phenom_job_gives_the_json_ld_of_its_own_page_on_the_career_site(monke
     assert jobs[0]["description"] == "Build things"
     assert "description" not in jobs[1]
     assert urls == [url]  # the list's own host, never the host of a link
+
+
+def test_a_comeet_page_job_gives_the_json_ld_of_its_own_page_on_the_careers_host(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    url = "https://acme.test/careers/co/israel/AA.470/engineer/all/"
+    urls = fake_get(monkeypatch, FakeHttpResponse(text=JZ_PAGE))
+    jobs = [
+        {"job_id": "AA.470", "title": "T", "url": url},
+        {"job_id": "BB.001", "title": "U", "url": "https://www.comeet.co/jobs/acme/BB.001"},
+    ]
+    assert adapters.add_descriptions("comeet_page", "https://acme.test/careers/", "Acme", jobs, set()) == (2, 1, 0)
+    assert jobs[0]["description"] == "Build things"
+    assert urls == [url]  # the careers page's own host, never the host of a link

@@ -724,6 +724,7 @@ DETAILS: dict[str, Callable[[str, Job], tuple[str, dict[str, Any]] | None]] = {
     "oraclehcm": oraclehcm_description,
     "jazzhr": _jsonld_job_page(lambda slug: f"{slug}.applytojob.com"),
     "phenom": _jsonld_job_page(lambda slug: slug.partition("/")[0]),
+    "comeet_page": _jsonld_job_page(host_of),
     "browser": browser_description,
 }
 WANTS: dict[str, Callable[[str, Job], bool]] = {"browser": _browser_wants_page}
