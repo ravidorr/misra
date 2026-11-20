@@ -4,6 +4,12 @@ All notable changes are documented here. Format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
+## [0.81.0] - 2026-11-20
+
+### Added
+
+- A dead-board alert after the coverage gaps in the `Log the coverage gaps` step (`run.py --gaps`): `dead boards: N (M new), no job for 30 days: names` lists a crawled company whose last crawls, 30 days or more, were all ok with no job, read from `crawl_log`. A board that crossed 30 days on the newest crawl day or up to two days before makes the line a `::warning::`. Counts and company names only; an alert, never a failure (a broken check is a warning and the step stays green), and the coverage gap line is unchanged.
+
 ### Removed
 
 - The "Filters reset." line with an "Undo" button that showed for 6 seconds after "Reset" (`#resetNote`, its timer and the code that restored the filters), and its `.reset-note` styles. "Reset" is unchanged and still acts at once; the `sr-only` status region now says "Filters reset." so screen readers still hear it.
