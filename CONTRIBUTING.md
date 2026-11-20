@@ -90,7 +90,7 @@ never floods the job alerts.
 
 ## Trying candidate companies
 
-Before a batch is added (PLAN_3.md step D), `survey.py --candidates` tells which names are worth adding. It is a dev
+Before a batch is added (`TODO.md`, "More companies"), `survey.py --candidates` tells which names are worth adding. It is a dev
 tool: it reads a CSV, writes nothing to Supabase, and prints to stdout only.
 
 1. Pull the list with the service-role key in the environment: `python3 sync_supabase.py --pull` (needs
@@ -116,7 +116,7 @@ jobs. The verdicts:
   or `not_found`. Read `board_name` before trusting a `keep` (a board that adds words to the name still
   matches).
 
-A batch has at most 25 companies (PLAN_3.md, "Batches"); then add them on the admin page as in "Adding a company".
+A batch has at most 25 companies (`TODO.md`, "More companies"); then add them on the admin page as in "Adding a company".
 
 ## Removing a company on request
 

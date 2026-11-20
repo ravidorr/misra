@@ -1,10 +1,27 @@
 # TODO
 
-Open work, as of 2026-11-19. Each item says what triggers it, how to do it and when it is done. When one is finished,
+Open work, as of 2026-11-20. Each item says what triggers it, how to do it and when it is done. When one is finished,
 delete it and update the counts in the others: the researched count and the segment, reason and no-careers-URL counts in the research item (recounted on
 2026-11-19, see its status note; a pin removes one record from one segment and one reason).
 An item with a screenshot in `todo-images/` goes with it: delete the image file in the same PR.
 Observations about live sites below come from checks made on 2026-11-14 and may have changed.
+This file replaced `PLAN.md`, `PLAN_2.md` and `PLAN_3.md` on 2026-11-20; they are in the git history.
+
+## Dates
+
+An item that has a date says `Due <date>` in its text. Dates marked "proposed" were set on 2026-11-20 and can be moved.
+
+| Due | What | Item |
+| --- | --- | --- |
+| 2026-11-21 | Review the 04:23 UTC daily run: the 24 Goozali companies, REE Automotive, Priority Software | "Check the daily run of 2026-11-21" |
+| 2026-11-27, then every Friday (proposed) | Weekly triage of reported sites and the coverage card | "More companies" |
+| 2026-12-04, then each quarter (proposed) | Recheck `site_unusable`, `no_openings` and the `bot_protection` decision | "More companies" |
+| 2026-12-16 | Size of `crawl_log` and `jobs`, and of the description text (30 days after the move) | "Measure the size" |
+| 2026-12-20, then monthly (proposed) | Monthly sweep of new company names, success metrics of the month | "More companies" |
+| 2027-02-20, then each quarter (proposed) | Diff the Goozali directory again | "Close the Goozali gap" |
+| 2027-10-20 | Node 27 becomes LTS: review the pins (Python 3.12 ends in October 2028) | "Review the Node and Python pins" |
+| 2027-11-15 | Yearly security review, with the cron-job.org token renewal | "Yearly security review" |
+| 2028-03-10 | The `2022-11-28` GitHub API version ends: move the cron-job.org header before then | "Yearly security review" |
 
 ## Dashboard
 
@@ -49,6 +66,14 @@ Observations about live sites below come from checks made on 2026-11-14 and may 
   endpoint the page itself calls (as HiBob and Eightfold), or the company's ATS if it has a public one. Done when: a company on
   that list gives a text without scraping page text and without working around bot protection. Do not retry a plain request.
 
+- [ ] **Descriptions for the adapters not read yet (FR-4).** Trigger: the description slices cover Greenhouse, Lever,
+  Ashby, Workable, Comeet and Amazon (70 percent of open jobs at the first slice), Workday (a request per job, 40 a company
+  a run), HiBob, Eightfold and four JSON-LD career pages. Left: Phenom (89 jobs, a teaser only), Oracle HCM, `comeet_page`,
+  JazzHR and BambooHR (a request per job), and SmartRecruiters (skipped by `robots.txt`). The full text lives in Supabase
+  only, never in `data/jobs.db` or a committed file. Where: one adapter at a time, with the same per-company cap as Workday.
+  Done when: FR-4 acceptance criteria 1, 2, 3 and 9 hold for each of them and the share with a full description is printed in
+  the daily log.
+
 - [ ] **Refresh a stored description that changed.** Trigger: the job-page adapters (Workday) fetch a text only for a job
   Supabase holds none for, so a posting edited in place keeps its first text until it closes and reopens. Where:
   `adapters.add_descriptions`: also ask the pages of the jobs whose key hashes into today's slice (for example a job a day in
@@ -64,20 +89,20 @@ Observations about live sites below come from checks made on 2026-11-14 and may 
 
 ## Yearly security review
 
-- [ ] **Do the yearly security review by 2027-11-15, then every year.** Trigger: the date. Where: the
+- [ ] **Do the yearly security review by 2027-11-15, then every year.** Due 2027-11-15. Trigger: the date. Where: the
   security note in `SECURITY.md` (it lists the checks: provider logs, who has access, two-factor sign-in, key
   rotation, Dependabot and CodeQL alerts, and re-reading `PRIVACY.md` and `TERMS.md` against the product).
   - Also each year: renew the GitHub token that cron-job.org uses to start the daily run (about a year after it was
     created; delete the old token in your GitHub settings under personal access tokens), and check that the
     `X-GitHub-Api-Version` header in the cron-job.org job is still supported (`2022-11-28` is deprecated and ends on
-    2028-03-10; move it to the newest version before then and test the job once).
+    2028-03-10; move it to the newest version before then and test the job once; do it at the 2027-11-15 review, at the latest by 2028-02-10).
   - Done when: the checks are done and the date and result are written in the note, and this item is moved to the
     next year.
 
 ## Review the Node and Python pins
 
 - [ ] Trigger: Node 27 becomes LTS (scheduled 2027-10-20) or Python 3.12 nears its end of life (October 2028), whichever
-  comes first. Nothing to do before then.
+  comes first. Due 2027-10-20 (Node), or by 2028-10-01 (Python). Nothing to do before then.
   - State now (as of 2026-11-14, from the Node release schedule and the Python release page): Node 26 has been LTS since
     2026-10-28 and `.nvmrc` is on its latest release (26.13.1). Python has no LTS; 3.12 is the floor and the version CI
     and the daily job run.
@@ -115,7 +140,7 @@ Observations about live sites below come from checks made on 2026-11-14 and may 
   - **Status of 2026-11-19 (PLAN_3).** The table holds 413 rows: 328 crawled, 85 researched only (with a `gap`),
     0 excluded. Since 2026-11-18 the table grew by 66 rows (some batch companies were researched rows that were
     unlocked) and the Avature, Eightfold and Jibe adapters, the browser reader fixes and the Load more wait were built
-    (`PLAN_3.md`, "Status (2026-11-19)"). The 85 researched records, counted on 2026-11-19 from the live table: by
+    ("More companies", Status). The 85 researched records, counted on 2026-11-19 from the live table: by
     segment, deeptech 33, multinational 19, biz_software 11, cyber_infra 10 and no segment 12; by gap reason,
     `no_careers_url` 22, `no_feed_found` 20, `needs_reader` 16, `bot_protection` 10, `site_unusable` 9 and
     `no_openings` 8. 24 of the 85 have no `careers_url`. Gilat, Landa, Synopsys,
@@ -301,7 +326,7 @@ Observations about live sites below come from checks made on 2026-11-14 and may 
       JSON-LD `JobPosting`, but the list is incomplete (Teramount's one job is not in Grove's sitemap), so it is not a
       feed. Getro's own job link is the employer's page when it has one (`teramount.com/careers/?job=1`). Decided
       with the lawyer on 2026-11-19: leave Getro and similar talent boards out unless there is written permission, and
-      find portfolio companies by hand and add their own career pages (`PLAN_3.md`, "Decisions on sources"). Q Factor's real domain is `q-factor.com` (a one-page site, a
+      find portfolio companies by hand and add their own career pages ("More companies", Decisions on sources). Q Factor's real domain is `q-factor.com` (a one-page site, a
       neutral-atom quantum company that emerged from stealth in April 2026; its only job route is a `careers@` email
       address, so nothing to pin); the lists now carry the right domain. Teramount was acquired by Molex (completed
       on 2026-05-07; `teramount.com` redirects to a Molex product page), so its jobs would be Molex's worldwide board.
@@ -350,6 +375,99 @@ Observations about live sites below come from checks made on 2026-11-14 and may 
     describes).
   - Done when: no row of the `companies` table has a `gap`, or every remaining one has a `reason` that says why it cannot be done.
 
+## Check the daily run of 2026-11-21
+
+- [ ] **Review the 04:23 UTC run of 2026-11-21.** Due 2026-11-21. Three things from 2026-11-20, counts only (Actions logs
+  are public, so no row contents):
+  - REE Automotive was pinned to the `browser` reader on 2026-11-20 (journal entry 218): its careers page no longer uses
+    Comeet and says "No open positions at the moment". The first run on the new reader should read zero jobs and close its
+    stored ones. Undo: `companyctl.py revert 218 --apply`.
+  - Priority Software read 9 jobs against 23 on 2026-11-20 and the sharp-drop guard held it (nothing closed); a local crawl
+    read 21 three times. If it is held again on two runs in a row, look at the runner's behaviour and the "Load more" wait
+    (`SETTLE_POLLS` in `browser_crawl.py`).
+  - The 24 Goozali companies: each `ok` with jobs, no more than 3 new failures against the known set (the 25 Workday
+    tenants, the 5 SmartRecruiters companies skipped by `robots.txt`, Check Point).
+  Done when: all three are checked and this item is deleted.
+
+## More companies (the rules and open steps of the former PLAN_3)
+
+Goal, to close the coverage gap users reported (too few startups, too few large multinationals): the targets confirmed on
+2026-11-18 are +60 startups crawled, +40 multinationals that return jobs from the GitHub runner, and 30 of the 80 researched
+records unlocked. On 2026-11-20 the table holds 352 crawled and 627 researched (the Goozali import included), 0 excluded.
+The research item above and "Close the Goozali gap" hold the per-company findings; this section holds the rules and the
+recurring work.
+
+- **Rules.**
+  - Public site data only: a candidate is accepted only if its career page is the company's own and lists roles in Israel.
+  - `robots.txt` is honoured and bot protection is never worked around. An opt-out is an `excluded` record (readable only by
+    the admin, never deleted, backed up daily to the private repository), checked with `is_excluded` before a candidate is
+    probed; the check sees excluded records only when the pull used the service-role key. Never paste the key anywhere.
+  - One list: no candidate file is committed (candidate lists live in the scratchpad or a PR description). Add, pin, park
+    and exclude on the Companies area of the admin page, so each pin is in the admin Log; SQL is a fallback and leaves no log.
+  - An adapter only for a platform that two or more companies share and `robots.txt` allows; one company gets a pinned
+    `browser` or `comeet_page` record.
+  - A company is added only if its first crawl returns jobs (a company that returned nothing is baselined late, so its
+    real first jobs are lost or, for a known company, sent as a flood). Count a company only if the GitHub runner reads it.
+  - A company with any row in `jobs` or `crawl_log` is known (`run.py` `is_known`): unlocking, re-pinning or fixing its
+    feed can email its jobs as new, so only the maintainer makes those edits. Parking closes a company's open jobs.
+  - Batches: at most 25 new companies before each `discover-companies` run. Check the budgets below first; after a batch
+    review the next daily run (jobs per company, new failures, the coverage card, the alert) before the next batch.
+    Pinning a researched record is one pin at a time. A bad pin is reverted by editing the row (`status` emptied to have it
+    looked at again).
+  - The lawyer's files (`ABOUT.md`, `PRIVACY.md`, `TERMS.md`, `ASSISTANT.md`) are not touched.
+- **Budgets** (measured 2026-11-18; re-measure before a batch with `gh run list --workflow=daily.yml`, then
+  `gh run view <id> --json jobs`, the `Crawl and diff` step's `completedAt` minus `startedAt`).
+  - Crawl time: the step took 3.5 to 3.9 minutes with 267 companies; the ceiling is 15 of the 20 minutes of
+    `timeout-minutes: 20` (900 s). A browser record costs more than a JSON feed.
+  - Failures: more than 3 new failing companies after a batch, not in the known set (the 25 Workday tenants, the 5
+    SmartRecruiters companies skipped by `robots.txt`, Check Point and the other bot-protected browser crawls), blocks the
+    next batch until they are fixed or parked.
+  - Size: `docs/jobs.json` was 2.0 MiB for 6,764 jobs; the ceiling proposed is 4 MB and 500 `crawl_log` rows a day (the log
+    keeps 90 days, about 45k rows). The maintainer confirms the ceiling.
+- **Holds and decisions.**
+  - Google stays a gap: `google.com/robots.txt` disallows the results pagination (`?page=`) and page 1 shows 20 of 65 Israel
+    rows. Revisit only with an allowed feed or written permission.
+  - Uber stays a gap: `jobs.uber.com` answers a Cloudflare challenge (403) although its `robots.txt` allows everything.
+  - Unity's 123 stale non-Israel rows are accepted; they close when its Workday tenant answers from the runner.
+  - All 25 Workday tenants are runner-blocked and stay listed; the bot-protected browser crawls (Nayax, DriveNets, Check
+    Point, Papaya Global) stay listed.
+  - The 09:53 UTC scheduled run is only a fallback and skips when a green run exists that day, so a new company's first
+    crawl is the next 04:23 UTC run unless a manual run is made (a manual run with `digest_dry_run` crawls without emailing).
+- **Decisions on sources** (the lawyer, 2026-11-19; no change to `PRIVACY.md`, `TERMS.md` or `SECURITY.md`).
+  - Israeli job boards (AllJobs, Drushim, JobMaster): do not scrape them, as a feed or as a list of employers. Left out for good.
+  - Getro and other VC talent boards whose `robots.txt` disallows the job list: left out unless there is written
+    permission; find the portfolio companies by hand and add their own career pages.
+  - Vendor-hosted career sites (Jibe, Eightfold, Phenom, TalentBrew): obeying the vendor host's `robots.txt` is enough, with
+    no per-employer approval, provided only intentionally configured employers are read and a removal request is honoured.
+  - Removal requests: the current process is sufficient (the `excluded` record is kept, the rows are deleted, the company is
+    never crawled). Keep the written request as a paper trail.
+- **Recurring and open steps.**
+  - [ ] **Weekly triage.** Due 2026-11-27, then every Friday (proposed). Run `survey.py --candidates` on a new list, review
+    the `crawl_log` failures and the coverage card, accept, park or decline each reported site as in `CONTRIBUTING.md`,
+    "Reported sites", add at most 25 companies, and verify each batch by the next daily crawl. Count the reports per month.
+  - [ ] **Success metrics.** Due 2026-12-20, then monthly (proposed). Per batch and per month: reports received
+    (`CONTRIBUTING.md` has the command), the share of crawled companies with at least one Israel job, the Israel job count
+    before and after. Put the numbers in each batch description, and add one `CHANGELOG.md` line per batch.
+  - [ ] **Monthly sweep.** Due 2026-12-20, then monthly (proposed). Run the candidate tool on the newest names from the
+    sources (VC portfolio pages, public lists, Y Combinator and Techstars cohorts, reports), with the budgets checked. Add
+    the companies the tool keeps (`keep`), a candidate with only a career page and no feed needs the maintainer's yes (it
+    becomes a browser crawl). Done when: the targets above are met and each batch's next daily run is reviewed.
+  - [ ] **Quarterly recheck of the gap records.** Due 2026-12-04, then each quarter (next 2027-03-04) (proposed). Recheck
+    `site_unusable` (9) and `no_openings` (8): a site that is back or a board that reopened moves to the crawl.
+    `bot_protection` (10) stays as it is; record each decision in the `gap.note` with the date so nobody retries.
+  - [ ] **Research `no_careers_url` (22), `no_feed_found` (20) and `needs_reader` (16).** No date: batches of at most 25,
+    each followed by a review of the next daily run. Find the real career page by hand (not by slug guessing), look for a
+    JSON endpoint the page calls, group `needs_reader` by platform and check `robots.txt` first. Pillar Security needs a
+    dedicated reader (its cards carry the city only as a section heading); Walnut is a researched record, not pinned.
+  - [ ] **Dead-board alert.** No date. Extend the daily coverage-gap log line (`Log the coverage gaps`) to flag a crawled
+    company with no open job for 30 days, from `crawl_log`. An alert, not a test; a test covers the query on fixtures.
+  - [ ] **Remove a company** only on request (an `excluded` record, `CONTRIBUTING.md`, "Removing a company on request") or
+    when it has closed for good.
+- **Risks.** More records can push the daily job past its timeout or bloat `jobs.json` (the budgets, JSON feeds first);
+  a pin that works from a normal network can fail from the runner (the runner-only rule); slug probing can hit an
+  unrelated company (compare the board's company name); a global company's feed may mix countries (spot checks and fixtures
+  with non-Israel jobs); a company may object to being listed (the `excluded` record).
+
 ## Close the Goozali gap
 
 - [ ] Goozali gave permission (2026-11-20) to use the company directory it publishes (992 rows: name, industry, website,
@@ -361,20 +479,21 @@ Observations about live sites below come from checks made on 2026-11-14 and may 
   note says "Not surveyed yet"). 177 directory rows had no usable website and were left out. The directory's contact
   emails, phones and personal LinkedIn links are never stored, and the PDF and its extracts stay outside the repository.
   The steps, in order:
-  1. Review the first daily run after 2026-11-20: jobs per company for the 24, new failures, the coverage card and the
-     maintainer alert. No further batch starts before that.
+  1. Review the first daily run after 2026-11-20 (the 04:23 UTC run of 2026-11-21, due 2026-11-21): jobs per company for the
+     24, new failures, the coverage card and the maintainer alert. No further batch starts before that.
   2. Survey the unsurveyed `no_feed_found` records: put them in a CSV outside the repository and run
      `survey.py --candidates` (CONTRIBUTING.md, "Trying candidate companies") with a service-role pull. Each `keep` is
-     added as crawled in a batch of at most 25, one batch per daily run (PLAN_3.md, "Batches"), and its gap record is
+     added as crawled in a batch of at most 25, one batch per daily run ("More companies", Batches), and its gap record is
      turned into a crawled one on the admin page. Companies with a long history of closed jobs are known; only the
      maintainer edits those.
   3. Find the career page of the `no_careers_url` records, largest first (size is in the directory), and record it.
   4. Take the `needs_reader` records one at a time: a browser crawl counts against the crawl-time budget and needs the
-     maintainer's yes; a Workday or Oracle board is tested from a daily run before it counts (PLAN_3.md, "Count only
-     what the runner can read").
+     maintainer's yes; a Workday or Oracle board is tested from a daily run before it counts ("More companies", Count only
+     what the runner can read).
   5. Leave the `bot_protection` records as they are: a refusal by robots.txt, 403 or 429 is never worked around.
   6. Re-check `no_openings` and dead sites twice, then drop a record that still has nothing.
-  7. Repeat the diff against a newer export of the directory each quarter, keeping the same rules.
+  7. Repeat the diff against a newer export of the directory each quarter, keeping the same rules. Due 2027-02-20 (proposed),
+     then every three months.
   - Done when: every Goozali company with a usable website is crawled, or has a gap `reason` that says why not, and the
     unsurveyed note is gone.
 
@@ -383,17 +502,21 @@ Observations about live sites below come from checks made on 2026-11-14 and may 
 Added when the history moved to Supabase (v0.53.0; `CONTRIBUTING.md`, "The history lives in Supabase"). What the rehearsal
 could not prove: a real PostgREST, a real Supabase project and a real Actions run. The restore was rehearsed on 2026-11-19 against a local Supabase (`CONTRIBUTING.md`, "Rehearsal, 2026-11-19"); a hosted project and a real Actions run are still unproven.
 
-- [ ] **Check the first daily runs after the move.** Trigger: the PR of step 9.1 is merged and the one-time copy of the
+- [ ] **Check the first daily runs after the move.** Due 2026-11-21 (the runs since 2026-11-17 have been green; read the log lines below once and delete). Trigger: the PR of step 9.1 is merged and the one-time copy of the
   old history is done. Status (2026-11-17): the 04:30 UTC cron-job.org run was green; two other runs that morning failed
   at the commit step on a stale checkout, fixed in #152 (`ref: main`); no run after #152 yet. How: in the log of the first run, `pull` says `pulled <jobs> jobs and <log> crawl log rows`, the
   sync says `<n> crawl log rows written` and a second run the next day does not repeat them; `docs/` is committed and
   `data/` is not; the `backup` step commits to `ravidorr/misra-backups` with `jobs` and `crawl_log` in its counts. Done
   when two runs in a row after #152 are green and the coverage card and the robots.txt deletion still work (the five SmartRecruiters
   companies lose their `jobs` rows on the first sync after v0.57.0: the log says `Supabase: robots.txt, deleted <n> jobs of 5 companies`).
-- [ ] **Measure the size of `crawl_log` and `jobs` after a month.** Trigger: 30 days after the move. How: Supabase
-  dashboard, Reports, Database. `crawl_log` keeps 90 days (`CRAWL_LOG_DAYS`, about 250 rows a day), the pull reads all of
-  it every run, and the backup exports it; if the pull gets slow or the table is large, shorten it. The same check serves PLAN.md step 7.4 (the size of the description
-  text, a month after 2026-11-16). Done when: the numbers are in `CONTRIBUTING.md`, "Real data against the limits".
+- [ ] **Measure the size of `crawl_log` and `jobs`, and of the description text, after a month.** Due 2026-12-16 (30 days
+  after the move; the first descriptions were written on 2026-11-16). How: Supabase dashboard, Reports, Database.
+  `crawl_log` keeps 90 days (`CRAWL_LOG_DAYS`, about 250 rows a day, more since the table grew to 979 companies), the pull
+  reads all of it every run, and the backup exports it; if the pull gets slow or the table is large, shorten it. The same
+  check is the storage check of the descriptions against the free 500 MB database (FR-4 acceptance criterion 10); the trim
+  that sets the full text of a job to NULL 30 days after it closes is built and runs in every sync. Done when: the numbers
+  are in `CONTRIBUTING.md`, "Real data against the limits", and the result of the storage check (trim now or not) is
+  written there.
 - [ ] **Keep the browser crawl's results when the browser crawl itself dies.** Added with the step 9.1 leftovers (v0.53.1).
   `run.py` now commits each company as it is recorded and records the API companies before the browser crawl, so a crash
   while recording loses one company and a crash in the browser crawl keeps the API companies. The browser crawl
