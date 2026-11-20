@@ -2606,6 +2606,15 @@ def test_varonis_keeps_the_jobs_with_a_place_in_israel_and_drops_the_others(monk
     ]
 
 
+def test_varonis_a_bad_job_outside_israel_still_fails_the_whole_list(monkeypatch: pytest.MonkeyPatch) -> None:
+    bad = varonis_item("oUS1", jobLocations=[{"city": "Austin", "country": "United States"}], locationsCount=2)
+    fake_eightfold(monkeypatch, varonis_answer([varonis_item("oIL1"), bad]))
+    assert adapters.varonis("careers.varonis.com") is None
+    twin = varonis_item("oIL1", jobLocations=[{"city": "Austin", "country": "United States"}])
+    fake_eightfold(monkeypatch, varonis_answer([varonis_item("oIL1"), twin]))
+    assert adapters.varonis("careers.varonis.com") is None
+
+
 def test_varonis_a_place_without_a_city_and_a_missing_team_are_read(monkeypatch: pytest.MonkeyPatch) -> None:
     item = varonis_item(department=None, jobLocations=[{"city": None, "country": "Israel"}, "x", {}])
     item["locationsCount"] = 3

@@ -35,7 +35,7 @@ PHENOM_MAX_PAGES = 100
 PHENOM_SLUG_PARTS = 3
 AVATURE_MAX = 20  # the most jobs an Avature feed gives (it has no paging): a feed this long may be cut short
 JIBE_MAX = 100  # the most jobs of one Jibe search read (one answer): a board with more is not read
-VARONIS_MAX = 200  # the most requisitions of Varonis' list read (it has no paging): a list this long may be cut short
+VARONIS_MAX = 200  # the most requisitions of Varonis' list read (it has no paging): a longer list is a failure
 EIGHTFOLD_MAX = 100  # the most positions of one Eightfold search read (ten an answer): a board with more is not read
 
 
@@ -1122,9 +1122,10 @@ VARONIS_HOST = "careers.varonis.com"
 
 
 def _varonis_job(item: Any) -> Job | None:
-    """One requisition of the answer, or None when it cannot be read: not an object, no id, no title, or a count of
-    locations that is not the number listed. The place is `City, Country` of each location, joined by '; ' (a job of
-    several lists every one). The link is the careers site's own page for the job, `/careers?p=job/<id>`, the address
+    """One requisition of the answer, or None when it cannot be read: not an object, an id that is not letters and
+    digits, no title, `jobLocations` that is not a list, or a count of locations that is not the
+    number listed. The place is `City, Country` of each location, joined by '; ' (a job of several lists every one).
+    The link is the careers site's own page for the job, `/careers?p=job/<id>`, the address
     its own list links to (the `app.jobvite.com` links of the answer are the applicant system and are not used)."""
     if not isinstance(item, dict):
         return None
@@ -1156,7 +1157,7 @@ def varonis(slug: str) -> list[Job] | None:
     ignores page and limit) and no total, so it is trusted only when it is the site's JSON (`data`), has at most
     VARONIS_MAX requisitions (a list that long may be cut short), no job is unreadable or twice and every job's
     `locationsCount` is the number of places it lists: a partial list would close the jobs it lacks. Of those, the
-    jobs with a place in Israel (the country of a location) are kept, so the places of the others are never kept. The
+    jobs whose place text (city and country of each location) names Israel, by `common.ISRAEL`, are kept. The
     answer has no job text and no date."""
     if slug != VARONIS_HOST:
         return None
