@@ -677,14 +677,15 @@ MAX_REDIRECTS = 3
 def _jsonld_page_text(url: str, host: str = "") -> tuple[str, dict[str, Any]] | None:
     """The description of the schema.org JobPosting in the JSON-LD of a job page, and nothing else of the page (never
     page text). With `host`, redirects are followed here, one request at a time, only to an https address on that same
-    host (a trailing slash is the usual one), each through `get` and so through robots.txt and the per-host delay: a
-    redirect to any other host is never requested. None when the page does not answer or has no JobPosting."""
+    host (an added trailing slash is the usual one), each through `get`, so through robots.txt and the per-host
+    delay: a redirect to any other host is never requested. None when the page does not answer or has no JobPosting."""
     r = get(url, allow_redirects=False) if host else get(url)
     for _ in range(MAX_REDIRECTS if host else 0):
         if r is None or r.status_code not in HTTP_REDIRECTS:
             break
-        url = urljoin(url, r.headers.get("Location", ""))
-        if not url.startswith("https://") or host_of(url) != host:
+        target = r.headers.get("Location")
+        url = urljoin(url, target) if target else ""
+        if not url.startswith("https://") or host_of(url) != host:  # no Location is no page either
             return None
         r = get(url, allow_redirects=False)
     if r is None or r.status_code != HTTP_OK:
@@ -716,7 +717,7 @@ def browser_description(slug: str, job: Job) -> tuple[str, dict[str, Any]] | Non
     page and reads only the JobPosting JSON-LD. Never page text. None on any failure."""
     detail = job.get("detail_url")
     if not detail:
-        return _jsonld_page_text(job["url"])
+        return _jsonld_page_text(job["url"], host_of(slug))
     r = get(detail, headers={"Accept": "application/json"})
     if r is None or r.status_code != HTTP_OK:
         return None

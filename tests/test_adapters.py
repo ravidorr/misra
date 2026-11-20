@@ -2789,6 +2789,12 @@ def test_a_job_page_redirected_on_its_own_host_is_followed_through_the_same_gate
     assert calls == [(JZ_URL, False), (JZ_URL + "/", False)]  # each hop is its own request, never auto-followed
 
 
+def test_a_redirect_without_a_location_is_no_text(monkeypatch: pytest.MonkeyPatch) -> None:
+    urls = fake_get(monkeypatch, FakeHttpResponse(status_code=302))
+    assert adapters.add_descriptions("jazzhr", "acme", "Acme", [{**JZ_JOB}], set()) == (1, 0, 0)
+    assert urls == [JZ_URL]
+
+
 def test_a_job_page_that_keeps_redirecting_is_given_up(monkeypatch: pytest.MonkeyPatch) -> None:
     urls = fake_get(monkeypatch, redirect("/apply/AbC123/again"))
     assert adapters.add_descriptions("jazzhr", "acme", "Acme", [{**JZ_JOB}], set()) == (1, 0, 0)
