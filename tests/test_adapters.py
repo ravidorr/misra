@@ -2022,7 +2022,6 @@ def fake_board(monkeypatch: pytest.MonkeyPatch, jobs: list[dict[str, Any]] | Non
         ("https://komodor.com/careers/", "https://komodor.com/job/4E.47C/some-title/", "4E.47C"),  # a segment
         ("https://panorays.com/careers/", "https://panorays.com/careers/some-title/2C.372/", "2C.372"),
         ("https://www.lasso.security/careers", "https://www.lasso.security/positions/position-a5_075", "A5.075"),
-        ("https://komodor.com/careers/", "https://komodor.com/job/D2.37E-50.70A/x/", "50.70A"),  # one of two uids
         ("https://komodor.com/careers/", "https://komodor.com/job/D2.37E-50.70A/x/", "D2.37E-50.70A"),  # the whole one
     ],
 )
@@ -2047,8 +2046,11 @@ def test_a_browser_job_the_board_does_not_hold_is_not_asked_for_and_the_board_is
     assert len(asked) == 1
 
 
-def test_a_link_that_names_two_board_jobs_gets_no_text(monkeypatch: pytest.MonkeyPatch) -> None:
-    fake_board(monkeypatch, [board_job("D2.37E", "One"), board_job("50.70A", "Two")])
+@pytest.mark.parametrize("held", [["D2.37E", "50.70A"], ["50.70A"]])
+def test_a_link_that_names_two_uids_gets_no_text_whatever_the_board_holds(
+    monkeypatch: pytest.MonkeyPatch, held: list[str]
+) -> None:
+    fake_board(monkeypatch, [board_job(i, "Text") for i in held])
     job = {"job_id": "k", "url": "https://komodor.com/job/D2.37E-50.70A/x/"}
     assert not adapters._browser_wants_page("https://komodor.com/careers/", job)
 

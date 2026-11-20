@@ -733,7 +733,7 @@ _boards: dict[str, dict[str, Job] | None] = {}  # per career page and process; a
 def _board(page: str) -> dict[str, Job] | None:
     """The jobs of the career page's board with a text, by upper-cased id (an Ashby id, a Comeet uid), read once a
     run; None when the board could not be read or holds none (one `::warning::` says which page, so a board that
-    disappeared is seen, not silent). One company is one page, so two threads never read the same board."""
+    disappeared is seen, not silent). A page shared by two companies could be read twice: harmless."""
     if page not in _boards:
         ats, board_slug = BOARD_PAGES[page]
         try:
@@ -756,9 +756,11 @@ def _board_job(page: str, job: Job) -> Job | None:
     if not board:
         return None
     for segment in reversed(urlparse(str(job.get("url") or "")).path.upper().strip("/").split("/")):
-        keys = {segment, *(u.replace("_", ".") for u in _BOARD_UID.findall(segment))} & board.keys()
-        if keys:
-            return board[keys.pop()] if len(keys) == 1 else None
+        if segment in board:
+            return board[segment]
+        uids = {u.replace("_", ".") for u in _BOARD_UID.findall(segment)}
+        if uids & board.keys():
+            return board[uids.pop()] if len(uids) == 1 else None  # two uids in one segment: which job is it?
     return None
 
 
