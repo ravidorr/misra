@@ -665,14 +665,15 @@ def add_descriptions(  # noqa: PLR0913, PLR0917
     ats: str, slug: str, company: str, jobs: list[Job], held: set[tuple[str, str]], day: int = 0
 ) -> tuple[int, int, int]:
     """Gives the jobs of a company whose list carries no text their description, one request per job page, and
-    returns (requested, got a text, deferred). Only jobs without a text are asked: one Supabase already holds (`held`,
-    left by the pull) is marked and not fetched again, except on its turn of one day in REFRESH_DAYS, when it is
-    asked again so an edited posting gets its new text (the sync writes it only if its hash changed), after the
-    new jobs and with only what they leave of the cap. At most DETAIL_CAP are asked per company and run, the new
-    jobs in a window that moves with `day` so a page that never answers cannot starve the others, and five misses in
-    a row end the company's run (a host that refuses is left alone). The rest wait for the next run. A page that
-    fails, is refused by robots.txt or has no text gives no description and changes nothing else: this never fails
-    the list, and a refusal does not make the company a robots skip (the list was crawled)."""
+    returns (requested, got a text, new jobs deferred). Only jobs without a text are asked: one Supabase already
+    holds (`held`, left by the pull) is marked and not fetched again, except on its turn of one day in
+    REFRESH_DAYS, when it is asked again so an edited posting gets its new text (the sync writes it only if its
+    hash changed), after the new jobs and with only what they leave of the cap. At most DETAIL_CAP are asked per
+    company and run, the new jobs in a window that moves with `day` so a page that never answers cannot starve the
+    others, and five misses in a row end the company's run (a host that refuses is left alone). The rest wait for
+    the next run. A page that fails, is refused by robots.txt or has no text gives no description and changes
+    nothing else: this never fails the list, and a refusal does not make the company a robots skip (the list was
+    crawled)."""
     fetch_one = DETAILS.get(ats)
     if fetch_one is None:
         return 0, 0, 0
@@ -692,6 +693,7 @@ def add_descriptions(  # noqa: PLR0913, PLR0917
     if todo:  # a different window each day, by the fewest pages a run can end after, so no job is starved
         start = day * DETAIL_FAIL_STREAK % len(todo)
         todo = todo[start:] + todo[:start]
+    waiting = len(todo)  # the new jobs: a refresh that is not reached waits for its next turn, not the next run
     todo += refresh
     asked = got = streak = 0
     for job in todo[:DETAIL_CAP]:
@@ -710,7 +712,7 @@ def add_descriptions(  # noqa: PLR0913, PLR0917
             if streak >= DETAIL_FAIL_STREAK:  # a host that keeps refusing or failing is left alone until the next run
                 break
     reset_robots_block()  # a refused job page is not a refused company
-    return asked, got, len(todo) - asked
+    return asked, got, max(waiting - asked, 0)
 
 
 def _oraclehcm_place(req: dict[str, Any]) -> str | None:

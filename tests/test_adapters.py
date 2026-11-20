@@ -1858,10 +1858,11 @@ def test_a_stored_job_is_asked_again_once_in_refresh_days_and_the_new_text_is_at
             job.pop("description", None)
         asked, got, left = adapters.add_descriptions("workday", WD_SLUG, "Acme", jobs, held, day=day)
         assert (asked, got, left) == (len(urls), len(urls), 0)
-        assert all(j.get("text_held") for j in jobs)  # a refreshed job still counts as stored when its page fails
+        assert all(j.get("text_held") for j in jobs)  # a refreshed job still counts as stored
         assert sum("description" in j for j in jobs) == asked
         asked_per_day.append(set(urls))
     assert sum(len(a) for a in asked_per_day) == len(jobs)  # every job exactly once in the fourteen days
+    assert len(set().union(*asked_per_day)) == len(jobs)  # and no job twice
 
 
 def test_a_refresh_whose_page_fails_leaves_the_stored_job_as_it_was(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -1881,13 +1882,15 @@ def test_refreshes_use_only_what_the_new_jobs_leave_of_the_cap(monkeypatch: pyte
     due = [j for j in jobs if adapters._in_refresh_slice(("Acme", j["job_id"]), day)]
     new = [j for j in jobs if j not in due][:3]
     assert len(due) > len(new)  # more refreshes due than the cap has room for
-    pool = new + due
+    pool = due + new  # only the explicit order puts the new jobs first
     held = {("Acme", j["job_id"]) for j in due}
-    asked, _, _ = adapters.add_descriptions("workday", WD_SLUG, "Acme", pool, held, day=day)
+    asked, _, deferred = adapters.add_descriptions("workday", WD_SLUG, "Acme", pool, held, day=day)
     ids = {u.rsplit("/", 1)[1] for u in urls}
     assert asked == adapters.DETAIL_CAP
     assert {j["job_id"].rsplit("/", 1)[1] for j in new} <= ids  # all 3 new jobs, then 1 refresh
+    assert all("description" in j for j in new)
     assert sum(("description" in j) for j in due) == 1
+    assert (asked, deferred) == (adapters.DETAIL_CAP, 0)  # refreshes not reached are not "left for later runs"
 
 
 def test_a_stored_job_off_its_turn_is_not_asked(monkeypatch: pytest.MonkeyPatch) -> None:
