@@ -218,6 +218,7 @@ def check_spelling(c: sqlite3.Connection, known: list[str], excluded: list[str])
 GAP_KINDS = ("failing", "held", "closed")  # the order gap_summary lists them in
 FAILING_RUNS = 2  # a company is failing when its last two crawls failed, as in the dashboard (one-offs do not count)
 GAP_STALE_DAYS = 7  # a company not crawled for this long before the newest crawl is no longer one of ours
+DEAD_DAYS = 30  # a crawled company whose board has been empty (crawls ok, no job) this long is a dead board
 GAP_NEW_DAYS = 2  # a gap is new when it began on the newest crawl day or this many days before it (a lost run fits)
 
 
@@ -275,6 +276,60 @@ def coverage_gaps(c: sqlite3.Connection) -> list[dict[str, Any]]:
     return gaps
 
 
+def dead_boards(c: sqlite3.Connection) -> list[dict[str, Any]]:
+    """Crawled companies whose board has been empty for DEAD_DAYS days: one dict each, company, since and new.
+
+    Dead means the last crawl of the company in crawl_log was ok with no job (a NULL count is no job), and its
+    first ok crawl with no job since the last ok crawl with a job (`since`) is DEAD_DAYS or more before the newest
+    crawl day. Failed and skipped crawls in between do not restart the count, but one at the start does not begin it
+    (the log keeps 90 days, so `since` never reaches back further, and a company observed for less is not judged
+    yet). The company must have been crawled in the last GAP_STALE_DAYS days (an excluded or removed company stops
+    showing after that). `new` is True when the run crossed DEAD_DAYS on the newest crawl day or up to GAP_NEW_DAYS
+    days before it, as for the coverage gaps.
+
+    n_jobs is counted after the Israel filter, so an israel_only company with no Israel roles can be flagged."""
+    history: dict[str, list[tuple[int, int, str]]] = {}
+    query = "SELECT company, ts, ok, COALESCE(n_jobs, 0) FROM crawl_log WHERE company IS NOT NULL ORDER BY ts, rowid"
+    for company, ts, ok, n_jobs in c.execute(query):
+        history.setdefault(company, []).append((ok, n_jobs, ts))
+    if not history:
+        return []
+    newest = datetime.date.fromisoformat(max(seq[-1][2][:10] for seq in history.values()))
+    stale = (newest - datetime.timedelta(days=GAP_STALE_DAYS)).isoformat()
+    dead = (newest - datetime.timedelta(days=DEAD_DAYS)).isoformat()
+    fresh = (newest - datetime.timedelta(days=DEAD_DAYS + GAP_NEW_DAYS)).isoformat()
+    boards: list[dict[str, Any]] = []
+    for company, seq in sorted(history.items()):
+        if seq[-1][2][:10] < stale:
+            continue
+        since = seq[-1][2]
+        for ok, n_jobs, ts in reversed(seq):
+            if ok and n_jobs:
+                break
+            if ok:
+                since = ts
+        if seq[-1][0] and not seq[-1][1] and since[:10] <= dead:
+            boards.append({"company": company, "since": since, "new": since[:10] >= fresh})
+    return boards
+
+
+def log_dead_boards(c: sqlite3.Connection) -> None:
+    """One more log line after the coverage gaps: `dead boards: N (M new), ...: names` (counts and public company
+    names only), a ::warning:: when one is new. An alert only: a failed check is a warning and never fails the step."""
+    try:
+        boards = dead_boards(c)
+    except (sqlite3.Error, ValueError, TypeError) as exc:
+        print(f"::warning::dead board check failed, {type(exc).__name__}")
+        return
+    if boards:
+        new = sum(1 for b in boards if b["new"])
+        names = ", ".join(b["company"] for b in boards)
+        print(
+            ("::warning::" if new else "")
+            + f"dead boards: {len(boards)} ({new} new), no job for {DEAD_DAYS} days: {names}"
+        )
+
+
 def safe_coverage_gaps(c: sqlite3.Connection) -> tuple[list[dict[str, Any]], str]:
     """(gaps, error): a problem in the gap check comes back as text, so the gaps step can report it and go red."""
     try:
@@ -298,14 +353,15 @@ def log_coverage_gaps(c: sqlite3.Connection) -> bool:
     """Put the coverage gaps in the job log, so a crawl problem is never silent (nothing is emailed for them).
 
     One line of counts and company names (the log is public, the names are public companies). A gap that is new (see
-    coverage_gaps) makes the line a ::warning:: annotation on the run. Returns False when the check itself failed, so
-    the step can go red."""
+    coverage_gaps) makes the line a ::warning:: annotation on the run. Then log_dead_boards adds its own line (skipped
+    when the gap check itself failed). Returns False when the gap check failed, so the step can go red."""
     gaps, error = safe_coverage_gaps(c)
     if error:
         print(f"::warning::coverage check failed, {error}")
         return False
     if gaps:
         print(("::warning::" if any(g["new"] for g in gaps) else "") + gap_summary(gaps))
+    log_dead_boards(c)
     return True
 
 

@@ -453,8 +453,6 @@ recurring work.
     each followed by a review of the next daily run. Find the real career page by hand (not by slug guessing), look for a
     JSON endpoint the page calls, group `needs_reader` by platform and check `robots.txt` first. Pillar Security needs a
     dedicated reader (its cards carry the city only as a section heading); Walnut is a researched record, not pinned.
-  - [ ] **Dead-board alert.** No date. Extend the daily coverage-gap log line (`Log the coverage gaps`) to flag a crawled
-    company with no open job for 30 days, from `crawl_log`. An alert, not a test; a test covers the query on fixtures.
   - [ ] **Remove a company** only on request (an `excluded` record, `CONTRIBUTING.md`, "Removing a company on request") or
     when it has closed for good.
 - **Risks.** More records can push the daily job past its timeout or bloat `jobs.json` (the budgets, JSON feeds first);
