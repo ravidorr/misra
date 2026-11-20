@@ -428,7 +428,7 @@ PLAN.md step 7.1. Where the text of a posting lives, and how it gets there:
   (`recruitingCEJobRequisitionDetails` on the list's own `/hcmRestApi/` path: `ExternalDescriptionStr` plus the external
   responsibilities and qualifications; the corporate boilerplate is left out), and JazzHR, Phenom and `comeet_page` (the job's
   own page on the host the slug names, only its `JobPosting` JSON-LD, as the JSON-LD pages above; a link to any other host is
-  never requested, and an answer redirected to another host is no text). Each shows as its own ATS in the `job pages:` and `descriptions:` lines. Not read: SmartRecruiters,
+  never requested, and a redirect to another host is never followed (a redirect on the same host goes through the same gate)). Each shows as its own ATS in the `job pages:` and `descriptions:` lines. Not read: SmartRecruiters,
   skipped by `robots.txt`.
 - **The text.** Plain text made from the site's HTML with the standard library: scripts, styles and embedded frames are
   dropped with their content, no tag survives (an angle bracket a posting wrote, such as `List<T>`, is kept as text, to be shown as text), paragraphs and list items keep their line breaks, control characters

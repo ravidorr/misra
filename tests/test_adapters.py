@@ -2749,11 +2749,55 @@ def test_a_comeet_page_job_gives_the_json_ld_of_its_own_page_on_the_careers_host
     assert urls == [url]  # the careers page's own host, never the host of a link
 
 
-def test_a_job_page_redirected_to_another_host_is_no_text(monkeypatch: pytest.MonkeyPatch) -> None:
-    fake_get(monkeypatch, FakeHttpResponse(text=JZ_PAGE, url="https://evil.test/apply/AbC123/x"))
+def redirect(location: str, status: int = 302) -> FakeHttpResponse:
+    answer = FakeHttpResponse(status_code=status)
+    answer.headers = {"Location": location}
+    return answer
+
+
+@pytest.mark.parametrize(
+    "location",
+    [
+        "https://evil.test/apply/x",
+        "//evil.test/x",
+        "http://acme.applytojob.com/x",
+        "https://acme.applytojob.com@evil.test/x",
+    ],
+)
+def test_a_job_page_redirected_to_another_host_is_not_requested_there(
+    monkeypatch: pytest.MonkeyPatch, location: str
+) -> None:
+    urls = fake_get(monkeypatch, redirect(location), FakeHttpResponse(text=JZ_PAGE))
     job = {**JZ_JOB}
     assert adapters.add_descriptions("jazzhr", "acme", "Acme", [job], set()) == (1, 0, 0)
+    assert urls == [JZ_URL]  # the redirect is read, never followed to another host
     assert job == JZ_JOB
+
+
+def test_a_job_page_redirected_on_its_own_host_is_followed_through_the_same_gate(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[tuple[str, Any]] = []
+    queue = [redirect("/apply/AbC123/Engineer/"), FakeHttpResponse(text=JZ_PAGE)]
+
+    def _get(url: str, **kw: Any) -> FakeHttpResponse:
+        calls.append((url, kw.get("allow_redirects")))
+        return queue.pop(0)
+
+    monkeypatch.setattr(adapters, "get", _get)
+    assert adapters.add_descriptions("jazzhr", "acme", "Acme", [{**JZ_JOB}], set()) == (1, 1, 0)
+    assert calls == [(JZ_URL, False), (JZ_URL + "/", False)]  # each hop is its own request, never auto-followed
+
+
+def test_a_job_page_that_keeps_redirecting_is_given_up(monkeypatch: pytest.MonkeyPatch) -> None:
+    urls = fake_get(monkeypatch, redirect("/apply/AbC123/again"))
+    assert adapters.add_descriptions("jazzhr", "acme", "Acme", [{**JZ_JOB}], set()) == (1, 0, 0)
+    assert len(urls) == adapters.MAX_REDIRECTS + 1
+
+
+def test_a_job_page_that_stops_answering_mid_redirect_is_no_text(monkeypatch: pytest.MonkeyPatch) -> None:
+    fake_get(monkeypatch, redirect("/apply/AbC123/next"), None)
+    assert adapters.add_descriptions("jazzhr", "acme", "Acme", [{**JZ_JOB}], set()) == (1, 0, 0)
 
 
 @pytest.mark.parametrize("job_id", ["\u00b2", "\u0661\u0662", "1.5"])

@@ -18,6 +18,7 @@ class FakeHttpResponse:
         self.status_code = status_code
         self.text = text
         self.url = url
+        self.headers: dict[str, str] = {}
         self._data = data
         self._json_error = json_error
 

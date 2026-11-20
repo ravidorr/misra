@@ -670,12 +670,24 @@ def _job_posting(page: str) -> dict[str, Any] | None:
     return None
 
 
+HTTP_REDIRECTS = frozenset({301, 302, 303, 307, 308})
+MAX_REDIRECTS = 3
+
+
 def _jsonld_page_text(url: str, host: str = "") -> tuple[str, dict[str, Any]] | None:
     """The description of the schema.org JobPosting in the JSON-LD of a job page, and nothing else of the page (never
-    page text). None when the page does not answer, has no JobPosting, or (when `host` is given) was redirected to
-    another host."""
-    r = get(url)
-    if r is None or r.status_code != HTTP_OK or (host and host_of(r.url) != host):
+    page text). With `host`, redirects are followed here, one request at a time, only to an https address on that same
+    host (a trailing slash is the usual one), each through `get` and so through robots.txt and the per-host delay: a
+    redirect to any other host is never requested. None when the page does not answer or has no JobPosting."""
+    r = get(url, allow_redirects=False) if host else get(url)
+    for _ in range(MAX_REDIRECTS if host else 0):
+        if r is None or r.status_code not in HTTP_REDIRECTS:
+            break
+        url = urljoin(url, r.headers.get("Location", ""))
+        if not url.startswith("https://") or host_of(url) != host:
+            return None
+        r = get(url, allow_redirects=False)
+    if r is None or r.status_code != HTTP_OK:
         return None
     posting = _job_posting(r.text)
     return jsonld_description(posting) if posting else None
@@ -686,7 +698,7 @@ def _jsonld_job_pages(
 ) -> tuple[Callable[[str, Job], tuple[str, dict[str, Any]] | None], Callable[[str, Job], bool]]:
     """The job-page reader and the filter of an ATS whose job pages carry a JobPosting JSON-LD. Only a job whose own
     https page is on the host the company's slug names (`host_for(slug)`) is asked for (a link to another host is not
-    a request and not counted), and an answer redirected to another host is no text."""
+    a request and not counted), and a redirect to another host is not followed."""
 
     def wants(slug: str, job: Job) -> bool:
         url = str(job.get("url"))
