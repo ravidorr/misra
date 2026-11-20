@@ -1893,12 +1893,24 @@ def test_refreshes_use_only_what_the_new_jobs_leave_of_the_cap(monkeypatch: pyte
     assert (asked, deferred) == (adapters.DETAIL_CAP, 0)  # refreshes not reached are not "left for later runs"
 
 
+def test_only_new_jobs_count_as_left_for_later_runs(monkeypatch: pytest.MonkeyPatch) -> None:
+    fake_get(monkeypatch, wd_detail())
+    monkeypatch.setattr(adapters, "DETAIL_CAP", 2)
+    day = 3
+    jobs = jobs_n(60)
+    due = [j for j in jobs if adapters._in_refresh_slice(("Acme", j["job_id"]), day)]
+    new = [j for j in jobs if j not in due][:5]
+    held = {("Acme", j["job_id"]) for j in due}
+    assert adapters.add_descriptions("workday", WD_SLUG, "Acme", due + new, held, day=day) == (2, 2, 3)  # 3 new wait
+
+
 def test_a_stored_job_off_its_turn_is_not_asked(monkeypatch: pytest.MonkeyPatch) -> None:
     urls = fake_get(monkeypatch, wd_detail())
     job = jobs_n(1)[0]
     turn = next(d for d in range(adapters.REFRESH_DAYS) if adapters._in_refresh_slice(("Acme", job["job_id"]), d))
     off = (turn + 1) % adapters.REFRESH_DAYS
     assert adapters.add_descriptions("workday", WD_SLUG, "Acme", [job], {("Acme", job["job_id"])}, day=off) == (0, 0, 0)
+    assert job["text_held"] is True
     assert urls == []
 
 

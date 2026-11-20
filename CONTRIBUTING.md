@@ -403,7 +403,7 @@ PLAN.md step 7.1. Where the text of a posting lives, and how it gets there:
   others; five pages in a row without a text end that company's job pages for the run, so a host that refuses is left alone). The first fill of the 318 Israeli jobs is therefore about 200 requests on the first day
   (Palo Alto Networks 115 and KLA 82 are capped at 40 each, so they take three days), over 24 tenant hosts, and a steady day
   asks for the new jobs and about a fourteenth of the stored ones (about 23 of the 318). A stored text is also asked again on its turn, one day in 14 (`adapters.REFRESH_DAYS`: the turn comes from
-  its key and the date, about a fourteenth of the stored jobs a day), after the new jobs and with only what they leave of
+  its key and the date), after the new jobs and with only what they leave of
   the same cap, so a posting edited in place has its new text within two weeks when the new jobs leave room (a refresh
   that is not reached waits for its next turn, and is not counted as left for a later run); the sync writes it only when its hash changed. A page that fails, is refused by `robots.txt` or has no text costs only its own text: the list is
   already final, so the company is never skipped and nothing closes. The log line is `job pages: workday N requests, N with a
@@ -418,7 +418,8 @@ PLAN.md step 7.1. Where the text of a posting lives, and how it gets there:
   (`adapters.JSONLD_PAGES`, found by hand on 2026-11-17); only that JSON is read. (2) and (3) go through `common.get`, so
   `robots.txt`, the delay and the budget (held keys, 40 a company and run, five misses in a row end the run) are the Workday
   ones; they run after the lists, so a refusal never skips a company. The first fill: about 160 requests on the first day
-  (Nvidia's 400 jobs take ten days at 40 a day), then the new jobs. Estimated, not yet seen live: about 830 of the 1,589 browser
+  (Nvidia's 400 jobs take ten days at 40 a day), then the new jobs and about a fourteenth of the stored texts a day
+  (the refresh of the Workday paragraph). Estimated, not yet seen live: about 830 of the 1,589 browser
   jobs. **Not read, and not to be tried again without a reason:** Check Point (231 jobs; a plain request answers HTTP 403, bot
   protection, never worked around) and every other browser company (monday.com, Tower, Priority,
   Komodor, Intezer, Oligo, Mesh, Pecan, Panorays, Lightbits, ForSight, Valens, Lasso): a sample of one
