@@ -18,6 +18,7 @@ An item that has a date says `Due <date>` in its text. The dates were set on 202
 | 2026-12-04, then each quarter | Recheck `site_unusable`, `no_openings` and the `bot_protection` decision | "More companies" |
 | 2026-12-16 | Size of `crawl_log` and `jobs`, and of the description text (30 days after the move) | "Measure the size" |
 | 2026-12-20, then monthly | Monthly sweep of new company names, success metrics of the month | "More companies" |
+| 2026-12-20, then monthly | Crawl the Mapped in Israel list for new company names, find their sites and career pages | "More companies" |
 | 2027-02-20, then each quarter | Diff the Goozali directory again | "Close the Goozali gap" |
 | 2027-10-20 | Node 27 becomes LTS: review the pins (Python 3.12 ends in October 2028) | "Review the Node and Python pins" |
 | 2027-11-15 | Yearly security review, with the cron-job.org token renewal | "Yearly security review" |
@@ -44,20 +45,6 @@ An item that has a date says `Due <date>` in its text. The dates were set on 202
   and out. No new data. Done when: a user sees every hidden company and unhides one without finding one of its roles; a hidden
   company with no open roles is listed too.
 
-- [ ] **Make the new-tab icon smaller.** Trigger: the icon after every `a[target="_blank"]` link (PR 240,
-  `design-system/components/external-link.css`, mask `design-system/assets/new-tab.svg`) is `0.9em` square, so it is as tall
-  as the job title's cap height or more (title `1.5rem`, `1.25rem` on a phone) and heavy inside the Apply button. Where: that
-  one rule only, after a UI/UX read (Claude Design and the UI/UX expert checked the CSS, the tokens and the 2.5 stroke of the
-  mask): a decorative cue should sit below the x-height of the text it follows, so the base size is `0.75em` (12px in 16px
-  text and in the button) with `margin-inline-start: 0.3em` and `vertical-align: -0.05em`, and the card title link gets
-  `0.6em` (about 14px at `1.5rem`, 12px at `1.25rem`) through one `.card-title a::after` override, because `em` scales with
-  the large title and would stay too big; the Apply button needs no override. The icon stays a visual cue, so the 44px
-  targets (`.btn` `min-height: var(--tap)`, the title link padding) and the "(opens in a new tab)" words are untouched.
-  Keep it one token, `--icon-new-tab-size` in `tokens.css`, if a second value is needed. Done when: the icon is `0.75em` in
-  link lines and the Apply button and `0.6em` in the job title, still readable (3:1 against its background) in light, dark and
-  forced-colors mode, checked on the dashboard at desktop and phone width; the only code touched is that rule, the README
-  line and the tests or snapshots that pin the size (`tests/test_new_tab_icon.py`).
-
 ## Descriptions
 
 - [ ] **Text for the browser companies that give none.** Trigger: Check Point (231 jobs, bot protection), monday.com (128),
@@ -80,6 +67,8 @@ An item that has a date says `Due <date>` in its text. The dates were set on 202
   that there is no per-caller limit and no `PRIVACY.md` change (reasons and what a limit would need: `supabase/README.md`,
   "Why `search_job_keys` has no per-caller limit"). Trigger: abnormal query volume on `rpc/search_job_keys` in the database
   or API logs. Then build the limit as that section describes.
+  Checked 2026-11-20 (Management API logs, counts only): 10 calls in total since 2026-11-17, at most 7 in a day, none to
+  the `mcp` function; normal, no limit needed.
 
 ## Yearly security review
 
@@ -446,6 +435,17 @@ recurring work.
     sources (VC portfolio pages, public lists, Y Combinator and Techstars cohorts, reports), with the budgets checked. Add
     the companies the tool keeps (`keep`), a candidate with only a career page and no feed needs the maintainer's yes (it
     becomes a browser crawl). Done when: the targets above are met and each batch's next daily run is reviewed.
+  - [ ] **Mapped in Israel list.** Due 2026-12-20, then monthly with the monthly sweep. Read
+    `https://mappedinisrael.com/job-posting-israel-startup/` once, politely (project User-Agent, one request, `robots.txt`
+    allows everything), and compare its company names with the names kept from the last read (outside the repository); skip
+    the rest of the task when the list is unchanged (its sitemap was last modified 2024-05-12, so it may rarely change).
+    For each new name: find the company's own website by search, verify it is the right Israeli company (never guess a
+    domain; skip acquired, closed or unsure ones), find its career page, and run `survey.py --candidates` on the verified
+    ones; batches of at most 25, reviewed on the next daily crawl. Names and the companies' own websites only: never use
+    the site's job links or listings. Permission: Mapped in Israel approved scraping the list by phone on 2026-11-20 (the
+    lawyer's advice was to ask them); keep a written confirmation (an email) as the paper trail. The first read on
+    2026-11-20 gave 433 rows (426 distinct), 54 already in the table and 372 new names with no websites; the website
+    search for those is done in four chunks. Done when: every new verified company is crawled or has a reason.
   - [ ] **Quarterly recheck of the gap records.** Due 2026-12-04, then each quarter (next 2027-03-04). Recheck
     `site_unusable` (9) and `no_openings` (8): a site that is back or a board that reopened moves to the crawl.
     `bot_protection` (10) stays as it is; record each decision in the `gap.note` with the date so nobody retries.

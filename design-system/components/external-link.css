@@ -7,19 +7,35 @@
  * a screen reader reads, and the build adds them to a converted link. The shape is the mask `new-tab.svg`, a file
  * because the Content-Security-Policy (`img-src 'self'`) refuses a data: URI; it takes the colour of the link text
  * (`currentColor`), so it follows the theme, a button and the colours Windows forces.
+ * The icon is 0.75em, below the x-height of the text it follows (0.6em in a job title).
  * A link that lays its text out in a column (`.gap-link`) puts the icon after its name text, so it never sits on a row of its own.
  */
 a[target="_blank"]:not(.gap-link)::after,
 .gap-link .gap-name-text::after {
   display: inline-block;
-  width: 0.9em;
-  height: 0.9em;
-  margin-inline-start: 0.25em;
+  width: 0.75em;
+  height: 0.75em;
+  margin-inline-start: 0.3em;
   background-color: currentcolor;
   content: "";
   forced-color-adjust: none; /* else Windows high contrast paints it with the page colour and it disappears */
   mask: url("new-tab.svg") center / contain no-repeat;
-  vertical-align: -0.12em;
+  vertical-align: -0.05em;
+}
+
+/* The job title is large (1.5rem, 1.25rem on a phone) and `em` scales with it, so its icon is smaller still. */
+.card-title a[target="_blank"]::after {
+  width: 0.6em;
+  height: 0.6em;
+}
+
+/* Windows high contrast: the icon keeps its own paint (above), so name the colour the browser gives a link instead of
+   the author's: a fixed one can equal the button's forced background and vanish. */
+@media (forced-colors: active) {
+  a[target="_blank"]:not(.gap-link)::after,
+  .gap-link .gap-name-text::after {
+    background-color: linktext;
+  }
 }
 
 a[target="_blank"]:dir(rtl)::after,
