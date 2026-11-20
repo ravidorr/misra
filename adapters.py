@@ -611,6 +611,36 @@ def bamboohr_description(slug: str, job: Job) -> tuple[str, dict[str, Any]] | No
     return html_to_text(opening.get("description")), {"employment_type": opening.get("employmentStatusLabel")}
 
 
+def oraclehcm_description(slug: str, job: Job) -> tuple[str, dict[str, Any]] | None:
+    """The text of one Oracle HCM requisition: `recruitingCEJobRequisitionDetails`, the same `/hcmRestApi/` REST path
+    as the list (so the same robots.txt rule), asked for the requisition by its id. The text is `ExternalDescriptionStr`
+    followed by the external responsibilities and qualifications when the tenant fills them in (the corporate and
+    organisation boilerplate is left out); of the rest only the schedule and the workplace type are kept. None on any
+    failure."""
+    host, _, site = slug.partition("/")
+    job_id = str(job["job_id"])
+    if not job_id.isdigit():
+        return None
+    r = get(
+        f"https://{host}/hcmRestApi/resources/latest/recruitingCEJobRequisitionDetails",
+        params={"onlyData": "true", "finder": f'ById;Id="{job_id}",siteNumber={site}'},
+    )
+    if r is None or r.status_code != HTTP_OK:
+        return None
+    try:
+        req = r.json()["items"][0]
+    except (ValueError, KeyError, IndexError, TypeError):
+        return None
+    if not isinstance(req, dict):
+        return None
+    text = sections(
+        ("", html_to_text(req.get("ExternalDescriptionStr"))),
+        ("Responsibilities", html_to_text(req.get("ExternalResponsibilitiesStr"))),
+        ("Qualifications", html_to_text(req.get("ExternalQualificationsStr"))),
+    )
+    return text, {"employment_type": req.get("JobSchedule"), "workplace_type": req.get("WorkplaceType")}
+
+
 # Career pages of the browser crawl whose job pages carry a schema.org JobPosting with the description in static HTML,
 # found by hand on 2026-11-17. Every other page of the crawl gives no text from a plain request (JavaScript only, no
 # markup of a posting, or bot protection as at Check Point, never worked around), see CONTRIBUTING.md.
@@ -668,6 +698,7 @@ def _browser_wants_page(slug: str, job: Job) -> bool:
 DETAILS: dict[str, Callable[[str, Job], tuple[str, dict[str, Any]] | None]] = {
     "workday": workday_description,
     "bamboohr": bamboohr_description,
+    "oraclehcm": oraclehcm_description,
     "browser": browser_description,
 }
 WANTS: dict[str, Callable[[str, Job], bool]] = {"browser": _browser_wants_page}

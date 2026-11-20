@@ -2617,3 +2617,69 @@ def test_bamboohr_jobs_are_asked_one_page_each_and_a_held_one_is_not(monkeypatch
     assert adapters.add_descriptions("bamboohr", "acme", "Acme", jobs, {("Acme", "2")}) == (1, 1, 0)
     assert urls == ["https://acme.bamboohr.com/careers/1/detail"]
     assert jobs[0]["description"] == "Build things\n\n- Python"
+
+
+OR_SLUG = "acme.fa.oraclecloud.com/CX_1"
+OR_JOB = {"job_id": "2108", "title": "T"}
+OR_URL = "https://acme.fa.oraclecloud.com/hcmRestApi/resources/latest/recruitingCEJobRequisitionDetails"
+
+
+def or_detail(**req: Any) -> FakeHttpResponse:
+    return FakeHttpResponse(data={"items": [{"Id": "2108", **req}]})
+
+
+def test_an_oracle_requisition_gives_its_external_texts_and_two_details(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls: list[dict[str, Any]] = []
+    answer = or_detail(
+        ExternalDescriptionStr="<p>Build things</p>",
+        ExternalResponsibilitiesStr="<ul><li>Ship</li></ul>",
+        ExternalQualificationsStr="<p>Python</p>",
+        CorporateDescriptionStr="<p>About us</p>",
+        JobSchedule="Full time",
+        WorkplaceType="On-site",
+        ExternalContactEmail="a@b.test",
+    )
+
+    def _get(url: str, **kw: Any) -> FakeHttpResponse:
+        calls.append({"url": url, **kw})
+        return answer
+
+    monkeypatch.setattr(adapters, "get", _get)
+    assert adapters.oraclehcm_description(OR_SLUG, OR_JOB) == (
+        "Build things\n\nResponsibilities\n- Ship\n\nQualifications\nPython",
+        {"employment_type": "Full time", "workplace_type": "On-site"},
+    )
+    assert calls == [
+        {"url": OR_URL, "params": {"onlyData": "true", "finder": 'ById;Id="2108",siteNumber=CX_1'}}
+    ]  # the list's own REST path, on the tenant's own host
+
+
+@pytest.mark.parametrize(
+    "answer",
+    [
+        None,
+        FakeHttpResponse(status_code=404),
+        FakeHttpResponse(json_error=True),
+        FakeHttpResponse(data={}),
+        FakeHttpResponse(data={"items": []}),
+        FakeHttpResponse(data={"items": ["x"]}),
+    ],
+)
+def test_an_oracle_answer_that_is_not_a_requisition_gives_nothing(
+    monkeypatch: pytest.MonkeyPatch, answer: FakeHttpResponse | None
+) -> None:
+    fake_get(monkeypatch, answer)
+    assert adapters.oraclehcm_description(OR_SLUG, OR_JOB) is None
+
+
+def test_an_oracle_job_without_a_numeric_id_is_never_requested(monkeypatch: pytest.MonkeyPatch) -> None:
+    urls = fake_get(monkeypatch, or_detail(ExternalDescriptionStr="x"))
+    assert adapters.oraclehcm_description(OR_SLUG, {"job_id": "1;x"}) is None
+    assert urls == []
+
+
+def test_an_oracle_requisition_without_text_keeps_the_job_as_it_was(monkeypatch: pytest.MonkeyPatch) -> None:
+    fake_get(monkeypatch, or_detail())
+    job = {**OR_JOB}
+    assert adapters.add_descriptions("oraclehcm", OR_SLUG, "Acme", [job], set()) == (1, 0, 0)
+    assert job == OR_JOB
