@@ -318,6 +318,21 @@ function starredItems() {
 }
 const discardedCount = () => JOBS.filter((j) => isDiscarded(key(j))).length;
 
+/* The Hidden view: every company the user hid (it needs no open role) and every open role they hid one by one. A role
+   hidden only because its company is hidden is not listed on its own: the company's row covers it, and Unhide brings it
+   back. A discard of a role that has closed is gone (the database deletes it, a stale signed-out key is ignored). */
+function hiddenCompanies() {
+  const names = account
+    ? [...new Set([...account.server.keys(), ...account.pending.keys()])]
+        .filter((k) => accountState(k) === 'company')
+        .map((k) => (account.pending.get(k) ?? account.server.get(k)).c)
+    : Object.keys(goneCompanies);
+  return names.sort((a, b) => a.localeCompare(b));
+}
+const hiddenRoles = () =>
+  JOBS.filter((j) => !companyHidden(j.c) && (account ? accountState(key(j)) === 'discard' : Boolean(gone[key(j)]) && !starred[key(j)]));
+const openRolesOf = (company) => JOBS.filter((j) => j.c === company).length;
+
 function loadPending(userId) {
   const saved = lsGet(LS_Q, {})[userId];
   const entries = Object.entries(saved && typeof saved === 'object' ? saved : {});
@@ -1253,6 +1268,7 @@ function renderHero(newN, filteredCount) {
   let top;
   let bottom;
   if (view === 'starred') [top, bottom] = ['Starred', 'roles.'];
+  else if (view === 'hidden') [top, bottom] = ['Hidden', 'by you.'];
   else if (newN > 0) [top, bottom] = [`${newN} new`, filtered ? many(newN) : 'this week.'];
   else if (filtered) [top, bottom] = filteredCount > 0 ? [`${filteredCount} open`, many(filteredCount)] : ['No', 'matches.'];
   else [top, bottom] = [`${filteredCount} open`, F.regions.includes(ABROAD) ? 'roles.' : 'in Israel.'];
@@ -1539,8 +1555,10 @@ const searchPending = () => {
 function showView() {
   const roles = view === 'roles';
   for (const id of ['moreFilters', 'searchBar', 'filtersOpen']) $(id).hidden = !roles;
-  $('starredView').setAttribute('aria-pressed', String(!roles));
+  $('starredView').setAttribute('aria-pressed', String(view === 'starred'));
   $('starredView').textContent = `Starred (${starredItems().length})`;
+  $('hiddenView').setAttribute('aria-pressed', String(view === 'hidden'));
+  $('hiddenView').textContent = `Hidden (${hiddenCompanies().length + hiddenRoles().length})`;
 }
 
 function renderStarred() {
@@ -1551,6 +1569,41 @@ function renderStarred() {
   announce(summary);
   $('hiring').hidden = true;
   return items;
+}
+
+/* The words of one count, "1 hidden company" or "2 hidden companies". */
+const countOf = (n, one, many) => `${n} ${n === 1 ? one : many}`;
+let hiddenNote = ''; /* "Unhidden: Acme." for the next summary only (the visible line and the spoken one) */
+
+/* A hidden company: its name, how many open roles it has, and "Unhide". */
+function hiddenCompanyEl(company) {
+  const open = openRolesOf(company);
+  return h('li', {}, [
+    h('div', { class: 'card', 'data-hidden-company': company, 'data-pending': String(Boolean(account?.pending.has(companyKey(company)))) }, [
+      h('p', { class: 'card-company', text: company }),
+      h('p', { class: 'hidden-company-count', text: open === 0 ? 'No open roles' : countOf(open, 'open role', 'open roles') }),
+      h('p', { class: 'card-actions' }, [
+        h('button', { type: 'button', class: 'btn btn-pill', 'data-act': 'unhide-company', 'data-company': company, 'aria-label': `Unhide: ${company}`, text: 'Unhide' }),
+      ]),
+    ]),
+  ]);
+}
+
+/* The Hidden view draws its companies above the list and returns the roles for the list. The filters do not apply to it. */
+function renderHidden() {
+  const companies = hiddenCompanies();
+  const roles = hiddenRoles();
+  const summary = `${hiddenNote}${countOf(companies.length, 'hidden company', 'hidden companies')}, ${countOf(roles.length, 'hidden role', 'hidden roles')}. The filters do not apply to this list.`;
+  hiddenNote = '';
+  $('summary').textContent = summary;
+  announce(summary);
+  $('hiring').hidden = true;
+  $('hiddenCompanies').hidden = companies.length === 0;
+  $('hiddenCompanies-h').textContent = `Hidden companies (${companies.length})`;
+  $('hiddenCompaniesList').replaceChildren(...companies.map(hiddenCompanyEl));
+  $('hiddenRoles-h').hidden = roles.length === 0;
+  $('hiddenRoles-h').textContent = `Hidden roles (${roles.length})`;
+  return roles;
 }
 
 /* Draw the list. replaceChildren drops the focus, and a late search answer draws the list while a reader is on one of
@@ -1577,16 +1630,25 @@ function drawList(nodes, keepFocus) {
    that dialog by pressing the card's button, so there is one dialog and one set of words. report.js has run by the first
    render, which waits for the roles to load. */
 const MISSING_BELOW = 3;
-function renderMissing(count, starredView) {
+function renderMissing(count, otherView) {
   const narrowed = F.q.trim() !== '' || F.company !== '';
   const few = count === 0 || (narrowed && count < MISSING_BELOW);
-  $('missing').hidden = starredView || searchPending() || !few || $('reportOpen').hidden;
+  $('missing').hidden = otherView || searchPending() || !few || $('reportOpen').hidden;
 }
 
 function render(focusIdx) {
   showView();
   const starredView = view === 'starred';
-  const res = starredView ? renderStarred() : select(F);
+  const hiddenView = view === 'hidden';
+  const roles = view === 'roles';
+  if (!hiddenView) {
+    $('hiddenCompanies').hidden = true;
+    $('hiddenRoles-h').hidden = true;
+  }
+  let res;
+  if (starredView) res = renderStarred();
+  else if (hiddenView) res = renderHidden();
+  else res = select(F);
   const goneN = discardedCount();
   const scope = JOBS.filter((j) => inScope(j, F)).length;
   $('goneN').textContent = goneN;
@@ -1594,7 +1656,7 @@ function render(focusIdx) {
   $('staleN').textContent = select({ ...F, hideStale: false }).filter((j) => j.s).length; /* what ticking the box would hide */
   const { counts, total } = newRoles();
   renderHero(total, select({ ...F, company: '', showGone: false, onlyNew: false }).length);
-  if (!starredView) {
+  if (roles) {
     const note = searchNote();
     const summary = `Showing ${res.length} of ${scope} open roles${F.regions.includes(ABROAD) ? '' : ' in Israel'}. ${goneN} discarded.${note && ` ${note}`}`;
     $('summary').textContent = summary;
@@ -1603,15 +1665,17 @@ function render(focusIdx) {
     $('filtersDone').textContent = `Show ${res.length} ${res.length === 1 ? 'role' : 'roles'}`;
     renderStories(counts);
   }
-  renderMissing(res.length, starredView);
+  renderMissing(res.length, !roles);
   const list = $('list');
   if (res.length === 0) {
-    drawList([
-      h('li', {
-        class: 'empty',
-        text: starredView ? 'No starred roles yet. Use Star on a role to keep it here.' : 'No roles match. Change the search or the filters.',
-      }),
-    ], focusIdx === undefined);
+    let none = 'No roles match. Change the search or the filters.';
+    if (starredView) none = 'No starred roles yet. Use Star on a role to keep it here.';
+    if (hiddenView) {
+      none = hiddenCompanies().length === 0
+        ? 'Nothing is hidden. "Not for me" on a role hides it, or its whole company, and it shows here.'
+        : 'No role is hidden on its own.';
+    }
+    drawList([h('li', { class: 'empty', text: none })], focusIdx === undefined);
     if (focusIdx !== undefined) $('list-h').focus(); /* the last role was starred or discarded: the focus stays on the page's list */
     $('pager').hidden = true;
     return;
@@ -1763,6 +1827,14 @@ function discardCompany(company) {
   return Promise.resolve({ saved: true, failure: null });
 }
 
+/* "Unhide": the company is not hidden any more. Individual discards of its roles are not touched. */
+function unhideCompany(company) {
+  if (account) return queueChanges([{ ...snapshotOf({ c: company, i: '' }), state: null, id: newId() }]);
+  Reflect.deleteProperty(goneCompanies, company);
+  lsSet(LS_DC, goneCompanies);
+  return Promise.resolve({ saved: true, failure: null });
+}
+
 /* The menu of "Not for me" on a card: open or closed, with aria-expanded kept in step. */
 function setMenu(menu, open) {
   const panel = menu.querySelector('.card-menu-panel');
@@ -1903,10 +1975,25 @@ $('list').addEventListener('keydown', (e) => {
   items[(items.indexOf(e.target) + step + items.length) % items.length].focus();
 });
 
-$('starredView').addEventListener('click', () => {
-  view = view === 'starred' ? 'roles' : 'starred';
-  page = 0;
+/* The two switches are views of their own: pressing the one that shows goes back to the roles, the other swaps. */
+for (const [id, name] of [['starredView', 'starred'], ['hiddenView', 'hidden']]) {
+  $(id).addEventListener('click', () => {
+    view = view === name ? 'roles' : name;
+    page = 0;
+    render();
+  });
+}
+
+/* "Unhide" on a hidden company: its roles come back (a role hidden on its own stays hidden). The focus goes to the
+   heading of the list that is left, never to the page. */
+$('hiddenCompaniesList').addEventListener('click', (e) => {
+  const button = e.target.closest('[data-act="unhide-company"]');
+  if (!button) return;
+  unhideCompany(button.dataset.company);
+  hiddenNote = `Unhidden: ${button.dataset.company}. `;
   render();
+  const left = !$('hiddenCompanies').hidden;
+  $(left ? 'hiddenCompanies-h' : 'list-h').focus();
 });
 
 const gaps = DATA.gaps ?? { blocked: [], untracked: [], total: 0, groups: [] };
@@ -2148,6 +2235,30 @@ const TOOLS = [
       if (!j) return unknownJob();
       const result = isDiscarded(key(j)) ? await choose(j, null) : { saved: true, failure: null };
       return reply({ ...describe(j), ...result });
+    },
+  },
+  {
+    name: 'list_hidden',
+    description:
+      'List what the user hid: the companies (each with how many roles it has open, a company with none is listed too) and the open roles hidden one by one. A role hidden only because its company is hidden is not in the roles.',
+    inputSchema: { type: 'object', properties: {} },
+    annotations: { readOnlyHint: true },
+    execute: () =>
+      Promise.resolve(reply({ companies: hiddenCompanies().map((company) => ({ company, openRoles: openRolesOf(company) })), roles: hiddenRoles().map(describe) })),
+  },
+  {
+    name: 'unhide_company',
+    description:
+      'Bring a hidden company back: every role of it shows again (a role the user hid on its own stays hidden). A company that is not hidden is left as it is. Saved like restore_job.',
+    inputSchema: { type: 'object', properties: { company: { type: 'string' } }, required: ['company'] },
+    execute: async (a) => {
+      const company = (a ?? {}).company;
+      if (typeof company !== 'string' || !hiddenCompanies().includes(company)) {
+        return reply({ error: 'unknown or not hidden company', saved: true, failure: null }, true);
+      }
+      const result = await unhideCompany(company);
+      render();
+      return reply({ company, ...result });
     },
   },
   {
