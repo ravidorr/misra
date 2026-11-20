@@ -478,8 +478,9 @@
  * The icon is decorative (empty content, no accessible name): the words "(opens in a new tab)" in `.sr-only` are what
  * a screen reader reads, and the build adds them to a converted link. The shape is the mask `new-tab.svg`, a file
  * because the Content-Security-Policy (`img-src 'self'`) refuses a data: URI; it takes the colour of the link text
- * (`currentColor`), so it follows the theme, a button and the colours Windows forces.
- * The icon is 0.75em, below the x-height of the text it follows (0.6em in a job title).
+ * (`currentColor`), so it follows the theme and a button's text colour; in Windows high contrast it is painted with
+ * `LinkText` (the `@media (forced-colors: active)` block).
+ * The icon is 0.75em, smaller than the text it follows (0.6em in a job title, see below).
  * A link that lays its text out in a column (`.gap-link`) puts the icon after its name text, so it never sits on a row of its own.
  */
 a[target="_blank"]:not(.gap-link)::after,
@@ -495,24 +496,26 @@ a[target="_blank"]:not(.gap-link)::after,
   vertical-align: -0.05em;
 }
 
-/* The job title is large (1.5rem, 1.25rem on a phone) and `em` scales with it, so its icon is smaller still. */
-.card-title a[target="_blank"]::after {
+a[target="_blank"]:dir(rtl)::after,
+.gap-link:dir(rtl) .gap-name-text::after {
+  transform: scaleX(-1);
+}
+
+/* The job title is large (1.5rem, 1.25rem on a phone) and `em` scales with it, so a smaller factor keeps the icon about
+   12 to 14px. It wins by weight, not only by order. */
+.card .card-title a[target="_blank"]::after {
   width: 0.6em;
   height: 0.6em;
 }
 
-/* Windows high contrast: the icon keeps its own paint (above), so name the colour the browser gives a link instead of
-   the author's: a fixed one can equal the button's forced background and vanish. */
+/* Windows high contrast: with `forced-color-adjust: none` the icon's `currentcolor` is the link's author colour, not the
+   forced one (white on the Apply button, which Windows forces to a white background, so the icon vanished). Name the
+   colour the browser gives a link instead. */
 @media (forced-colors: active) {
   a[target="_blank"]:not(.gap-link)::after,
   .gap-link .gap-name-text::after {
     background-color: linktext;
   }
-}
-
-a[target="_blank"]:dir(rtl)::after,
-.gap-link:dir(rtl) .gap-name-text::after {
-  transform: scaleX(-1);
 }
 /*
  * Field (input / select) and notice. Always pair a field with a <label>.
