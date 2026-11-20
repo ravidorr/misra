@@ -681,7 +681,8 @@ def credentials() -> tuple[str, str]:
 
 def leave_held(client: Client) -> int | None:
     """After a pull: leaves the keys of the open jobs whose text Supabase holds in a work file outside the checkout, so
-    the crawl asks a job page for a description only where there is none (descriptions.write_held, no text in it). Any
+    the crawl asks a job page only where there is none, or on that job's refresh turn (descriptions.write_held, no text
+    in it). Any
     failure is a warning and no file: the crawl then asks for every job without a text, at most DETAIL_CAP per company.
     Returns the count, or None when it could not be left."""
     held = descriptions.work_path(descriptions.HELD_FILE)

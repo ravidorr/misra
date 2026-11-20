@@ -336,7 +336,8 @@ async def test_the_row_fits_and_every_action_is_a_target(page: Page, site: Path,
     assert panel["x"] >= 0
     assert panel["x"] + panel["width"] <= width
     if width >= 768:  # noqa: PLR2004
-        assert len({round(b[3]) for b in boxes}) == 1  # one row
+        tops = [b[3] for b in boxes]
+        assert max(tops) - min(tops) < 1  # one row (a sub-pixel difference is the same row)
 
 
 async def test_the_card_has_no_accessibility_violations_in_light_and_dark_while_the_result_shows(

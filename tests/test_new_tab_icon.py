@@ -74,8 +74,9 @@ def test_no_template_or_component_writes_an_arrow_glyph_or_its_own_icon_for_a_ne
 def test_the_rule_is_one_mask_file_that_the_page_policy_allows_and_the_build_copies() -> None:
     css = RULE.read_text(encoding="utf-8")
     assert 'a[target="_blank"]' in css
-    assert "currentcolor" in css  # the link's own colour, so light, dark, a button and forced colors all follow it
+    assert "currentcolor" in css  # the link colour: light, dark and a button follow it
     assert "forced-color-adjust: none" in css
+    assert "linktext" in css  # under forced colors the icon is painted with the system link colour (see the test below)
     assert 'url("new-tab.svg")' in css
     assert 'url("data:' not in css  # the pages' `img-src 'self'` refuses a data: URI (a mask is an image fetch)
     assert "<svg" in MASK.read_text(encoding="utf-8")
@@ -163,6 +164,35 @@ async def test_the_icon_does_not_move_the_card_and_a_screen_reader_hears_the_wor
     assert float(size[0].removesuffix("px")) == pytest.approx(float(size[1].removesuffix("px")))
     font = await one.evaluate("(a) => parseFloat(getComputedStyle(a).fontSize)")
     assert float(size[0].removesuffix("px")) == pytest.approx(font * 0.6, abs=0.1)  # the job title link: 0.6em
+
+
+async def test_the_apply_icon_is_three_quarters_of_its_text(page: Page, site: Path) -> None:  # noqa: F811
+    await serve(page, site)
+    apply = page.locator(".card a.btn-primary[target=_blank]").first
+    width = await apply.evaluate("(a) => parseFloat(getComputedStyle(a, '::after').width)")
+    font = await apply.evaluate("(a) => parseFloat(getComputedStyle(a).fontSize)")
+    assert width == pytest.approx(font * 0.75, abs=0.1)
+
+
+@pytest.mark.parametrize("selector", [".card a.btn-primary[target=_blank]", ".card-title a[target=_blank]"])
+async def test_under_forced_colors_the_icon_is_painted_with_the_system_link_colour(
+    page: Page,
+    site: Path,  # noqa: F811
+    selector: str,
+) -> None:
+    await page.emulate_media(forced_colors="active")
+    await serve(page, site)
+    probe = await page.locator(selector).first.evaluate(
+        """(a) => {
+            const t = document.createElement('span');
+            t.style.color = 'LinkText';
+            a.after(t);
+            const want = getComputedStyle(t).color;
+            t.remove();
+            return [getComputedStyle(a, '::after').backgroundColor, want];
+        }"""
+    )
+    assert probe[0] == probe[1], selector  # the Apply icon was white on its white forced background and vanished
 
 
 async def test_a_new_tab_link_keeps_a_visible_focus_ring(page: Page, site: Path) -> None:  # noqa: F811
