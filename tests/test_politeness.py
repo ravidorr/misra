@@ -90,7 +90,7 @@ def test_the_browser_crawl_uses_the_shared_user_agent(monkeypatch: pytest.Monkey
             return None
 
     monkeypatch.setattr(browser_crawl, "async_playwright", Playwright)
-    browser_crawl.crawl_many([])
+    assert list(browser_crawl.crawl_many([])) == []
     assert seen["user_agent"] == common.USER_AGENT
 
 
@@ -179,7 +179,7 @@ def test_the_concurrency_cap_stays_at_three(monkeypatch: pytest.MonkeyPatch) -> 
             return None
 
     monkeypatch.setattr(browser_crawl, "async_playwright", Playwright)
-    browser_crawl.crawl_many(["a"])
+    list(browser_crawl.crawl_many(["a"]))
     assert sizes == [3]
 
 
@@ -496,7 +496,7 @@ def test_a_browser_company_robots_txt_forbids_is_skipped_not_failed(
     monkeypatch.setattr(
         run,
         "crawl_many",
-        lambda urls: browser_crawl.WHY.update(dict.fromkeys(urls, ROBOTS_NOTE)) or dict.fromkeys(urls),
+        lambda urls: browser_crawl.WHY.update(dict.fromkeys(urls, ROBOTS_NOTE)) or iter(dict.fromkeys(urls).items()),
     )
     run.main()
     out = capsys.readouterr().out
@@ -1077,7 +1077,7 @@ def test_a_browser_company_skipped_for_robots_loses_its_jobs(workdir: Path, monk
     monkeypatch.setattr(
         run,
         "crawl_many",
-        lambda urls: browser_crawl.WHY.update(dict.fromkeys(urls, ROBOTS_NOTE)) or dict.fromkeys(urls),
+        lambda urls: browser_crawl.WHY.update(dict.fromkeys(urls, ROBOTS_NOTE)) or iter(dict.fromkeys(urls).items()),
     )
     run_on("2026-11-08", monkeypatch)
     assert rows("SELECT COUNT(*) FROM jobs") == [(0,)]
@@ -1112,7 +1112,7 @@ def test_a_held_crawl_deletes_nothing(workdir: Path, monkeypatch: pytest.MonkeyP
         add_job(conn, "Br", f"j{i}", "T")
     conn.close()
     write_json(workdir / "data" / "companies.json", [co("Br", ats="browser", slug=url)])
-    monkeypatch.setattr(run, "crawl_many", lambda urls: {key: [] for key in urls})
+    monkeypatch.setattr(run, "crawl_many", lambda urls: iter([(key, []) for key in urls]))
     run_on("2026-11-20", monkeypatch)
     assert rows("SELECT COUNT(*) FROM jobs WHERE status='open'") == [(run.DROP_MIN_OPEN,)]
 

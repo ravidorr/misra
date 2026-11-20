@@ -6,7 +6,7 @@ All notable changes are documented here. Format follows [Keep a Changelog](https
 
 ### Changed
 
-- The new-tab icon is smaller: `0.75em` (12px in 16px text and in the Apply button) with a `0.3em` gap and `vertical-align: -0.05em`, and `0.6em` in the job title link (`.card-title a`), so it sits below the x-height of the text it follows. In Windows high contrast mode the icon is now painted with `LinkText`, because its fixed colour could equal the button's forced background and the Apply icon vanished. `design-system/components/external-link.css`, `design-system/README.md` and `tests/test_new_tab_icon.py` only; the 44px targets and the "(opens in a new tab)" words are unchanged. No version bump: no Python module or package file changed.
+- The new-tab icon is smaller: `0.75em` (12px in 16px text and in the Apply button) with a `0.3em` gap and `vertical-align: -0.05em`, and `0.6em` in the job title link (`.card .card-title a[target="_blank"]::after`), so it is quieter next to the text it follows. In Windows high contrast mode the icon is now painted with `LinkText`: it kept the link's author colour, which was white on the Apply button's forced white background, so the Apply icon vanished. `design-system/components/external-link.css`, `design-system/README.md` and `tests/test_new_tab_icon.py` (and the done item removed from `TODO.md`); the 44px targets and the "(opens in a new tab)" words are unchanged. No version bump: no Python module or package file changed.
 
 ### Removed
 
@@ -26,11 +26,17 @@ All notable changes are documented here. Format follows [Keep a Changelog](https
 - The Crawl area of the admin page (PLAN_2.md step 2.2): it calls `admin_crawl_health()` when first shown and lists one card per company, worst first, with a headline, chips with counts (Needs attention, Failing, Robots.txt, Held, All), the values of the crawl and a status pill. Loading, empty, error and 401 states. Templates and tests only.
 - A Copy button under every code block of the legal pages (the address on "Connect your assistant", the command for Claude Code), in `templates/theme.js`.
 
-## [0.80.2] - 2026-11-20
+## [0.80.3] - 2026-11-20
 
 ### Changed
 
 - Job pages (`adapters.add_descriptions`) ask again for a stored text once in 14 days (`REFRESH_DAYS`): a job whose key and the date hash into today's slice is fetched even though Supabase holds its text, after the new jobs and with only what they leave of the same per-company cap (a refresh never crowds out a new job), so a posting edited in place has its new text within two weeks when the new jobs leave room (a refresh not reached waits for its next turn) while a steady day asks only a fourteenth of the stored jobs. The sync still writes a text only when its hash changed. The TODO item is closed.
+
+## [0.80.2] - 2026-11-20
+
+### Fixed
+
+- A crash or the 20-minute step timeout in the browser crawl no longer loses the browser companies already crawled that day. `browser_crawl.crawl_many` now yields `(url, jobs)` as each page finishes (the crawl runs in a thread). `run.py` reads the job pages of each company in a pool of 8 and records and commits the company as soon as its pages are read, even while the next list is slow or stuck (one queue carries both the lists and the finished reads), in the order the lists arrived. A crash in the crawl is raised after the results that came before it and records every company whose list had arrived; on the step timeout the companies recorded so far are kept; those whose pages were still being read, and any finished behind one of them (companies are recorded in list order), are lost. A crash while recording a company rolls back that company only, and the others are still recorded. After a crash or the timeout, browser companies whose list never arrived have no `crawl_log` row; the run is red anyway and the next run crawls them again. Two browser companies with one slug are both recorded, and one a crawl that ends normally never reports is logged as failed. A list with no browser company starts no browser. Tests: a fake crawl that dies midway, a stuck next list, and a company that cannot be recorded, in `tests/test_run.py` and `tests/test_browser_crawl.py`.
 
 ## [0.80.1] - 2026-11-19
 
