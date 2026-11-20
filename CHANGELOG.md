@@ -22,6 +22,12 @@ All notable changes are documented here. Format follows [Keep a Changelog](https
 - The Crawl area of the admin page (PLAN_2.md step 2.2): it calls `admin_crawl_health()` when first shown and lists one card per company, worst first, with a headline, chips with counts (Needs attention, Failing, Robots.txt, Held, All), the values of the crawl and a status pill. Loading, empty, error and 401 states. Templates and tests only.
 - A Copy button under every code block of the legal pages (the address on "Connect your assistant", the command for Claude Code), in `templates/theme.js`.
 
+## [0.80.2] - 2026-11-20
+
+### Changed
+
+- Job pages (`adapters.add_descriptions`) ask again for a stored text once in 14 days (`REFRESH_DAYS`): a job whose key and the date hash into today's slice is fetched even though Supabase holds its text, within the same per-company cap, so a posting edited in place has its new text within two weeks while a steady day asks only a fourteenth of the stored jobs. The sync still writes a text only when its hash changed. The TODO item is closed.
+
 ## [0.80.1] - 2026-11-19
 
 ### Fixed

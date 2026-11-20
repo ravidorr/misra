@@ -508,6 +508,18 @@ def test_a_stored_text_without_a_snippet_gets_one_on_the_next_sync_and_then_is_l
     assert sync(seeded, client(fake)).texts == 0  # the hash and the snippet agree: not written again
 
 
+def test_a_refreshed_text_is_written_only_when_it_changed(seeded: sqlite3.Connection) -> None:
+    work({("Acme", "1"): "Text one"})
+    fake = FakeSupabase()
+    sync(seeded, client(fake))
+    work({("Acme", "1"): "Text one"})  # the refresh found the same posting
+    assert sync(seeded, client(fake)).texts == 0
+    work({("Acme", "1"): "Text one, edited"})  # the employer edited it in place
+    assert sync(seeded, client(fake)).texts == 1
+    assert stored(fake, ("Acme", "1"))["description"] == "Text one, edited"
+    assert sync(seeded, client(fake)).texts == 0
+
+
 def test_a_text_with_no_snippet_is_not_rewritten_every_day(seeded: sqlite3.Connection) -> None:
     work({("Acme", "1"): "a" * 400})  # one long word: the text is stored, the snippet is null
     fake = FakeSupabase()

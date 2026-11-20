@@ -5,6 +5,7 @@ import html
 import json
 import re
 import xml.etree.ElementTree as ET
+import zlib
 from collections import Counter
 from collections.abc import Callable, Iterable, Iterator
 from datetime import UTC, datetime
@@ -16,6 +17,7 @@ from common import ISRAEL, get, host_of, post, reset_robots_block
 from descriptions import DETAIL_CAP, HELD, attach, html_to_text, jsonld_description, plain_text, sections
 
 HTTP_OK = 200
+REFRESH_DAYS = 14  # a stored text is asked again once in this many days, so an edited posting is picked up
 DETAIL_FAIL_STREAK = 5  # job pages in a row without a text after which a company's job pages stop for this run
 Job = dict[str, Any]
 WORKDAY_ISRAEL = (
@@ -653,16 +655,24 @@ DETAILS: dict[str, Callable[[str, Job], tuple[str, dict[str, Any]] | None]] = {
 WANTS: dict[str, Callable[[str, Job], bool]] = {"browser": _browser_wants_page}
 
 
+def _in_refresh_slice(key: tuple[str, str], day: int) -> bool:
+    """True on the one day in REFRESH_DAYS when a job's stored text is asked again: the key fixes the job's turn and the
+    day moves it, so every job comes up once every REFRESH_DAYS days, whatever its key."""
+    return (zlib.crc32("\x00".join(key).encode()) + day) % REFRESH_DAYS == 0
+
+
 def add_descriptions(  # noqa: PLR0913, PLR0917
     ats: str, slug: str, company: str, jobs: list[Job], held: set[tuple[str, str]], day: int = 0
 ) -> tuple[int, int, int]:
     """Gives the jobs of a company whose list carries no text their description, one request per job page, and
     returns (requested, got a text, deferred). Only jobs without a text are asked: one Supabase already holds (`held`,
-    left by the pull) is marked and not fetched again. At most DETAIL_CAP are asked per company and run, in a window
-    that moves with `day` so a page that never answers cannot starve the others, and five misses in a row end the
-    company's run (a host that refuses is left alone). The rest wait for the next run. A page that fails, is refused
-    by robots.txt or has no text gives no description and changes nothing else: this never fails the list, and a
-    refusal does not make the company a robots skip (the list was crawled)."""
+    left by the pull) is marked and not fetched again, except on its turn of one day in REFRESH_DAYS, when it is
+    asked again so an edited posting gets its new text (the sync writes it only if its hash changed). At most
+    DETAIL_CAP are asked per company and run, in a window that moves with `day` so a page that never answers cannot
+    starve the others, and five misses in a row end the company's run (a host that refuses is left alone). The rest
+    wait for the next run. A page that fails, is refused by robots.txt or has no text gives no description and
+    changes nothing else: this never fails the list, and a refusal does not make the company a robots skip (the list
+    was crawled)."""
     fetch_one = DETAILS.get(ats)
     if fetch_one is None:
         return 0, 0, 0
@@ -671,9 +681,10 @@ def add_descriptions(  # noqa: PLR0913, PLR0917
     for job in jobs:
         if job.get("description") or (wants and not wants(slug, job)):
             continue
-        if (company, str(job.get("job_id"))) in held:
+        key = (company, str(job.get("job_id")))
+        if key in held:
             job[HELD] = True
-        else:
+        if key not in held or _in_refresh_slice(key, day):
             todo.append(job)
     if todo:  # a different window each day, by the fewest pages a run can end after, so no job is starved
         start = day * DETAIL_FAIL_STREAK % len(todo)

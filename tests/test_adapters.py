@@ -1845,6 +1845,34 @@ def test_jobs_behind_five_failing_pages_are_reached_on_later_days(monkeypatch: p
     assert asked == {f"/job/x/J{i}" for i in range(10)}
 
 
+def test_a_stored_job_is_asked_again_once_in_refresh_days_and_the_new_text_is_attached(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    urls = fake_get(monkeypatch, wd_detail())
+    jobs = jobs_n(28)
+    held = {("Acme", j["job_id"]) for j in jobs}
+    asked_per_day = []
+    for day in range(adapters.REFRESH_DAYS):
+        urls.clear()
+        for job in jobs:
+            job.pop("description", None)
+        asked, got, left = adapters.add_descriptions("workday", WD_SLUG, "Acme", jobs, held, day=day)
+        assert (asked, got, left) == (len(urls), len(urls), 0)
+        assert all(j.get("text_held") for j in jobs)  # a refreshed job still counts as stored when its page fails
+        assert sum("description" in j for j in jobs) == asked
+        asked_per_day.append(set(urls))
+    assert sum(len(a) for a in asked_per_day) == len(jobs)  # every job exactly once in the fourteen days
+
+
+def test_a_stored_job_off_its_turn_is_not_asked(monkeypatch: pytest.MonkeyPatch) -> None:
+    urls = fake_get(monkeypatch, wd_detail())
+    job = jobs_n(1)[0]
+    turn = next(d for d in range(adapters.REFRESH_DAYS) if adapters._in_refresh_slice(("Acme", job["job_id"]), d))
+    off = (turn + 1) % adapters.REFRESH_DAYS
+    assert adapters.add_descriptions("workday", WD_SLUG, "Acme", [job], {("Acme", job["job_id"])}, day=off) == (0, 0, 0)
+    assert urls == []
+
+
 EF = "https://jobs.acme.test/api/pcsx/position_details?position_id=1&domain=acme.test&hl=en"
 LD_PAGE = "https://www.weka.io/careers"
 

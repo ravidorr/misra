@@ -74,12 +74,6 @@ An item that has a date says `Due <date>` in its text. Dates marked "proposed" w
   Done when: FR-4 acceptance criteria 1, 2, 3 and 9 hold for each of them and the share with a full description is printed in
   the daily log.
 
-- [ ] **Refresh a stored description that changed.** Trigger: the job-page adapters (Workday) fetch a text only for a job
-  Supabase holds none for, so a posting edited in place keeps its first text until it closes and reopens. Where:
-  `adapters.add_descriptions`: also ask the pages of the jobs whose key hashes into today's slice (for example a job a day in
-  fourteen), within the same per-company cap. Done when: a changed Workday posting has its new text within two weeks, and the
-  request count in the `job pages:` line stays a handful on a steady day.
-
 ## Assistant endpoint
 
 - [ ] **Watch `rpc/search_job_keys` for abnormal query volume.** Standing note, not a task. The lawyer agreed on 2026-11-17
