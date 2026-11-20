@@ -35,12 +35,38 @@ def test_a_company_crawled_for_less_than_thirty_days_is_not_judged(db: sqlite3.C
     assert run.dead_boards(db) == []
 
 
-def test_a_job_a_failure_or_a_skip_ends_the_run(db: sqlite3.Connection) -> None:
+def test_a_job_or_a_failing_last_crawl_is_not_dead(db: sqlite3.Connection) -> None:
     crawls(db, "Hired", [*empty(35), (1, 2), *empty(4)])  # a job 4 days ago: not dead
-    crawls(db, "Failed", [*empty(35), (0, 0), *empty(4)])  # a failure: gap list, not dead
-    crawls(db, "Failing now", [*empty(39), (0, 0)])
+    crawls(db, "Failing now", [*empty(39), (0, 0)])  # failing now: a gap, not a dead board
     crawls(db, "Open now", [*empty(39), (1, 3)])
     assert run.dead_boards(db) == []
+
+
+def test_a_failed_crawl_in_between_does_not_restart_the_count(db: sqlite3.Connection) -> None:
+    crawls(db, "Flaky", [(1, 4), *empty(34), (0, 0), *empty(4)])
+    (board,) = run.dead_boards(db)
+    assert board["company"] == "Flaky"
+    assert board["since"] == "2026-01-02T06:00:00"  # the first crawl after the last job
+
+
+def test_the_thirty_day_boundary_from_both_sides(db: sqlite3.Connection) -> None:
+    crawls(db, "Busy", [(1, 5)] * (run.DEAD_DAYS + 1))  # sets the newest day, 30 days after the first crawl
+    crawls(db, "Almost", empty(run.DEAD_DAYS), first_day=1)  # first crawl 29 days before the newest day
+    crawls(db, "Exact", empty(run.DEAD_DAYS + 1))
+    assert [b["company"] for b in run.dead_boards(db)] == ["Exact"]
+
+
+@pytest.mark.parametrize(("age", "is_new"), [(30, True), (32, True), (33, False)])
+def test_new_covers_the_last_three_crawl_days(db: sqlite3.Connection, age: int, is_new: bool) -> None:
+    crawls(db, "Quiet", [(1, 4), *empty(age + 1)])  # empty from day 1: `age` days before the newest day
+    (board,) = run.dead_boards(db)
+    assert board["new"] is is_new
+
+
+def test_a_company_crawled_exactly_the_stale_limit_ago_still_shows(db: sqlite3.Connection) -> None:
+    crawls(db, "Recent", empty(36))  # last crawl on day 35
+    crawls(db, "Busy", [(1, 5)] * (36 + run.GAP_STALE_DAYS))  # newest day 42: seven days later
+    assert [b["company"] for b in run.dead_boards(db)] == ["Recent"]
 
 
 def test_a_company_not_crawled_lately_is_skipped(db: sqlite3.Connection) -> None:
@@ -91,6 +117,15 @@ def test_the_coverage_line_is_unchanged_and_the_alert_follows_it(
     assert capsys.readouterr().out == (
         "::warning::coverage gaps: 1 (1 new): failing 1 (Blocked)\ndead boards: 1 (0 new), no job for 30 days: Quiet\n"
     )
+
+
+def test_the_dead_board_line_is_skipped_when_the_gap_check_failed(
+    db: sqlite3.Connection, capsys: pytest.CaptureFixture[str]
+) -> None:
+    db.execute("INSERT INTO crawl_log(ts,company,ats,ok,n_jobs,note) VALUES('garbage','A','x',0,0,'')")
+    crawls(db, "Quiet", empty(60))
+    assert run.log_coverage_gaps(db) is False
+    assert "dead boards" not in capsys.readouterr().out
 
 
 def test_a_broken_dead_board_check_warns_and_never_fails_the_step(

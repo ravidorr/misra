@@ -161,7 +161,8 @@ async def test_the_icon_does_not_move_the_card_and_a_screen_reader_hears_the_wor
     )
     assert size[2] == "static"
     assert float(size[0].removesuffix("px")) == pytest.approx(float(size[1].removesuffix("px")))
-    assert 8 < float(size[0].removesuffix("px")) < 32  # noqa: PLR2004  (about 0.9em of the text)
+    font = await one.evaluate("(a) => parseFloat(getComputedStyle(a).fontSize)")
+    assert float(size[0].removesuffix("px")) == pytest.approx(font * 0.6, abs=0.1)  # the job title link: 0.6em
 
 
 async def test_a_new_tab_link_keeps_a_visible_focus_ring(page: Page, site: Path) -> None:  # noqa: F811

@@ -268,11 +268,12 @@ def coverage_gaps(c: sqlite3.Connection) -> list[dict[str, Any]]:
 def dead_boards(c: sqlite3.Connection) -> list[dict[str, Any]]:
     """Crawled companies whose board has been empty for DEAD_DAYS days: one dict each, company, since and new.
 
-    Dead means the trailing crawls of the company in crawl_log are all ok with no job (a failure, a skip or a drop
-    ends the run, so those stay in the gap list), the run began DEAD_DAYS or more before the newest crawl day (the log
-    keeps 90 days, so a company crawled for less is not judged yet), and the company was crawled in the last
-    GAP_STALE_DAYS days (an excluded or removed company is not crawled, so it never shows). `new` is True when the run
-    crossed DEAD_DAYS on the newest crawl day or up to GAP_NEW_DAYS days before it, as for the coverage gaps."""
+    Dead means the last crawl of the company in crawl_log was ok with no job (a NULL count is no job) and no crawl
+    since the last job was ok with one: failed and skipped crawls in between do not restart the count, a crawl that
+    found a job does. The run began DEAD_DAYS or more before the newest crawl day (the log keeps 90 days, so `since`
+    never reaches back further, and a company crawled for less is not judged yet), and the company was crawled in
+    the last GAP_STALE_DAYS days (an excluded or removed company stops showing after that). `new` is True when the
+    run crossed DEAD_DAYS on the newest crawl day or up to GAP_NEW_DAYS days before it, as for the coverage gaps."""
     history: dict[str, list[tuple[int, int, str]]] = {}
     query = "SELECT company, ts, ok, COALESCE(n_jobs, 0) FROM crawl_log WHERE company IS NOT NULL ORDER BY ts, rowid"
     for company, ts, ok, n_jobs in c.execute(query):
@@ -289,7 +290,7 @@ def dead_boards(c: sqlite3.Connection) -> list[dict[str, Any]]:
             continue
         since = seq[-1][2]
         for ok, n_jobs, ts in reversed(seq):
-            if not ok or n_jobs:
+            if ok and n_jobs:
                 break
             since = ts
         if seq[-1][0] and not seq[-1][1] and since[:10] <= dead:
@@ -337,8 +338,8 @@ def log_coverage_gaps(c: sqlite3.Connection) -> bool:
     """Put the coverage gaps in the job log, so a crawl problem is never silent (nothing is emailed for them).
 
     One line of counts and company names (the log is public, the names are public companies). A gap that is new (see
-    coverage_gaps) makes the line a ::warning:: annotation on the run. Returns False when the check itself failed, so
-    the step can go red."""
+    coverage_gaps) makes the line a ::warning:: annotation on the run. Then log_dead_boards adds its own line (skipped
+    when the gap check itself failed). Returns False when the gap check failed, so the step can go red."""
     gaps, error = safe_coverage_gaps(c)
     if error:
         print(f"::warning::coverage check failed, {error}")
