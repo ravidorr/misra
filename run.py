@@ -273,7 +273,9 @@ def dead_boards(c: sqlite3.Connection) -> list[dict[str, Any]]:
     found a job does. The run began DEAD_DAYS or more before the newest crawl day (the log keeps 90 days, so `since`
     never reaches back further, and a company crawled for less is not judged yet), and the company was crawled in
     the last GAP_STALE_DAYS days (an excluded or removed company stops showing after that). `new` is True when the
-    run crossed DEAD_DAYS on the newest crawl day or up to GAP_NEW_DAYS days before it, as for the coverage gaps."""
+    run crossed DEAD_DAYS on the newest crawl day or up to GAP_NEW_DAYS days before it, as for the coverage gaps.
+
+    n_jobs is counted after the Israel filter, so a global company with no Israel roles can be flagged."""
     history: dict[str, list[tuple[int, int, str]]] = {}
     query = "SELECT company, ts, ok, COALESCE(n_jobs, 0) FROM crawl_log WHERE company IS NOT NULL ORDER BY ts, rowid"
     for company, ts, ok, n_jobs in c.execute(query):
