@@ -656,6 +656,42 @@ def test_a_crash_midway_in_the_browser_crawl_keeps_the_browser_companies_already
     check.close()
 
 
+def test_no_browser_company_means_no_browser_crawl(
+    workdir: Path, adapter: dict[str, Any], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    write_json(workdir / "data" / "companies.json", [co("Good")])
+    adapter["good"] = [[job("g1")]]
+
+    def never(_urls: list[str]) -> Any:
+        raise AssertionError("no browser company: no browser")
+
+    monkeypatch.setattr(run, "crawl_many", never)
+    run.main()
+
+
+def test_browser_companies_that_share_a_slug_are_all_recorded_and_one_the_crawl_never_reports_is_a_failure(
+    workdir: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    write_json(
+        workdir / "data" / "companies.json",
+        [
+            co("One", ats="browser", slug="https://shared"),
+            co("Two", ats="browser", slug="https://shared"),
+            co("Lost", ats="browser", slug="https://lost"),
+        ],
+    )
+    monkeypatch.setattr(run, "crawl_many", lambda urls: iter([("https://shared", [job("s1")])]))
+    run.main()
+    check = sqlite3.connect(run.DB)
+    assert check.execute("SELECT company FROM jobs ORDER BY company").fetchall() == [("One",), ("Two",)]
+    assert check.execute("SELECT company, ok FROM crawl_log ORDER BY company").fetchall() == [
+        ("Lost", 0),
+        ("One", 1),
+        ("Two", 1),
+    ]
+    check.close()
+
+
 def test_a_crash_while_recording_a_company_keeps_the_ones_before_it_and_rolls_back_its_own_rows(
     workdir: Path, adapter: dict[str, Any], monkeypatch: pytest.MonkeyPatch
 ) -> None:

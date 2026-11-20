@@ -6,7 +6,7 @@ import re
 import sqlite3
 import sys
 import time
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import Future, ThreadPoolExecutor, as_completed
 from typing import Any
 
 import common
@@ -148,6 +148,14 @@ def read_job_pages(co: dict[str, Any], jobs: list[dict[str, Any]]) -> None:
     else:
         if stats[0] or stats[2]:
             DETAIL_STATS[co["name"]] = (co["ats"], *stats)
+
+
+def read_pages_of(
+    co: dict[str, Any], jobs: list[dict[str, Any]] | None
+) -> tuple[dict[str, Any], list[dict[str, Any]] | None]:
+    if jobs:
+        read_job_pages(co, jobs)
+    return co, jobs
 
 
 def crawl(co: dict[str, Any]) -> tuple[dict[str, Any], list[dict[str, Any]] | None]:
@@ -443,13 +451,43 @@ def main() -> None:  # noqa: PLR0915
     with ThreadPoolExecutor(8) as ex:
         results = list(ex.map(crawl, api))
     record(results)  # the API companies are in the history before the slow browser crawl starts
-    by_slug = {co["slug"]: co for co in br}
-    for slug, jobs in crawl_many(list(by_slug)):  # each company is recorded as its crawl finishes
-        co = by_slug[slug]
-        if jobs:
-            read_job_pages(co, jobs)
-        record([(co, jobs)])
-        results.append((co, jobs))
+
+    def crawl_browser_companies() -> None:
+        by_slug: dict[str, list[dict[str, Any]]] = {}
+        for co in br:
+            by_slug.setdefault(co["slug"], []).append(co)
+
+        def finish(fut: Future[tuple[dict[str, Any], list[dict[str, Any]] | None]]) -> None:
+            later = fut.result()
+            record([later])
+            results.append(later)
+
+        if by_slug:
+            seen_slugs: set[str] = set()
+            # the job pages of each company are read in a pool, after its list; a company is recorded when its pages are
+            # read, so a crash or the step timeout keeps the ones finished before it
+            with ThreadPoolExecutor(8) as ex:
+                waiting: set[Future[tuple[dict[str, Any], list[dict[str, Any]] | None]]] = set()
+                try:
+                    for slug, jobs in crawl_many(list(by_slug)):
+                        seen_slugs.add(slug)
+                        # companies sharing a page each get their own copy of the jobs
+                        waiting.update(
+                            ex.submit(read_pages_of, co, [dict(j) for j in jobs] if jobs and i else jobs)
+                            for i, co in enumerate(by_slug[slug])
+                        )
+                        for fut in [f for f in waiting if f.done()]:
+                            waiting.discard(fut)
+                            finish(fut)
+                finally:
+                    for fut in as_completed(waiting):
+                        finish(fut)
+            for slug in by_slug.keys() - seen_slugs:  # a page the crawl never reported is a failed crawl
+                for co in by_slug[slug]:
+                    record([(co, None)])
+                    results.append((co, None))
+
+    crawl_browser_companies()
     dropped = delete_robots_skips(c, set(skipped) - attempted)
     c.commit()
     n_open = c.execute("SELECT COUNT(*) FROM jobs WHERE status='open'").fetchone()[0]
