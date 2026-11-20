@@ -356,9 +356,9 @@ def main() -> None:  # noqa: PLR0915
 
     def record(batch: list[tuple[dict[str, Any], list[dict[str, Any]] | None]]) -> None:  # noqa: PLR0912
         """Write the results of these companies into the history and commit them, company by company. A crash while
-        recording loses only the company being recorded, and a crash in the browser crawl keeps the API companies (the
-        browser results themselves are lost, TODO.md): the workflow syncs after a failed crawl, so what was recorded
-        reaches Supabase, and the run is red anyway."""
+        recording loses only the company being recorded, and a crash or timeout in the browser crawl keeps the API
+        companies and the browser companies already crawled: the workflow syncs after a failed crawl, so what was
+        recorded reaches Supabase, and the run is red anyway."""
         for co, fetched in batch:
             c.commit()  # the previous company is complete: keep it whatever comes next
             name = co["name"]
@@ -443,13 +443,13 @@ def main() -> None:  # noqa: PLR0915
     with ThreadPoolExecutor(8) as ex:
         results = list(ex.map(crawl, api))
     record(results)  # the API companies are in the history before the slow browser crawl starts
-    if br:
-        got = crawl_many([co["slug"] for co in br])
-        later = [(co, got.get(co["slug"])) for co in br]
-        with ThreadPoolExecutor(8) as ex:  # the job pages of the browser companies, one host each, after the lists
-            list(ex.map(lambda r: read_job_pages(*r) if r[1] else None, later))
-        record(later)
-        results.extend(later)
+    by_slug = {co["slug"]: co for co in br}
+    for slug, jobs in crawl_many(list(by_slug)):  # each company is recorded as its crawl finishes
+        co = by_slug[slug]
+        if jobs:
+            read_job_pages(co, jobs)
+        record([(co, jobs)])
+        results.append((co, jobs))
     dropped = delete_robots_skips(c, set(skipped) - attempted)
     c.commit()
     n_open = c.execute("SELECT COUNT(*) FROM jobs WHERE status='open'").fetchone()[0]

@@ -6,7 +6,10 @@ import contextlib
 import itertools
 import json
 import os
+import queue
 import re
+import threading
+from collections.abc import Callable, Iterator
 from typing import Any, cast
 from urllib.parse import parse_qs, urlencode, urlsplit
 
@@ -571,7 +574,7 @@ async def crawl_one(ctx: Any, url: str, sem: asyncio.Semaphore) -> list[dict[str
             await page.close()
 
 
-async def _run(urls: list[str]) -> dict[str, list[dict[str, Any]] | None]:
+async def _run(urls: list[str], on_result: Callable[[str, list[dict[str, Any]] | None], None]) -> None:
     sem = asyncio.Semaphore(3)
     async with async_playwright() as p:
         b = (
@@ -580,10 +583,32 @@ async def _run(urls: list[str]) -> dict[str, list[dict[str, Any]] | None]:
             else await p.chromium.launch(args=["--no-sandbox"])
         )
         ctx = await b.new_context(user_agent=USER_AGENT, locale="en-US")
-        res = await asyncio.gather(*[crawl_one(ctx, u, sem) for u in urls])
+
+        async def one(url: str) -> None:
+            on_result(url, await crawl_one(ctx, url, sem))
+
+        await asyncio.gather(*[one(u) for u in urls])
         await b.close()
-    return dict(zip(urls, res, strict=True))
 
 
-def crawl_many(urls: Any) -> dict[str, list[dict[str, Any]] | None]:
-    return asyncio.run(_run(list(urls)))
+def crawl_many(urls: Any) -> Iterator[tuple[str, list[dict[str, Any]] | None]]:
+    """Yield (url, jobs) for each page as its crawl finishes, so a caller that records each one keeps the pages
+    already crawled when the browser crawl dies or the step times out. The crawl runs in a thread and the caller
+    reads on its own, so what the caller does between results never stalls the browser. A crash in the crawl is
+    raised here after the results that came before it."""
+    done: queue.Queue[tuple[str, list[dict[str, Any]] | None] | None] = queue.Queue()
+    failure: list[BaseException] = []
+
+    def work() -> None:
+        try:
+            asyncio.run(_run(list(urls), lambda url, jobs: done.put((url, jobs))))
+        except BaseException as exc:  # handed to the caller below
+            failure.append(exc)
+        finally:
+            done.put(None)
+
+    threading.Thread(target=work, daemon=True).start()
+    while (item := done.get()) is not None:
+        yield item
+    if failure:
+        raise failure[0]

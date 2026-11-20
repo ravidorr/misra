@@ -85,7 +85,7 @@ def test_main_full_cycle(
         "https://br3": [],
         "https://br4": None,
     }
-    monkeypatch.setattr(run, "crawl_many", lambda urls: {u: crawled[u] for u in urls if u in crawled})
+    monkeypatch.setattr(run, "crawl_many", lambda urls: iter([(u, crawled.get(u)) for u in urls]))
     monkeypatch.setitem(browser_crawl.WHY, "https://br3", "empty page")
     monkeypatch.setitem(browser_crawl.WHY, "https://br4", "blocked")
     run.main()
@@ -212,7 +212,7 @@ def log_runs(name: str, notes: list[str | None], date: str = "2024-01-{:02d}") -
 
 def crawl(workdir: Path, monkeypatch: pytest.MonkeyPatch, jobs: list[Any], company: dict[str, Any] = BIG) -> None:
     write_json(workdir / "data" / "companies.json", [company])
-    monkeypatch.setattr(run, "crawl_many", lambda urls: dict.fromkeys(urls, jobs))
+    monkeypatch.setattr(run, "crawl_many", lambda urls: iter(dict.fromkeys(urls, jobs).items()))
     run.main()
 
 
@@ -474,7 +474,7 @@ def test_one_held_company_does_not_hold_another(
     seed("Fine")
     write_json(workdir / "data" / "companies.json", [BIG, co("Fine", ats="browser", slug="https://fine")])
     crawled = {"https://big": returned(RETURNED), "https://fine": returned(OPEN - 1)}
-    monkeypatch.setattr(run, "crawl_many", lambda urls: {u: crawled[u] for u in urls})
+    monkeypatch.setattr(run, "crawl_many", lambda urls: iter([(u, crawled[u]) for u in urls]))
     run.main()
     assert (open_jobs("Big"), open_jobs("Fine")) == (OPEN, OPEN - 1)  # Fine closed its one job as usual
     out = capsys.readouterr().out
@@ -633,6 +633,29 @@ def test_a_crash_in_the_browser_crawl_keeps_the_api_companies_already_recorded(
     check.close()
 
 
+def test_a_crash_midway_in_the_browser_crawl_keeps_the_browser_companies_already_crawled(
+    workdir: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Each browser company is recorded when its crawl finishes, so the ones done before the crash (or the step
+    timeout) are in the history, and the run is still red."""
+    write_json(
+        workdir / "data" / "companies.json",
+        [co("One", ats="browser", slug="https://one"), co("Two", ats="browser", slug="https://two")],
+    )
+
+    def dies_after_one(_urls: list[str]) -> Any:
+        yield "https://one", [job("o1")]
+        raise RuntimeError("browser died")
+
+    monkeypatch.setattr(run, "crawl_many", dies_after_one)
+    with pytest.raises(RuntimeError, match="browser died"):
+        run.main()
+    check = sqlite3.connect(run.DB)
+    assert check.execute("SELECT company, job_id FROM jobs").fetchall() == [("One", "o1")]
+    assert check.execute("SELECT company, ok FROM crawl_log").fetchall() == [("One", 1)]
+    check.close()
+
+
 def test_a_crash_while_recording_a_company_keeps_the_ones_before_it_and_rolls_back_its_own_rows(
     workdir: Path, adapter: dict[str, Any], monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -659,7 +682,9 @@ def test_the_job_pages_of_browser_companies_are_read_after_the_lists(
     workdir: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     write_json(workdir / "data" / "companies.json", [co("Br", ats="browser", slug="https://br.test/careers")])
-    monkeypatch.setattr(run, "crawl_many", lambda urls: {u: [{**job("1"), "detail_url": "d"}, job("2")] for u in urls})
+    monkeypatch.setattr(
+        run, "crawl_many", lambda urls: iter([(u, [{**job("1"), "detail_url": "d"}, job("2")]) for u in urls])
+    )
     monkeypatch.setitem(adapters.DETAILS, "browser", lambda _slug, j: ("text of " + j["job_id"], {}))
     run.main()
     out = capsys.readouterr().out
@@ -715,7 +740,9 @@ def test_a_browser_company_whose_crawl_failed_gets_no_job_pages_and_the_others_d
         workdir / "data" / "companies.json",
         [co("Down", ats="browser", slug="https://down.test/c"), co("Up", ats="browser", slug="https://up.test/c")],
     )
-    monkeypatch.setattr(run, "crawl_many", lambda urls: {"https://up.test/c": [{**job("1"), "detail_url": "d"}]})
+    monkeypatch.setattr(
+        run, "crawl_many", lambda urls: iter([("https://up.test/c", [{**job("1"), "detail_url": "d"}])])
+    )
     monkeypatch.setitem(adapters.DETAILS, "browser", lambda _slug, j: ("text", {}))
     run.main()
     assert list(descriptions.read_work_file()) == [("Up", "1")]
