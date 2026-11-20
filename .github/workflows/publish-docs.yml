@@ -61,7 +61,7 @@ jobs:
         with:
           python-version: "3.12"
       # The same pin as pyproject.toml and daily.yml (a test keeps the three equal).
-      - run: pip install requests markdown-it-py==4.0.0
+      - run: pip install requests markdown-it-py==4.3.0
       - name: Pull the history and the company list from Supabase
         # Reads only. A failure stops the run before the build, so the site is never rebuilt from an empty history or
         # an empty company list (the same pull writes data/companies.json).
