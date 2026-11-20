@@ -594,6 +594,55 @@ def workday_description(slug: str, job: Job) -> tuple[str, dict[str, Any]] | Non
     return html_to_text(info.get("jobDescription")), {"employment_type": info.get("timeType")}
 
 
+def bamboohr_description(slug: str, job: Job) -> tuple[str, dict[str, Any]] | None:
+    """The text of one BambooHR posting: `/careers/<id>/detail`, the JSON the careers page itself loads (the same host
+    and `/careers/` path as the list), `result.jobOpening.description` as HTML. Of what else it gives only the
+    employment type is kept (the compensation, the share link and the ids are not). None on any failure."""
+    job_id = str(job["job_id"])
+    if not (job_id.isascii() and job_id.isdigit()):
+        return None
+    r = get(f"https://{slug}.bamboohr.com/careers/{job_id}/detail", headers={"Accept": "application/json"})
+    if r is None or r.status_code != HTTP_OK:
+        return None
+    try:
+        opening = r.json()["result"]["jobOpening"]
+    except (ValueError, KeyError, TypeError):
+        return None
+    if not isinstance(opening, dict):
+        return None
+    return html_to_text(opening.get("description")), {"employment_type": opening.get("employmentStatusLabel")}
+
+
+def oraclehcm_description(slug: str, job: Job) -> tuple[str, dict[str, Any]] | None:
+    """The text of one Oracle HCM requisition: `recruitingCEJobRequisitionDetails`, the same `/hcmRestApi/` REST path
+    as the list (so the same robots.txt rule), asked for the requisition by its id. The text is `ExternalDescriptionStr`
+    followed by the external responsibilities and qualifications when the tenant fills them in (the corporate and
+    organisation boilerplate is left out); of the rest only the schedule and the workplace type are kept. None on any
+    failure."""
+    host, _, site = slug.partition("/")
+    job_id = str(job["job_id"])
+    if not (job_id.isascii() and job_id.isdigit()):
+        return None
+    r = get(
+        f"https://{host}/hcmRestApi/resources/latest/recruitingCEJobRequisitionDetails",
+        params={"onlyData": "true", "finder": f'ById;Id="{job_id}",siteNumber={site}'},
+    )
+    if r is None or r.status_code != HTTP_OK:
+        return None
+    try:
+        req = r.json()["items"][0]
+    except (ValueError, KeyError, IndexError, TypeError):
+        return None
+    if not isinstance(req, dict):
+        return None
+    text = sections(
+        ("", html_to_text(req.get("ExternalDescriptionStr"))),
+        ("Responsibilities", html_to_text(req.get("ExternalResponsibilitiesStr"))),
+        ("Qualifications", html_to_text(req.get("ExternalQualificationsStr"))),
+    )
+    return text, {"employment_type": req.get("JobSchedule"), "workplace_type": req.get("WorkplaceType")}
+
+
 # Career pages of the browser crawl whose job pages carry a schema.org JobPosting with the description in static HTML,
 # found by hand on 2026-11-17. Every other page of the crawl gives no text from a plain request (JavaScript only, no
 # markup of a posting, or bot protection as at Check Point, never worked around), see CONTRIBUTING.md.
@@ -623,21 +672,61 @@ def _job_posting(page: str) -> dict[str, Any] | None:
     return None
 
 
+HTTP_REDIRECTS = frozenset({301, 302, 303, 307, 308})
+MAX_REDIRECTS = 3
+
+
+def _jsonld_page_text(url: str, host: str = "") -> tuple[str, dict[str, Any]] | None:
+    """The description of the schema.org JobPosting in the JSON-LD of a job page, and nothing else of the page (never
+    page text). With `host`, redirects are followed here, one request at a time, only to an https address on that same
+    host (an added trailing slash is the usual one), each through `get`, so through robots.txt and the per-host
+    delay: a redirect to any other host is never requested. None when the page does not answer or has no JobPosting."""
+    r = get(url, allow_redirects=False) if host else get(url)
+    for _ in range(MAX_REDIRECTS if host else 0):
+        if r is None or r.status_code not in HTTP_REDIRECTS:
+            break
+        target = r.headers.get("Location")
+        url = urljoin(url, target) if target else ""
+        if not url.startswith("https://") or host_of(url) != host:  # no Location is no page either
+            return None
+        r = get(url, allow_redirects=False)
+    if r is None or r.status_code != HTTP_OK:
+        return None
+    posting = _job_posting(r.text)
+    return jsonld_description(posting) if posting else None
+
+
+def _jsonld_job_pages(
+    host_for: Callable[[str], str],
+) -> tuple[Callable[[str, Job], tuple[str, dict[str, Any]] | None], Callable[[str, Job], bool]]:
+    """The job-page reader and the filter of an ATS whose job pages carry a JobPosting JSON-LD. Only a job whose own
+    https page is on the host the company's slug names (`host_for(slug)`) is asked for (a link to another host is not
+    a request and not counted), and a redirect to another host is not followed."""
+
+    def wants(slug: str, job: Job) -> bool:
+        url = str(job.get("url"))
+        return url.startswith("https://") and host_of(url) == host_for(slug)
+
+    def fetch(slug: str, job: Job) -> tuple[str, dict[str, Any]] | None:
+        return _jsonld_page_text(str(job["url"]), host_for(slug))
+
+    return fetch, wants
+
+
 def browser_description(slug: str, job: Job) -> tuple[str, dict[str, Any]] | None:
     """The text of a job found by the browser crawl: an Eightfold job asks its own `position_details` JSON (the call the
     career page makes, under the `/api/pcsx` path its search already uses); a job of a page in JSONLD_PAGES asks its
     page and reads only the JobPosting JSON-LD. Never page text. None on any failure."""
     detail = job.get("detail_url")
-    r = get(detail, headers={"Accept": "application/json"}) if detail else get(job["url"])
+    if not detail:
+        return _jsonld_page_text(job["url"], host_of(slug))
+    r = get(detail, headers={"Accept": "application/json"})
     if r is None or r.status_code != HTTP_OK:
         return None
-    if detail:
-        try:
-            return html_to_text(r.json()["data"]["jobDescription"]), {}
-        except (ValueError, KeyError, TypeError):
-            return None
-    posting = _job_posting(r.text)
-    return jsonld_description(posting) if posting else None
+    try:
+        return html_to_text(r.json()["data"]["jobDescription"]), {}
+    except (ValueError, KeyError, TypeError):
+        return None
 
 
 def _browser_wants_page(slug: str, job: Job) -> bool:
@@ -650,9 +739,17 @@ def _browser_wants_page(slug: str, job: Job) -> bool:
 # limits an ATS to the jobs worth a request.
 DETAILS: dict[str, Callable[[str, Job], tuple[str, dict[str, Any]] | None]] = {
     "workday": workday_description,
+    "bamboohr": bamboohr_description,
+    "oraclehcm": oraclehcm_description,
     "browser": browser_description,
 }
 WANTS: dict[str, Callable[[str, Job], bool]] = {"browser": _browser_wants_page}
+for _ats, _host_for in (
+    ("jazzhr", lambda slug: f"{slug}.applytojob.com"),
+    ("phenom", lambda slug: slug.partition("/")[0]),
+    ("comeet_page", host_of),
+):
+    DETAILS[_ats], WANTS[_ats] = _jsonld_job_pages(_host_for)
 
 
 def _in_refresh_slice(key: tuple[str, str], day: int) -> bool:
