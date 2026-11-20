@@ -53,12 +53,6 @@ An item that has a date says `Due <date>` in its text. The dates were set on 202
   endpoint the page itself calls (as HiBob and Eightfold), or the company's ATS if it has a public one. Done when: a company on
   that list gives a text without scraping page text and without working around bot protection. Do not retry a plain request.
 
-- [ ] **Refresh a stored description that changed.** Trigger: the job-page adapters (Workday) fetch a text only for a job
-  Supabase holds none for, so a posting edited in place keeps its first text until it closes and reopens. Where:
-  `adapters.add_descriptions`: also ask the pages of the jobs whose key hashes into today's slice (for example a job a day in
-  fourteen), within the same per-company cap. Done when: a changed Workday posting has its new text within two weeks, and the
-  request count in the `job pages:` line stays a handful on a steady day.
-
 ## Assistant endpoint
 
 - [ ] **Watch `rpc/search_job_keys` for abnormal query volume.** Standing note, not a task. The lawyer agreed on 2026-11-17
@@ -331,7 +325,7 @@ An item that has a date says `Due <date>` in its text. The dates were set on 202
        A Workable job link on a page is `apply.workable.com/j/<shortcode>`: it names no account (open it: it redirects
        to `apply.workable.com/<account>/j/<shortcode>`). `ATS_LINK` skips these links since 0.10.1.
     2. With an existing adapter, probe it from a shell (`adapters.ADAPTERS["greenhouse"]("slug")` and so on). Without
-       one, the browser crawler is the fallback: `browser_crawl.crawl_many([url])` (set `PW_CHROMIUM` to a Chromium
+       one, the browser crawler is the fallback: `list(browser_crawl.crawl_many([url]))` (set `PW_CHROMIUM` to a Chromium
        build, or run `playwright install chromium`) shows what it reads.
     3. Read the result before pinning. It needs real titles, distinct links and a location per job that the Israel matcher
        (`discover.ISRAEL`) can recognise, for the jobs that will appear and not only the ones there today. A list of
@@ -451,8 +445,6 @@ recurring work.
     each followed by a review of the next daily run. Find the real career page by hand (not by slug guessing), look for a
     JSON endpoint the page calls, group `needs_reader` by platform and check `robots.txt` first. Pillar Security needs a
     dedicated reader (its cards carry the city only as a section heading); Walnut is a researched record, not pinned.
-  - [ ] **Dead-board alert.** No date. Extend the daily coverage-gap log line (`Log the coverage gaps`) to flag a crawled
-    company with no open job for 30 days, from `crawl_log`. An alert, not a test; a test covers the query on fixtures.
   - [ ] **Remove a company** only on request (an `excluded` record, `CONTRIBUTING.md`, "Removing a company on request") or
     when it has closed for good.
 - **Risks.** More records can push the daily job past its timeout or bloat `jobs.json` (the budgets, JSON feeds first);
@@ -509,10 +501,3 @@ could not prove: a real PostgREST, a real Supabase project and a real Actions ru
   that sets the full text of a job to NULL 30 days after it closes is built and runs in every sync. Done when: the numbers
   are in `CONTRIBUTING.md`, "Real data against the limits", and the result of the storage check (trim now or not) is
   written there.
-- [ ] **Keep the browser crawl's results when the browser crawl itself dies.** Added with the step 9.1 leftovers (v0.53.1).
-  `run.py` now commits each company as it is recorded and records the API companies before the browser crawl, so a crash
-  while recording loses one company and a crash in the browser crawl keeps the API companies. The browser crawl
-  (`browser_crawl.crawl_many`) still returns all its results at the end, so a crash or the 20-minute step timeout inside
-  it loses the browser companies of that day. Trigger: it happens in a real run (the alert shows `crawl=failure` and the
-  log stops in the browser crawl). How: let `crawl_many` hand over each company as it finishes (a callback or a
-  generator) and record it then. Done when a timeout in the browser crawl keeps the companies already crawled.
