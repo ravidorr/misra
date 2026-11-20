@@ -1845,6 +1845,75 @@ def test_jobs_behind_five_failing_pages_are_reached_on_later_days(monkeypatch: p
     assert asked == {f"/job/x/J{i}" for i in range(10)}
 
 
+def test_a_stored_job_is_asked_again_once_in_refresh_days_and_the_new_text_is_attached(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    urls = fake_get(monkeypatch, wd_detail())
+    jobs = jobs_n(28)
+    held = {("Acme", j["job_id"]) for j in jobs}
+    asked_per_day = []
+    for day in range(adapters.REFRESH_DAYS):
+        urls.clear()
+        for job in jobs:
+            job.pop("description", None)
+        asked, got, left = adapters.add_descriptions("workday", WD_SLUG, "Acme", jobs, held, day=day)
+        assert (asked, got, left) == (len(urls), len(urls), 0)
+        assert all(j.get("text_held") for j in jobs)  # a refreshed job still counts as stored
+        assert sum("description" in j for j in jobs) == asked
+        asked_per_day.append(set(urls))
+    assert sum(len(a) for a in asked_per_day) == len(jobs)  # every job exactly once in the fourteen days
+    assert len(set().union(*asked_per_day)) == len(jobs)  # and no job twice
+
+
+def test_a_refresh_whose_page_fails_leaves_the_stored_job_as_it_was(monkeypatch: pytest.MonkeyPatch) -> None:
+    fake_get(monkeypatch, FakeHttpResponse(status_code=404))
+    job = jobs_n(1)[0]
+    key = ("Acme", job["job_id"])
+    turn = next(d for d in range(adapters.REFRESH_DAYS) if adapters._in_refresh_slice(key, d))
+    assert adapters.add_descriptions("workday", WD_SLUG, "Acme", [job], {key}, day=turn) == (1, 0, 0)
+    assert job["text_held"] is True and "description" not in job
+
+
+def test_refreshes_use_only_what_the_new_jobs_leave_of_the_cap(monkeypatch: pytest.MonkeyPatch) -> None:
+    urls = fake_get(monkeypatch, wd_detail())
+    monkeypatch.setattr(adapters, "DETAIL_CAP", 4)
+    jobs = jobs_n(60)
+    day = 3
+    due = [j for j in jobs if adapters._in_refresh_slice(("Acme", j["job_id"]), day)]
+    new = [j for j in jobs if j not in due][:3]
+    assert len(due) > len(new)  # more refreshes due than the cap has room for
+    pool = due + new  # only the explicit order puts the new jobs first
+    held = {("Acme", j["job_id"]) for j in due}
+    asked, _, deferred = adapters.add_descriptions("workday", WD_SLUG, "Acme", pool, held, day=day)
+    ids = {u.rsplit("/", 1)[1] for u in urls}
+    assert asked == adapters.DETAIL_CAP
+    assert {j["job_id"].rsplit("/", 1)[1] for j in new} <= ids  # all 3 new jobs, then 1 refresh
+    assert all("description" in j for j in new)
+    assert sum(("description" in j) for j in due) == 1
+    assert (asked, deferred) == (adapters.DETAIL_CAP, 0)  # refreshes not reached are not "left for later runs"
+
+
+def test_only_new_jobs_count_as_left_for_later_runs(monkeypatch: pytest.MonkeyPatch) -> None:
+    fake_get(monkeypatch, wd_detail())
+    monkeypatch.setattr(adapters, "DETAIL_CAP", 2)
+    day = 3
+    jobs = jobs_n(60)
+    due = [j for j in jobs if adapters._in_refresh_slice(("Acme", j["job_id"]), day)]
+    new = [j for j in jobs if j not in due][:5]
+    held = {("Acme", j["job_id"]) for j in due}
+    assert adapters.add_descriptions("workday", WD_SLUG, "Acme", due + new, held, day=day) == (2, 2, 3)  # 3 new wait
+
+
+def test_a_stored_job_off_its_turn_is_not_asked(monkeypatch: pytest.MonkeyPatch) -> None:
+    urls = fake_get(monkeypatch, wd_detail())
+    job = jobs_n(1)[0]
+    turn = next(d for d in range(adapters.REFRESH_DAYS) if adapters._in_refresh_slice(("Acme", job["job_id"]), d))
+    off = (turn + 1) % adapters.REFRESH_DAYS
+    assert adapters.add_descriptions("workday", WD_SLUG, "Acme", [job], {("Acme", job["job_id"])}, day=off) == (0, 0, 0)
+    assert job["text_held"] is True
+    assert urls == []
+
+
 EF = "https://jobs.acme.test/api/pcsx/position_details?position_id=1&domain=acme.test&hl=en"
 LD_PAGE = "https://www.weka.io/careers"
 
