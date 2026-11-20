@@ -6,7 +6,7 @@ All notable changes are documented here. Format follows [Keep a Changelog](https
 
 ### Changed
 
-- The new-tab icon is smaller: `0.75em` (12px in 16px text and in the Apply button) with a `0.3em` gap and `vertical-align: -0.05em`, and `0.6em` in the job title link (`.card-title a`), so it sits below the x-height of the text it follows. In Windows high contrast mode the icon is now painted with `LinkText`, because its fixed colour could equal the button's forced background and the Apply icon vanished. `design-system/components/external-link.css`, `design-system/README.md` and `tests/test_new_tab_icon.py` only; the 44px targets and the "(opens in a new tab)" words are unchanged. No version bump: no Python module or package file changed.
+- The new-tab icon is smaller: `0.75em` (12px in 16px text and in the Apply button) with a `0.3em` gap and `vertical-align: -0.05em`, and `0.6em` in the job title link (`.card .card-title a[target="_blank"]::after`), so it is quieter next to the text it follows. In Windows high contrast mode the icon is now painted with `LinkText`: it kept the link's author colour, which was white on the Apply button's forced white background, so the Apply icon vanished. `design-system/components/external-link.css`, `design-system/README.md` and `tests/test_new_tab_icon.py` (and the done item removed from `TODO.md`); the 44px targets and the "(opens in a new tab)" words are unchanged. No version bump: no Python module or package file changed.
 
 ### Removed
 
