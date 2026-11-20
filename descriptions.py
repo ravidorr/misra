@@ -272,7 +272,7 @@ def _pct(part: int, whole: int) -> str:
 
 def share_report(jobs_by_ats: Iterable[tuple[str, list[dict[str, Any]]]]) -> str:
     """The FR-4 AC 3 log line: per ATS the jobs with a full description (given today, or already stored in Supabase
-    and so not fetched again) out of the jobs the crawl returned, then all of them, the jobs cut at the cap and the
+    and so not fetched every run) out of the jobs the crawl returned, then all of them, the jobs cut at the cap and the
     characters kept. Counts and percentages only, no text."""
     total: Counter[str] = Counter()
     with_text: Counter[str] = Counter()
