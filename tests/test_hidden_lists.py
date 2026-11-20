@@ -175,7 +175,7 @@ async def test_signed_out_hidden_roles_are_cards_with_restore_and_a_company_hide
     assert (
         await page.locator(PM1).evaluate("e => getComputedStyle(e).opacity") == "1"
     )  # not faded: readable, not disabled
-    assert await page.locator("#gapsCard").is_hidden()  # the coverage card belongs to the feed
+    assert await page.locator("#gapsCard").is_hidden()  # the Hidden view puts the coverage card away
     await page.click(f"{PM1} [data-act=toggle]")
     assert await page.locator("#list > li.empty").inner_text() == "No role is hidden on its own."
     assert await page.locator("#hiddenRoles-h").is_hidden()
@@ -251,7 +251,7 @@ async def test_signed_in_a_hidden_company_a_hidden_role_and_a_pending_change_sho
     assert await names(page) == ["Acme"]
     await page.click(f"{ACME_ROW} {UNHIDE}")
     assert await page.locator("#hiddenCompanies").is_hidden()  # at once, before the service answers
-    await until(lambda: choices.rows == {})
+    await until(lambda: [w["op"] for w in choices.writes][-1:] == ["delete"] and choices.rows == {})
 
 
 async def test_signed_in_a_role_hidden_on_its_own_is_restored_from_the_list(page: Page, site: Path) -> None:
@@ -347,7 +347,7 @@ async def test_while_the_account_choices_load_the_view_shows_no_count_and_no_fal
     await open_hidden(page)
     assert await summary(page) == "Loading your hidden roles and companies."
     assert await page.locator("#list > li.empty").inner_text() == "Loading your hidden roles and companies."
-    assert "Nothing is hidden" not in await page.locator("main").inner_text()
+    assert await page.locator("#list .empty-title").count() == 0  # never the empty state
     assert "error" in await ask(page, "list_hidden")
     assert "error" in await ask(page, "unhide_company", {"company": GHOST})
     async with page.expect_response(lambda r: r.request.method == "GET" and "user_jobs" in r.url):
@@ -362,7 +362,7 @@ async def test_when_the_account_choices_cannot_load_the_view_says_so_and_shows_n
     assert await label(page) == "Hidden"
     await open_hidden(page)
     assert await summary(page) == "Your hidden roles and companies could not be loaded."
-    assert "Nothing is hidden" not in await page.locator("main").inner_text()
+    assert await page.locator("#list .empty-title").count() == 0  # never the empty state
     await expect(page.locator("#syncNote .notice")).to_be_visible()
     choices.mode = "ok"
     await page.click("#syncRetry")
