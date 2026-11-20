@@ -109,7 +109,9 @@ async def test_signed_out_nothing_hidden_says_how_to_hide_and_the_chip_toggles(p
 
 async def test_signed_out_the_two_switches_swap_views_and_never_both_show_as_pressed(page: Page, site: Path) -> None:
     await load(page, site)
+    assert await page.locator("#gapsCard").is_visible()
     await page.click("#starredView")
+    assert await page.locator("#gapsCard").is_hidden()  # the coverage card is about the roles feed
     await open_hidden(page)
     assert await page.locator("#starredView").get_attribute("aria-pressed") == "false"
     assert await page.locator("#hiddenView").get_attribute("aria-pressed") == "true"
@@ -364,3 +366,15 @@ async def test_when_the_account_choices_cannot_load_the_view_says_so_and_shows_n
     choices.mode = "ok"
     await page.click("#syncRetry")
     await expect(page.locator("#hiddenView")).to_have_text("Hidden (1)")
+
+
+async def test_the_main_feed_keeps_new_restore_and_the_faded_card(page: Page, site: Path) -> None:
+    await start(page, roles={"Acme|1": "2026-01-02"})
+    await load(page, site)
+    await page.check("#showGone")
+    assert await page.locator(f"{PM1} .card-flag").text_content() == "New"
+    assert await page.locator(f"{PM1} [data-act=toggle]").inner_text() == "Restore"
+    assert (await page.locator(f"{PM1} [data-act=toggle]").get_attribute("aria-label")).startswith("Restore: ")
+    assert await page.locator(PM1).evaluate("e => getComputedStyle(e).opacity") == "0.5"
+    await open_hidden(page)
+    assert await page.locator("#missing").is_hidden()
