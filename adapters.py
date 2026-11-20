@@ -592,6 +592,25 @@ def workday_description(slug: str, job: Job) -> tuple[str, dict[str, Any]] | Non
     return html_to_text(info.get("jobDescription")), {"employment_type": info.get("timeType")}
 
 
+def bamboohr_description(slug: str, job: Job) -> tuple[str, dict[str, Any]] | None:
+    """The text of one BambooHR posting: `/careers/<id>/detail`, the JSON the careers page itself loads (the same host
+    and `/careers/` path as the list), `result.jobOpening.description` as HTML. Of what else it gives only the
+    employment type is kept (the compensation, the share link and the ids are not). None on any failure."""
+    job_id = str(job["job_id"])
+    if not job_id.isdigit():
+        return None
+    r = get(f"https://{slug}.bamboohr.com/careers/{job_id}/detail", headers={"Accept": "application/json"})
+    if r is None or r.status_code != HTTP_OK:
+        return None
+    try:
+        opening = r.json()["result"]["jobOpening"]
+    except (ValueError, KeyError, TypeError):
+        return None
+    if not isinstance(opening, dict):
+        return None
+    return html_to_text(opening.get("description")), {"employment_type": opening.get("employmentStatusLabel")}
+
+
 # Career pages of the browser crawl whose job pages carry a schema.org JobPosting with the description in static HTML,
 # found by hand on 2026-11-17. Every other page of the crawl gives no text from a plain request (JavaScript only, no
 # markup of a posting, or bot protection as at Check Point, never worked around), see CONTRIBUTING.md.
@@ -648,6 +667,7 @@ def _browser_wants_page(slug: str, job: Job) -> bool:
 # limits an ATS to the jobs worth a request.
 DETAILS: dict[str, Callable[[str, Job], tuple[str, dict[str, Any]] | None]] = {
     "workday": workday_description,
+    "bamboohr": bamboohr_description,
     "browser": browser_description,
 }
 WANTS: dict[str, Callable[[str, Job], bool]] = {"browser": _browser_wants_page}

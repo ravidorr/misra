@@ -22,6 +22,12 @@ All notable changes are documented here. Format follows [Keep a Changelog](https
 - The Crawl area of the admin page (PLAN_2.md step 2.2): it calls `admin_crawl_health()` when first shown and lists one card per company, worst first, with a headline, chips with counts (Needs attention, Failing, Robots.txt, Held, All), the values of the crawl and a status pill. Loading, empty, error and 401 states. Templates and tests only.
 - A Copy button under every code block of the legal pages (the address on "Connect your assistant", the command for Claude Code), in `templates/theme.js`.
 
+## [0.81.0] - 2026-11-20
+
+### Added
+
+- Job descriptions (FR-4) for BambooHR: `adapters.bamboohr_description` asks `/careers/<id>/detail`, the JSON the careers page loads itself (same host and `/careers/` path as the list, `robots.txt` checked 2026-11-20), and keeps `result.jobOpening.description` as plain text and the employment type. Same budget as Workday: only jobs Supabase holds no text for, 40 a company and run, one request a second; the `job pages:` line counts it as `bamboohr`.
+
 ## [0.80.1] - 2026-11-19
 
 ### Fixed

@@ -2561,3 +2561,59 @@ def test_jibe_reads_nothing_of_the_job_text_or_the_apply_link(monkeypatch: pytes
 
 def test_jibe_is_registered() -> None:
     assert adapters.ADAPTERS["jibe"] is adapters.jibe
+
+
+BB_JOB = {"job_id": "82", "title": "T"}
+BB_URL = "https://acme.bamboohr.com/careers/82/detail"
+
+
+def bb_detail(description: Any = "<p>Build things</p><ul><li>Python</li></ul>", **opening: Any) -> FakeHttpResponse:
+    return FakeHttpResponse(
+        data={"result": {"jobOpening": {"description": description, "employmentStatusLabel": "Full-Time", **opening}}}
+    )
+
+
+def test_a_bamboohr_job_page_gives_the_text_and_the_employment_type_only(monkeypatch: pytest.MonkeyPatch) -> None:
+    urls = fake_get(monkeypatch, bb_detail(compensation="$1", jobOpeningShareUrl="https://x"))
+    found = adapters.bamboohr_description("acme", BB_JOB)
+    assert found == ("Build things\n\n- Python", {"employment_type": "Full-Time"})
+    assert urls == [BB_URL]  # the board's own host and /careers/ path, as the list
+
+
+@pytest.mark.parametrize(
+    "answer",
+    [
+        None,
+        FakeHttpResponse(status_code=404),
+        FakeHttpResponse(json_error=True),
+        FakeHttpResponse(data={}),
+        FakeHttpResponse(data=[]),
+        FakeHttpResponse(data={"result": {"jobOpening": "x"}}),
+    ],
+)
+def test_a_bamboohr_job_page_that_does_not_answer_with_a_posting_gives_nothing(
+    monkeypatch: pytest.MonkeyPatch, answer: FakeHttpResponse | None
+) -> None:
+    fake_get(monkeypatch, answer)
+    assert adapters.bamboohr_description("acme", BB_JOB) is None
+
+
+def test_a_bamboohr_job_without_a_numeric_id_is_never_requested(monkeypatch: pytest.MonkeyPatch) -> None:
+    urls = fake_get(monkeypatch, bb_detail())
+    assert adapters.bamboohr_description("acme", {"job_id": "../x"}) is None
+    assert urls == []
+
+
+def test_a_bamboohr_job_page_without_text_keeps_the_job_as_it_was(monkeypatch: pytest.MonkeyPatch) -> None:
+    fake_get(monkeypatch, bb_detail(None, employmentStatusLabel=None))
+    job = {**BB_JOB}
+    assert adapters.add_descriptions("bamboohr", "acme", "Acme", [job], set()) == (1, 0, 0)
+    assert job == BB_JOB
+
+
+def test_bamboohr_jobs_are_asked_one_page_each_and_a_held_one_is_not(monkeypatch: pytest.MonkeyPatch) -> None:
+    urls = fake_get(monkeypatch, bb_detail())
+    jobs = [{"job_id": "1", "title": "A"}, {"job_id": "2", "title": "B"}]
+    assert adapters.add_descriptions("bamboohr", "acme", "Acme", jobs, {("Acme", "2")}) == (1, 1, 0)
+    assert urls == ["https://acme.bamboohr.com/careers/1/detail"]
+    assert jobs[0]["description"] == "Build things\n\n- Python"
