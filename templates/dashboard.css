@@ -110,7 +110,7 @@ a {
   margin: 0;
 }
 
-/* Parts the Starred and Hidden views put away with the filters: the coverage card is about the roles feed. */
+/* The Hidden view puts the coverage card away with the filters (the Starred view keeps it). */
 .gaps[data-away="true"] {
   display: none;
 }

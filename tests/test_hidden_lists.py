@@ -111,8 +111,9 @@ async def test_signed_out_the_two_switches_swap_views_and_never_both_show_as_pre
     await load(page, site)
     assert await page.locator("#gapsCard").is_visible()
     await page.click("#starredView")
-    assert await page.locator("#gapsCard").is_hidden()  # the coverage card is about the roles feed
+    assert await page.locator("#gapsCard").is_visible()  # the Starred view keeps the coverage card
     await open_hidden(page)
+    assert await page.locator("#gapsCard").is_hidden()  # the Hidden view puts it away
     assert await page.locator("#starredView").get_attribute("aria-pressed") == "false"
     assert await page.locator("#hiddenView").get_attribute("aria-pressed") == "true"
     await page.click("#starredView")

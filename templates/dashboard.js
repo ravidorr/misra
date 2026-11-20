@@ -1560,7 +1560,7 @@ const searchPending = () => {
 function showView() {
   const roles = view === 'roles';
   $('list').dataset.view = view;
-  $('gapsCard').dataset.away = String(!roles);
+  $('gapsCard').dataset.away = String(view === 'hidden');
   for (const id of ['moreFilters', 'searchBar', 'filtersOpen']) $(id).hidden = !roles;
   $('starredView').setAttribute('aria-pressed', String(view === 'starred'));
   $('starredView').textContent = `Starred (${starredItems().length})`;
