@@ -857,6 +857,16 @@ html:has(.sheet:modal) {
     display: inline-flex;
   }
 
+  /* Three controls ("Filters", "Starred", "Hidden") share one row on a phone, so the first job stays on the first screen. */
+  .toolbar {
+    gap: var(--space-2);
+  }
+
+  .toolbar .filters-open,
+  .toolbar .chip {
+    padding-inline: var(--space-2);
+  }
+
   .card-title {
     font-size: 1.25rem;
   }
