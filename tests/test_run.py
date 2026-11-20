@@ -637,8 +637,8 @@ def test_a_crash_in_the_browser_crawl_keeps_the_api_companies_already_recorded(
 def test_a_crash_midway_in_the_browser_crawl_keeps_the_browser_companies_already_crawled(
     workdir: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Each browser company is recorded once its pages are read and the next list arrives, or when the crawl
-    crashes, so the ones whose list arrived before the crash are in the history, and the run is still red."""
+    """Each browser company is recorded once its pages are read, or when the crawl crashes, so the ones whose
+    list arrived before the crash are in the history, and the run is still red."""
     write_json(
         workdir / "data" / "companies.json",
         [co("One", ats="browser", slug="https://one"), co("Two", ats="browser", slug="https://two")],
@@ -693,35 +693,29 @@ def test_browser_companies_that_share_a_slug_are_all_recorded_and_one_the_crawl_
     check.close()
 
 
-def test_a_browser_company_is_recorded_as_soon_as_the_next_list_arrives_when_its_pages_are_read(
+def test_a_browser_company_is_recorded_while_the_next_list_is_still_stuck(
     workdir: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     write_json(
         workdir / "data" / "companies.json",
         [co("One", ats="browser", slug="https://one"), co("Two", ats="browser", slug="https://two")],
     )
-    read = threading.Event()
-    real = run.read_pages_of
-
-    def wrapped(co: dict[str, Any], jobs: Any) -> Any:
-        done = real(co, jobs)
-        read.set()
-        return done
-
-    monkeypatch.setattr(run, "read_pages_of", wrapped)
     monkeypatch.setattr(run, "read_job_pages", lambda _co, _jobs: None)
     seen: list[Any] = []
 
     def crawl(_urls: list[str]) -> Any:
         yield "https://one", [job("o1")]
-        assert read.wait(5)
-        time.sleep(0.5)  # the pool has handed the first company back
+        deadline = time.monotonic() + 10
+        check = sqlite3.connect(run.DB, check_same_thread=False)  # made in the crawl thread
+        while time.monotonic() < deadline and not check.execute("SELECT 1 FROM jobs").fetchone():
+            time.sleep(0.02)  # the next list is stuck: One must be recorded without it
+        seen.append(check.execute("SELECT company FROM jobs").fetchall())
+        check.close()
         yield "https://two", [job("t1")]
-        seen.append(sqlite3.connect(run.DB).execute("SELECT company FROM jobs").fetchall())
 
     monkeypatch.setattr(run, "crawl_many", crawl)
     run.main()
-    assert ("One",) in seen[0]
+    assert seen == [[("One",)]]
 
 
 def assert_set(event: threading.Event) -> None:
@@ -741,7 +735,7 @@ def test_a_browser_company_whose_pages_are_still_being_read_waits_for_the_end_of
     def crawl(_urls: list[str]) -> Any:
         yield "https://one", [job("o1")]
         yield "https://two", [job("t1")]
-        check = sqlite3.connect(run.DB)
+        check = sqlite3.connect(run.DB, check_same_thread=False)  # made in the crawl thread
         assert check.execute("SELECT COUNT(*) FROM jobs").fetchone() == (0,)  # nothing recorded while pages are read
         check.close()
         release.set()
@@ -761,11 +755,19 @@ def test_a_browser_company_that_cannot_be_recorded_does_not_cost_the_others_or_l
         [co("One", ats="browser", slug="https://one"), co("Two", ats="browser", slug="https://two")],
     )
     release = threading.Event()
-    monkeypatch.setattr(run, "read_job_pages", lambda _co, _jobs: assert_set(release))
+    started = {"One": threading.Event(), "Two": threading.Event()}
+
+    def read(company: dict[str, Any], _jobs: Any) -> None:
+        started[company["name"]].set()
+        assert_set(release)
+
+    monkeypatch.setattr(run, "read_job_pages", read)
 
     def crawl(_urls: list[str]) -> Any:
         yield "https://one", [job("o1")]
         yield "https://two", [job("t1")]
+        assert_set(started["One"])
+        assert_set(started["Two"])  # both are in the pool before either is recorded
         release.set()
 
     monkeypatch.setattr(run, "crawl_many", crawl)

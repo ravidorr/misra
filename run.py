@@ -2,9 +2,11 @@
 Supabase), mark new/closed. `--gaps` logs the coverage gaps."""
 
 import datetime
+import queue
 import re
 import sqlite3
 import sys
+import threading
 import time
 from collections import deque
 from concurrent.futures import Future, ThreadPoolExecutor
@@ -463,36 +465,57 @@ def main() -> None:  # noqa: PLR0915
             record([later])
             results.append(later)
 
+        def drain(waiting: deque[Future[tuple[dict[str, Any], list[dict[str, Any]] | None]]]) -> None:
+            failure: Exception | None = None
+            while waiting:  # one company that cannot be recorded must not cost the others
+                try:
+                    finish(waiting.popleft())
+                except Exception as exc:
+                    c.rollback()
+                    failure = failure or exc
+            if failure:
+                raise failure
+
         if by_slug:
             seen_slugs: set[str] = set()
-            # the job pages of each company are read in a pool, after its list. A company is recorded, in the order
-            # its list arrived, when its pages are read and the next list arrives or the crawl ends. A crash keeps
-            # every company whose list arrived; a step timeout keeps the ones recorded before it
+            # One queue carries both the crawl's lists and the finished job-page reads, so a company is recorded as
+            # soon as its pages are read, even while the next list is slow or stuck. Companies are recorded in the
+            # order their lists arrived. A crash keeps every company whose list arrived.
+            events: queue.Queue[tuple[str, Any]] = queue.Queue()
+
+            def feed() -> None:
+                try:
+                    for slug, jobs in crawl_many(list(by_slug)):
+                        events.put(("list", (slug, jobs)))
+                except BaseException as exc:  # handed to the loop below
+                    events.put(("error", exc))
+                else:
+                    events.put(("end", None))
+
+            threading.Thread(target=feed, daemon=True).start()
             with ThreadPoolExecutor(8) as ex:
                 waiting: deque[Future[tuple[dict[str, Any], list[dict[str, Any]] | None]]] = deque()
                 try:
-                    for slug, jobs in crawl_many(list(by_slug)):
-                        seen_slugs.add(slug)
-                        # companies sharing a page each get their own copy of the jobs
-                        waiting.extend(
-                            ex.submit(read_pages_of, co, [dict(j) for j in jobs] if jobs and i else jobs)
-                            for i, co in enumerate(by_slug[slug])
-                        )
+                    while True:
+                        kind, value = events.get()
+                        if kind == "error":
+                            raise value
+                        if kind == "end":
+                            break
+                        for slug, jobs in [value] if kind == "list" else []:  # "done" only wakes the loop
+                            seen_slugs.add(slug)
+                            # companies sharing a page each get their own copy of the jobs
+                            for i, co in enumerate(by_slug[slug]):
+                                fut = ex.submit(read_pages_of, co, [dict(j) for j in jobs] if jobs and i else jobs)
+                                fut.add_done_callback(lambda f: events.put(("done", f)))
+                                waiting.append(fut)
                         while waiting and waiting[0].done():
                             finish(waiting.popleft())
                 except BaseException:
                     c.rollback()  # the company being recorded: the drain below must not commit half of it
                     raise
                 finally:
-                    failure: Exception | None = None
-                    while waiting:  # one company that cannot be recorded must not cost the others
-                        try:
-                            finish(waiting.popleft())
-                        except Exception as exc:
-                            c.rollback()
-                            failure = failure or exc
-                    if failure:
-                        raise failure
+                    drain(waiting)
             for slug in by_slug.keys() - seen_slugs:  # a page the crawl never reported is a failed crawl
                 for co in by_slug[slug]:
                     record([(co, None)])
