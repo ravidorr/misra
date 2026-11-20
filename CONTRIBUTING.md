@@ -385,7 +385,7 @@ PLAN.md step 7.1. Where the text of a posting lives, and how it gets there:
   in this pass is a `::warning::` with the HTTP status and nothing else (an answer can quote the row, and the log is
   public); it never fails the step, so the digests and the deploy still run.
 - **What is read.** Only what a site publishes for applicants, and only from the request the adapter already makes
-  (no new host, no new path, no request per job; Workday below is the exception): Greenhouse (`?content=true` on the board list), Lever (the posting
+  (no new host, no new path, no request per job; the job pages below are the exception): Greenhouse (`?content=true` on the board list), Lever (the posting
   list: description, the named lists, the closing text), Ashby (the posting list), Workable (`?details=true` on the widget
   list), Comeet (`custom_fields.details` of each position in the page's embedded data) and Amazon (the search JSON: description
   and qualifications). `greenhouse_url` takes the content when the company's proxy gives it. Every request stays inside
@@ -428,7 +428,7 @@ PLAN.md step 7.1. Where the text of a posting lives, and how it gets there:
   (`recruitingCEJobRequisitionDetails` on the list's own `/hcmRestApi/` path: `ExternalDescriptionStr` plus the external
   responsibilities and qualifications; the corporate boilerplate is left out), and JazzHR, Phenom and `comeet_page` (the job's
   own page on the host the slug names, only its `JobPosting` JSON-LD, as the JSON-LD pages above; a link to any other host is
-  never requested). Each shows as its own ATS in the `job pages:` and `descriptions:` lines. Not read: SmartRecruiters,
+  never requested, and an answer redirected to another host is no text). Each shows as its own ATS in the `job pages:` and `descriptions:` lines. Not read: SmartRecruiters,
   skipped by `robots.txt`.
 - **The text.** Plain text made from the site's HTML with the standard library: scripts, styles and embedded frames are
   dropped with their content, no tag survives (an angle bracket a posting wrote, such as `List<T>`, is kept as text, to be shown as text), paragraphs and list items keep their line breaks, control characters

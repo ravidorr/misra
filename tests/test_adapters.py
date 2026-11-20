@@ -2693,7 +2693,7 @@ JZ_PAGE = ld_html(
 
 
 def test_a_jazzhr_job_gives_the_json_ld_of_its_own_page(monkeypatch: pytest.MonkeyPatch) -> None:
-    urls = fake_get(monkeypatch, FakeHttpResponse(text=JZ_PAGE))
+    urls = fake_get(monkeypatch, FakeHttpResponse(text=JZ_PAGE, url=JZ_URL))
     jobs = [{**JZ_JOB}]
     assert adapters.add_descriptions("jazzhr", "acme", "Acme", jobs, set()) == (1, 1, 0)
     assert jobs[0]["description"] == "Build things"
@@ -2713,7 +2713,7 @@ def test_a_jazzhr_job_gives_the_json_ld_of_its_own_page(monkeypatch: pytest.Monk
 def test_a_job_page_on_another_host_is_never_requested(monkeypatch: pytest.MonkeyPatch, url: str) -> None:
     urls = fake_get(monkeypatch, FakeHttpResponse(text=JZ_PAGE))
     jobs = [{**JZ_JOB, "url": url}]
-    assert adapters.add_descriptions("jazzhr", "acme", "Acme", jobs, set()) == (1, 0, 0)
+    assert adapters.add_descriptions("jazzhr", "acme", "Acme", jobs, set()) == (0, 0, 0)  # not a request, not counted
     assert urls == []
     assert "description" not in jobs[0]
 
@@ -2727,9 +2727,9 @@ def test_a_jazzhr_page_without_a_job_posting_keeps_the_job_as_it_was(monkeypatch
 
 def test_a_phenom_job_gives_the_json_ld_of_its_own_page_on_the_career_site(monkeypatch: pytest.MonkeyPatch) -> None:
     url = "https://careers.acme.test/global/en/job/ACME123"
-    urls = fake_get(monkeypatch, FakeHttpResponse(text=JZ_PAGE))
+    urls = fake_get(monkeypatch, FakeHttpResponse(text=JZ_PAGE, url=url))
     jobs = [{"job_id": "123", "title": "T", "url": url}, {"job_id": "9", "title": "U", "url": "https://x.test/job/9"}]
-    assert adapters.add_descriptions("phenom", "careers.acme.test/global/en", "Acme", jobs, set()) == (2, 1, 0)
+    assert adapters.add_descriptions("phenom", "careers.acme.test/global/en", "Acme", jobs, set()) == (1, 1, 0)
     assert jobs[0]["description"] == "Build things"
     assert "description" not in jobs[1]
     assert urls == [url]  # the list's own host, never the host of a link
@@ -2739,11 +2739,39 @@ def test_a_comeet_page_job_gives_the_json_ld_of_its_own_page_on_the_careers_host
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     url = "https://acme.test/careers/co/israel/AA.470/engineer/all/"
-    urls = fake_get(monkeypatch, FakeHttpResponse(text=JZ_PAGE))
+    urls = fake_get(monkeypatch, FakeHttpResponse(text=JZ_PAGE, url=url))
     jobs = [
         {"job_id": "AA.470", "title": "T", "url": url},
         {"job_id": "BB.001", "title": "U", "url": "https://www.comeet.co/jobs/acme/BB.001"},
     ]
-    assert adapters.add_descriptions("comeet_page", "https://acme.test/careers/", "Acme", jobs, set()) == (2, 1, 0)
+    assert adapters.add_descriptions("comeet_page", "https://acme.test/careers/", "Acme", jobs, set()) == (1, 1, 0)
     assert jobs[0]["description"] == "Build things"
     assert urls == [url]  # the careers page's own host, never the host of a link
+
+
+def test_a_job_page_redirected_to_another_host_is_no_text(monkeypatch: pytest.MonkeyPatch) -> None:
+    fake_get(monkeypatch, FakeHttpResponse(text=JZ_PAGE, url="https://evil.test/apply/AbC123/x"))
+    job = {**JZ_JOB}
+    assert adapters.add_descriptions("jazzhr", "acme", "Acme", [job], set()) == (1, 0, 0)
+    assert job == JZ_JOB
+
+
+@pytest.mark.parametrize("job_id", ["\u00b2", "\u0661\u0662", "1.5"])
+def test_only_ascii_digits_are_an_id_of_a_bamboohr_or_oracle_job(monkeypatch: pytest.MonkeyPatch, job_id: str) -> None:
+    urls = fake_get(monkeypatch, bb_detail())
+    assert adapters.bamboohr_description("acme", {"job_id": job_id}) is None
+    assert adapters.oraclehcm_description(OR_SLUG, {"job_id": job_id}) is None
+    assert urls == []
+
+
+def test_an_oracle_requisition_with_only_qualifications_has_no_empty_heading(monkeypatch: pytest.MonkeyPatch) -> None:
+    fake_get(monkeypatch, or_detail(ExternalQualificationsStr="<p>Python</p>"))
+    assert adapters.oraclehcm_description(OR_SLUG, OR_JOB) == (
+        "Qualifications\nPython",
+        {"employment_type": None, "workplace_type": None},
+    )
+
+
+def test_the_job_page_readers_are_registered() -> None:
+    for ats in ("bamboohr", "oraclehcm", "jazzhr", "phenom", "comeet_page"):
+        assert ats in adapters.DETAILS

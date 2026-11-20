@@ -597,7 +597,7 @@ def bamboohr_description(slug: str, job: Job) -> tuple[str, dict[str, Any]] | No
     and `/careers/` path as the list), `result.jobOpening.description` as HTML. Of what else it gives only the
     employment type is kept (the compensation, the share link and the ids are not). None on any failure."""
     job_id = str(job["job_id"])
-    if not job_id.isdigit():
+    if not (job_id.isascii() and job_id.isdigit()):
         return None
     r = get(f"https://{slug}.bamboohr.com/careers/{job_id}/detail", headers={"Accept": "application/json"})
     if r is None or r.status_code != HTTP_OK:
@@ -619,7 +619,7 @@ def oraclehcm_description(slug: str, job: Job) -> tuple[str, dict[str, Any]] | N
     failure."""
     host, _, site = slug.partition("/")
     job_id = str(job["job_id"])
-    if not job_id.isdigit():
+    if not (job_id.isascii() and job_id.isdigit()):
         return None
     r = get(
         f"https://{host}/hcmRestApi/resources/latest/recruitingCEJobRequisitionDetails",
@@ -670,28 +670,32 @@ def _job_posting(page: str) -> dict[str, Any] | None:
     return None
 
 
-def _jsonld_page_text(url: str) -> tuple[str, dict[str, Any]] | None:
+def _jsonld_page_text(url: str, host: str = "") -> tuple[str, dict[str, Any]] | None:
     """The description of the schema.org JobPosting in the JSON-LD of a job page, and nothing else of the page (never
-    page text). None when the page does not answer or has no JobPosting."""
+    page text). None when the page does not answer, has no JobPosting, or (when `host` is given) was redirected to
+    another host."""
     r = get(url)
-    if r is None or r.status_code != HTTP_OK:
+    if r is None or r.status_code != HTTP_OK or (host and host_of(r.url) != host):
         return None
     posting = _job_posting(r.text)
     return jsonld_description(posting) if posting else None
 
 
-def _jsonld_job_page(host_for: Callable[[str], str]) -> Callable[[str, Job], tuple[str, dict[str, Any]] | None]:
-    """The job-page reader of an ATS whose job pages carry a JobPosting JSON-LD: it asks the job's own page, and only
-    when that page is on the host the company's slug names (`host_for(slug)`), so a link to anywhere else is never
-    requested."""
+def _jsonld_job_pages(
+    host_for: Callable[[str], str],
+) -> tuple[Callable[[str, Job], tuple[str, dict[str, Any]] | None], Callable[[str, Job], bool]]:
+    """The job-page reader and the filter of an ATS whose job pages carry a JobPosting JSON-LD. Only a job whose own
+    https page is on the host the company's slug names (`host_for(slug)`) is asked for (a link to another host is not
+    a request and not counted), and an answer redirected to another host is no text."""
+
+    def wants(slug: str, job: Job) -> bool:
+        url = str(job.get("url"))
+        return url.startswith("https://") and host_of(url) == host_for(slug)
 
     def fetch(slug: str, job: Job) -> tuple[str, dict[str, Any]] | None:
-        url = str(job.get("url"))
-        if not url.startswith("https://") or host_of(url) != host_for(slug):
-            return None
-        return _jsonld_page_text(url)
+        return _jsonld_page_text(str(job["url"]), host_for(slug))
 
-    return fetch
+    return fetch, wants
 
 
 def browser_description(slug: str, job: Job) -> tuple[str, dict[str, Any]] | None:
@@ -722,12 +726,15 @@ DETAILS: dict[str, Callable[[str, Job], tuple[str, dict[str, Any]] | None]] = {
     "workday": workday_description,
     "bamboohr": bamboohr_description,
     "oraclehcm": oraclehcm_description,
-    "jazzhr": _jsonld_job_page(lambda slug: f"{slug}.applytojob.com"),
-    "phenom": _jsonld_job_page(lambda slug: slug.partition("/")[0]),
-    "comeet_page": _jsonld_job_page(host_of),
     "browser": browser_description,
 }
 WANTS: dict[str, Callable[[str, Job], bool]] = {"browser": _browser_wants_page}
+for _ats, _host_for in (
+    ("jazzhr", lambda slug: f"{slug}.applytojob.com"),
+    ("phenom", lambda slug: slug.partition("/")[0]),
+    ("comeet_page", host_of),
+):
+    DETAILS[_ats], WANTS[_ats] = _jsonld_job_pages(_host_for)
 
 
 def add_descriptions(  # noqa: PLR0913, PLR0917
