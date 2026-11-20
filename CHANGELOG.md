@@ -26,6 +26,12 @@ All notable changes are documented here. Format follows [Keep a Changelog](https
 - The Crawl area of the admin page (PLAN_2.md step 2.2): it calls `admin_crawl_health()` when first shown and lists one card per company, worst first, with a headline, chips with counts (Needs attention, Failing, Robots.txt, Held, All), the values of the crawl and a status pill. Loading, empty, error and 401 states. Templates and tests only.
 - A Copy button under every code block of the legal pages (the address on "Connect your assistant", the command for Claude Code), in `templates/theme.js`.
 
+## [0.80.2] - 2026-11-20
+
+### Fixed
+
+- A crash or the 20-minute step timeout in the browser crawl no longer loses the browser companies already crawled that day. `browser_crawl.crawl_many` now yields `(url, jobs)` as each page finishes (the crawl runs in a thread). `run.py` reads the job pages of each company in a pool of 8 and records and commits the company as soon as its pages are read, even while the next list is slow or stuck (one queue carries both the lists and the finished reads), in the order the lists arrived. A crash in the crawl is raised after the results that came before it and records every company whose list had arrived; on the step timeout the companies recorded so far are kept; those whose pages were still being read, and any finished behind one of them (companies are recorded in list order), are lost. A crash while recording a company rolls back that company only, and the others are still recorded. After a crash or the timeout, browser companies whose list never arrived have no `crawl_log` row; the run is red anyway and the next run crawls them again. Two browser companies with one slug are both recorded, and one a crawl that ends normally never reports is logged as failed. A list with no browser company starts no browser. Tests: a fake crawl that dies midway, a stuck next list, and a company that cannot be recorded, in `tests/test_run.py` and `tests/test_browser_crawl.py`.
+
 ## [0.80.1] - 2026-11-19
 
 ### Fixed

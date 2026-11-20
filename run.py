@@ -2,11 +2,14 @@
 Supabase), mark new/closed. `--gaps` logs the coverage gaps."""
 
 import datetime
+import queue
 import re
 import sqlite3
 import sys
+import threading
 import time
-from concurrent.futures import ThreadPoolExecutor
+from collections import deque
+from concurrent.futures import Future, ThreadPoolExecutor
 from typing import Any
 
 import common
@@ -148,6 +151,14 @@ def read_job_pages(co: dict[str, Any], jobs: list[dict[str, Any]]) -> None:
     else:
         if stats[0] or stats[2]:
             DETAIL_STATS[co["name"]] = (co["ats"], *stats)
+
+
+def read_pages_of(
+    co: dict[str, Any], jobs: list[dict[str, Any]] | None
+) -> tuple[dict[str, Any], list[dict[str, Any]] | None]:
+    if jobs:
+        read_job_pages(co, jobs)
+    return co, jobs
 
 
 def crawl(co: dict[str, Any]) -> tuple[dict[str, Any], list[dict[str, Any]] | None]:
@@ -356,9 +367,9 @@ def main() -> None:  # noqa: PLR0915
 
     def record(batch: list[tuple[dict[str, Any], list[dict[str, Any]] | None]]) -> None:  # noqa: PLR0912
         """Write the results of these companies into the history and commit them, company by company. A crash while
-        recording loses only the company being recorded, and a crash in the browser crawl keeps the API companies (the
-        browser results themselves are lost, TODO.md): the workflow syncs after a failed crawl, so what was recorded
-        reaches Supabase, and the run is red anyway."""
+        recording loses only the company being recorded, and a crash in the browser crawl keeps the API companies
+        and the browser companies recorded before it (on a step timeout, the ones recorded so far): the workflow syncs
+        after a failed crawl, so what was recorded reaches Supabase, and the run is red anyway."""
         for co, fetched in batch:
             c.commit()  # the previous company is complete: keep it whatever comes next
             name = co["name"]
@@ -443,13 +454,76 @@ def main() -> None:  # noqa: PLR0915
     with ThreadPoolExecutor(8) as ex:
         results = list(ex.map(crawl, api))
     record(results)  # the API companies are in the history before the slow browser crawl starts
-    if br:
-        got = crawl_many([co["slug"] for co in br])
-        later = [(co, got.get(co["slug"])) for co in br]
-        with ThreadPoolExecutor(8) as ex:  # the job pages of the browser companies, one host each, after the lists
-            list(ex.map(lambda r: read_job_pages(*r) if r[1] else None, later))
-        record(later)
-        results.extend(later)
+
+    def crawl_browser_companies() -> None:
+        by_slug = {slug: [co for co in br if co["slug"] == slug] for slug in dict.fromkeys(co["slug"] for co in br)}
+
+        def finish(fut: Future[tuple[dict[str, Any], list[dict[str, Any]] | None]]) -> None:
+            later = fut.result()
+            record([later])
+            results.append(later)
+
+        def drain(waiting: deque[Future[tuple[dict[str, Any], list[dict[str, Any]] | None]]]) -> None:
+            failure: Exception | None = None
+            while waiting:  # one company that cannot be recorded must not cost the others
+                try:
+                    finish(waiting.popleft())
+                except Exception as exc:
+                    c.rollback()
+                    failure = failure or exc
+            if failure:
+                raise failure
+
+        if by_slug:
+            seen_slugs: set[str] = set()
+            # One queue carries both the crawl's lists and the finished job-page reads, so a company is recorded as
+            # soon as its pages are read, even while the next list is slow or stuck. Companies are recorded in the
+            # order their lists arrived. A crash keeps every company whose list arrived.
+            events: queue.Queue[tuple[str, Any]] = queue.Queue()
+
+            def feed() -> None:
+                try:
+                    for slug, jobs in crawl_many(list(by_slug)):
+                        events.put(("list", (slug, jobs)))
+                except BaseException as exc:  # handed to the loop below
+                    events.put(("error", exc))
+                else:
+                    events.put(("end", None))
+
+            threading.Thread(target=feed, daemon=True).start()
+            with ThreadPoolExecutor(8) as ex:
+                waiting: deque[Future[tuple[dict[str, Any], list[dict[str, Any]] | None]]] = deque()
+                try:
+                    while True:
+                        kind, value = events.get()
+                        if kind == "error":
+                            raise value
+                        if kind == "end":
+                            break
+                        for slug, jobs in [value] if kind == "list" else []:  # "done" only wakes the loop
+                            seen_slugs.add(slug)
+                            # companies sharing a page each get their own copy of the jobs, made before any is submitted
+                            sharing = [
+                                (co, [dict(j) for j in jobs] if jobs and i else jobs)
+                                for i, co in enumerate(by_slug[slug])
+                            ]
+                            for co, mine in sharing:
+                                fut = ex.submit(read_pages_of, co, mine)
+                                fut.add_done_callback(lambda f: events.put(("done", f)))
+                                waiting.append(fut)
+                        while waiting and waiting[0].done():
+                            finish(waiting.popleft())
+                except BaseException:
+                    c.rollback()  # discard a half-recorded company: the drain below must not commit it
+                    raise
+                finally:
+                    drain(waiting)
+            for slug in by_slug.keys() - seen_slugs:  # a page the crawl never reported is a failed crawl
+                for co in by_slug[slug]:
+                    record([(co, None)])
+                    results.append((co, None))
+
+    crawl_browser_companies()
     dropped = delete_robots_skips(c, set(skipped) - attempted)
     c.commit()
     n_open = c.execute("SELECT COUNT(*) FROM jobs WHERE status='open'").fetchone()[0]

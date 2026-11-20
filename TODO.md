@@ -339,7 +339,7 @@ An item that has a date says `Due <date>` in its text. The dates were set on 202
        A Workable job link on a page is `apply.workable.com/j/<shortcode>`: it names no account (open it: it redirects
        to `apply.workable.com/<account>/j/<shortcode>`). `ATS_LINK` skips these links since 0.10.1.
     2. With an existing adapter, probe it from a shell (`adapters.ADAPTERS["greenhouse"]("slug")` and so on). Without
-       one, the browser crawler is the fallback: `browser_crawl.crawl_many([url])` (set `PW_CHROMIUM` to a Chromium
+       one, the browser crawler is the fallback: `list(browser_crawl.crawl_many([url]))` (set `PW_CHROMIUM` to a Chromium
        build, or run `playwright install chromium`) shows what it reads.
     3. Read the result before pinning. It needs real titles, distinct links and a location per job that the Israel matcher
        (`discover.ISRAEL`) can recognise, for the jobs that will appear and not only the ones there today. A list of
@@ -517,10 +517,3 @@ could not prove: a real PostgREST, a real Supabase project and a real Actions ru
   that sets the full text of a job to NULL 30 days after it closes is built and runs in every sync. Done when: the numbers
   are in `CONTRIBUTING.md`, "Real data against the limits", and the result of the storage check (trim now or not) is
   written there.
-- [ ] **Keep the browser crawl's results when the browser crawl itself dies.** Added with the step 9.1 leftovers (v0.53.1).
-  `run.py` now commits each company as it is recorded and records the API companies before the browser crawl, so a crash
-  while recording loses one company and a crash in the browser crawl keeps the API companies. The browser crawl
-  (`browser_crawl.crawl_many`) still returns all its results at the end, so a crash or the 20-minute step timeout inside
-  it loses the browser companies of that day. Trigger: it happens in a real run (the alert shows `crawl=failure` and the
-  log stops in the browser crawl). How: let `crawl_many` hand over each company as it finishes (a callback or a
-  generator) and record it then. Done when a timeout in the browser crawl keeps the companies already crawled.
