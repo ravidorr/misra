@@ -267,7 +267,7 @@ An item that has a date says `Due <date>` in its text. The dates were set on 202
       jobs, the same on two runs); robots.txt of `careers.ormat.com` and `careers.stratasys.com` only blocks
       `/applybutton/`, `/talentcommunity/`, `/services/` and similar, so both are pinned with `israel_only`. Jobvite
       (`jobs.jobvite.com`) has no robots.txt, but Varonis's public board `/varonis/jobs` shows no job to the crawl (the
-      `varonis-internal` board did: it is not the public one), and Playstudios' Jobvite board has no job location; no
+      `varonis-internal` board did: it is not the public one; Varonis has its own reader since 2026-11-20, see below), and Playstudios' Jobvite board has no job location; no
       adapter. Pinpoint (`jobs.aligntech.com`: robots.txt allows the pages and `jobs.rss`) serves Align Technology
       alone. SAP's SuccessFactors host answers 403 to a plain request: not read. Redefine Meat's Comeet board
       (`redefinemeat/28.004`) lists 1 job, in the Netherlands.
@@ -446,6 +446,10 @@ recurring work.
     each followed by a review of the next daily run. Find the real career page by hand (not by slug guessing), look for a
     JSON endpoint the page calls, group `needs_reader` by platform and check `robots.txt` first. Pillar Security needs a
     dedicated reader (its cards carry the city only as a section heading); Walnut is a researched record, not pinned.
+    Varonis is no longer a gap once pinned: the maintainer allowed a one-company reader on 2026-11-20 (`adapters.varonis`,
+    slug `careers.varonis.com`, 11 Israel jobs of 80 on that day); after the merge apply the migration
+    `20261206100000_companies_ats_varonis.sql`, then `companyctl pin Varonis` (a known-company check first). Wix (Velo
+    backend call) and Pay-Me (WordPress job pages) are the same kind of one-company reader, not built.
   - [ ] **Remove a company** only on request (an `excluded` record, `CONTRIBUTING.md`, "Removing a company on request") or
     when it has closed for good.
 - **Risks.** More records can push the daily job past its timeout or bloat `jobs.json` (the budgets, JSON feeds first);
