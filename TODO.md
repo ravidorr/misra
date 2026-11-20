@@ -44,20 +44,6 @@ An item that has a date says `Due <date>` in its text. The dates were set on 202
   and out. No new data. Done when: a user sees every hidden company and unhides one without finding one of its roles; a hidden
   company with no open roles is listed too.
 
-- [ ] **Make the new-tab icon smaller.** Trigger: the icon after every `a[target="_blank"]` link (PR 240,
-  `design-system/components/external-link.css`, mask `design-system/assets/new-tab.svg`) is `0.9em` square, so it is as tall
-  as the job title's cap height or more (title `1.5rem`, `1.25rem` on a phone) and heavy inside the Apply button. Where: that
-  one rule only, after a UI/UX read (Claude Design and the UI/UX expert checked the CSS, the tokens and the 2.5 stroke of the
-  mask): a decorative cue should sit below the x-height of the text it follows, so the base size is `0.75em` (12px in 16px
-  text and in the button) with `margin-inline-start: 0.3em` and `vertical-align: -0.05em`, and the card title link gets
-  `0.6em` (about 14px at `1.5rem`, 12px at `1.25rem`) through one `.card-title a::after` override, because `em` scales with
-  the large title and would stay too big; the Apply button needs no override. The icon stays a visual cue, so the 44px
-  targets (`.btn` `min-height: var(--tap)`, the title link padding) and the "(opens in a new tab)" words are untouched.
-  Keep it one token, `--icon-new-tab-size` in `tokens.css`, if a second value is needed. Done when: the icon is `0.75em` in
-  link lines and the Apply button and `0.6em` in the job title, still readable (3:1 against its background) in light, dark and
-  forced-colors mode, checked on the dashboard at desktop and phone width; the only code touched is that rule, the README
-  line and the tests or snapshots that pin the size (`tests/test_new_tab_icon.py`).
-
 ## Descriptions
 
 - [ ] **Text for the browser companies that give none.** Trigger: seven browser companies now read the text of their own
