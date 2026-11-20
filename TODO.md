@@ -48,7 +48,7 @@ An item that has a date says `Due <date>` in its text. The dates were set on 202
 
 - [ ] **Text for the browser companies that give none.** Trigger: seven browser companies now read the text of their own
   public Ashby or Comeet board (CONTRIBUTING.md, "Job descriptions"). Left: Check Point (bot protection, never worked
-  around), Tower, Stratasys, Ormat and Intezer (page text only) and Valens (no text in its API) stay without text.
+  around), Tower, Stratasys, Ormat and Intezer (no allowed source) and Valens (no text in its API) stay without text.
   Decision needed: Priority, Mesh, Pecan and Lightbits (42 jobs) publish their postings through the site's WordPress REST
   API, which is neither a call the page makes nor an ATS. Where: a reader like `adapters.BOARD_PAGES` with a `wp_posts`
   list. Done when: the maintainer has decided, and the four read it or are listed as not read.

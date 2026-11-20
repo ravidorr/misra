@@ -634,36 +634,45 @@ BOARD_PAGES: dict[str, tuple[str, str]] = {
     "https://www.lasso.security/careers": ("comeet", "lassosecurity/F9.008"),
     "https://forsightrobotics.com/careers": ("comeet", "forsightrobotics/E9.008"),
 }
-_BOARD_UID = re.compile(r"(?<![0-9A-Z])[0-9A-F]{2}[._][0-9A-F]{3}(?![0-9A-Z])")  # a Comeet position uid: 4E.47C, _47C
+_BOARD_UID = re.compile(r"(?<![0-9A-Z])[0-9A-F]{2}[._][0-9A-F]{3}(?![0-9A-Z])")  # Comeet uid 4E.47C, or 4E_47C
 _boards: dict[str, dict[str, Job] | None] = {}  # per career page and process; a failed read is kept too (one request)
 
 
-def _board(slug: str) -> dict[str, Job] | None:
-    """The jobs of the page's board by upper-cased id (an Ashby id, a Comeet position uid), read once; None when the
-    board could not be read."""
-    if slug not in _boards:
-        ats, board_slug = BOARD_PAGES[slug]
-        jobs = ADAPTERS[ats](board_slug)
-        _boards[slug] = None if jobs is None else {str(j["job_id"]).upper(): j for j in jobs}
-    return _boards[slug]
+def _board(page: str) -> dict[str, Job] | None:
+    """The jobs of the career page's board with a text, by upper-cased id (an Ashby id, a Comeet uid), read once a
+    run; None when the board could not be read or holds none (one `::warning::` says which page, so a board that
+    disappeared is seen, not silent). One company is one page, so two threads never read the same board."""
+    if page not in _boards:
+        ats, board_slug = BOARD_PAGES[page]
+        try:
+            jobs = ADAPTERS[ats](board_slug)
+        except Exception as exc:  # a board that answers something unexpected costs the texts of its page only
+            print(f"::warning::the {ats} board of {page} could not be read: {type(exc).__name__}")
+            jobs = None
+        board = {str(j["job_id"]).upper(): j for j in jobs or [] if j.get("description")}
+        if not board:
+            print(f"::warning::the {ats} board of {page} gave no job text")
+        _boards[page] = board or None
+    return _boards[page]
 
 
-def _board_job(slug: str, job: Job) -> Job | None:
-    """The board's job of a crawl job: an id that is a segment of its link (Ashby, a Comeet link `/4E.47C/title/`), or
-    a Comeet uid written in one (`position-4e_47c`)."""
-    board = _board(slug) if slug in BOARD_PAGES else None
+def _board_job(page: str, job: Job) -> Job | None:
+    """The board's job of a crawl job: an id that is a segment of the link's path (Ashby, a Comeet link
+    `/4E.47C/title/`), or a Comeet uid written in one (`position-4e_47c`). A link that names two board jobs matches
+    none: a wrong text is worse than none."""
+    board = _board(page)
     if not board:
         return None
     for segment in reversed(urlparse(str(job.get("url") or "")).path.upper().strip("/").split("/")):
-        for key in (segment, *(u.replace("_", ".") for u in _BOARD_UID.findall(segment))):
-            if key in board:
-                return board[key]
+        keys = {segment, *(u.replace("_", ".") for u in _BOARD_UID.findall(segment))} & board.keys()
+        if keys:
+            return board[keys.pop()] if len(keys) == 1 else None
     return None
 
 
-def _board_description(slug: str, job: Job) -> tuple[str, dict[str, Any]] | None:
-    found = _board_job(slug, job)
-    return (found.get("description") or "", found.get("details") or {}) if found else None
+def _board_description(page: str, job: Job) -> tuple[str, dict[str, Any]] | None:
+    found = _board_job(page, job)
+    return (found["description"], found.get("details") or {}) if found else None
 
 
 def browser_description(slug: str, job: Job) -> tuple[str, dict[str, Any]] | None:

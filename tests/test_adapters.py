@@ -1954,6 +1954,7 @@ def fake_board(monkeypatch: pytest.MonkeyPatch, jobs: list[dict[str, Any]] | Non
         ("https://panorays.com/careers/", "https://panorays.com/careers/some-title/2C.372/", "2C.372"),
         ("https://www.lasso.security/careers", "https://www.lasso.security/positions/position-a5_075", "A5.075"),
         ("https://komodor.com/careers/", "https://komodor.com/job/D2.37E-50.70A/x/", "50.70A"),  # one of two uids
+        ("https://komodor.com/careers/", "https://komodor.com/job/D2.37E-50.70A/x/", "D2.37E-50.70A"),  # the whole one
     ],
 )
 def test_a_browser_job_takes_the_text_of_its_boards_job(
@@ -1975,6 +1976,31 @@ def test_a_browser_job_the_board_does_not_hold_is_not_asked_for_and_the_board_is
     assert adapters.browser_description(BOARD_PAGE, gone) is None
     assert adapters.browser_description(BOARD_PAGE, {"job_id": "x"}) is None  # a job without a link
     assert len(asked) == 1
+
+
+def test_a_link_that_names_two_board_jobs_gets_no_text(monkeypatch: pytest.MonkeyPatch) -> None:
+    fake_board(monkeypatch, [board_job("D2.37E", "One"), board_job("50.70A", "Two")])
+    job = {"job_id": "k", "url": "https://komodor.com/job/D2.37E-50.70A/x/"}
+    assert not adapters._browser_wants_page("https://komodor.com/careers/", job)
+
+
+def test_a_board_that_raises_or_has_no_text_is_a_warning_and_no_text(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    job = {"job_id": "https://monday.com/careers/a", "url": "https://monday.com/careers/a"}
+    fake_board(monkeypatch, [board_job("a", "")])  # a job with no text is not a board job
+    assert not adapters._browser_wants_page(BOARD_PAGE, job)
+    assert "gave no job text" in capsys.readouterr().out
+
+    def boom(slug: str) -> None:
+        raise KeyError("id")
+
+    monkeypatch.setattr(adapters, "_boards", {})
+    monkeypatch.setitem(adapters.ADAPTERS, "ashby", boom)
+    assert adapters.add_descriptions("browser", BOARD_PAGE, "monday.com", [job], set()) == (0, 0, 0)
+    out = capsys.readouterr().out
+    assert "could not be read: KeyError" in out
+    assert "KeyError(" not in out  # the exception's own text is never printed
 
 
 def test_an_unreadable_board_gives_no_text_and_is_not_asked_again(monkeypatch: pytest.MonkeyPatch) -> None:

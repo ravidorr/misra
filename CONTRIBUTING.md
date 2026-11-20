@@ -421,7 +421,7 @@ PLAN.md step 7.1. Where the text of a posting lives, and how it gets there:
   Lasso Security, ForSight Robotics) embed a public board of an ATS (monday.com's page data says `"source":"ashby"`, the
   others load Comeet's `api.js` with their company id, found on 2026-11-20). The crawl keeps its list and ids; the text is
   the board's (`ashby` or `comeet` adapter, one request a run), joined to the job by the id in its link, so a job with no
-  board job gets no text and no miss, and nothing is re-pinned. About 180 jobs. **Not read, and not to be tried again
+  board job gets no text and no miss, a link that names two board jobs gets none, a board that cannot be read or has no text is one `::warning::` line, and nothing is re-pinned. About 180 jobs. The board goes through `common.get` like the rest (`robots.txt`, the delay, the User-Agent); the 40 a company and run cap limits the texts attached, not the requests (one a run), so monday.com's 137 jobs fill over four days and the log's `job pages: browser N requests` counts jobs, not requests. **Not read, and not to be tried again
   without a reason:** Check Point (231 jobs; a plain request answers HTTP 403, bot protection, never worked around), Tower
   (SAP SuccessFactors, whose `robots.txt` is `Disallow: /`; the text is only in the page's HTML), Stratasys and Ormat
   (SuccessFactors career sites, no JSON-LD, the JSON the page calls is under a disallowed `/services/`), Intezer and Valens
