@@ -1628,7 +1628,7 @@ function drawList(nodes, keepFocus) {
    fewer than MISSING_BELOW roles show, and always when none do (the unfiltered view never has none). It waits for the
    description search to answer, and is not shown without the report dialog's own button (report.js). The button opens
    that dialog by pressing the card's button, so there is one dialog and one set of words. report.js has run by the first
-   render, which waits for the roles to load. */
+   render, which waits for the roles to load. The starred and the hidden views never show it. */
 const MISSING_BELOW = 3;
 function renderMissing(count, otherView) {
   const narrowed = F.q.trim() !== '' || F.company !== '';
@@ -1985,15 +1985,22 @@ for (const [id, name] of [['starredView', 'starred'], ['hiddenView', 'hidden']])
 }
 
 /* "Unhide" on a hidden company: its roles come back (a role hidden on its own stays hidden). The focus goes to the
-   heading of the list that is left, never to the page. */
+   heading of what is left (companies, then roles, then the list), never to the page. */
 $('hiddenCompaniesList').addEventListener('click', (e) => {
   const button = e.target.closest('[data-act="unhide-company"]');
   if (!button) return;
-  unhideCompany(button.dataset.company);
-  hiddenNote = `Unhidden: ${button.dataset.company}. `;
+  const company = button.dataset.company;
+  const saving = unhideCompany(company);
+  hiddenNote = `Unhidden: ${company}. `;
   render();
-  const left = !$('hiddenCompanies').hidden;
-  $(left ? 'hiddenCompanies-h' : 'list-h').focus();
+  if (!$('hiddenCompanies').hidden) $('hiddenCompanies-h').focus();
+  else if (!$('hiddenRoles-h').hidden) $('hiddenRoles-h').focus();
+  else $('list-h').focus();
+  saving.then((result) => {
+    if (result.saved || result.failure === 'later') return; /* a refusal puts the company back: say so, never leave "Unhidden" */
+    hiddenNote = `Could not unhide ${company}. `;
+    render();
+  });
 });
 
 const gaps = DATA.gaps ?? { blocked: [], untracked: [], total: 0, groups: [] };
@@ -2249,12 +2256,12 @@ const TOOLS = [
   {
     name: 'unhide_company',
     description:
-      'Bring a hidden company back: every role of it shows again (a role the user hid on its own stays hidden). A company that is not hidden is left as it is. Saved like restore_job.',
+      'Bring a hidden company back: every role of it shows again (a role the user hid on its own stays hidden). A company that is not hidden is refused with an error and nothing changes. Saved like restore_job.',
     inputSchema: { type: 'object', properties: { company: { type: 'string' } }, required: ['company'] },
     execute: async (a) => {
       const company = (a ?? {}).company;
       if (typeof company !== 'string' || !hiddenCompanies().includes(company)) {
-        return reply({ error: 'unknown or not hidden company', saved: true, failure: null }, true);
+        return reply({ error: 'unknown or not hidden company' }, true);
       }
       const result = await unhideCompany(company);
       render();

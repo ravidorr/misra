@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from playwright.async_api import Page
+from playwright.async_api import Page, expect
 
 import build_dashboard
 from tests.test_dashboard_page import (
@@ -288,3 +288,27 @@ async def test_the_assistant_lists_hidden_things_and_unhides_a_company(page: Pag
     assert done == {"company": GHOST, "saved": True, "failure": None}
     assert (await ask(page, "list_hidden"))["companies"] == []
     assert await label(page) == "Hidden (1)"
+
+
+async def test_signed_in_a_refused_unhide_puts_the_company_back_and_says_so(page: Page, site: Path) -> None:
+    choices = ChoicesBackend([company_row("Acme")], mode="refused")
+    await sign_in(page, site, choices)
+    await open_hidden(page)
+    await page.click(f"{ACME_ROW} {UNHIDE}")
+    await expect(page.locator("#summary")).to_contain_text("Could not unhide Acme.")
+    assert await names(page) == ["Acme"]  # the service refused: still hidden, and the page does not say otherwise
+    assert choices.state_of("Acme", "") == "company"
+
+
+async def test_signed_in_unhiding_a_company_leaves_a_role_hidden_on_its_own_and_lists_it(
+    page: Page, site: Path
+) -> None:
+    choices = ChoicesBackend([company_row("Acme"), discard_row("Acme", "1")])
+    await sign_in(page, site, choices)
+    await open_hidden(page)
+    assert await page.locator("#list article").count() == 0  # covered by the company row
+    await page.click(f"{ACME_ROW} {UNHIDE}")
+    await until(lambda: ("Acme", "") not in choices.rows)
+    assert choices.state_of("Acme", "1") == "discard"
+    assert await page.locator(PM1).get_attribute("data-discarded") == "true"
+    assert await page.evaluate("document.activeElement.id") == "hiddenRoles-h"

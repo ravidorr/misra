@@ -54,7 +54,7 @@ a {
 
 /* The Hidden view: its two headings are visible (unlike the list's own), and a hidden company is a card with its name, a
    quiet line and "Unhide". */
-.hidden-head {
+.label.hidden-head {
   margin: var(--space-5) 0 0;
 }
 
