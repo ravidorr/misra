@@ -61,6 +61,7 @@ Hosted job boards:
 - Comeet: public pages and WordPress plugin pages
 - JazzHR, BambooHR
 - Workday, Oracle Fusion HCM, Phenom, Avature, Eightfold and Jibe: jobs in Israel only
+- Varonis' own careers site
 - Amazon (amazon.jobs)
 
 The browser crawler reads:

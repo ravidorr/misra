@@ -1,7 +1,10 @@
 import json
+import queue
 import runpy
 import sqlite3
+import threading
 import time
+import types
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
@@ -85,7 +88,7 @@ def test_main_full_cycle(
         "https://br3": [],
         "https://br4": None,
     }
-    monkeypatch.setattr(run, "crawl_many", lambda urls: {u: crawled[u] for u in urls if u in crawled})
+    monkeypatch.setattr(run, "crawl_many", lambda urls: iter([(u, crawled.get(u)) for u in urls]))
     monkeypatch.setitem(browser_crawl.WHY, "https://br3", "empty page")
     monkeypatch.setitem(browser_crawl.WHY, "https://br4", "blocked")
     run.main()
@@ -212,7 +215,7 @@ def log_runs(name: str, notes: list[str | None], date: str = "2024-01-{:02d}") -
 
 def crawl(workdir: Path, monkeypatch: pytest.MonkeyPatch, jobs: list[Any], company: dict[str, Any] = BIG) -> None:
     write_json(workdir / "data" / "companies.json", [company])
-    monkeypatch.setattr(run, "crawl_many", lambda urls: dict.fromkeys(urls, jobs))
+    monkeypatch.setattr(run, "crawl_many", lambda urls: iter(dict.fromkeys(urls, jobs).items()))
     run.main()
 
 
@@ -474,7 +477,7 @@ def test_one_held_company_does_not_hold_another(
     seed("Fine")
     write_json(workdir / "data" / "companies.json", [BIG, co("Fine", ats="browser", slug="https://fine")])
     crawled = {"https://big": returned(RETURNED), "https://fine": returned(OPEN - 1)}
-    monkeypatch.setattr(run, "crawl_many", lambda urls: {u: crawled[u] for u in urls})
+    monkeypatch.setattr(run, "crawl_many", lambda urls: iter([(u, crawled[u]) for u in urls]))
     run.main()
     assert (open_jobs("Big"), open_jobs("Fine")) == (OPEN, OPEN - 1)  # Fine closed its one job as usual
     out = capsys.readouterr().out
@@ -633,6 +636,214 @@ def test_a_crash_in_the_browser_crawl_keeps_the_api_companies_already_recorded(
     check.close()
 
 
+def test_a_crash_midway_in_the_browser_crawl_keeps_the_browser_companies_already_crawled(
+    workdir: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Each browser company is recorded once its pages are read, or when the crawl crashes, so the ones whose
+    list arrived before the crash are in the history, and the run is still red."""
+    write_json(
+        workdir / "data" / "companies.json",
+        [co("One", ats="browser", slug="https://one"), co("Two", ats="browser", slug="https://two")],
+    )
+
+    def dies_after_one(_urls: list[str]) -> Any:
+        yield "https://one", [job("o1")]
+        raise RuntimeError("browser died")
+
+    monkeypatch.setattr(run, "crawl_many", dies_after_one)
+    with pytest.raises(RuntimeError, match="browser died"):
+        run.main()
+    check = sqlite3.connect(run.DB)
+    assert check.execute("SELECT company, job_id FROM jobs").fetchall() == [("One", "o1")]
+    assert check.execute("SELECT company, ok FROM crawl_log").fetchall() == [("One", 1)]
+    check.close()
+
+
+def test_no_browser_company_means_no_browser_crawl(
+    workdir: Path, adapter: dict[str, Any], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    write_json(workdir / "data" / "companies.json", [co("Good")])
+    adapter["good"] = [[job("g1")]]
+
+    def never(_urls: list[str]) -> Any:
+        raise AssertionError("no browser company: no browser")
+
+    monkeypatch.setattr(run, "crawl_many", never)
+    run.main()
+
+
+def test_browser_companies_that_share_a_slug_are_all_recorded_and_one_the_crawl_never_reports_is_a_failure(
+    workdir: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    write_json(
+        workdir / "data" / "companies.json",
+        [
+            co("One", ats="browser", slug="https://shared"),
+            co("Two", ats="browser", slug="https://shared"),
+            co("Lost", ats="browser", slug="https://lost"),
+        ],
+    )
+    monkeypatch.setattr(run, "crawl_many", lambda urls: iter([("https://shared", [job("s1")])]))
+    run.main()
+    check = sqlite3.connect(run.DB)
+    assert check.execute("SELECT company FROM jobs ORDER BY company").fetchall() == [("One",), ("Two",)]
+    assert check.execute("SELECT company, ok FROM crawl_log ORDER BY company").fetchall() == [
+        ("Lost", 0),
+        ("One", 1),
+        ("Two", 1),
+    ]
+    check.close()
+
+
+def test_a_browser_company_is_recorded_while_the_next_list_is_still_stuck(
+    workdir: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    write_json(
+        workdir / "data" / "companies.json",
+        [co("One", ats="browser", slug="https://one"), co("Two", ats="browser", slug="https://two")],
+    )
+    monkeypatch.setattr(run, "read_job_pages", lambda _co, _jobs: None)
+    seen: list[Any] = []
+
+    def crawl(_urls: list[str]) -> Any:
+        yield "https://one", [job("o1")]
+        deadline = time.monotonic() + 10
+        check = sqlite3.connect(run.DB, check_same_thread=False)  # made in the crawl thread
+        while time.monotonic() < deadline and not check.execute("SELECT 1 FROM jobs").fetchone():
+            time.sleep(0.02)  # the next list is stuck: One must be recorded without it
+        seen.append(check.execute("SELECT company FROM jobs").fetchall())
+        check.close()
+        yield "https://two", [job("t1")]
+
+    monkeypatch.setattr(run, "crawl_many", crawl)
+    run.main()
+    assert seen == [[("One",)]]
+
+
+def assert_set(event: threading.Event) -> None:
+    assert event.wait(5)
+
+
+def test_a_browser_company_whose_pages_are_still_being_read_waits_for_the_end_of_the_crawl(
+    workdir: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    write_json(
+        workdir / "data" / "companies.json",
+        [co("One", ats="browser", slug="https://one"), co("Two", ats="browser", slug="https://two")],
+    )
+    release = threading.Event()
+    monkeypatch.setattr(run, "read_job_pages", lambda _co, _jobs: assert_set(release))
+
+    def crawl(_urls: list[str]) -> Any:
+        yield "https://one", [job("o1")]
+        yield "https://two", [job("t1")]
+        time.sleep(0.3)  # long enough for a premature record to show
+        check = sqlite3.connect(run.DB, check_same_thread=False)  # made in the crawl thread
+        assert check.execute("SELECT COUNT(*) FROM jobs").fetchone() == (0,)  # nothing recorded while pages are read
+        check.close()
+        release.set()
+
+    monkeypatch.setattr(run, "crawl_many", crawl)
+    run.main()
+    check = sqlite3.connect(run.DB)
+    assert check.execute("SELECT company FROM jobs ORDER BY company").fetchall() == [("One",), ("Two",)]
+    check.close()
+
+
+def test_a_browser_company_that_cannot_be_recorded_does_not_cost_the_others_or_leave_half_of_itself(
+    workdir: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    write_json(
+        workdir / "data" / "companies.json",
+        [co("One", ats="browser", slug="https://one"), co("Two", ats="browser", slug="https://two")],
+    )
+    release = threading.Event()
+    started = {"One": threading.Event(), "Two": threading.Event()}
+
+    def read(company: dict[str, Any], _jobs: Any) -> None:
+        started[company["name"]].set()
+        assert_set(release)
+
+    monkeypatch.setattr(run, "read_job_pages", read)
+
+    def crawl(_urls: list[str]) -> Any:
+        yield "https://one", [job("o1")]
+        yield "https://two", [job("t1")]
+        assert_set(started["One"])
+        assert_set(started["Two"])  # both are in the pool before either is recorded
+        release.set()
+
+    monkeypatch.setattr(run, "crawl_many", crawl)
+    real = run.close_unseen
+
+    def boom(c: sqlite3.Connection, name: str, seen: set[str]) -> None:
+        if name == "One":
+            raise KeyError("bad page")
+        real(c, name, seen)
+
+    monkeypatch.setattr(run, "close_unseen", boom)
+    with pytest.raises(KeyError):
+        run.main()
+    check = sqlite3.connect(run.DB)
+    assert check.execute("SELECT company FROM jobs").fetchall() == [("Two",)]
+    assert check.execute("SELECT company FROM crawl_log").fetchall() == [("Two",)]
+    check.close()
+
+
+def test_a_company_that_cannot_be_recorded_while_the_crawl_has_died_fails_inside_the_drain_and_costs_no_other(
+    workdir: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Deterministic: the pages are released only after the loop has taken the crawl's error off the queue, so the
+    failing company is always recorded by the drain, never by the loop."""
+    write_json(
+        workdir / "data" / "companies.json",
+        [co("One", ats="browser", slug="https://one"), co("Two", ats="browser", slug="https://two")],
+    )
+    release = threading.Event()
+    started = {"One": threading.Event(), "Two": threading.Event()}
+
+    def read(company: dict[str, Any], _jobs: Any) -> None:
+        started[company["name"]].set()
+        assert_set(release)
+
+    monkeypatch.setattr(run, "read_job_pages", read)
+
+    def crawl(_urls: list[str]) -> Any:
+        yield "https://one", [job("o1")]
+        yield "https://two", [job("t1")]
+        assert_set(started["One"])
+        assert_set(started["Two"])
+        raise RuntimeError("browser died")
+
+    class ReleasingQueue(queue.Queue[Any]):
+        def get(self, block: bool = True, timeout: float | None = None) -> Any:
+            item = super().get(block, timeout)
+            if item[0] == "error":
+                release.set()  # only now can a read finish: the loop has the error and goes to the drain
+            return item
+
+    monkeypatch.setattr(run, "crawl_many", crawl)
+    monkeypatch.setattr(run, "queue", types.SimpleNamespace(Queue=ReleasingQueue))
+    real = run.close_unseen
+    drained: list[str] = []
+
+    def boom(c: sqlite3.Connection, name: str, seen: set[str]) -> None:
+        if name == "One":
+            drained.append(name)
+            raise KeyError("bad page")
+        real(c, name, seen)
+
+    monkeypatch.setattr(run, "close_unseen", boom)
+    with pytest.raises(KeyError) as raised:
+        run.main()
+    assert drained == ["One"]
+    assert isinstance(raised.value.__context__, RuntimeError)  # the drain raised over the crawl's error
+    check = sqlite3.connect(run.DB)
+    assert check.execute("SELECT company FROM jobs").fetchall() == [("Two",)]
+    assert check.execute("SELECT company FROM crawl_log").fetchall() == [("Two",)]
+    check.close()
+
+
 def test_a_crash_while_recording_a_company_keeps_the_ones_before_it_and_rolls_back_its_own_rows(
     workdir: Path, adapter: dict[str, Any], monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -655,11 +866,13 @@ def test_a_crash_while_recording_a_company_keeps_the_ones_before_it_and_rolls_ba
     check.close()
 
 
-def test_the_job_pages_of_browser_companies_are_read_after_the_lists(
+def test_the_job_pages_of_browser_companies_are_read_after_their_list(
     workdir: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     write_json(workdir / "data" / "companies.json", [co("Br", ats="browser", slug="https://br.test/careers")])
-    monkeypatch.setattr(run, "crawl_many", lambda urls: {u: [{**job("1"), "detail_url": "d"}, job("2")] for u in urls})
+    monkeypatch.setattr(
+        run, "crawl_many", lambda urls: iter([(u, [{**job("1"), "detail_url": "d"}, job("2")]) for u in urls])
+    )
     monkeypatch.setitem(adapters.DETAILS, "browser", lambda _slug, j: ("text of " + j["job_id"], {}))
     run.main()
     out = capsys.readouterr().out
@@ -715,7 +928,9 @@ def test_a_browser_company_whose_crawl_failed_gets_no_job_pages_and_the_others_d
         workdir / "data" / "companies.json",
         [co("Down", ats="browser", slug="https://down.test/c"), co("Up", ats="browser", slug="https://up.test/c")],
     )
-    monkeypatch.setattr(run, "crawl_many", lambda urls: {"https://up.test/c": [{**job("1"), "detail_url": "d"}]})
+    monkeypatch.setattr(
+        run, "crawl_many", lambda urls: iter([("https://up.test/c", [{**job("1"), "detail_url": "d"}])])
+    )
     monkeypatch.setitem(adapters.DETAILS, "browser", lambda _slug, j: ("text", {}))
     run.main()
     assert list(descriptions.read_work_file()) == [("Up", "1")]

@@ -1845,6 +1845,75 @@ def test_jobs_behind_five_failing_pages_are_reached_on_later_days(monkeypatch: p
     assert asked == {f"/job/x/J{i}" for i in range(10)}
 
 
+def test_a_stored_job_is_asked_again_once_in_refresh_days_and_the_new_text_is_attached(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    urls = fake_get(monkeypatch, wd_detail())
+    jobs = jobs_n(28)
+    held = {("Acme", j["job_id"]) for j in jobs}
+    asked_per_day = []
+    for day in range(adapters.REFRESH_DAYS):
+        urls.clear()
+        for job in jobs:
+            job.pop("description", None)
+        asked, got, left = adapters.add_descriptions("workday", WD_SLUG, "Acme", jobs, held, day=day)
+        assert (asked, got, left) == (len(urls), len(urls), 0)
+        assert all(j.get("text_held") for j in jobs)  # a refreshed job still counts as stored
+        assert sum("description" in j for j in jobs) == asked
+        asked_per_day.append(set(urls))
+    assert sum(len(a) for a in asked_per_day) == len(jobs)  # every job exactly once in the fourteen days
+    assert len(set().union(*asked_per_day)) == len(jobs)  # and no job twice
+
+
+def test_a_refresh_whose_page_fails_leaves_the_stored_job_as_it_was(monkeypatch: pytest.MonkeyPatch) -> None:
+    fake_get(monkeypatch, FakeHttpResponse(status_code=404))
+    job = jobs_n(1)[0]
+    key = ("Acme", job["job_id"])
+    turn = next(d for d in range(adapters.REFRESH_DAYS) if adapters._in_refresh_slice(key, d))
+    assert adapters.add_descriptions("workday", WD_SLUG, "Acme", [job], {key}, day=turn) == (1, 0, 0)
+    assert job["text_held"] is True and "description" not in job
+
+
+def test_refreshes_use_only_what_the_new_jobs_leave_of_the_cap(monkeypatch: pytest.MonkeyPatch) -> None:
+    urls = fake_get(monkeypatch, wd_detail())
+    monkeypatch.setattr(adapters, "DETAIL_CAP", 4)
+    jobs = jobs_n(60)
+    day = 3
+    due = [j for j in jobs if adapters._in_refresh_slice(("Acme", j["job_id"]), day)]
+    new = [j for j in jobs if j not in due][:3]
+    assert len(due) > len(new)  # more refreshes due than the cap has room for
+    pool = due + new  # only the explicit order puts the new jobs first
+    held = {("Acme", j["job_id"]) for j in due}
+    asked, _, deferred = adapters.add_descriptions("workday", WD_SLUG, "Acme", pool, held, day=day)
+    ids = {u.rsplit("/", 1)[1] for u in urls}
+    assert asked == adapters.DETAIL_CAP
+    assert {j["job_id"].rsplit("/", 1)[1] for j in new} <= ids  # all 3 new jobs, then 1 refresh
+    assert all("description" in j for j in new)
+    assert sum(("description" in j) for j in due) == 1
+    assert (asked, deferred) == (adapters.DETAIL_CAP, 0)  # refreshes not reached are not "left for later runs"
+
+
+def test_only_new_jobs_count_as_left_for_later_runs(monkeypatch: pytest.MonkeyPatch) -> None:
+    fake_get(monkeypatch, wd_detail())
+    monkeypatch.setattr(adapters, "DETAIL_CAP", 2)
+    day = 3
+    jobs = jobs_n(60)
+    due = [j for j in jobs if adapters._in_refresh_slice(("Acme", j["job_id"]), day)]
+    new = [j for j in jobs if j not in due][:5]
+    held = {("Acme", j["job_id"]) for j in due}
+    assert adapters.add_descriptions("workday", WD_SLUG, "Acme", due + new, held, day=day) == (2, 2, 3)  # 3 new wait
+
+
+def test_a_stored_job_off_its_turn_is_not_asked(monkeypatch: pytest.MonkeyPatch) -> None:
+    urls = fake_get(monkeypatch, wd_detail())
+    job = jobs_n(1)[0]
+    turn = next(d for d in range(adapters.REFRESH_DAYS) if adapters._in_refresh_slice(("Acme", job["job_id"]), d))
+    off = (turn + 1) % adapters.REFRESH_DAYS
+    assert adapters.add_descriptions("workday", WD_SLUG, "Acme", [job], {("Acme", job["job_id"])}, day=off) == (0, 0, 0)
+    assert job["text_held"] is True
+    assert urls == []
+
+
 EF = "https://jobs.acme.test/api/pcsx/position_details?position_id=1&domain=acme.test&hl=en"
 LD_PAGE = "https://www.weka.io/careers"
 
@@ -1923,6 +1992,115 @@ def test_the_pages_known_to_carry_a_job_posting_are_career_pages_of_the_list() -
     companies = json.loads(FROZEN_COMPANIES.read_text(encoding="utf-8"))
     browser = {c["slug"] for c in companies if c["ats"] == "browser"}
     assert browser >= adapters.JSONLD_PAGES
+
+
+BOARD_PAGE = "https://monday.com/careers"
+
+
+def board_job(job_id: str, text: str, url: str = "") -> dict[str, Any]:
+    return {"job_id": job_id, "url": url, "description": text, "details": {"employment_type": "FullTime"}}
+
+
+def fake_board(monkeypatch: pytest.MonkeyPatch, jobs: list[dict[str, Any]] | None) -> list[str]:
+    """The ATS adapter of BOARD_PAGE answers `jobs`; returns the slugs it was asked for."""
+    monkeypatch.setattr(adapters, "_boards", {})
+    asked: list[str] = []
+
+    def read(slug: str) -> list[dict[str, Any]] | None:
+        asked.append(slug)
+        return jobs
+
+    monkeypatch.setitem(adapters.ADAPTERS, "ashby", read)
+    monkeypatch.setitem(adapters.ADAPTERS, "comeet", read)
+    return asked
+
+
+@pytest.mark.parametrize(
+    ("page", "link", "board_id"),
+    [
+        (BOARD_PAGE, "https://monday.com/careers/ab12-CD34/", "ab12-cd34"),  # an Ashby id is the last segment
+        ("https://komodor.com/careers/", "https://komodor.com/job/4E.47C/some-title/", "4E.47C"),  # a segment
+        ("https://panorays.com/careers/", "https://panorays.com/careers/some-title/2C.372/", "2C.372"),
+        ("https://www.lasso.security/careers", "https://www.lasso.security/positions/position-a5_075", "A5.075"),
+        ("https://komodor.com/careers/", "https://komodor.com/job/D2.37E-50.70A/x/", "D2.37E-50.70A"),  # the whole one
+    ],
+)
+def test_a_browser_job_takes_the_text_of_its_boards_job(
+    monkeypatch: pytest.MonkeyPatch, page: str, link: str, board_id: str
+) -> None:
+    asked = fake_board(monkeypatch, [board_job("other", "No"), board_job(board_id, "Board text")])
+    job = {"job_id": link.rstrip("/"), "url": link}
+    assert adapters._browser_wants_page(page, job)
+    assert adapters.browser_description(page, job) == ("Board text", {"employment_type": "FullTime"})
+    assert asked == [adapters.BOARD_PAGES[page][1]]  # the board is read once for both calls
+
+
+def test_a_browser_job_the_board_does_not_hold_is_not_asked_for_and_the_board_is_read_once(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    asked = fake_board(monkeypatch, [board_job("known", "Text")])
+    gone = {"job_id": "https://monday.com/careers/gone", "url": "https://monday.com/careers/gone"}
+    assert not adapters._browser_wants_page(BOARD_PAGE, gone)
+    assert adapters.browser_description(BOARD_PAGE, gone) is None
+    assert adapters.browser_description(BOARD_PAGE, {"job_id": "x"}) is None  # a job without a link
+    assert len(asked) == 1
+
+
+@pytest.mark.parametrize("held", [["D2.37E", "50.70A"], ["50.70A"]])
+def test_a_link_that_names_two_uids_gets_no_text_whatever_the_board_holds(
+    monkeypatch: pytest.MonkeyPatch, held: list[str]
+) -> None:
+    fake_board(monkeypatch, [board_job(i, "Text") for i in held])
+    job = {"job_id": "k", "url": "https://komodor.com/job/D2.37E-50.70A/x/"}
+    assert not adapters._browser_wants_page("https://komodor.com/careers/", job)
+
+
+def test_a_board_that_raises_or_has_no_text_is_a_warning_and_no_text(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    job = {"job_id": "https://monday.com/careers/a", "url": "https://monday.com/careers/a"}
+    fake_board(monkeypatch, [board_job("a", "")])  # a job with no text is not a board job
+    assert not adapters._browser_wants_page(BOARD_PAGE, job)
+    assert "gave no job text" in capsys.readouterr().out
+
+    def boom(slug: str) -> None:
+        raise KeyError("id")
+
+    monkeypatch.setattr(adapters, "_boards", {})
+    monkeypatch.setitem(adapters.ADAPTERS, "ashby", boom)
+    assert adapters.add_descriptions("browser", BOARD_PAGE, "monday.com", [job], set()) == (0, 0, 0)
+    out = capsys.readouterr().out
+    assert "could not be read: KeyError" in out
+    assert "KeyError(" not in out  # the exception's own text is never printed
+
+
+def test_an_unreadable_board_gives_no_text_and_is_not_asked_again(monkeypatch: pytest.MonkeyPatch) -> None:
+    asked = fake_board(monkeypatch, None)
+    job = {"job_id": "https://monday.com/careers/a", "url": "https://monday.com/careers/a"}
+    jobs = [job, dict(job, url="https://monday.com/careers/b")]
+    assert adapters.add_descriptions("browser", BOARD_PAGE, "monday.com", jobs, set()) == (0, 0, 0)
+    assert asked == ["monday.com"]  # no miss streak either: a job with no board job is not asked for
+
+
+def test_a_board_fills_the_browser_jobs_it_holds_within_the_per_company_cap(monkeypatch: pytest.MonkeyPatch) -> None:
+    n = adapters.DETAIL_CAP + 3
+    asked = fake_board(monkeypatch, [board_job(f"id-{i}", f"Text {i}") for i in range(n)])
+    jobs = [{"job_id": f"u{i}", "url": f"https://monday.com/careers/id-{i}"} for i in range(n)]
+    assert adapters.add_descriptions("browser", BOARD_PAGE, "monday.com", jobs, set()) == (
+        adapters.DETAIL_CAP,
+        adapters.DETAIL_CAP,
+        3,
+    )
+    assert len(asked) == 1  # one request for the whole board, not one a job
+    assert sum(1 for j in jobs if j.get("description")) == adapters.DETAIL_CAP
+
+
+def test_the_boards_known_for_browser_pages_are_career_pages_of_the_list_and_real_adapters() -> None:
+    companies = json.loads(FROZEN_COMPANIES.read_text(encoding="utf-8"))
+    browser = {c["slug"] for c in companies if c["ats"] == "browser"}
+    assert browser >= set(adapters.BOARD_PAGES)
+    assert {ats for ats, _ in adapters.BOARD_PAGES.values()} <= {"ashby", "comeet"}
+    assert not set(adapters.BOARD_PAGES) & adapters.JSONLD_PAGES  # one source of text for a page
 
 
 def test_a_job_posting_whose_type_is_a_list_is_found_and_a_page_is_read_to_a_limit(
@@ -2561,3 +2739,408 @@ def test_jibe_reads_nothing_of_the_job_text_or_the_apply_link(monkeypatch: pytes
 
 def test_jibe_is_registered() -> None:
     assert adapters.ADAPTERS["jibe"] is adapters.jibe
+
+
+BB_JOB = {"job_id": "82", "title": "T"}
+BB_URL = "https://acme.bamboohr.com/careers/82/detail"
+
+
+def bb_detail(description: Any = "<p>Build things</p><ul><li>Python</li></ul>", **opening: Any) -> FakeHttpResponse:
+    return FakeHttpResponse(
+        data={"result": {"jobOpening": {"description": description, "employmentStatusLabel": "Full-Time", **opening}}}
+    )
+
+
+def test_a_bamboohr_job_page_gives_the_text_and_the_employment_type_only(monkeypatch: pytest.MonkeyPatch) -> None:
+    urls = fake_get(monkeypatch, bb_detail(compensation="$1", jobOpeningShareUrl="https://x"))
+    found = adapters.bamboohr_description("acme", BB_JOB)
+    assert found == ("Build things\n\n- Python", {"employment_type": "Full-Time"})
+    assert urls == [BB_URL]  # the board's own host and /careers/ path, as the list
+
+
+@pytest.mark.parametrize(
+    "answer",
+    [
+        None,
+        FakeHttpResponse(status_code=404),
+        FakeHttpResponse(json_error=True),
+        FakeHttpResponse(data={}),
+        FakeHttpResponse(data=[]),
+        FakeHttpResponse(data={"result": {"jobOpening": "x"}}),
+    ],
+)
+def test_a_bamboohr_job_page_that_does_not_answer_with_a_posting_gives_nothing(
+    monkeypatch: pytest.MonkeyPatch, answer: FakeHttpResponse | None
+) -> None:
+    fake_get(monkeypatch, answer)
+    assert adapters.bamboohr_description("acme", BB_JOB) is None
+
+
+def test_a_bamboohr_job_without_a_numeric_id_is_never_requested(monkeypatch: pytest.MonkeyPatch) -> None:
+    urls = fake_get(monkeypatch, bb_detail())
+    assert adapters.bamboohr_description("acme", {"job_id": "../x"}) is None
+    assert urls == []
+
+
+def test_a_bamboohr_job_page_without_text_keeps_the_job_as_it_was(monkeypatch: pytest.MonkeyPatch) -> None:
+    fake_get(monkeypatch, bb_detail(None, employmentStatusLabel=None))
+    job = {**BB_JOB}
+    assert adapters.add_descriptions("bamboohr", "acme", "Acme", [job], set()) == (1, 0, 0)
+    assert job == BB_JOB
+
+
+def test_bamboohr_jobs_are_asked_one_page_each_and_a_held_one_is_not(monkeypatch: pytest.MonkeyPatch) -> None:
+    urls = fake_get(monkeypatch, bb_detail())
+    jobs = [{"job_id": "1", "title": "A"}, {"job_id": "2", "title": "B"}]
+    assert adapters.add_descriptions("bamboohr", "acme", "Acme", jobs, {("Acme", "2")}, day=1) == (1, 1, 0)
+    assert urls == ["https://acme.bamboohr.com/careers/1/detail"]  # day 1 is not the held job's turn to be refreshed
+    assert jobs[0]["description"] == "Build things\n\n- Python"
+
+
+OR_SLUG = "acme.fa.oraclecloud.com/CX_1"
+OR_JOB = {"job_id": "2108", "title": "T"}
+OR_URL = "https://acme.fa.oraclecloud.com/hcmRestApi/resources/latest/recruitingCEJobRequisitionDetails"
+
+
+def or_detail(**req: Any) -> FakeHttpResponse:
+    return FakeHttpResponse(data={"items": [{"Id": "2108", **req}]})
+
+
+def test_an_oracle_requisition_gives_its_external_texts_and_two_details(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls: list[dict[str, Any]] = []
+    answer = or_detail(
+        ExternalDescriptionStr="<p>Build things</p>",
+        ExternalResponsibilitiesStr="<ul><li>Ship</li></ul>",
+        ExternalQualificationsStr="<p>Python</p>",
+        CorporateDescriptionStr="<p>About us</p>",
+        JobSchedule="Full time",
+        WorkplaceType="On-site",
+        ExternalContactEmail="a@b.test",
+    )
+
+    def _get(url: str, **kw: Any) -> FakeHttpResponse:
+        calls.append({"url": url, **kw})
+        return answer
+
+    monkeypatch.setattr(adapters, "get", _get)
+    assert adapters.oraclehcm_description(OR_SLUG, OR_JOB) == (
+        "Build things\n\nResponsibilities\n- Ship\n\nQualifications\nPython",
+        {"employment_type": "Full time", "workplace_type": "On-site"},
+    )
+    assert calls == [
+        {"url": OR_URL, "params": {"onlyData": "true", "finder": 'ById;Id="2108",siteNumber=CX_1'}}
+    ]  # the list's own REST path, on the tenant's own host
+
+
+@pytest.mark.parametrize(
+    "answer",
+    [
+        None,
+        FakeHttpResponse(status_code=404),
+        FakeHttpResponse(json_error=True),
+        FakeHttpResponse(data={}),
+        FakeHttpResponse(data={"items": []}),
+        FakeHttpResponse(data={"items": ["x"]}),
+    ],
+)
+def test_an_oracle_answer_that_is_not_a_requisition_gives_nothing(
+    monkeypatch: pytest.MonkeyPatch, answer: FakeHttpResponse | None
+) -> None:
+    fake_get(monkeypatch, answer)
+    assert adapters.oraclehcm_description(OR_SLUG, OR_JOB) is None
+
+
+def test_an_oracle_job_without_a_numeric_id_is_never_requested(monkeypatch: pytest.MonkeyPatch) -> None:
+    urls = fake_get(monkeypatch, or_detail(ExternalDescriptionStr="x"))
+    assert adapters.oraclehcm_description(OR_SLUG, {"job_id": "1;x"}) is None
+    assert urls == []
+
+
+def test_an_oracle_requisition_without_text_keeps_the_job_as_it_was(monkeypatch: pytest.MonkeyPatch) -> None:
+    fake_get(monkeypatch, or_detail())
+    job = {**OR_JOB}
+    assert adapters.add_descriptions("oraclehcm", OR_SLUG, "Acme", [job], set()) == (1, 0, 0)
+    assert job == OR_JOB
+
+
+JZ_URL = "https://acme.applytojob.com/apply/AbC123/Engineer"
+JZ_JOB = {"job_id": "AbC123", "title": "T", "url": JZ_URL}
+JZ_PAGE = ld_html(
+    {"@type": "JobPosting", "description": "&lt;p&gt;Build things&lt;/p&gt;", "employmentType": "FULL_TIME"}
+)
+
+
+def test_a_jazzhr_job_gives_the_json_ld_of_its_own_page(monkeypatch: pytest.MonkeyPatch) -> None:
+    urls = fake_get(monkeypatch, FakeHttpResponse(text=JZ_PAGE, url=JZ_URL))
+    jobs = [{**JZ_JOB}]
+    assert adapters.add_descriptions("jazzhr", "acme", "Acme", jobs, set()) == (1, 1, 0)
+    assert jobs[0]["description"] == "Build things"
+    assert jobs[0]["details"] == {"employment_type": "FULL_TIME"}
+    assert urls == [JZ_URL]
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "https://evil.test/apply/AbC123/x",  # not the company's own board
+        "https://acme.applytojob.com@evil.test/x",  # a host hidden in the user part
+        "http://acme.applytojob.com/apply/AbC123/x",  # not https
+        "None",  # no link at all
+    ],
+)
+def test_a_job_page_on_another_host_is_never_requested(monkeypatch: pytest.MonkeyPatch, url: str) -> None:
+    urls = fake_get(monkeypatch, FakeHttpResponse(text=JZ_PAGE))
+    jobs = [{**JZ_JOB, "url": url}]
+    assert adapters.add_descriptions("jazzhr", "acme", "Acme", jobs, set()) == (0, 0, 0)  # not a request, not counted
+    assert urls == []
+    assert "description" not in jobs[0]
+
+
+def test_a_jazzhr_page_without_a_job_posting_keeps_the_job_as_it_was(monkeypatch: pytest.MonkeyPatch) -> None:
+    fake_get(monkeypatch, FakeHttpResponse(text="<p>closed</p>"))
+    job = {**JZ_JOB}
+    assert adapters.add_descriptions("jazzhr", "acme", "Acme", [job], set()) == (1, 0, 0)
+    assert job == JZ_JOB
+
+
+def test_a_phenom_job_gives_the_json_ld_of_its_own_page_on_the_career_site(monkeypatch: pytest.MonkeyPatch) -> None:
+    url = "https://careers.acme.test/global/en/job/ACME123"
+    urls = fake_get(monkeypatch, FakeHttpResponse(text=JZ_PAGE, url=url))
+    jobs = [{"job_id": "123", "title": "T", "url": url}, {"job_id": "9", "title": "U", "url": "https://x.test/job/9"}]
+    assert adapters.add_descriptions("phenom", "careers.acme.test/global/en", "Acme", jobs, set()) == (1, 1, 0)
+    assert jobs[0]["description"] == "Build things"
+    assert "description" not in jobs[1]
+    assert urls == [url]  # the list's own host, never the host of a link
+
+
+def test_a_comeet_page_job_gives_the_json_ld_of_its_own_page_on_the_careers_host(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    url = "https://acme.test/careers/co/israel/AA.470/engineer/all/"
+    urls = fake_get(monkeypatch, FakeHttpResponse(text=JZ_PAGE, url=url))
+    jobs = [
+        {"job_id": "AA.470", "title": "T", "url": url},
+        {"job_id": "BB.001", "title": "U", "url": "https://www.comeet.co/jobs/acme/BB.001"},
+    ]
+    assert adapters.add_descriptions("comeet_page", "https://acme.test/careers/", "Acme", jobs, set()) == (1, 1, 0)
+    assert jobs[0]["description"] == "Build things"
+    assert urls == [url]  # the careers page's own host, never the host of a link
+
+
+def redirect(location: str, status: int = 302) -> FakeHttpResponse:
+    answer = FakeHttpResponse(status_code=status)
+    answer.headers = {"Location": location}
+    return answer
+
+
+@pytest.mark.parametrize(
+    "location",
+    [
+        "https://evil.test/apply/x",
+        "//evil.test/x",
+        "http://acme.applytojob.com/x",
+        "https://acme.applytojob.com@evil.test/x",
+    ],
+)
+def test_a_job_page_redirected_to_another_host_is_not_requested_there(
+    monkeypatch: pytest.MonkeyPatch, location: str
+) -> None:
+    urls = fake_get(monkeypatch, redirect(location), FakeHttpResponse(text=JZ_PAGE))
+    job = {**JZ_JOB}
+    assert adapters.add_descriptions("jazzhr", "acme", "Acme", [job], set()) == (1, 0, 0)
+    assert urls == [JZ_URL]  # the redirect is read, never followed to another host
+    assert job == JZ_JOB
+
+
+def test_a_job_page_redirected_on_its_own_host_is_followed_through_the_same_gate(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[tuple[str, Any]] = []
+    queue = [redirect("/apply/AbC123/Engineer/"), FakeHttpResponse(text=JZ_PAGE)]
+
+    def _get(url: str, **kw: Any) -> FakeHttpResponse:
+        calls.append((url, kw.get("allow_redirects")))
+        return queue.pop(0)
+
+    monkeypatch.setattr(adapters, "get", _get)
+    assert adapters.add_descriptions("jazzhr", "acme", "Acme", [{**JZ_JOB}], set()) == (1, 1, 0)
+    assert calls == [(JZ_URL, False), (JZ_URL + "/", False)]  # each hop is its own request, never auto-followed
+
+
+def test_a_redirect_without_a_location_is_no_text(monkeypatch: pytest.MonkeyPatch) -> None:
+    urls = fake_get(monkeypatch, FakeHttpResponse(status_code=302))
+    assert adapters.add_descriptions("jazzhr", "acme", "Acme", [{**JZ_JOB}], set()) == (1, 0, 0)
+    assert urls == [JZ_URL]
+
+
+def test_a_job_page_that_keeps_redirecting_is_given_up(monkeypatch: pytest.MonkeyPatch) -> None:
+    urls = fake_get(monkeypatch, redirect("/apply/AbC123/again"))
+    assert adapters.add_descriptions("jazzhr", "acme", "Acme", [{**JZ_JOB}], set()) == (1, 0, 0)
+    assert len(urls) == adapters.MAX_REDIRECTS + 1
+
+
+def test_a_job_page_that_stops_answering_mid_redirect_is_no_text(monkeypatch: pytest.MonkeyPatch) -> None:
+    fake_get(monkeypatch, redirect("/apply/AbC123/next"), None)
+    assert adapters.add_descriptions("jazzhr", "acme", "Acme", [{**JZ_JOB}], set()) == (1, 0, 0)
+
+
+@pytest.mark.parametrize("job_id", ["\u00b2", "\u0661\u0662", "1.5"])
+def test_only_ascii_digits_are_an_id_of_a_bamboohr_or_oracle_job(monkeypatch: pytest.MonkeyPatch, job_id: str) -> None:
+    urls = fake_get(monkeypatch, bb_detail())
+    assert adapters.bamboohr_description("acme", {"job_id": job_id}) is None
+    assert adapters.oraclehcm_description(OR_SLUG, {"job_id": job_id}) is None
+    assert urls == []
+
+
+def test_an_oracle_requisition_with_only_qualifications_has_no_empty_heading(monkeypatch: pytest.MonkeyPatch) -> None:
+    fake_get(monkeypatch, or_detail(ExternalQualificationsStr="<p>Python</p>"))
+    assert adapters.oraclehcm_description(OR_SLUG, OR_JOB) == (
+        "Qualifications\nPython",
+        {"employment_type": None, "workplace_type": None},
+    )
+
+
+def test_the_job_page_readers_are_registered() -> None:
+    for ats in ("bamboohr", "oraclehcm", "jazzhr", "phenom", "comeet_page"):
+        assert ats in adapters.DETAILS
+
+
+VARONIS_URL = "https://careers.varonis.com/api/getRequisitions"
+
+
+def varonis_item(job_id: Any = "oAbc1234", **over: Any) -> dict[str, Any]:
+    return {
+        "eId": job_id,
+        "title": "Engineer",
+        "department": "R&D",
+        "locationsCount": 1,
+        "jobLocations": [{"city": "Herzliya", "country": "Israel"}],
+        **over,
+    }
+
+
+def varonis_answer(items: Any) -> FakeHttpResponse:
+    return FakeHttpResponse(data={"data": items})
+
+
+def test_varonis_keeps_the_jobs_with_a_place_in_israel_and_drops_the_others(monkeypatch: pytest.MonkeyPatch) -> None:
+    data = json.loads((FIXTURES / "varonis_requisitions.json").read_text("utf-8"))
+    calls = fake_eightfold(monkeypatch, FakeHttpResponse(data=data))
+    jobs = adapters.varonis("careers.varonis.com")
+    assert calls == [{"url": VARONIS_URL}]
+    assert jobs == [
+        {
+            "job_id": "oIL00001",
+            "title": "Senior Data Scientist",
+            "location": "Herzliya, Israel",
+            "url": "https://careers.varonis.com/careers?p=job/oIL00001",
+            "team": "R&D",
+            "posted": "",
+        },
+        {
+            "job_id": "oIL00002",
+            "title": "Technical Support Engineer",
+            "location": "New York, United States; Herzliya, Israel",
+            "url": "https://careers.varonis.com/careers?p=job/oIL00002",
+            "team": "Support",
+            "posted": "",
+        },
+    ]
+
+
+def test_varonis_a_bad_job_outside_israel_still_fails_the_whole_list(monkeypatch: pytest.MonkeyPatch) -> None:
+    bad = varonis_item("oUS1", jobLocations=[{"city": "Austin", "country": "United States"}], locationsCount=2)
+    fake_eightfold(monkeypatch, varonis_answer([varonis_item("oIL1"), bad]))
+    assert adapters.varonis("careers.varonis.com") is None
+    twin = varonis_item("oIL1", jobLocations=[{"city": "Austin", "country": "United States"}])
+    fake_eightfold(monkeypatch, varonis_answer([varonis_item("oIL1"), twin]))
+    assert adapters.varonis("careers.varonis.com") is None
+
+
+def test_varonis_a_place_without_a_city_and_a_missing_team_are_read(monkeypatch: pytest.MonkeyPatch) -> None:
+    item = varonis_item(department=None, jobLocations=[{"city": None, "country": "Israel"}])
+    fake_eightfold(monkeypatch, varonis_answer([item]))
+    assert adapters.varonis("careers.varonis.com") == [
+        {
+            "job_id": "oAbc1234",
+            "title": "Engineer",
+            "location": "Israel",
+            "url": "https://careers.varonis.com/careers?p=job/oAbc1234",
+            "team": "",
+            "posted": "",
+        }
+    ]
+
+
+def test_varonis_an_empty_list_or_one_without_an_israel_job_is_a_failure(monkeypatch: pytest.MonkeyPatch) -> None:
+    fake_eightfold(monkeypatch, varonis_answer([]))
+    assert adapters.varonis("careers.varonis.com") is None
+    elsewhere = varonis_item(jobLocations=[{"city": "Austin", "country": "United States"}])
+    fake_eightfold(monkeypatch, varonis_answer([elsewhere]))
+    assert adapters.varonis("careers.varonis.com") is None
+
+
+def test_varonis_a_list_at_the_cap_is_read_and_one_above_it_is_not(monkeypatch: pytest.MonkeyPatch) -> None:
+    ids = [f"o{i:06d}" for i in range(adapters.VARONIS_MAX + 1)]
+    fake_eightfold(monkeypatch, varonis_answer([varonis_item(i) for i in ids[:-1]]))
+    jobs = adapters.varonis("careers.varonis.com")
+    assert jobs is not None
+    assert len(jobs) == adapters.VARONIS_MAX
+    fake_eightfold(monkeypatch, varonis_answer([varonis_item(i) for i in ids]))
+    assert adapters.varonis("careers.varonis.com") is None  # a list that long may be cut short
+
+
+@pytest.mark.parametrize(
+    "answer",
+    [
+        None,
+        FakeHttpResponse(status_code=403),
+        FakeHttpResponse(json_error=True),
+        FakeHttpResponse(data={}),
+        FakeHttpResponse(data=[]),
+        FakeHttpResponse(data={"data": "x"}),
+        varonis_answer([varonis_item("oA1"), varonis_item("oA1")]),  # a job twice
+        varonis_answer(["x"]),  # not an object
+        varonis_answer([varonis_item(None)]),
+        varonis_answer([varonis_item("a b")]),
+        varonis_answer([varonis_item(title="  ")]),
+        varonis_answer([varonis_item(title=None)]),
+        varonis_answer([varonis_item(jobLocations=None)]),
+        varonis_answer([varonis_item(locationsCount=2)]),  # fewer places than the count says
+        varonis_answer([varonis_item(locationsCount=0)]),
+        varonis_answer([varonis_item(locationsCount=True)]),  # a bool is not a count
+        varonis_answer([varonis_item("oé1")]),  # not an ASCII id
+        varonis_answer([varonis_item(jobLocations=["Tel Aviv, Israel"])]),  # a place that is not an object
+        varonis_answer([varonis_item(jobLocations=[{"city": None, "country": None}])]),  # a place with no text
+    ],
+)
+def test_varonis_an_answer_that_is_not_the_whole_readable_list_is_a_failure(
+    monkeypatch: pytest.MonkeyPatch, answer: FakeHttpResponse | None
+) -> None:
+    fake_eightfold(monkeypatch, answer)
+    assert adapters.varonis("careers.varonis.com") is None
+
+
+@pytest.mark.parametrize("slug", ["", "varonis", "careers.varonis.com/x", "Careers.Varonis.com", "careers.se.com"])
+def test_varonis_serves_no_other_host(monkeypatch: pytest.MonkeyPatch, slug: str) -> None:
+    calls = fake_eightfold(monkeypatch)
+    assert adapters.varonis(slug) is None
+    assert calls == []
+
+
+def test_varonis_reads_nothing_of_the_apply_link(monkeypatch: pytest.MonkeyPatch) -> None:
+    item = varonis_item(jobLocations=[{"city": "Herzliya", "country": "Israel", "applyUrl": "https://x.test/apply"}])
+    fake_eightfold(monkeypatch, varonis_answer([item]))
+    jobs = adapters.varonis("careers.varonis.com")
+    assert jobs is not None
+    assert "x.test" not in json.dumps(jobs)
+
+
+def test_varonis_goes_through_the_robots_gate_and_the_polite_get(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(adapters, "get", common.get)
+    monkeypatch.setattr(common, "robots_gate", lambda url: False)
+    assert adapters.varonis("careers.varonis.com") is None
+
+
+def test_varonis_is_registered() -> None:
+    assert adapters.ADAPTERS["varonis"] is adapters.varonis
