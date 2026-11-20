@@ -2561,3 +2561,129 @@ def test_jibe_reads_nothing_of_the_job_text_or_the_apply_link(monkeypatch: pytes
 
 def test_jibe_is_registered() -> None:
     assert adapters.ADAPTERS["jibe"] is adapters.jibe
+
+
+VARONIS_URL = "https://careers.varonis.com/api/getRequisitions"
+
+
+def varonis_item(job_id: Any = "oAbc1234", **over: Any) -> dict[str, Any]:
+    return {
+        "eId": job_id,
+        "title": "Engineer",
+        "department": "R&D",
+        "locationsCount": 1,
+        "jobLocations": [{"city": "Herzliya", "country": "Israel"}],
+        **over,
+    }
+
+
+def varonis_answer(items: Any) -> FakeHttpResponse:
+    return FakeHttpResponse(data={"data": items})
+
+
+def test_varonis_keeps_the_jobs_with_a_place_in_israel_and_drops_the_others(monkeypatch: pytest.MonkeyPatch) -> None:
+    data = json.loads((FIXTURES / "varonis_requisitions.json").read_text("utf-8"))
+    calls = fake_eightfold(monkeypatch, FakeHttpResponse(data=data))
+    jobs = adapters.varonis("careers.varonis.com")
+    assert calls == [{"url": VARONIS_URL}]
+    assert jobs == [
+        {
+            "job_id": "oIL00001",
+            "title": "Senior Data Scientist",
+            "location": "Herzliya, Israel",
+            "url": "https://careers.varonis.com/careers?p=job/oIL00001",
+            "team": "R&D",
+            "posted": "",
+        },
+        {
+            "job_id": "oIL00002",
+            "title": "Technical Support Engineer",
+            "location": "New York, United States; Herzliya, Israel",
+            "url": "https://careers.varonis.com/careers?p=job/oIL00002",
+            "team": "Support",
+            "posted": "",
+        },
+    ]
+
+
+def test_varonis_a_place_without_a_city_and_a_missing_team_are_read(monkeypatch: pytest.MonkeyPatch) -> None:
+    item = varonis_item(department=None, jobLocations=[{"city": None, "country": "Israel"}, "x", {}])
+    item["locationsCount"] = 3
+    fake_eightfold(monkeypatch, varonis_answer([item]))
+    assert adapters.varonis("careers.varonis.com") == [
+        {
+            "job_id": "oAbc1234",
+            "title": "Engineer",
+            "location": "Israel",
+            "url": "https://careers.varonis.com/careers?p=job/oAbc1234",
+            "team": "",
+            "posted": "",
+        }
+    ]
+
+
+def test_varonis_no_job_is_an_empty_list(monkeypatch: pytest.MonkeyPatch) -> None:
+    fake_eightfold(monkeypatch, varonis_answer([]))
+    assert adapters.varonis("careers.varonis.com") == []
+
+
+def test_varonis_a_list_at_the_cap_is_read_and_one_above_it_is_not(monkeypatch: pytest.MonkeyPatch) -> None:
+    ids = [f"o{i:06d}" for i in range(adapters.VARONIS_MAX + 1)]
+    fake_eightfold(monkeypatch, varonis_answer([varonis_item(i) for i in ids[:-1]]))
+    jobs = adapters.varonis("careers.varonis.com")
+    assert jobs is not None
+    assert len(jobs) == adapters.VARONIS_MAX
+    fake_eightfold(monkeypatch, varonis_answer([varonis_item(i) for i in ids]))
+    assert adapters.varonis("careers.varonis.com") is None  # a list that long may be cut short
+
+
+@pytest.mark.parametrize(
+    "answer",
+    [
+        None,
+        FakeHttpResponse(status_code=403),
+        FakeHttpResponse(json_error=True),
+        FakeHttpResponse(data={}),
+        FakeHttpResponse(data=[]),
+        FakeHttpResponse(data={"data": "x"}),
+        varonis_answer([varonis_item("oA1"), varonis_item("oA1")]),  # a job twice
+        varonis_answer(["x"]),  # not an object
+        varonis_answer([varonis_item(None)]),
+        varonis_answer([varonis_item("a b")]),
+        varonis_answer([varonis_item(title="  ")]),
+        varonis_answer([varonis_item(title=None)]),
+        varonis_answer([varonis_item(jobLocations=None)]),
+        varonis_answer([varonis_item(locationsCount=2)]),  # fewer places than the count says
+        varonis_answer([varonis_item(locationsCount=0)]),
+    ],
+)
+def test_varonis_an_answer_that_is_not_the_whole_readable_list_is_a_failure(
+    monkeypatch: pytest.MonkeyPatch, answer: FakeHttpResponse | None
+) -> None:
+    fake_eightfold(monkeypatch, answer)
+    assert adapters.varonis("careers.varonis.com") is None
+
+
+@pytest.mark.parametrize("slug", ["", "varonis", "careers.varonis.com/x", "Careers.Varonis.com", "careers.se.com"])
+def test_varonis_serves_no_other_host(monkeypatch: pytest.MonkeyPatch, slug: str) -> None:
+    calls = fake_eightfold(monkeypatch)
+    assert adapters.varonis(slug) is None
+    assert calls == []
+
+
+def test_varonis_reads_nothing_of_the_apply_link(monkeypatch: pytest.MonkeyPatch) -> None:
+    item = varonis_item(jobLocations=[{"city": "Herzliya", "country": "Israel", "applyUrl": "https://x.test/apply"}])
+    fake_eightfold(monkeypatch, varonis_answer([item]))
+    jobs = adapters.varonis("careers.varonis.com")
+    assert jobs is not None
+    assert "x.test" not in json.dumps(jobs)
+
+
+def test_varonis_goes_through_the_robots_gate_and_the_polite_get(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(adapters, "get", common.get)
+    monkeypatch.setattr(common, "robots_gate", lambda url: False)
+    assert adapters.varonis("careers.varonis.com") is None
+
+
+def test_varonis_is_registered() -> None:
+    assert adapters.ADAPTERS["varonis"] is adapters.varonis

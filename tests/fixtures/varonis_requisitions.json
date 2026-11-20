@@ -1,0 +1,46 @@
+{
+ "data": [
+  {
+   "eId": "oIL00001",
+   "title": "Senior Data Scientist",
+   "department": "R&D",
+   "subDepartment": "Engineering",
+   "locationCity": "Herzliya",
+   "locationCountry": "Israel",
+   "locationsCount": 1,
+   "jobLocations": [{"city": "Herzliya", "country": "Israel", "name": "Israel", "applyUrl": "https://example-ats.test/apply/oIL00001"}]
+  },
+  {
+   "eId": "oIL00002",
+   "title": "Technical Support Engineer",
+   "department": "Support",
+   "subDepartment": "Technical Support",
+   "locationCity": "New York",
+   "locationCountry": "United States",
+   "locationsCount": 2,
+   "jobLocations": [
+    {"city": "New York", "country": "United States", "name": "USA, New York"},
+    {"city": "Herzliya", "country": "Israel", "name": "Israel"}
+   ]
+  },
+  {
+   "eId": "oUS00003",
+   "title": "Sales Development Representative",
+   "department": "Sales",
+   "subDepartment": "Inside Sales",
+   "locationCity": "Morrisville",
+   "locationCountry": "United States",
+   "locationsCount": 1,
+   "jobLocations": [{"city": "Morrisville", "country": "United States", "name": "USA, North Carolina, Raleigh"}]
+  },
+  {
+   "eId": "oUK00004",
+   "title": "Account Executive",
+   "department": "Sales",
+   "locationCity": "London",
+   "locationCountry": "United Kingdom",
+   "locationsCount": 1,
+   "jobLocations": [{"city": "London", "country": "United Kingdom", "name": "UK, London"}]
+  }
+ ]
+}

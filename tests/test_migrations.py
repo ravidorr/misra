@@ -1215,6 +1215,7 @@ ATS_FILES = (
     "20261203100000_companies_ats_avature.sql",
     "20261204100000_companies_ats_eightfold.sql",
     "20261205100000_companies_ats_jibe.sql",
+    "20261206100000_companies_ats_varonis.sql",
 )
 ATS_SQL = (MIGRATION_DIR / ATS_FILES[0]).read_text(encoding="utf-8")
 

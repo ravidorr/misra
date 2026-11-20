@@ -35,6 +35,7 @@ PHENOM_MAX_PAGES = 100
 PHENOM_SLUG_PARTS = 3
 AVATURE_MAX = 20  # the most jobs an Avature feed gives (it has no paging): a feed this long may be cut short
 JIBE_MAX = 100  # the most jobs of one Jibe search read (one answer): a board with more is not read
+VARONIS_MAX = 200  # the most requisitions of Varonis' list read (it has no paging): a list this long may be cut short
 EIGHTFOLD_MAX = 100  # the most positions of one Eightfold search read (ten an answer): a board with more is not read
 
 
@@ -1117,6 +1118,64 @@ def jibe(slug: str) -> list[Job] | None:
     return [j for j in jobs if ISRAEL.search(j["location"] or "")]
 
 
+VARONIS_HOST = "careers.varonis.com"
+
+
+def _varonis_job(item: Any) -> Job | None:
+    """One requisition of the answer, or None when it cannot be read: not an object, no id, no title, or a count of
+    locations that is not the number listed. The place is `City, Country` of each location, joined by '; ' (a job of
+    several lists every one). The link is the careers site's own page for the job, `/careers?p=job/<id>`, the address
+    its own list links to (the `app.jobvite.com` links of the answer are the applicant system and are not used)."""
+    if not isinstance(item, dict):
+        return None
+    job_id, title, places = item.get("eId"), item.get("title"), item.get("jobLocations")
+    if not (isinstance(job_id, str) and job_id.isalnum() and isinstance(title, str) and title.strip()):
+        return None
+    if not isinstance(places, list) or item.get("locationsCount") != len(places):
+        return None
+    where = [
+        ", ".join(x for x in (p.get("city"), p.get("country")) if isinstance(x, str) and x.strip())
+        for p in places
+        if isinstance(p, dict)
+    ]
+    return _job(
+        job_id,
+        title,
+        "; ".join(w for w in where if w),
+        f"https://{VARONIS_HOST}/careers?p=job/{job_id}",
+        team=item.get("department") if isinstance(item.get("department"), str) else "",
+    )
+
+
+def varonis(slug: str) -> list[Job] | None:
+    """slug is 'careers.varonis.com', the only host this reader serves (a dedicated reader for one company, by the
+    maintainer's decision of 2026-11-20: the careers site is a custom page over Jobvite and no other company uses it).
+    The site's own list, `https://careers.varonis.com/api/getRequisitions`, the call its page makes itself, is read in
+    one request; the site has no robots.txt of its own (it answers its page), so `common.get` finds no rule, and it is
+    the same gate as every adapter: one request a second, the project's User-Agent. The list has no paging (it
+    ignores page and limit) and no total, so it is trusted only when it is the site's JSON (`data`), has at most
+    VARONIS_MAX requisitions (a list that long may be cut short), no job is unreadable or twice and every job's
+    `locationsCount` is the number of places it lists: a partial list would close the jobs it lacks. Of those, the
+    jobs with a place in Israel (the country of a location) are kept, so the places of the others are never kept. The
+    answer has no job text and no date."""
+    if slug != VARONIS_HOST:
+        return None
+    r = get(f"https://{VARONIS_HOST}/api/getRequisitions")
+    if r is None or r.status_code != HTTP_OK:
+        return None
+    try:
+        items = r.json()["data"]
+    except (ValueError, KeyError, TypeError):
+        return None
+    if not isinstance(items, list) or len(items) > VARONIS_MAX:
+        return None
+    read = [_varonis_job(i) for i in items]
+    jobs = [j for j in read if j]
+    if len(jobs) != len(items) or len({j["job_id"] for j in jobs}) != len(jobs):
+        return None
+    return [j for j in jobs if ISRAEL.search(j["location"])]
+
+
 ADAPTERS: dict[str, Callable[[str], list[Job] | None]] = {
     "greenhouse_url": greenhouse_url,
     "greenhouse": greenhouse,
@@ -1135,4 +1194,5 @@ ADAPTERS: dict[str, Callable[[str], list[Job] | None]] = {
     "avature": avature,
     "eightfold": eightfold,
     "jibe": jibe,
+    "varonis": varonis,
 }
