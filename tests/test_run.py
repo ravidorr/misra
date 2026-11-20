@@ -1,8 +1,10 @@
 import json
+import queue
 import runpy
 import sqlite3
 import threading
 import time
+import types
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
@@ -782,6 +784,60 @@ def test_a_browser_company_that_cannot_be_recorded_does_not_cost_the_others_or_l
     monkeypatch.setattr(run, "close_unseen", boom)
     with pytest.raises(KeyError):
         run.main()
+    check = sqlite3.connect(run.DB)
+    assert check.execute("SELECT company FROM jobs").fetchall() == [("Two",)]
+    assert check.execute("SELECT company FROM crawl_log").fetchall() == [("Two",)]
+    check.close()
+
+
+def test_a_company_that_cannot_be_recorded_while_the_crawl_has_died_fails_inside_the_drain_and_costs_no_other(
+    workdir: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Deterministic: the pages are released only after the loop has taken the crawl's error off the queue, so the
+    failing company is always recorded by the drain, never by the loop."""
+    write_json(
+        workdir / "data" / "companies.json",
+        [co("One", ats="browser", slug="https://one"), co("Two", ats="browser", slug="https://two")],
+    )
+    release = threading.Event()
+    started = {"One": threading.Event(), "Two": threading.Event()}
+
+    def read(company: dict[str, Any], _jobs: Any) -> None:
+        started[company["name"]].set()
+        assert_set(release)
+
+    monkeypatch.setattr(run, "read_job_pages", read)
+
+    def crawl(_urls: list[str]) -> Any:
+        yield "https://one", [job("o1")]
+        yield "https://two", [job("t1")]
+        assert_set(started["One"])
+        assert_set(started["Two"])
+        raise RuntimeError("browser died")
+
+    class ReleasingQueue(queue.Queue[Any]):
+        def get(self, block: bool = True, timeout: float | None = None) -> Any:
+            item = super().get(block, timeout)
+            if item[0] == "error":
+                release.set()  # only now can a read finish: the loop has the error and goes to the drain
+            return item
+
+    monkeypatch.setattr(run, "crawl_many", crawl)
+    monkeypatch.setattr(run, "queue", types.SimpleNamespace(Queue=ReleasingQueue))
+    real = run.close_unseen
+    drained: list[str] = []
+
+    def boom(c: sqlite3.Connection, name: str, seen: set[str]) -> None:
+        if name == "One":
+            drained.append(name)
+            raise KeyError("bad page")
+        real(c, name, seen)
+
+    monkeypatch.setattr(run, "close_unseen", boom)
+    with pytest.raises(KeyError) as raised:
+        run.main()
+    assert drained == ["One"]
+    assert isinstance(raised.value.__context__, RuntimeError)  # the drain raised over the crawl's error
     check = sqlite3.connect(run.DB)
     assert check.execute("SELECT company FROM jobs").fetchall() == [("Two",)]
     assert check.execute("SELECT company FROM crawl_log").fetchall() == [("Two",)]
