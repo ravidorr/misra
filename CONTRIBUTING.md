@@ -403,7 +403,7 @@ PLAN.md step 7.1. Where the text of a posting lives, and how it gets there:
   others; five pages in a row without a text end that company's job pages for the run, so a host that refuses is left alone). The first fill of the 318 Israeli jobs is therefore about 200 requests on the first day
   (Palo Alto Networks 115 and KLA 82 are capped at 40 each, so they take three days), over 24 tenant hosts, and a steady day
   asks for the new jobs and about a fourteenth of the stored ones (about 20 of the 318). A stored text is asked again once in 14 days (`adapters.REFRESH_DAYS`: each job's turn comes from
-  its key and the date, so every job is asked once in 14 days, about a fourteenth of them a day, within the same cap), so a posting edited in place has its new text
+  its key and the date, so every job is asked once in 14 days, about a fourteenth of them a day, after the new jobs, with only what they leave of the same cap), so a posting edited in place has its new text
   within two weeks; the sync writes it only when its hash changed. A page that fails, is refused by `robots.txt` or has no text costs only its own text: the list is
   already final, so the company is never skipped and nothing closes. The log line is `job pages: workday N requests, N with a
   text, N left for later runs`, and a job whose text is stored counts in the share of the `descriptions:` line. A site that answers

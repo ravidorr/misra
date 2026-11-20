@@ -1873,6 +1873,23 @@ def test_a_refresh_whose_page_fails_leaves_the_stored_job_as_it_was(monkeypatch:
     assert job["text_held"] is True and "description" not in job
 
 
+def test_refreshes_use_only_what_the_new_jobs_leave_of_the_cap(monkeypatch: pytest.MonkeyPatch) -> None:
+    urls = fake_get(monkeypatch, wd_detail())
+    monkeypatch.setattr(adapters, "DETAIL_CAP", 4)
+    jobs = jobs_n(60)
+    day = 3
+    due = [j for j in jobs if adapters._in_refresh_slice(("Acme", j["job_id"]), day)]
+    new = [j for j in jobs if j not in due][:3]
+    assert len(due) > len(new)  # more refreshes due than the cap has room for
+    pool = new + due
+    held = {("Acme", j["job_id"]) for j in due}
+    asked, _, _ = adapters.add_descriptions("workday", WD_SLUG, "Acme", pool, held, day=day)
+    ids = {u.rsplit("/", 1)[1] for u in urls}
+    assert asked == adapters.DETAIL_CAP
+    assert {j["job_id"].rsplit("/", 1)[1] for j in new} <= ids  # all 3 new jobs, then 1 refresh
+    assert sum(("description" in j) for j in due) == 1
+
+
 def test_a_stored_job_off_its_turn_is_not_asked(monkeypatch: pytest.MonkeyPatch) -> None:
     urls = fake_get(monkeypatch, wd_detail())
     job = jobs_n(1)[0]
