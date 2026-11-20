@@ -1123,26 +1123,35 @@ VARONIS_HOST = "careers.varonis.com"
 
 def _varonis_job(item: Any) -> Job | None:
     """One requisition of the answer, or None when it cannot be read: not an object, an id that is not letters and
-    digits, no title, `jobLocations` that is not a list, or a count of locations that is not the
-    number listed. The place is `City, Country` of each location, joined by '; ' (a job of several lists every one).
-    The link is the careers site's own page for the job, `/careers?p=job/<id>`, the address
+    digits, no title, `jobLocations` that is not a list or holds a place with no city or country text, or a count of
+    locations that is not the number listed. The place is `City, Country` of each location, joined by '; ' (a job of
+    several lists every one). The link is the careers site's own page for the job, `/careers?p=job/<id>`, the address
     its own list links to (the `app.jobvite.com` links of the answer are the applicant system and are not used)."""
     if not isinstance(item, dict):
         return None
     job_id, title, places = item.get("eId"), item.get("title"), item.get("jobLocations")
-    if not (isinstance(job_id, str) and job_id.isalnum() and isinstance(title, str) and title.strip()):
+    if not (
+        isinstance(job_id, str) and job_id.isascii() and job_id.isalnum() and isinstance(title, str) and title.strip()
+    ):
         return None
-    if not isinstance(places, list) or item.get("locationsCount") != len(places):
+    if (
+        not isinstance(places, list)
+        or type(item.get("locationsCount")) is not int
+        or item["locationsCount"] != len(places)
+    ):
         return None
     where = [
         ", ".join(x for x in (p.get("city"), p.get("country")) if isinstance(x, str) and x.strip())
-        for p in places
         if isinstance(p, dict)
+        else ""
+        for p in places
     ]
+    if not all(where):
+        return None  # a place that cannot be read may be the one in Israel: the job, and so the list, is a failure
     return _job(
         job_id,
         title,
-        "; ".join(w for w in where if w),
+        "; ".join(where),
         f"https://{VARONIS_HOST}/careers?p=job/{job_id}",
         team=item.get("department") if isinstance(item.get("department"), str) else "",
     )

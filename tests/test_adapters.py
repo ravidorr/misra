@@ -2616,8 +2616,7 @@ def test_varonis_a_bad_job_outside_israel_still_fails_the_whole_list(monkeypatch
 
 
 def test_varonis_a_place_without_a_city_and_a_missing_team_are_read(monkeypatch: pytest.MonkeyPatch) -> None:
-    item = varonis_item(department=None, jobLocations=[{"city": None, "country": "Israel"}, "x", {}])
-    item["locationsCount"] = 3
+    item = varonis_item(department=None, jobLocations=[{"city": None, "country": "Israel"}])
     fake_eightfold(monkeypatch, varonis_answer([item]))
     assert adapters.varonis("careers.varonis.com") == [
         {
@@ -2667,6 +2666,10 @@ def test_varonis_a_list_at_the_cap_is_read_and_one_above_it_is_not(monkeypatch: 
         varonis_answer([varonis_item(jobLocations=None)]),
         varonis_answer([varonis_item(locationsCount=2)]),  # fewer places than the count says
         varonis_answer([varonis_item(locationsCount=0)]),
+        varonis_answer([varonis_item(locationsCount=True)]),  # a bool is not a count
+        varonis_answer([varonis_item("oé1")]),  # not an ASCII id
+        varonis_answer([varonis_item(jobLocations=["Tel Aviv, Israel"])]),  # a place that is not an object
+        varonis_answer([varonis_item(jobLocations=[{"city": None, "country": None}])]),  # a place with no text
     ],
 )
 def test_varonis_an_answer_that_is_not_the_whole_readable_list_is_a_failure(
