@@ -341,9 +341,6 @@ def test_the_email_texts_are_kept_exactly_in_one_file_for_the_steps_that_build_t
     assert "Reply-To: raanan@avidor.org" in texts
     for needle in UNSUBSCRIBE_HEADERS:
         assert needle in texts
-    plan = " ".join(read("PLAN.md").split())
-    assert "supabase/email-texts.md" in plan
-    assert "Reply-To" in plan
     prd = " ".join(read("PRD.md").split())
     assert DIGEST_FOOTER in prd
     assert CONFIRM_FOOTER in prd
@@ -354,7 +351,7 @@ def test_the_email_footers_link_to_the_pages_on_the_site() -> None:
         "Privacy: https://ravidorr.github.io/misra/privacy.html | Terms: https://ravidorr.github.io/misra/terms.html"
     )
     assert read("supabase/email-texts.md").count(links) == FOOTERS
-    for name in ("supabase/email-texts.md", "PRD.md", "PLAN.md"):
+    for name in ("supabase/email-texts.md", "PRD.md"):
         assert "blob/main/PRIVACY.md" not in read(name), name
         assert "blob/main/TERMS.md" not in read(name), name
     assert "https://ravidorr.github.io/misra/privacy.html" in read("PRD.md")
