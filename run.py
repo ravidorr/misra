@@ -268,14 +268,15 @@ def coverage_gaps(c: sqlite3.Connection) -> list[dict[str, Any]]:
 def dead_boards(c: sqlite3.Connection) -> list[dict[str, Any]]:
     """Crawled companies whose board has been empty for DEAD_DAYS days: one dict each, company, since and new.
 
-    Dead means the last crawl of the company in crawl_log was ok with no job (a NULL count is no job) and no crawl
-    since the last job was ok with one: failed and skipped crawls in between do not restart the count, a crawl that
-    found a job does. The run began DEAD_DAYS or more before the newest crawl day (the log keeps 90 days, so `since`
-    never reaches back further, and a company crawled for less is not judged yet), and the company was crawled in
-    the last GAP_STALE_DAYS days (an excluded or removed company stops showing after that). `new` is True when the
-    run crossed DEAD_DAYS on the newest crawl day or up to GAP_NEW_DAYS days before it, as for the coverage gaps.
+    Dead means the last crawl of the company in crawl_log was ok with no job (a NULL count is no job), and its
+    first ok crawl with no job since the last ok crawl with a job (`since`) is DEAD_DAYS or more before the newest
+    crawl day. Failed and skipped crawls in between do not restart the count, but one at the start does not begin it
+    (the log keeps 90 days, so `since` never reaches back further, and a company observed for less is not judged
+    yet). The company must have been crawled in the last GAP_STALE_DAYS days (an excluded or removed company stops
+    showing after that). `new` is True when the run crossed DEAD_DAYS on the newest crawl day or up to GAP_NEW_DAYS
+    days before it, as for the coverage gaps.
 
-    n_jobs is counted after the Israel filter, so a global company with no Israel roles can be flagged."""
+    n_jobs is counted after the Israel filter, so an israel_only company with no Israel roles can be flagged."""
     history: dict[str, list[tuple[int, int, str]]] = {}
     query = "SELECT company, ts, ok, COALESCE(n_jobs, 0) FROM crawl_log WHERE company IS NOT NULL ORDER BY ts, rowid"
     for company, ts, ok, n_jobs in c.execute(query):
@@ -294,7 +295,8 @@ def dead_boards(c: sqlite3.Connection) -> list[dict[str, Any]]:
         for ok, n_jobs, ts in reversed(seq):
             if ok and n_jobs:
                 break
-            since = ts
+            if ok:
+                since = ts
         if seq[-1][0] and not seq[-1][1] and since[:10] <= dead:
             boards.append({"company": company, "since": since, "new": since[:10] >= fresh})
     return boards

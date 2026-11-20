@@ -49,6 +49,11 @@ def test_a_failed_crawl_in_between_does_not_restart_the_count(db: sqlite3.Connec
     assert board["since"] == "2026-01-02T06:00:00"  # the first crawl after the last job
 
 
+def test_failed_crawls_at_the_start_do_not_begin_the_count(db: sqlite3.Connection) -> None:
+    crawls(db, "Was down", [*[(0, 0)] * 29, *empty(2)])  # one ok observation after 29 failures: not 30 days
+    assert run.dead_boards(db) == []
+
+
 def test_the_thirty_day_boundary_from_both_sides(db: sqlite3.Connection) -> None:
     crawls(db, "Busy", [(1, 5)] * (run.DEAD_DAYS + 1))  # sets the newest day, 30 days after the first crawl
     crawls(db, "Almost", empty(run.DEAD_DAYS), first_day=1)  # first crawl 29 days before the newest day
