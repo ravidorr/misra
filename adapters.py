@@ -781,7 +781,7 @@ def _board_description(page: str, job: Job) -> tuple[str, dict[str, Any]] | None
 # Career pages of the browser crawl whose company publishes its postings through its own WordPress REST API, found by
 # hand on 2026-11-20 (the site's `/wp-json/wp/v2/types` names the post type, and each answer is public, no sign-in):
 # the career page -> the exact endpoint. Its `robots.txt` allows it; the request goes through `common.get` (robots.txt,
-# the delay, the User-Agent, redirects only on the same host), once a run for the page. A crawl job takes the
+# the delay, the User-Agent, redirects only on the same host), once per process for the page. A crawl job takes the
 # `content` of the post whose link is its own link (host without `www.`, path without the trailing slash, lower case);
 # no such post, or two, is no text. Pecan is not listed: its host did not answer on 2026-11-20, so nothing was checked.
 WP_POSTS: dict[str, str] = {
@@ -789,18 +789,25 @@ WP_POSTS: dict[str, str] = {
     "https://www.meshpayments.com/careers": "https://www.meshpayments.com/wp-json/wp/v2/cpt_careers?per_page=100",
     "https://www.lightbitslabs.com/careers/": "https://www.lightbitslabs.com/wp-json/wp/v2/lb_position?per_page=100",
 }
+WP_PER_PAGE = 100  # the `per_page` of every endpoint above
 _wp_texts: dict[str, dict[str, str] | None] = {}  # per career page and process; a failed read is kept too
 
 
 def _link_key(url: str) -> str:
-    parts = urlparse(url)
+    """The host without `www.` and the path without the trailing slash, lower case; the scheme, query and fragment are
+    ignored. Empty for an address that cannot be read (it matches nothing)."""
+    try:
+        parts = urlparse(url)
+    except ValueError:
+        return ""
     return f"{parts.netloc.lower().removeprefix('www.')}{parts.path.rstrip('/').lower()}"
 
 
 def _wp_page_texts(page: str) -> dict[str, str] | None:
     """The text of each published post of the page's endpoint, by `_link_key` of its link, read once a run (the first
-    100 posts; the three sites hold fewer than 25). A key two posts share is dropped. None when the endpoint could not
-    be read or has no text (one `::warning::` says which page, never the answer)."""
+    100 posts: a full first page is a `::warning::`, since later posts would get no text). A key two posts share is
+    dropped. None when the endpoint could not be read or has no text (one `::warning::` says which page, never the
+    answer)."""
     if page not in _wp_texts:
         endpoint = WP_POSTS[page]
         r = _get_on_host(endpoint, host_of(endpoint))
@@ -824,6 +831,8 @@ def _wp_page_texts(page: str) -> dict[str, str] | None:
             del texts[key]
         if not texts:
             print(f"::warning::the WordPress posts of {page} could not be read or gave no job text")
+        elif isinstance(posts, list) and len(posts) >= WP_PER_PAGE:
+            print(f"::warning::the WordPress posts of {page} fill a whole page: later posts are not read")
         _wp_texts[page] = texts or None
     return _wp_texts[page]
 
@@ -837,7 +846,8 @@ def browser_description(slug: str, job: Job) -> tuple[str, dict[str, Any]] | Non
     """The text of a job found by the browser crawl: a job of a page in BOARD_PAGES takes the text of its company's
     public ATS board; an Eightfold job asks its own `position_details` JSON (the call the career page makes, under the
     `/api/pcsx` path its search already uses); a job of a page in JSONLD_PAGES asks its page and reads only the
-    JobPosting JSON-LD. Never page text. None on any failure."""
+    JobPosting JSON-LD; a job of a page in WP_POSTS takes the `content` of the post of its company's own WordPress
+    REST API with its link. Never page text. None on any failure."""
     if slug in BOARD_PAGES:
         return _board_description(slug, job)
     if slug in WP_POSTS:

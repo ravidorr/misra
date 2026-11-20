@@ -3230,3 +3230,48 @@ def test_the_wordpress_pages_are_career_pages_of_the_list_with_public_endpoints_
         assert urlparse(endpoint).hostname == urlparse(page).hostname
         assert urlparse(endpoint).path.startswith("/wp-json/wp/v2/")
     assert not set(adapters.WP_POSTS) & (set(adapters.BOARD_PAGES) | adapters.JSONLD_PAGES)  # one source of text
+
+
+def test_bad_entries_and_an_empty_post_do_not_cost_the_good_posts(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setattr(adapters, "_wp_texts", {})
+    posts = [
+        "x",
+        wp_post("https://[bad/a"),  # an address that cannot be read matches nothing
+        wp_post("https://meshpayments.com/a", ""),  # no text: not a clash with the next one
+        wp_post("https://meshpayments.com/a"),
+    ]
+    urls = fake_get(monkeypatch, FakeHttpResponse(data=posts))
+    jobs = [wp_job("http://www.meshpayments.com/a/?x=1#y"), wp_job("https://[bad/a")]
+    assert adapters.add_descriptions("browser", WP_PAGE, "Mesh", jobs, set()) == (1, 1, 0)
+    assert jobs[0]["description"] == "Synthetic text"  # the scheme, query and fragment do not matter
+    assert capsys.readouterr().out == ""
+    assert urls == [WP_ENDPOINT]
+
+
+def test_a_full_first_page_of_posts_is_a_warning(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setattr(adapters, "_wp_texts", {})
+    posts = [wp_post(f"https://meshpayments.com/p{i}") for i in range(adapters.WP_PER_PAGE)]
+    fake_get(monkeypatch, FakeHttpResponse(data=posts))
+    assert adapters._wp_page_texts(WP_PAGE) is not None
+    assert capsys.readouterr().out.count("fill a whole page") == 1
+
+
+def test_a_wordpress_endpoint_redirected_on_its_own_host_is_followed(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(adapters, "_wp_texts", {})
+    answers = [
+        redirect("/wp-json/wp/v2/cpt_careers/?per_page=100"),
+        FakeHttpResponse(data=[wp_post("https://a.test/a")]),
+    ]
+    calls: list[Any] = []
+
+    def _get(url: str, **kw: Any) -> FakeHttpResponse:
+        calls.append(kw.get("allow_redirects"))
+        return answers.pop(0)
+
+    monkeypatch.setattr(adapters, "get", _get)
+    assert adapters._wp_page_texts(WP_PAGE) == {"a.test/a": "Synthetic text"}
+    assert calls == [False, False]
