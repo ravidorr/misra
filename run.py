@@ -456,9 +456,7 @@ def main() -> None:  # noqa: PLR0915
     record(results)  # the API companies are in the history before the slow browser crawl starts
 
     def crawl_browser_companies() -> None:
-        by_slug: dict[str, list[dict[str, Any]]] = {}
-        for co in br:
-            by_slug.setdefault(co["slug"], []).append(co)
+        by_slug = {slug: [co for co in br if co["slug"] == slug] for slug in dict.fromkeys(co["slug"] for co in br)}
 
         def finish(fut: Future[tuple[dict[str, Any], list[dict[str, Any]] | None]]) -> None:
             later = fut.result()
@@ -504,15 +502,19 @@ def main() -> None:  # noqa: PLR0915
                             break
                         for slug, jobs in [value] if kind == "list" else []:  # "done" only wakes the loop
                             seen_slugs.add(slug)
-                            # companies sharing a page each get their own copy of the jobs
-                            for i, co in enumerate(by_slug[slug]):
-                                fut = ex.submit(read_pages_of, co, [dict(j) for j in jobs] if jobs and i else jobs)
+                            # companies sharing a page each get their own copy of the jobs, made before any is submitted
+                            sharing = [
+                                (co, [dict(j) for j in jobs] if jobs and i else jobs)
+                                for i, co in enumerate(by_slug[slug])
+                            ]
+                            for co, mine in sharing:
+                                fut = ex.submit(read_pages_of, co, mine)
                                 fut.add_done_callback(lambda f: events.put(("done", f)))
                                 waiting.append(fut)
                         while waiting and waiting[0].done():
                             finish(waiting.popleft())
                 except BaseException:
-                    c.rollback()  # the company being recorded: the drain below must not commit half of it
+                    c.rollback()  # discard a half-recorded company: the drain below must not commit it
                     raise
                 finally:
                     drain(waiting)

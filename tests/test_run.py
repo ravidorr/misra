@@ -735,6 +735,7 @@ def test_a_browser_company_whose_pages_are_still_being_read_waits_for_the_end_of
     def crawl(_urls: list[str]) -> Any:
         yield "https://one", [job("o1")]
         yield "https://two", [job("t1")]
+        time.sleep(0.3)  # long enough for a premature record to show
         check = sqlite3.connect(run.DB, check_same_thread=False)  # made in the crawl thread
         assert check.execute("SELECT COUNT(*) FROM jobs").fetchone() == (0,)  # nothing recorded while pages are read
         check.close()
