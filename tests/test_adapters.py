@@ -1864,6 +1864,15 @@ def test_a_stored_job_is_asked_again_once_in_refresh_days_and_the_new_text_is_at
     assert sum(len(a) for a in asked_per_day) == len(jobs)  # every job exactly once in the fourteen days
 
 
+def test_a_refresh_whose_page_fails_leaves_the_stored_job_as_it_was(monkeypatch: pytest.MonkeyPatch) -> None:
+    fake_get(monkeypatch, FakeHttpResponse(status_code=404))
+    job = jobs_n(1)[0]
+    key = ("Acme", job["job_id"])
+    turn = next(d for d in range(adapters.REFRESH_DAYS) if adapters._in_refresh_slice(key, d))
+    assert adapters.add_descriptions("workday", WD_SLUG, "Acme", [job], {key}, day=turn) == (1, 0, 0)
+    assert job["text_held"] is True and "description" not in job
+
+
 def test_a_stored_job_off_its_turn_is_not_asked(monkeypatch: pytest.MonkeyPatch) -> None:
     urls = fake_get(monkeypatch, wd_detail())
     job = jobs_n(1)[0]
