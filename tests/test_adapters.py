@@ -1925,6 +1925,87 @@ def test_the_pages_known_to_carry_a_job_posting_are_career_pages_of_the_list() -
     assert browser >= adapters.JSONLD_PAGES
 
 
+BOARD_PAGE = "https://monday.com/careers"
+
+
+def board_job(job_id: str, text: str, url: str = "") -> dict[str, Any]:
+    return {"job_id": job_id, "url": url, "description": text, "details": {"employment_type": "FullTime"}}
+
+
+def fake_board(monkeypatch: pytest.MonkeyPatch, jobs: list[dict[str, Any]] | None) -> list[str]:
+    """The ATS adapter of BOARD_PAGE answers `jobs`; returns the slugs it was asked for."""
+    monkeypatch.setattr(adapters, "_boards", {})
+    asked: list[str] = []
+
+    def read(slug: str) -> list[dict[str, Any]] | None:
+        asked.append(slug)
+        return jobs
+
+    monkeypatch.setitem(adapters.ADAPTERS, "ashby", read)
+    monkeypatch.setitem(adapters.ADAPTERS, "comeet", read)
+    return asked
+
+
+@pytest.mark.parametrize(
+    ("page", "link", "board_id"),
+    [
+        (BOARD_PAGE, "https://monday.com/careers/ab12-CD34/", "ab12-cd34"),  # an Ashby id is the last segment
+        ("https://komodor.com/careers/", "https://komodor.com/job/4E.47C/some-title/", "4E.47C"),  # a segment
+        ("https://panorays.com/careers/", "https://panorays.com/careers/some-title/2C.372/", "2C.372"),
+        ("https://www.lasso.security/careers", "https://www.lasso.security/positions/position-a5_075", "A5.075"),
+        ("https://komodor.com/careers/", "https://komodor.com/job/D2.37E-50.70A/x/", "50.70A"),  # one of two uids
+    ],
+)
+def test_a_browser_job_takes_the_text_of_its_boards_job(
+    monkeypatch: pytest.MonkeyPatch, page: str, link: str, board_id: str
+) -> None:
+    asked = fake_board(monkeypatch, [board_job("other", "No"), board_job(board_id, "Board text")])
+    job = {"job_id": link.rstrip("/"), "url": link}
+    assert adapters._browser_wants_page(page, job)
+    assert adapters.browser_description(page, job) == ("Board text", {"employment_type": "FullTime"})
+    assert asked == [adapters.BOARD_PAGES[page][1]]  # the board is read once for both calls
+
+
+def test_a_browser_job_the_board_does_not_hold_is_not_asked_for_and_the_board_is_read_once(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    asked = fake_board(monkeypatch, [board_job("known", "Text")])
+    gone = {"job_id": "https://monday.com/careers/gone", "url": "https://monday.com/careers/gone"}
+    assert not adapters._browser_wants_page(BOARD_PAGE, gone)
+    assert adapters.browser_description(BOARD_PAGE, gone) is None
+    assert adapters.browser_description(BOARD_PAGE, {"job_id": "x"}) is None  # a job without a link
+    assert len(asked) == 1
+
+
+def test_an_unreadable_board_gives_no_text_and_is_not_asked_again(monkeypatch: pytest.MonkeyPatch) -> None:
+    asked = fake_board(monkeypatch, None)
+    job = {"job_id": "https://monday.com/careers/a", "url": "https://monday.com/careers/a"}
+    jobs = [job, dict(job, url="https://monday.com/careers/b")]
+    assert adapters.add_descriptions("browser", BOARD_PAGE, "monday.com", jobs, set()) == (0, 0, 0)
+    assert asked == ["monday.com"]  # no miss streak either: a job with no board job is not asked for
+
+
+def test_a_board_fills_the_browser_jobs_it_holds_within_the_per_company_cap(monkeypatch: pytest.MonkeyPatch) -> None:
+    n = adapters.DETAIL_CAP + 3
+    asked = fake_board(monkeypatch, [board_job(f"id-{i}", f"Text {i}") for i in range(n)])
+    jobs = [{"job_id": f"u{i}", "url": f"https://monday.com/careers/id-{i}"} for i in range(n)]
+    assert adapters.add_descriptions("browser", BOARD_PAGE, "monday.com", jobs, set()) == (
+        adapters.DETAIL_CAP,
+        adapters.DETAIL_CAP,
+        3,
+    )
+    assert len(asked) == 1  # one request for the whole board, not one a job
+    assert sum(1 for j in jobs if j.get("description")) == adapters.DETAIL_CAP
+
+
+def test_the_boards_known_for_browser_pages_are_career_pages_of_the_list_and_real_adapters() -> None:
+    companies = json.loads(FROZEN_COMPANIES.read_text(encoding="utf-8"))
+    browser = {c["slug"] for c in companies if c["ats"] == "browser"}
+    assert browser >= set(adapters.BOARD_PAGES)
+    assert {ats for ats, _ in adapters.BOARD_PAGES.values()} <= {"ashby", "comeet"}
+    assert not set(adapters.BOARD_PAGES) & adapters.JSONLD_PAGES  # one source of text for a page
+
+
 def test_a_job_posting_whose_type_is_a_list_is_found_and_a_page_is_read_to_a_limit(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

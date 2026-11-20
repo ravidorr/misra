@@ -407,7 +407,7 @@ PLAN.md step 7.1. Where the text of a posting lives, and how it gets there:
   already final, so the company is never skipped and nothing closes. The log line is `job pages: workday N requests, N with a
   text, N left for later runs`, and a job whose text is stored counts in the share of the `descriptions:` line. A site that answers
   a job page with a block or challenge page is never worked around: no text.
-- **The browser crawl.** Three ways, none of them page text: (1) HiBob career pages (Sapiens, Hibob, Fundbox) return the
+- **The browser crawl.** Four ways, none of them page text: (1) HiBob career pages (Sapiens, Hibob, Fundbox) return the
   description in the list JSON the crawl already captures: no request. A `JobPosting` JSON-LD on a list page also gives its
   description, no request. (2) Eightfold boards (Nvidia, Applied Materials, Qualcomm, Microsoft, HP, PayPal, Citi; Amdocs has no
   jobs today) give the job's own JSON at `/api/pcsx/position_details?position_id=...&domain=...&hl=en`, the call the board
@@ -417,11 +417,18 @@ PLAN.md step 7.1. Where the text of a posting lives, and how it gets there:
   `robots.txt`, the delay and the budget (held keys, 40 a company and run, five misses in a row end the run) are the Workday
   ones; they run after the lists, so a refusal never skips a company. The first fill: about 160 requests on the first day
   (Nvidia's 400 jobs take ten days at 40 a day), then the new jobs. Estimated, not yet seen live: about 830 of the 1,589 browser
-  jobs. **Not read, and not to be tried again without a reason:** Check Point (231 jobs; a plain request answers HTTP 403, bot
-  protection, never worked around) and every other browser company (monday.com, Tower, Priority,
-  Komodor, Intezer, Oligo, Mesh, Pecan, Panorays, Lightbits, ForSight, Valens, Lasso): a sample of one
-  job page each shows no JobPosting markup in the static HTML (the text is drawn by JavaScript). Digital Turbine is a Workday site
-  read through its JSON-LD; its Workday JSON would be an alternative.
+  jobs. (4) **Boards:** the pages in `adapters.BOARD_PAGES` (monday.com, Classiq, Komodor, Panorays, Oligo Security,
+  Lasso Security, ForSight Robotics) embed a public board of an ATS (monday.com's page data says `"source":"ashby"`, the
+  others load Comeet's `api.js` with their company id, found on 2026-11-20). The crawl keeps its list and ids; the text is
+  the board's (`ashby` or `comeet` adapter, one request a run), joined to the job by the id in its link, so a job with no
+  board job gets no text and no miss, and nothing is re-pinned. About 180 jobs. **Not read, and not to be tried again
+  without a reason:** Check Point (231 jobs; a plain request answers HTTP 403, bot protection, never worked around), Tower
+  (SAP SuccessFactors, whose `robots.txt` is `Disallow: /`; the text is only in the page's HTML), Stratasys and Ormat
+  (SuccessFactors career sites, no JSON-LD, the JSON the page calls is under a disallowed `/services/`), Intezer and Valens
+  (no JSON of the postings; Valens' WordPress API has no text field). Priority, Mesh, Pecan and Lightbits publish their
+  postings through the site's WordPress REST API (`/wp-json/wp/v2/<post type>`, 42 jobs, full text, robots.txt allows
+  it): not read, because it is neither a call the page makes nor an ATS (a decision for the maintainer, `TODO.md`).
+  Digital Turbine is a Workday site read through its JSON-LD; its Workday JSON would be an alternative.
 - **Not read yet.** Phenom (89 jobs, the list carries a teaser, not the text), Oracle HCM (9 jobs), `comeet_page` (11), JazzHR
   (1) and BambooHR (none open today): each would need its own per-job path and adapter for a handful of jobs, so they wait until
   one has enough jobs to matter (judged on 2026-11-17 by job count only; their `robots.txt` and detail endpoints are not

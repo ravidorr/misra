@@ -22,6 +22,12 @@ All notable changes are documented here. Format follows [Keep a Changelog](https
 - The Crawl area of the admin page (PLAN_2.md step 2.2): it calls `admin_crawl_health()` when first shown and lists one card per company, worst first, with a headline, chips with counts (Needs attention, Failing, Robots.txt, Held, All), the values of the crawl and a status pill. Loading, empty, error and 401 states. Templates and tests only.
 - A Copy button under every code block of the legal pages (the address on "Connect your assistant", the command for Claude Code), in `templates/theme.js`.
 
+## [0.81.0] - 2026-11-20
+
+### Added
+
+- Text for the jobs of seven browser companies whose own career page embeds a public job board (`adapters.BOARD_PAGES`): monday.com (Ashby), Classiq, Komodor, Panorays, Oligo Security, Lasso Security and ForSight Robotics (Comeet), about 180 jobs. The browser crawl keeps its list and its job ids; the description is the board's, read once a run through the `ashby` or `comeet` adapter and joined to the crawl's job by the id in its link (an Ashby id, a Comeet position uid), so nothing is re-pinned and no job closes and reopens. Still no page text, the 40 jobs a company and run cap applies, and a board that cannot be read gives no text and costs no miss. Read on 2026-11-20: monday.com 137 of its 138 jobs matched, the other six companies 44 of 45. The companies that do not qualify (Check Point, Tower, Stratasys, Ormat, Intezer, Valens) and the four that publish through the WordPress REST API are in `CONTRIBUTING.md`, "Job descriptions", and `TODO.md`.
+
 ## [0.80.1] - 2026-11-19
 
 ### Fixed

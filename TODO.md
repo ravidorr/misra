@@ -60,11 +60,12 @@ An item that has a date says `Due <date>` in its text. The dates were set on 202
 
 ## Descriptions
 
-- [ ] **Text for the browser companies that give none.** Trigger: Check Point (231 jobs, bot protection), monday.com (128),
-  Tower (75), Priority and a dozen small career pages draw the posting with JavaScript, so a plain request has no text and
-  the browser crawl has no standard field (CONTRIBUTING.md, "Job descriptions", has the list). Where: per company, a JSON
-  endpoint the page itself calls (as HiBob and Eightfold), or the company's ATS if it has a public one. Done when: a company on
-  that list gives a text without scraping page text and without working around bot protection. Do not retry a plain request.
+- [ ] **Text for the browser companies that give none.** Trigger: seven browser companies now read the text of their own
+  public Ashby or Comeet board (CONTRIBUTING.md, "Job descriptions"). Left: Check Point (bot protection, never worked
+  around), Tower, Stratasys, Ormat and Intezer (page text only) and Valens (no text in its API) stay without text.
+  Decision needed: Priority, Mesh, Pecan and Lightbits (42 jobs) publish their postings through the site's WordPress REST
+  API, which is neither a call the page makes nor an ATS. Where: a reader like `adapters.BOARD_PAGES` with a `wp_posts`
+  list. Done when: the maintainer has decided, and the four read it or are listed as not read.
 
 - [ ] **Descriptions for the adapters not read yet (FR-4).** Trigger: the description slices cover Greenhouse, Lever,
   Ashby, Workable, Comeet and Amazon (70 percent of open jobs at the first slice), Workday (a request per job, 40 a company

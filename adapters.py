@@ -621,10 +621,58 @@ def _job_posting(page: str) -> dict[str, Any] | None:
     return None
 
 
+# Career pages of the browser crawl whose company embeds a public board of an ATS we already read (the page's own data
+# names it, or its job pages load the ATS's script with the company's id), found by hand on 2026-11-20: the career page
+# -> (the ATS's adapter, its slug). The crawl keeps its list and its job ids; the text is the board's, joined to the
+# crawl's job by the id in the job's link, so the board is read once a run, not once a job, and nothing is re-pinned.
+BOARD_PAGES: dict[str, tuple[str, str]] = {
+    "https://monday.com/careers": ("ashby", "monday.com"),
+    "https://www.classiq.io/careers-page": ("comeet", "classiq/F7.008"),
+    "https://komodor.com/careers/": ("comeet", "komodor/96.005"),
+    "https://panorays.com/careers/": ("comeet", "panorays/97.00D"),
+    "https://www.oligo.security/company/careers": ("comeet", "oligosecurity/5A.00B"),
+    "https://www.lasso.security/careers": ("comeet", "lassosecurity/F9.008"),
+    "https://forsightrobotics.com/careers": ("comeet", "forsightrobotics/E9.008"),
+}
+_BOARD_UID = re.compile(r"(?<![0-9A-Z])[0-9A-F]{2}[._][0-9A-F]{3}(?![0-9A-Z])")  # a Comeet position uid: 4E.47C, _47C
+_boards: dict[str, dict[str, Job] | None] = {}  # per career page and process; a failed read is kept too (one request)
+
+
+def _board(slug: str) -> dict[str, Job] | None:
+    """The jobs of the page's board by upper-cased id (an Ashby id, a Comeet position uid), read once; None when the
+    board could not be read."""
+    if slug not in _boards:
+        ats, board_slug = BOARD_PAGES[slug]
+        jobs = ADAPTERS[ats](board_slug)
+        _boards[slug] = None if jobs is None else {str(j["job_id"]).upper(): j for j in jobs}
+    return _boards[slug]
+
+
+def _board_job(slug: str, job: Job) -> Job | None:
+    """The board's job of a crawl job: an id that is a segment of its link (Ashby, a Comeet link `/4E.47C/title/`), or
+    a Comeet uid written in one (`position-4e_47c`)."""
+    board = _board(slug) if slug in BOARD_PAGES else None
+    if not board:
+        return None
+    for segment in reversed(urlparse(str(job.get("url") or "")).path.upper().strip("/").split("/")):
+        for key in (segment, *(u.replace("_", ".") for u in _BOARD_UID.findall(segment))):
+            if key in board:
+                return board[key]
+    return None
+
+
+def _board_description(slug: str, job: Job) -> tuple[str, dict[str, Any]] | None:
+    found = _board_job(slug, job)
+    return (found.get("description") or "", found.get("details") or {}) if found else None
+
+
 def browser_description(slug: str, job: Job) -> tuple[str, dict[str, Any]] | None:
-    """The text of a job found by the browser crawl: an Eightfold job asks its own `position_details` JSON (the call the
-    career page makes, under the `/api/pcsx` path its search already uses); a job of a page in JSONLD_PAGES asks its
-    page and reads only the JobPosting JSON-LD. Never page text. None on any failure."""
+    """The text of a job found by the browser crawl: a job of a page in BOARD_PAGES takes the text of its company's
+    public ATS board; an Eightfold job asks its own `position_details` JSON (the call the career page makes, under the
+    `/api/pcsx` path its search already uses); a job of a page in JSONLD_PAGES asks its page and reads only the
+    JobPosting JSON-LD. Never page text. None on any failure."""
+    if slug in BOARD_PAGES:
+        return _board_description(slug, job)
     detail = job.get("detail_url")
     r = get(detail, headers={"Accept": "application/json"}) if detail else get(job["url"])
     if r is None or r.status_code != HTTP_OK:
@@ -639,6 +687,8 @@ def browser_description(slug: str, job: Job) -> tuple[str, dict[str, Any]] | Non
 
 
 def _browser_wants_page(slug: str, job: Job) -> bool:
+    if slug in BOARD_PAGES:
+        return _board_job(slug, job) is not None  # no match, or a board that could not be read: no ask, no miss
     if job.get("detail_url"):
         return True
     return slug in JSONLD_PAGES and host_of(str(job.get("url"))) == host_of(slug)  # the career page's own host only
