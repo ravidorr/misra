@@ -55,6 +55,7 @@ __HEADER__
   <div class="toolbar">
     <button type="button" class="btn btn-pill filters-open" id="filtersOpen" aria-haspopup="dialog">Filters</button>
     <button type="button" class="chip chip-new" id="starredView" aria-pressed="false">Starred (0)</button>
+    <button type="button" class="chip chip-new" id="hiddenView" aria-pressed="false">Hidden (0)</button>
   </div>
 
   <dialog class="sheet" id="moreFilters" aria-labelledby="sheetTitle" open>
@@ -107,6 +108,11 @@ __HEADER__
   </section>
 
   <noscript><p class="notice">The list needs JavaScript. Every open role is also in <a href="jobs.json">jobs.json</a> and <a href="jobs.jsonld">jobs.jsonld</a>.</p></noscript>
+  <section class="hidden-companies" id="hiddenCompanies" aria-labelledby="hiddenCompanies-h" hidden>
+    <h2 class="label hidden-head" id="hiddenCompanies-h" tabindex="-1">Hidden companies</h2>
+    <ul class="hidden-company-list" id="hiddenCompaniesList"></ul>
+  </section>
+  <h2 class="label hidden-head" id="hiddenRoles-h" tabindex="-1" hidden>Hidden roles</h2>
   <h2 class="sr-only list-heading" id="list-h" tabindex="-1">Roles</h2>
   <ul class="feed" id="list" aria-labelledby="list-h"></ul>
   <p class="missing" id="missing" data-report="prompt" hidden><span>Is a company missing? Tell us which one.</span> <button type="button" class="btn btn-pill" id="missingOpen" aria-haspopup="dialog">Add a company</button></p>
