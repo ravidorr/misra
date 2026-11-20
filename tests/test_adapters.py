@@ -2723,3 +2723,13 @@ def test_a_jazzhr_page_without_a_job_posting_keeps_the_job_as_it_was(monkeypatch
     job = {**JZ_JOB}
     assert adapters.add_descriptions("jazzhr", "acme", "Acme", [job], set()) == (1, 0, 0)
     assert job == JZ_JOB
+
+
+def test_a_phenom_job_gives_the_json_ld_of_its_own_page_on_the_career_site(monkeypatch: pytest.MonkeyPatch) -> None:
+    url = "https://careers.acme.test/global/en/job/ACME123"
+    urls = fake_get(monkeypatch, FakeHttpResponse(text=JZ_PAGE))
+    jobs = [{"job_id": "123", "title": "T", "url": url}, {"job_id": "9", "title": "U", "url": "https://x.test/job/9"}]
+    assert adapters.add_descriptions("phenom", "careers.acme.test/global/en", "Acme", jobs, set()) == (2, 1, 0)
+    assert jobs[0]["description"] == "Build things"
+    assert "description" not in jobs[1]
+    assert urls == [url]  # the list's own host, never the host of a link
