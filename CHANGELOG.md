@@ -4,6 +4,10 @@ All notable changes are documented here. Format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
+### Changed
+
+- The new-tab icon is smaller: `0.75em` (12px in 16px text and in the Apply button) with a `0.3em` gap and `vertical-align: -0.05em`, and `0.6em` in the job title link (`.card-title a`), so it sits below the x-height of the text it follows. In Windows high contrast mode the icon is now painted with `LinkText`, because its fixed colour could equal the button's forced background and the Apply icon vanished. `design-system/components/external-link.css`, `design-system/README.md` and `tests/test_new_tab_icon.py` only; the 44px targets and the "(opens in a new tab)" words are unchanged. No version bump: no Python module or package file changed.
+
 ### Removed
 
 - The "Filters reset." line with an "Undo" button that showed for 6 seconds after "Reset" (`#resetNote`, its timer and the code that restored the filters), and its `.reset-note` styles. "Reset" is unchanged and still acts at once; the `sr-only` status region now says "Filters reset." so screen readers still hear it.
