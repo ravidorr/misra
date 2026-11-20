@@ -74,7 +74,7 @@ def test_no_template_or_component_writes_an_arrow_glyph_or_its_own_icon_for_a_ne
 def test_the_rule_is_one_mask_file_that_the_page_policy_allows_and_the_build_copies() -> None:
     css = RULE.read_text(encoding="utf-8")
     assert 'a[target="_blank"]' in css
-    assert "currentcolor" in css  # the link's own colour, so light, dark, a button and forced colors all follow it
+    assert "currentcolor" in css  # the link colour: light, dark and a button follow it
     assert "forced-color-adjust: none" in css
     assert "linktext" in css  # under forced colors the icon is painted with the system link colour (see the test below)
     assert 'url("new-tab.svg")' in css
