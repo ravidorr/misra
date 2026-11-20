@@ -670,21 +670,44 @@ def _job_posting(page: str) -> dict[str, Any] | None:
     return None
 
 
+def _jsonld_page_text(url: str) -> tuple[str, dict[str, Any]] | None:
+    """The description of the schema.org JobPosting in the JSON-LD of a job page, and nothing else of the page (never
+    page text). None when the page does not answer or has no JobPosting."""
+    r = get(url)
+    if r is None or r.status_code != HTTP_OK:
+        return None
+    posting = _job_posting(r.text)
+    return jsonld_description(posting) if posting else None
+
+
+def _jsonld_job_page(host_for: Callable[[str], str]) -> Callable[[str, Job], tuple[str, dict[str, Any]] | None]:
+    """The job-page reader of an ATS whose job pages carry a JobPosting JSON-LD: it asks the job's own page, and only
+    when that page is on the host the company's slug names (`host_for(slug)`), so a link to anywhere else is never
+    requested."""
+
+    def fetch(slug: str, job: Job) -> tuple[str, dict[str, Any]] | None:
+        url = str(job.get("url"))
+        if not url.startswith("https://") or host_of(url) != host_for(slug):
+            return None
+        return _jsonld_page_text(url)
+
+    return fetch
+
+
 def browser_description(slug: str, job: Job) -> tuple[str, dict[str, Any]] | None:
     """The text of a job found by the browser crawl: an Eightfold job asks its own `position_details` JSON (the call the
     career page makes, under the `/api/pcsx` path its search already uses); a job of a page in JSONLD_PAGES asks its
     page and reads only the JobPosting JSON-LD. Never page text. None on any failure."""
     detail = job.get("detail_url")
-    r = get(detail, headers={"Accept": "application/json"}) if detail else get(job["url"])
+    if not detail:
+        return _jsonld_page_text(job["url"])
+    r = get(detail, headers={"Accept": "application/json"})
     if r is None or r.status_code != HTTP_OK:
         return None
-    if detail:
-        try:
-            return html_to_text(r.json()["data"]["jobDescription"]), {}
-        except (ValueError, KeyError, TypeError):
-            return None
-    posting = _job_posting(r.text)
-    return jsonld_description(posting) if posting else None
+    try:
+        return html_to_text(r.json()["data"]["jobDescription"]), {}
+    except (ValueError, KeyError, TypeError):
+        return None
 
 
 def _browser_wants_page(slug: str, job: Job) -> bool:
@@ -699,6 +722,7 @@ DETAILS: dict[str, Callable[[str, Job], tuple[str, dict[str, Any]] | None]] = {
     "workday": workday_description,
     "bamboohr": bamboohr_description,
     "oraclehcm": oraclehcm_description,
+    "jazzhr": _jsonld_job_page(lambda slug: f"{slug}.applytojob.com"),
     "browser": browser_description,
 }
 WANTS: dict[str, Callable[[str, Job], bool]] = {"browser": _browser_wants_page}

@@ -2683,3 +2683,43 @@ def test_an_oracle_requisition_without_text_keeps_the_job_as_it_was(monkeypatch:
     job = {**OR_JOB}
     assert adapters.add_descriptions("oraclehcm", OR_SLUG, "Acme", [job], set()) == (1, 0, 0)
     assert job == OR_JOB
+
+
+JZ_URL = "https://acme.applytojob.com/apply/AbC123/Engineer"
+JZ_JOB = {"job_id": "AbC123", "title": "T", "url": JZ_URL}
+JZ_PAGE = ld_html(
+    {"@type": "JobPosting", "description": "&lt;p&gt;Build things&lt;/p&gt;", "employmentType": "FULL_TIME"}
+)
+
+
+def test_a_jazzhr_job_gives_the_json_ld_of_its_own_page(monkeypatch: pytest.MonkeyPatch) -> None:
+    urls = fake_get(monkeypatch, FakeHttpResponse(text=JZ_PAGE))
+    jobs = [{**JZ_JOB}]
+    assert adapters.add_descriptions("jazzhr", "acme", "Acme", jobs, set()) == (1, 1, 0)
+    assert jobs[0]["description"] == "Build things"
+    assert jobs[0]["details"] == {"employment_type": "FULL_TIME"}
+    assert urls == [JZ_URL]
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "https://evil.test/apply/AbC123/x",  # not the company's own board
+        "https://acme.applytojob.com@evil.test/x",  # a host hidden in the user part
+        "http://acme.applytojob.com/apply/AbC123/x",  # not https
+        "None",  # no link at all
+    ],
+)
+def test_a_job_page_on_another_host_is_never_requested(monkeypatch: pytest.MonkeyPatch, url: str) -> None:
+    urls = fake_get(monkeypatch, FakeHttpResponse(text=JZ_PAGE))
+    jobs = [{**JZ_JOB, "url": url}]
+    assert adapters.add_descriptions("jazzhr", "acme", "Acme", jobs, set()) == (1, 0, 0)
+    assert urls == []
+    assert "description" not in jobs[0]
+
+
+def test_a_jazzhr_page_without_a_job_posting_keeps_the_job_as_it_was(monkeypatch: pytest.MonkeyPatch) -> None:
+    fake_get(monkeypatch, FakeHttpResponse(text="<p>closed</p>"))
+    job = {**JZ_JOB}
+    assert adapters.add_descriptions("jazzhr", "acme", "Acme", [job], set()) == (1, 0, 0)
+    assert job == JZ_JOB
