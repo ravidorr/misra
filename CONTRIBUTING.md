@@ -422,10 +422,14 @@ PLAN.md step 7.1. Where the text of a posting lives, and how it gets there:
   Komodor, Intezer, Oligo, Mesh, Pecan, Panorays, Lightbits, ForSight, Valens, Lasso): a sample of one
   job page each shows no JobPosting markup in the static HTML (the text is drawn by JavaScript). Digital Turbine is a Workday site
   read through its JSON-LD; its Workday JSON would be an alternative.
-- **Not read yet.** Phenom (89 jobs, the list carries a teaser, not the text), Oracle HCM (9 jobs), `comeet_page` (11), JazzHR
-  (1) and BambooHR (none open today): each would need its own per-job path and adapter for a handful of jobs, so they wait until
-  one has enough jobs to matter (judged on 2026-11-17 by job count only; their `robots.txt` and detail endpoints are not
-  checked yet). SmartRecruiters stays skipped by `robots.txt`.
+- **Job pages (other ATSs).** Five more adapters ask one page per job, with the Workday budget (held keys, 40 a company
+  and run, five misses end the run, one request a second a host, `robots.txt` checked on 2026-11-20 for each path): BambooHR
+  (`/careers/<id>/detail`, the JSON the careers page loads, `result.jobOpening.description`), Oracle HCM
+  (`recruitingCEJobRequisitionDetails` on the list's own `/hcmRestApi/` path: `ExternalDescriptionStr` plus the external
+  responsibilities and qualifications; the corporate boilerplate is left out), and JazzHR, Phenom and `comeet_page` (the job's
+  own page on the host the slug names, only its `JobPosting` JSON-LD, as the JSON-LD pages above; a link to any other host is
+  never requested). Each shows as its own ATS in the `job pages:` and `descriptions:` lines. Not read: SmartRecruiters,
+  skipped by `robots.txt`.
 - **The text.** Plain text made from the site's HTML with the standard library: scripts, styles and embedded frames are
   dropped with their content, no tag survives (an angle bracket a posting wrote, such as `List<T>`, is kept as text, to be shown as text), paragraphs and list items keep their line breaks, control characters
   (NUL breaks a Postgres insert) are removed. At most 20,000 characters a job (`MAX_CHARS` in `descriptions.py`, cut at a
