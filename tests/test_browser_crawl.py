@@ -758,8 +758,24 @@ def test_crawl_many(monkeypatch: pytest.MonkeyPatch, exe: str | None) -> None:
     monkeypatch.setattr(browser_crawl, "async_playwright", lambda: FakePlaywright(calls))
     monkeypatch.setattr(browser_crawl, "crawl_one", fake_crawl)
     monkeypatch.setattr(browser_crawl, "EXE", exe)
-    assert browser_crawl.crawl_many(iter(["a", "b"])) == {"a": [], "b": None}
+    assert sorted(browser_crawl.crawl_many(iter(["a", "b"]))) == [("a", []), ("b", None)]
     assert ("executable_path" in calls[0]) == bool(exe)
+
+
+def test_crawl_many_hands_over_the_pages_done_before_a_crash_and_then_raises(monkeypatch: pytest.MonkeyPatch) -> None:
+    async def fake_crawl(_ctx: object, url: str, _sem: asyncio.Semaphore) -> list[dict[str, Any]] | None:
+        if url == "b":
+            await asyncio.sleep(0.05)  # "a" is done by now
+            raise RuntimeError("browser died")
+        return []
+
+    monkeypatch.setattr(browser_crawl, "async_playwright", lambda: FakePlaywright([]))
+    monkeypatch.setattr(browser_crawl, "crawl_one", fake_crawl)
+    got = []
+    with pytest.raises(RuntimeError, match="browser died"):
+        for item in browser_crawl.crawl_many(["a", "b"]):
+            got.append(item)
+    assert got == [("a", [])]
 
 
 async def test_an_eightfold_search_without_a_domain_gives_no_job_page_to_read() -> None:

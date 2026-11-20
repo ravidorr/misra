@@ -2,11 +2,14 @@
 Supabase), mark new/closed. `--gaps` logs the coverage gaps."""
 
 import datetime
+import queue
 import re
 import sqlite3
 import sys
+import threading
 import time
-from concurrent.futures import ThreadPoolExecutor
+from collections import deque
+from concurrent.futures import Future, ThreadPoolExecutor
 from typing import Any
 
 import common
@@ -150,6 +153,14 @@ def read_job_pages(co: dict[str, Any], jobs: list[dict[str, Any]]) -> None:
             DETAIL_STATS[co["name"]] = (co["ats"], *stats)
 
 
+def read_pages_of(
+    co: dict[str, Any], jobs: list[dict[str, Any]] | None
+) -> tuple[dict[str, Any], list[dict[str, Any]] | None]:
+    if jobs:
+        read_job_pages(co, jobs)
+    return co, jobs
+
+
 def crawl(co: dict[str, Any]) -> tuple[dict[str, Any], list[dict[str, Any]] | None]:
     jobs = fetch(co)
     if jobs is None and not robots_skipped(co):  # one retry: most failures are transient rate limits
@@ -207,6 +218,7 @@ def check_spelling(c: sqlite3.Connection, known: list[str], excluded: list[str])
 GAP_KINDS = ("failing", "held", "closed")  # the order gap_summary lists them in
 FAILING_RUNS = 2  # a company is failing when its last two crawls failed, as in the dashboard (one-offs do not count)
 GAP_STALE_DAYS = 7  # a company not crawled for this long before the newest crawl is no longer one of ours
+DEAD_DAYS = 30  # a crawled company whose board has been empty (crawls ok, no job) this long is a dead board
 GAP_NEW_DAYS = 2  # a gap is new when it began on the newest crawl day or this many days before it (a lost run fits)
 
 
@@ -264,6 +276,60 @@ def coverage_gaps(c: sqlite3.Connection) -> list[dict[str, Any]]:
     return gaps
 
 
+def dead_boards(c: sqlite3.Connection) -> list[dict[str, Any]]:
+    """Crawled companies whose board has been empty for DEAD_DAYS days: one dict each, company, since and new.
+
+    Dead means the last crawl of the company in crawl_log was ok with no job (a NULL count is no job), and its
+    first ok crawl with no job since the last ok crawl with a job (`since`) is DEAD_DAYS or more before the newest
+    crawl day. Failed and skipped crawls in between do not restart the count, but one at the start does not begin it
+    (the log keeps 90 days, so `since` never reaches back further, and a company observed for less is not judged
+    yet). The company must have been crawled in the last GAP_STALE_DAYS days (an excluded or removed company stops
+    showing after that). `new` is True when the run crossed DEAD_DAYS on the newest crawl day or up to GAP_NEW_DAYS
+    days before it, as for the coverage gaps.
+
+    n_jobs is counted after the Israel filter, so an israel_only company with no Israel roles can be flagged."""
+    history: dict[str, list[tuple[int, int, str]]] = {}
+    query = "SELECT company, ts, ok, COALESCE(n_jobs, 0) FROM crawl_log WHERE company IS NOT NULL ORDER BY ts, rowid"
+    for company, ts, ok, n_jobs in c.execute(query):
+        history.setdefault(company, []).append((ok, n_jobs, ts))
+    if not history:
+        return []
+    newest = datetime.date.fromisoformat(max(seq[-1][2][:10] for seq in history.values()))
+    stale = (newest - datetime.timedelta(days=GAP_STALE_DAYS)).isoformat()
+    dead = (newest - datetime.timedelta(days=DEAD_DAYS)).isoformat()
+    fresh = (newest - datetime.timedelta(days=DEAD_DAYS + GAP_NEW_DAYS)).isoformat()
+    boards: list[dict[str, Any]] = []
+    for company, seq in sorted(history.items()):
+        if seq[-1][2][:10] < stale:
+            continue
+        since = seq[-1][2]
+        for ok, n_jobs, ts in reversed(seq):
+            if ok and n_jobs:
+                break
+            if ok:
+                since = ts
+        if seq[-1][0] and not seq[-1][1] and since[:10] <= dead:
+            boards.append({"company": company, "since": since, "new": since[:10] >= fresh})
+    return boards
+
+
+def log_dead_boards(c: sqlite3.Connection) -> None:
+    """One more log line after the coverage gaps: `dead boards: N (M new), ...: names` (counts and public company
+    names only), a ::warning:: when one is new. An alert only: a failed check is a warning and never fails the step."""
+    try:
+        boards = dead_boards(c)
+    except (sqlite3.Error, ValueError, TypeError) as exc:
+        print(f"::warning::dead board check failed, {type(exc).__name__}")
+        return
+    if boards:
+        new = sum(1 for b in boards if b["new"])
+        names = ", ".join(b["company"] for b in boards)
+        print(
+            ("::warning::" if new else "")
+            + f"dead boards: {len(boards)} ({new} new), no job for {DEAD_DAYS} days: {names}"
+        )
+
+
 def safe_coverage_gaps(c: sqlite3.Connection) -> tuple[list[dict[str, Any]], str]:
     """(gaps, error): a problem in the gap check comes back as text, so the gaps step can report it and go red."""
     try:
@@ -287,14 +353,15 @@ def log_coverage_gaps(c: sqlite3.Connection) -> bool:
     """Put the coverage gaps in the job log, so a crawl problem is never silent (nothing is emailed for them).
 
     One line of counts and company names (the log is public, the names are public companies). A gap that is new (see
-    coverage_gaps) makes the line a ::warning:: annotation on the run. Returns False when the check itself failed, so
-    the step can go red."""
+    coverage_gaps) makes the line a ::warning:: annotation on the run. Then log_dead_boards adds its own line (skipped
+    when the gap check itself failed). Returns False when the gap check failed, so the step can go red."""
     gaps, error = safe_coverage_gaps(c)
     if error:
         print(f"::warning::coverage check failed, {error}")
         return False
     if gaps:
         print(("::warning::" if any(g["new"] for g in gaps) else "") + gap_summary(gaps))
+    log_dead_boards(c)
     return True
 
 
@@ -356,9 +423,9 @@ def main() -> None:  # noqa: PLR0915
 
     def record(batch: list[tuple[dict[str, Any], list[dict[str, Any]] | None]]) -> None:  # noqa: PLR0912
         """Write the results of these companies into the history and commit them, company by company. A crash while
-        recording loses only the company being recorded, and a crash in the browser crawl keeps the API companies (the
-        browser results themselves are lost, TODO.md): the workflow syncs after a failed crawl, so what was recorded
-        reaches Supabase, and the run is red anyway."""
+        recording loses only the company being recorded, and a crash in the browser crawl keeps the API companies
+        and the browser companies recorded before it (on a step timeout, the ones recorded so far): the workflow syncs
+        after a failed crawl, so what was recorded reaches Supabase, and the run is red anyway."""
         for co, fetched in batch:
             c.commit()  # the previous company is complete: keep it whatever comes next
             name = co["name"]
@@ -443,13 +510,76 @@ def main() -> None:  # noqa: PLR0915
     with ThreadPoolExecutor(8) as ex:
         results = list(ex.map(crawl, api))
     record(results)  # the API companies are in the history before the slow browser crawl starts
-    if br:
-        got = crawl_many([co["slug"] for co in br])
-        later = [(co, got.get(co["slug"])) for co in br]
-        with ThreadPoolExecutor(8) as ex:  # the job pages of the browser companies, one host each, after the lists
-            list(ex.map(lambda r: read_job_pages(*r) if r[1] else None, later))
-        record(later)
-        results.extend(later)
+
+    def crawl_browser_companies() -> None:
+        by_slug = {slug: [co for co in br if co["slug"] == slug] for slug in dict.fromkeys(co["slug"] for co in br)}
+
+        def finish(fut: Future[tuple[dict[str, Any], list[dict[str, Any]] | None]]) -> None:
+            later = fut.result()
+            record([later])
+            results.append(later)
+
+        def drain(waiting: deque[Future[tuple[dict[str, Any], list[dict[str, Any]] | None]]]) -> None:
+            failure: Exception | None = None
+            while waiting:  # one company that cannot be recorded must not cost the others
+                try:
+                    finish(waiting.popleft())
+                except Exception as exc:
+                    c.rollback()
+                    failure = failure or exc
+            if failure:
+                raise failure
+
+        if by_slug:
+            seen_slugs: set[str] = set()
+            # One queue carries both the crawl's lists and the finished job-page reads, so a company is recorded as
+            # soon as its pages are read, even while the next list is slow or stuck. Companies are recorded in the
+            # order their lists arrived. A crash keeps every company whose list arrived.
+            events: queue.Queue[tuple[str, Any]] = queue.Queue()
+
+            def feed() -> None:
+                try:
+                    for slug, jobs in crawl_many(list(by_slug)):
+                        events.put(("list", (slug, jobs)))
+                except BaseException as exc:  # handed to the loop below
+                    events.put(("error", exc))
+                else:
+                    events.put(("end", None))
+
+            threading.Thread(target=feed, daemon=True).start()
+            with ThreadPoolExecutor(8) as ex:
+                waiting: deque[Future[tuple[dict[str, Any], list[dict[str, Any]] | None]]] = deque()
+                try:
+                    while True:
+                        kind, value = events.get()
+                        if kind == "error":
+                            raise value
+                        if kind == "end":
+                            break
+                        for slug, jobs in [value] if kind == "list" else []:  # "done" only wakes the loop
+                            seen_slugs.add(slug)
+                            # companies sharing a page each get their own copy of the jobs, made before any is submitted
+                            sharing = [
+                                (co, [dict(j) for j in jobs] if jobs and i else jobs)
+                                for i, co in enumerate(by_slug[slug])
+                            ]
+                            for co, mine in sharing:
+                                fut = ex.submit(read_pages_of, co, mine)
+                                fut.add_done_callback(lambda f: events.put(("done", f)))
+                                waiting.append(fut)
+                        while waiting and waiting[0].done():
+                            finish(waiting.popleft())
+                except BaseException:
+                    c.rollback()  # discard a half-recorded company: the drain below must not commit it
+                    raise
+                finally:
+                    drain(waiting)
+            for slug in by_slug.keys() - seen_slugs:  # a page the crawl never reported is a failed crawl
+                for co in by_slug[slug]:
+                    record([(co, None)])
+                    results.append((co, None))
+
+    crawl_browser_companies()
     dropped = delete_robots_skips(c, set(skipped) - attempted)
     c.commit()
     n_open = c.execute("SELECT COUNT(*) FROM jobs WHERE status='open'").fetchone()[0]

@@ -5,6 +5,7 @@ import html
 import json
 import re
 import xml.etree.ElementTree as ET
+import zlib
 from collections import Counter
 from collections.abc import Callable, Iterable, Iterator
 from datetime import UTC, datetime
@@ -16,6 +17,7 @@ from common import ISRAEL, get, host_of, post, reset_robots_block
 from descriptions import DETAIL_CAP, HELD, attach, html_to_text, jsonld_description, plain_text, sections
 
 HTTP_OK = 200
+REFRESH_DAYS = 14  # a stored text is asked again once in this many days, so an edited posting is picked up
 DETAIL_FAIL_STREAK = 5  # job pages in a row without a text after which a company's job pages stop for this run
 Job = dict[str, Any]
 WORKDAY_ISRAEL = (
@@ -593,6 +595,55 @@ def workday_description(slug: str, job: Job) -> tuple[str, dict[str, Any]] | Non
     return html_to_text(info.get("jobDescription")), {"employment_type": info.get("timeType")}
 
 
+def bamboohr_description(slug: str, job: Job) -> tuple[str, dict[str, Any]] | None:
+    """The text of one BambooHR posting: `/careers/<id>/detail`, the JSON the careers page itself loads (the same host
+    and `/careers/` path as the list), `result.jobOpening.description` as HTML. Of what else it gives only the
+    employment type is kept (the compensation, the share link and the ids are not). None on any failure."""
+    job_id = str(job["job_id"])
+    if not (job_id.isascii() and job_id.isdigit()):
+        return None
+    r = get(f"https://{slug}.bamboohr.com/careers/{job_id}/detail", headers={"Accept": "application/json"})
+    if r is None or r.status_code != HTTP_OK:
+        return None
+    try:
+        opening = r.json()["result"]["jobOpening"]
+    except (ValueError, KeyError, TypeError):
+        return None
+    if not isinstance(opening, dict):
+        return None
+    return html_to_text(opening.get("description")), {"employment_type": opening.get("employmentStatusLabel")}
+
+
+def oraclehcm_description(slug: str, job: Job) -> tuple[str, dict[str, Any]] | None:
+    """The text of one Oracle HCM requisition: `recruitingCEJobRequisitionDetails`, the same `/hcmRestApi/` REST path
+    as the list (so the same robots.txt rule), asked for the requisition by its id. The text is `ExternalDescriptionStr`
+    followed by the external responsibilities and qualifications when the tenant fills them in (the corporate and
+    organisation boilerplate is left out); of the rest only the schedule and the workplace type are kept. None on any
+    failure."""
+    host, _, site = slug.partition("/")
+    job_id = str(job["job_id"])
+    if not (job_id.isascii() and job_id.isdigit()):
+        return None
+    r = get(
+        f"https://{host}/hcmRestApi/resources/latest/recruitingCEJobRequisitionDetails",
+        params={"onlyData": "true", "finder": f'ById;Id="{job_id}",siteNumber={site}'},
+    )
+    if r is None or r.status_code != HTTP_OK:
+        return None
+    try:
+        req = r.json()["items"][0]
+    except (ValueError, KeyError, IndexError, TypeError):
+        return None
+    if not isinstance(req, dict):
+        return None
+    text = sections(
+        ("", html_to_text(req.get("ExternalDescriptionStr"))),
+        ("Responsibilities", html_to_text(req.get("ExternalResponsibilitiesStr"))),
+        ("Qualifications", html_to_text(req.get("ExternalQualificationsStr"))),
+    )
+    return text, {"employment_type": req.get("JobSchedule"), "workplace_type": req.get("WorkplaceType")}
+
+
 # Career pages of the browser crawl whose job pages carry a schema.org JobPosting with the description in static HTML,
 # found by hand on 2026-11-17. Every other page of the crawl gives no text from a plain request (JavaScript only, no
 # markup of a posting, or bot protection as at Check Point, never worked around), see CONTRIBUTING.md.
@@ -622,24 +673,125 @@ def _job_posting(page: str) -> dict[str, Any] | None:
     return None
 
 
-def browser_description(slug: str, job: Job) -> tuple[str, dict[str, Any]] | None:
-    """The text of a job found by the browser crawl: an Eightfold job asks its own `position_details` JSON (the call the
-    career page makes, under the `/api/pcsx` path its search already uses); a job of a page in JSONLD_PAGES asks its
-    page and reads only the JobPosting JSON-LD. Never page text. None on any failure."""
-    detail = job.get("detail_url")
-    r = get(detail, headers={"Accept": "application/json"}) if detail else get(job["url"])
+HTTP_REDIRECTS = frozenset({301, 302, 303, 307, 308})
+MAX_REDIRECTS = 3
+
+
+def _jsonld_page_text(url: str, host: str = "") -> tuple[str, dict[str, Any]] | None:
+    """The description of the schema.org JobPosting in the JSON-LD of a job page, and nothing else of the page (never
+    page text). With `host`, redirects are followed here, one request at a time, only to an https address on that same
+    host (an added trailing slash is the usual one), each through `get`, so through robots.txt and the per-host
+    delay: a redirect to any other host is never requested. None when the page does not answer or has no JobPosting."""
+    r = get(url, allow_redirects=False) if host else get(url)
+    for _ in range(MAX_REDIRECTS if host else 0):
+        if r is None or r.status_code not in HTTP_REDIRECTS:
+            break
+        target = r.headers.get("Location")
+        url = urljoin(url, target) if target else ""
+        if not url.startswith("https://") or host_of(url) != host:  # no Location is no page either
+            return None
+        r = get(url, allow_redirects=False)
     if r is None or r.status_code != HTTP_OK:
         return None
-    if detail:
-        try:
-            return html_to_text(r.json()["data"]["jobDescription"]), {}
-        except (ValueError, KeyError, TypeError):
-            return None
     posting = _job_posting(r.text)
     return jsonld_description(posting) if posting else None
 
 
+def _jsonld_job_pages(
+    host_for: Callable[[str], str],
+) -> tuple[Callable[[str, Job], tuple[str, dict[str, Any]] | None], Callable[[str, Job], bool]]:
+    """The job-page reader and the filter of an ATS whose job pages carry a JobPosting JSON-LD. Only a job whose own
+    https page is on the host the company's slug names (`host_for(slug)`) is asked for (a link to another host is not
+    a request and not counted), and a redirect to another host is not followed."""
+
+    def wants(slug: str, job: Job) -> bool:
+        url = str(job.get("url"))
+        return url.startswith("https://") and host_of(url) == host_for(slug)
+
+    def fetch(slug: str, job: Job) -> tuple[str, dict[str, Any]] | None:
+        return _jsonld_page_text(str(job["url"]), host_for(slug))
+
+    return fetch, wants
+
+
+# Career pages of the browser crawl whose company embeds a public board of an ATS we already read (the page's own data
+# names it, or its job pages load the ATS's script with the company's id), found by hand on 2026-11-20: the career page
+# -> (the ATS's adapter, its slug). The crawl keeps its list and its job ids; the text is the board's, joined to the
+# crawl's job by the id in the job's link, so the board is read once a run, not once a job, and nothing is re-pinned.
+BOARD_PAGES: dict[str, tuple[str, str]] = {
+    "https://monday.com/careers": ("ashby", "monday.com"),
+    "https://www.classiq.io/careers-page": ("comeet", "classiq/F7.008"),
+    "https://komodor.com/careers/": ("comeet", "komodor/96.005"),
+    "https://panorays.com/careers/": ("comeet", "panorays/97.00D"),
+    "https://www.oligo.security/company/careers": ("comeet", "oligosecurity/5A.00B"),
+    "https://www.lasso.security/careers": ("comeet", "lassosecurity/F9.008"),
+    "https://forsightrobotics.com/careers": ("comeet", "forsightrobotics/E9.008"),
+}
+_BOARD_UID = re.compile(r"(?<![0-9A-Z])[0-9A-F]{2}[._][0-9A-F]{3}(?![0-9A-Z])")  # Comeet uid 4E.47C, or 4E_47C
+_boards: dict[str, dict[str, Job] | None] = {}  # per career page and process; a failed read is kept too (one request)
+
+
+def _board(page: str) -> dict[str, Job] | None:
+    """The jobs of the career page's board with a text, by upper-cased id (an Ashby id, a Comeet uid), read once a
+    run; None when the board could not be read or holds none (one `::warning::` says which page, so a board that
+    disappeared is seen, not silent). A page shared by two companies could be read twice: harmless."""
+    if page not in _boards:
+        ats, board_slug = BOARD_PAGES[page]
+        try:
+            jobs = ADAPTERS[ats](board_slug)
+        except Exception as exc:  # a board that answers something unexpected costs the texts of its page only
+            print(f"::warning::the {ats} board of {page} could not be read: {type(exc).__name__}")
+            jobs = None
+        board = {str(j["job_id"]).upper(): j for j in jobs or [] if j.get("description")}
+        if not board:
+            print(f"::warning::the {ats} board of {page} gave no job text")
+        _boards[page] = board or None
+    return _boards[page]
+
+
+def _board_job(page: str, job: Job) -> Job | None:
+    """The board's job of a crawl job: an id that is a segment of the link's path (Ashby, a Comeet link
+    `/4E.47C/title/`), or a Comeet uid written in one (`position-4e_47c`). A link that names two board jobs matches
+    none: a wrong text is worse than none."""
+    board = _board(page)
+    if not board:
+        return None
+    for segment in reversed(urlparse(str(job.get("url") or "")).path.upper().strip("/").split("/")):
+        if segment in board:
+            return board[segment]
+        uids = {u.replace("_", ".") for u in _BOARD_UID.findall(segment)}
+        if uids & board.keys():
+            return board[uids.pop()] if len(uids) == 1 else None  # two uids in one segment: which job is it?
+    return None
+
+
+def _board_description(page: str, job: Job) -> tuple[str, dict[str, Any]] | None:
+    found = _board_job(page, job)
+    return (found["description"], found.get("details") or {}) if found else None
+
+
+def browser_description(slug: str, job: Job) -> tuple[str, dict[str, Any]] | None:
+    """The text of a job found by the browser crawl: a job of a page in BOARD_PAGES takes the text of its company's
+    public ATS board; an Eightfold job asks its own `position_details` JSON (the call the career page makes, under the
+    `/api/pcsx` path its search already uses); a job of a page in JSONLD_PAGES asks its page and reads only the
+    JobPosting JSON-LD. Never page text. None on any failure."""
+    if slug in BOARD_PAGES:
+        return _board_description(slug, job)
+    detail = job.get("detail_url")
+    if not detail:
+        return _jsonld_page_text(job["url"], host_of(slug))
+    r = get(detail, headers={"Accept": "application/json"})
+    if r is None or r.status_code != HTTP_OK:
+        return None
+    try:
+        return html_to_text(r.json()["data"]["jobDescription"]), {}
+    except (ValueError, KeyError, TypeError):
+        return None
+
+
 def _browser_wants_page(slug: str, job: Job) -> bool:
+    if slug in BOARD_PAGES:
+        return _board_job(slug, job) is not None  # no match, or a board that could not be read: no ask, no miss
     if job.get("detail_url"):
         return True
     return slug in JSONLD_PAGES and host_of(str(job.get("url"))) == host_of(slug)  # the career page's own host only
@@ -649,36 +801,59 @@ def _browser_wants_page(slug: str, job: Job) -> bool:
 # limits an ATS to the jobs worth a request.
 DETAILS: dict[str, Callable[[str, Job], tuple[str, dict[str, Any]] | None]] = {
     "workday": workday_description,
+    "bamboohr": bamboohr_description,
+    "oraclehcm": oraclehcm_description,
     "browser": browser_description,
 }
 WANTS: dict[str, Callable[[str, Job], bool]] = {"browser": _browser_wants_page}
+for _ats, _host_for in (
+    ("jazzhr", lambda slug: f"{slug}.applytojob.com"),
+    ("phenom", lambda slug: slug.partition("/")[0]),
+    ("comeet_page", host_of),
+):
+    DETAILS[_ats], WANTS[_ats] = _jsonld_job_pages(_host_for)
+
+
+def _in_refresh_slice(key: tuple[str, str], day: int) -> bool:
+    """True on the one day in REFRESH_DAYS when a job's stored text is asked again: the key fixes the job's turn and the
+    day moves it, so every job comes up once every REFRESH_DAYS days, whatever its key."""
+    return (zlib.crc32("\x00".join(key).encode()) + day) % REFRESH_DAYS == 0
 
 
 def add_descriptions(  # noqa: PLR0913, PLR0917
     ats: str, slug: str, company: str, jobs: list[Job], held: set[tuple[str, str]], day: int = 0
 ) -> tuple[int, int, int]:
     """Gives the jobs of a company whose list carries no text their description, one request per job page, and
-    returns (requested, got a text, deferred). Only jobs without a text are asked: one Supabase already holds (`held`,
-    left by the pull) is marked and not fetched again. At most DETAIL_CAP are asked per company and run, in a window
-    that moves with `day` so a page that never answers cannot starve the others, and five misses in a row end the
-    company's run (a host that refuses is left alone). The rest wait for the next run. A page that fails, is refused
-    by robots.txt or has no text gives no description and changes nothing else: this never fails the list, and a
-    refusal does not make the company a robots skip (the list was crawled)."""
+    returns (requested, got a text, new jobs deferred). Only jobs without a text are asked: one Supabase already
+    holds (`held`, left by the pull) is marked and not fetched again, except on its turn of one day in
+    REFRESH_DAYS, when it is asked again so an edited posting gets its new text (the sync writes it only if its
+    hash changed), after the new jobs and with only what they leave of the cap. At most DETAIL_CAP are asked per
+    company and run, the new jobs in a window that moves with `day` so a page that never answers cannot starve the
+    others, and five misses in a row end the company's run (a host that refuses is left alone). The rest wait for
+    the next run. A page that fails, is refused by robots.txt or has no text gives no description and changes
+    nothing else: this never fails the list, and a refusal does not make the company a robots skip (the list was
+    crawled)."""
     fetch_one = DETAILS.get(ats)
     if fetch_one is None:
         return 0, 0, 0
     wants = WANTS.get(ats)
     todo: list[Job] = []
+    refresh: list[Job] = []  # stored texts whose turn it is: they only use what the new jobs leave of the cap
     for job in jobs:
         if job.get("description") or (wants and not wants(slug, job)):
             continue
-        if (company, str(job.get("job_id"))) in held:
-            job[HELD] = True
-        else:
+        key = (company, str(job.get("job_id")))
+        if key not in held:
             todo.append(job)
+            continue
+        job[HELD] = True
+        if _in_refresh_slice(key, day):
+            refresh.append(job)
     if todo:  # a different window each day, by the fewest pages a run can end after, so no job is starved
         start = day * DETAIL_FAIL_STREAK % len(todo)
         todo = todo[start:] + todo[:start]
+    waiting = len(todo)  # the new jobs: a refresh that is not reached waits for its next turn, not the next run
+    todo += refresh
     asked = got = streak = 0
     for job in todo[:DETAIL_CAP]:
         asked += 1
@@ -696,7 +871,7 @@ def add_descriptions(  # noqa: PLR0913, PLR0917
             if streak >= DETAIL_FAIL_STREAK:  # a host that keeps refusing or failing is left alone until the next run
                 break
     reset_robots_block()  # a refused job page is not a refused company
-    return asked, got, len(todo) - asked
+    return asked, got, max(waiting - asked, 0)
 
 
 def _oraclehcm_place(req: dict[str, Any]) -> str | None:
