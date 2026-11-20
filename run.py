@@ -6,7 +6,8 @@ import re
 import sqlite3
 import sys
 import time
-from concurrent.futures import Future, ThreadPoolExecutor, as_completed
+from collections import deque
+from concurrent.futures import Future, ThreadPoolExecutor
 from typing import Any
 
 import common
@@ -464,24 +465,24 @@ def main() -> None:  # noqa: PLR0915
 
         if by_slug:
             seen_slugs: set[str] = set()
-            # the job pages of each company are read in a pool, after its list; a company is recorded when its pages are
-            # read, so a crash or the step timeout keeps the ones finished before it
+            # the job pages of each company are read in a pool, after its list; a company is recorded (in the order its
+            # list arrived) when its pages are read and the next list arrives or the crawl ends, so a crash or the step
+            # timeout keeps the ones finished before it
             with ThreadPoolExecutor(8) as ex:
-                waiting: set[Future[tuple[dict[str, Any], list[dict[str, Any]] | None]]] = set()
+                waiting: deque[Future[tuple[dict[str, Any], list[dict[str, Any]] | None]]] = deque()
                 try:
                     for slug, jobs in crawl_many(list(by_slug)):
                         seen_slugs.add(slug)
                         # companies sharing a page each get their own copy of the jobs
-                        waiting.update(
+                        waiting.extend(
                             ex.submit(read_pages_of, co, [dict(j) for j in jobs] if jobs and i else jobs)
                             for i, co in enumerate(by_slug[slug])
                         )
-                        for fut in [f for f in waiting if f.done()]:
-                            waiting.discard(fut)
-                            finish(fut)
+                        while waiting and waiting[0].done():
+                            finish(waiting.popleft())
                 finally:
-                    for fut in as_completed(waiting):
-                        finish(fut)
+                    while waiting:
+                        finish(waiting.popleft())
             for slug in by_slug.keys() - seen_slugs:  # a page the crawl never reported is a failed crawl
                 for co in by_slug[slug]:
                     record([(co, None)])

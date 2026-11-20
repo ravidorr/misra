@@ -1,6 +1,7 @@
 import json
 import runpy
 import sqlite3
+import threading
 import time
 from collections.abc import Callable
 from pathlib import Path
@@ -689,6 +690,51 @@ def test_browser_companies_that_share_a_slug_are_all_recorded_and_one_the_crawl_
         ("One", 1),
         ("Two", 1),
     ]
+    check.close()
+
+
+def test_a_browser_company_is_recorded_as_soon_as_the_next_list_arrives_when_its_pages_are_read(
+    workdir: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    write_json(
+        workdir / "data" / "companies.json",
+        [co("One", ats="browser", slug="https://one"), co("Two", ats="browser", slug="https://two")],
+    )
+    read = threading.Event()
+    monkeypatch.setattr(run, "read_job_pages", lambda _co, _jobs: read.set())
+    seen: list[Any] = []
+
+    def crawl(_urls: list[str]) -> Any:
+        yield "https://one", [job("o1")]
+        read.wait(5)
+        time.sleep(0.2)  # the pool has returned the first company
+        yield "https://two", [job("t1")]
+        seen.append(sqlite3.connect(run.DB).execute("SELECT company FROM jobs").fetchall())
+
+    monkeypatch.setattr(run, "crawl_many", crawl)
+    run.main()
+    assert ("One",) in seen[0]
+
+
+def test_a_browser_company_whose_pages_are_still_being_read_waits_for_the_end_of_the_crawl(
+    workdir: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    write_json(
+        workdir / "data" / "companies.json",
+        [co("One", ats="browser", slug="https://one"), co("Two", ats="browser", slug="https://two")],
+    )
+    release = threading.Event()
+    monkeypatch.setattr(run, "read_job_pages", lambda _co, _jobs: release.wait(5))
+
+    def crawl(_urls: list[str]) -> Any:
+        yield "https://one", [job("o1")]
+        yield "https://two", [job("t1")]
+        release.set()
+
+    monkeypatch.setattr(run, "crawl_many", crawl)
+    run.main()
+    check = sqlite3.connect(run.DB)
+    assert check.execute("SELECT company FROM jobs ORDER BY company").fetchall() == [("One",), ("Two",)]
     check.close()
 
 
