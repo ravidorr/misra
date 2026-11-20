@@ -350,6 +350,34 @@ Observations about live sites below come from checks made on 2026-11-14 and may 
     describes).
   - Done when: no row of the `companies` table has a `gap`, or every remaining one has a `reason` that says why it cannot be done.
 
+## Close the Goozali gap
+
+- [ ] Goozali gave permission (2026-11-20) to use the company directory it publishes (992 rows: name, industry, website,
+  career page, size, funding stage). On 2026-11-20 the list was diffed against the live `companies` table by website and
+  name. 24 companies with a job feed we already read were added as crawled (`discover-companies` run 44715708214, all
+  `ok`; the 12 foreign-headquartered ones have `israel_only`), and 542 more as researched records (`gap`), so the table
+  holds 352 crawled and 627 researched. The gap records by reason: `no_feed_found` about 376, `no_careers_url` about 111,
+  `needs_reader` about 36, `no_openings` about 13 and `bot_protection` about 7. About 380 of them were never probed (the
+  note says "Not surveyed yet"). 177 directory rows had no usable website and were left out. The directory's contact
+  emails, phones and personal LinkedIn links are never stored, and the PDF and its extracts stay outside the repository.
+  The steps, in order:
+  1. Review the first daily run after 2026-11-20: jobs per company for the 24, new failures, the coverage card and the
+     maintainer alert. No further batch starts before that.
+  2. Survey the unsurveyed `no_feed_found` records: put them in a CSV outside the repository and run
+     `survey.py --candidates` (CONTRIBUTING.md, "Trying candidate companies") with a service-role pull. Each `keep` is
+     added as crawled in a batch of at most 25, one batch per daily run (PLAN_3.md, "Batches"), and its gap record is
+     turned into a crawled one on the admin page. Companies with a long history of closed jobs are known; only the
+     maintainer edits those.
+  3. Find the career page of the `no_careers_url` records, largest first (size is in the directory), and record it.
+  4. Take the `needs_reader` records one at a time: a browser crawl counts against the crawl-time budget and needs the
+     maintainer's yes; a Workday or Oracle board is tested from a daily run before it counts (PLAN_3.md, "Count only
+     what the runner can read").
+  5. Leave the `bot_protection` records as they are: a refusal by robots.txt, 403 or 429 is never worked around.
+  6. Re-check `no_openings` and dead sites twice, then drop a record that still has nothing.
+  7. Repeat the diff against a newer export of the directory each quarter, keeping the same rules.
+  - Done when: every Goozali company with a usable website is crawled, or has a gap `reason` that says why not, and the
+    unsurveyed note is gone.
+
 ## Step 9.1 live checks
 
 Added when the history moved to Supabase (v0.53.0; `CONTRIBUTING.md`, "The history lives in Supabase"). What the rehearsal
