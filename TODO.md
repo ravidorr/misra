@@ -47,12 +47,11 @@ An item that has a date says `Due <date>` in its text. The dates were set on 202
 
 ## Descriptions
 
-- [ ] **Text for the browser companies that give none.** Trigger: seven browser companies now read the text of their own
-  public Ashby or Comeet board (CONTRIBUTING.md, "Job descriptions"). Left: Check Point (bot protection, never worked
-  around), Tower, Stratasys, Ormat and Intezer (no allowed source) and Valens (no text in its API) stay without text.
-  Decision needed: Priority, Mesh, Pecan and Lightbits (42 jobs) publish their postings through the site's WordPress REST
-  API, which is neither a call the page makes nor an ATS. Where: a reader like `adapters.BOARD_PAGES` with a `wp_posts`
-  list. Done when: the maintainer has decided, and the four read it or are listed as not read.
+- [ ] **Text for the browser companies that give none.** Trigger: ten browser companies now read their text (Ashby or
+  Comeet boards, WordPress posts; CONTRIBUTING.md, "Job descriptions"). Left without text: Check Point (bot protection,
+  never worked around), Tower, Stratasys, Ormat and Intezer (no allowed source), Valens (no text in its API) and Pecan
+  (its host did not answer on 2026-11-20, so its WordPress API was not checked). Where: `adapters.WP_POSTS` for Pecan.
+  Done when: Pecan's endpoint is checked by hand and added, or it is listed as not read for a reason.
 
 ## Assistant endpoint
 
