@@ -9,16 +9,16 @@ This file replaced `PLAN.md`, `PLAN_2.md` and `PLAN_3.md` on 2026-11-20; they ar
 
 ## Dates
 
-An item that has a date says `Due <date>` in its text. Dates marked "proposed" were set on 2026-11-20 and can be moved.
+An item that has a date says `Due <date>` in its text. The dates were set on 2026-11-20 and accepted by the maintainer.
 
 | Due | What | Item |
 | --- | --- | --- |
 | 2026-11-21 | Review the 04:23 UTC daily run: the 24 Goozali companies, REE Automotive, Priority Software | "Check the daily run of 2026-11-21" |
-| 2026-11-27, then every Friday (proposed) | Weekly triage of reported sites and the coverage card | "More companies" |
-| 2026-12-04, then each quarter (proposed) | Recheck `site_unusable`, `no_openings` and the `bot_protection` decision | "More companies" |
+| 2026-11-27, then every Friday | Weekly triage of reported sites and the coverage card | "More companies" |
+| 2026-12-04, then each quarter | Recheck `site_unusable`, `no_openings` and the `bot_protection` decision | "More companies" |
 | 2026-12-16 | Size of `crawl_log` and `jobs`, and of the description text (30 days after the move) | "Measure the size" |
-| 2026-12-20, then monthly (proposed) | Monthly sweep of new company names, success metrics of the month | "More companies" |
-| 2027-02-20, then each quarter (proposed) | Diff the Goozali directory again | "Close the Goozali gap" |
+| 2026-12-20, then monthly | Monthly sweep of new company names, success metrics of the month | "More companies" |
+| 2027-02-20, then each quarter | Diff the Goozali directory again | "Close the Goozali gap" |
 | 2027-10-20 | Node 27 becomes LTS: review the pins (Python 3.12 ends in October 2028) | "Review the Node and Python pins" |
 | 2027-11-15 | Yearly security review, with the cron-job.org token renewal | "Yearly security review" |
 | 2028-03-10 | The `2022-11-28` GitHub API version ends: move the cron-job.org header before then | "Yearly security review" |
@@ -43,20 +43,6 @@ An item that has a date says `Due <date>` in its text. Dates marked "proposed" w
   Where: the same UI/UX plan step as the previous item (one design), then a "Hidden companies" list with "Unhide", signed in
   and out. No new data. Done when: a user sees every hidden company and unhides one without finding one of its roles; a hidden
   company with no open roles is listed too.
-
-- [ ] **Make the new-tab icon smaller.** Trigger: the icon after every `a[target="_blank"]` link (PR 240,
-  `design-system/components/external-link.css`, mask `design-system/assets/new-tab.svg`) is `0.9em` square, so it is as tall
-  as the job title's cap height or more (title `1.5rem`, `1.25rem` on a phone) and heavy inside the Apply button. Where: that
-  one rule only, after a UI/UX read (Claude Design and the UI/UX expert checked the CSS, the tokens and the 2.5 stroke of the
-  mask): a decorative cue should sit below the x-height of the text it follows, so the base size is `0.75em` (12px in 16px
-  text and in the button) with `margin-inline-start: 0.3em` and `vertical-align: -0.05em`, and the card title link gets
-  `0.6em` (about 14px at `1.5rem`, 12px at `1.25rem`) through one `.card-title a::after` override, because `em` scales with
-  the large title and would stay too big; the Apply button needs no override. The icon stays a visual cue, so the 44px
-  targets (`.btn` `min-height: var(--tap)`, the title link padding) and the "(opens in a new tab)" words are untouched.
-  Keep it one token, `--icon-new-tab-size` in `tokens.css`, if a second value is needed. Done when: the icon is `0.75em` in
-  link lines and the Apply button and `0.6em` in the job title, still readable (3:1 against its background) in light, dark and
-  forced-colors mode, checked on the dashboard at desktop and phone width; the only code touched is that rule, the README
-  line and the tests or snapshots that pin the size (`tests/test_new_tab_icon.py`).
 
 ## Descriptions
 
@@ -442,17 +428,17 @@ recurring work.
   - Removal requests: the current process is sufficient (the `excluded` record is kept, the rows are deleted, the company is
     never crawled). Keep the written request as a paper trail.
 - **Recurring and open steps.**
-  - [ ] **Weekly triage.** Due 2026-11-27, then every Friday (proposed). Run `survey.py --candidates` on a new list, review
+  - [ ] **Weekly triage.** Due 2026-11-27, then every Friday. Run `survey.py --candidates` on a new list, review
     the `crawl_log` failures and the coverage card, accept, park or decline each reported site as in `CONTRIBUTING.md`,
     "Reported sites", add at most 25 companies, and verify each batch by the next daily crawl. Count the reports per month.
-  - [ ] **Success metrics.** Due 2026-12-20, then monthly (proposed). Per batch and per month: reports received
+  - [ ] **Success metrics.** Due 2026-12-20, then monthly. Per batch and per month: reports received
     (`CONTRIBUTING.md` has the command), the share of crawled companies with at least one Israel job, the Israel job count
     before and after. Put the numbers in each batch description, and add one `CHANGELOG.md` line per batch.
-  - [ ] **Monthly sweep.** Due 2026-12-20, then monthly (proposed). Run the candidate tool on the newest names from the
+  - [ ] **Monthly sweep.** Due 2026-12-20, then monthly. Run the candidate tool on the newest names from the
     sources (VC portfolio pages, public lists, Y Combinator and Techstars cohorts, reports), with the budgets checked. Add
     the companies the tool keeps (`keep`), a candidate with only a career page and no feed needs the maintainer's yes (it
     becomes a browser crawl). Done when: the targets above are met and each batch's next daily run is reviewed.
-  - [ ] **Quarterly recheck of the gap records.** Due 2026-12-04, then each quarter (next 2027-03-04) (proposed). Recheck
+  - [ ] **Quarterly recheck of the gap records.** Due 2026-12-04, then each quarter (next 2027-03-04). Recheck
     `site_unusable` (9) and `no_openings` (8): a site that is back or a board that reopened moves to the crawl.
     `bot_protection` (10) stays as it is; record each decision in the `gap.note` with the date so nobody retries.
   - [ ] **Research `no_careers_url` (22), `no_feed_found` (20) and `needs_reader` (16).** No date: batches of at most 25,
@@ -492,7 +478,7 @@ recurring work.
      what the runner can read).
   5. Leave the `bot_protection` records as they are: a refusal by robots.txt, 403 or 429 is never worked around.
   6. Re-check `no_openings` and dead sites twice, then drop a record that still has nothing.
-  7. Repeat the diff against a newer export of the directory each quarter, keeping the same rules. Due 2027-02-20 (proposed),
+  7. Repeat the diff against a newer export of the directory each quarter, keeping the same rules. Due 2027-02-20,
      then every three months.
   - Done when: every Goozali company with a usable website is crawled, or has a gap `reason` that says why not, and the
     unsurveyed note is gone.
