@@ -429,9 +429,14 @@ PLAN.md step 7.1. Where the text of a posting lives, and how it gets there:
   without a reason:** Check Point (231 jobs; a plain request answers HTTP 403, bot protection, never worked around), Tower
   (SAP SuccessFactors, whose `robots.txt` is `Disallow: /`; the text is only in the page's HTML), Stratasys and Ormat
   (SuccessFactors career sites, no JSON-LD, the JSON the page calls is under a disallowed `/services/`), Intezer and Valens
-  (no JSON of the postings; Valens' WordPress API has no text field). Priority, Mesh, Pecan and Lightbits publish their
-  postings through the site's WordPress REST API (`/wp-json/wp/v2/<post type>`, 42 jobs, full text, robots.txt allows
-  it): not read, because it is neither a call the page makes nor an ATS (a decision for the maintainer, `TODO.md`).
+  (no JSON of the postings; Valens' WordPress API has no text field), and Pecan (its host did not answer on 2026-11-20,
+  so no endpoint could be checked; look again before listing it).
+  (5) **WordPress posts:** the pages in `adapters.WP_POSTS` (Priority Software `careers`, Mesh Payments `cpt_careers`,
+  Lightbits Labs `lb_position`: `/wp-json/wp/v2/<post type>?per_page=100`, found by hand in each site's
+  `/wp-json/wp/v2/types` on 2026-11-20, public, allowed by `robots.txt`, about 34 jobs). Read once a run through
+  `common.get` (robots.txt, the delay, the User-Agent, redirects only on the same host); a job takes the `content` of
+  the post whose link is its own (host without `www.`, path without the trailing slash, lower case); no post, two posts
+  or an endpoint that cannot be read is no text, no miss and one `::warning::`. Only the first 100 posts are read.
   Digital Turbine is a Workday site read through its JSON-LD; its Workday JSON would be an alternative.
 - **Job pages (other ATSs).** Five more adapters ask one page per job, with the Workday budget (held keys, 40 a company
   and run, five misses end the run, one request a second a host, `robots.txt` checked on 2026-11-20 for each path): BambooHR

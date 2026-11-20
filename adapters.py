@@ -13,6 +13,8 @@ from email.utils import parsedate_to_datetime
 from typing import Any
 from urllib.parse import parse_qsl, urljoin, urlparse
 
+import requests
+
 from common import ISRAEL, get, host_of, post, reset_robots_block
 from descriptions import DETAIL_CAP, HELD, attach, html_to_text, jsonld_description, plain_text, sections
 
@@ -677,11 +679,10 @@ HTTP_REDIRECTS = frozenset({301, 302, 303, 307, 308})
 MAX_REDIRECTS = 3
 
 
-def _jsonld_page_text(url: str, host: str = "") -> tuple[str, dict[str, Any]] | None:
-    """The description of the schema.org JobPosting in the JSON-LD of a job page, and nothing else of the page (never
-    page text). With `host`, redirects are followed here, one request at a time, only to an https address on that same
-    host (an added trailing slash is the usual one), each through `get`, so through robots.txt and the per-host
-    delay: a redirect to any other host is never requested. None when the page does not answer or has no JobPosting."""
+def _get_on_host(url: str, host: str = "") -> requests.Response | None:
+    """`get`, and with `host` the redirects are followed here, one request at a time, only to an https address on that
+    same host (an added trailing slash is the usual one), each through `get`, so through robots.txt and the per-host
+    delay: a redirect to any other host is never requested. None when the answer is not a 200."""
     r = get(url, allow_redirects=False) if host else get(url)
     for _ in range(MAX_REDIRECTS if host else 0):
         if r is None or r.status_code not in HTTP_REDIRECTS:
@@ -691,7 +692,14 @@ def _jsonld_page_text(url: str, host: str = "") -> tuple[str, dict[str, Any]] | 
         if not url.startswith("https://") or host_of(url) != host:  # no Location is no page either
             return None
         r = get(url, allow_redirects=False)
-    if r is None or r.status_code != HTTP_OK:
+    return r if r is not None and r.status_code == HTTP_OK else None
+
+
+def _jsonld_page_text(url: str, host: str = "") -> tuple[str, dict[str, Any]] | None:
+    """The description of the schema.org JobPosting in the JSON-LD of a job page, and nothing else of the page (never
+    page text). With `host`, redirects follow `_get_on_host`. None when the page has no answer or no JobPosting."""
+    r = _get_on_host(url, host)
+    if r is None:
         return None
     posting = _job_posting(r.text)
     return jsonld_description(posting) if posting else None
@@ -770,6 +778,61 @@ def _board_description(page: str, job: Job) -> tuple[str, dict[str, Any]] | None
     return (found["description"], found.get("details") or {}) if found else None
 
 
+# Career pages of the browser crawl whose company publishes its postings through its own WordPress REST API, found by
+# hand on 2026-11-20 (the site's `/wp-json/wp/v2/types` names the post type, and each answer is public, no sign-in):
+# the career page -> the exact endpoint. Its `robots.txt` allows it; the request goes through `common.get` (robots.txt,
+# the delay, the User-Agent, redirects only on the same host), once a run for the page. A crawl job takes the
+# `content` of the post whose link is its own link (host without `www.`, path without the trailing slash, lower case);
+# no such post, or two, is no text. Pecan is not listed: its host did not answer on 2026-11-20, so nothing was checked.
+WP_POSTS: dict[str, str] = {
+    "https://www.priority-software.com/careers/": "https://www.priority-software.com/wp-json/wp/v2/careers?per_page=100",
+    "https://www.meshpayments.com/careers": "https://www.meshpayments.com/wp-json/wp/v2/cpt_careers?per_page=100",
+    "https://www.lightbitslabs.com/careers/": "https://www.lightbitslabs.com/wp-json/wp/v2/lb_position?per_page=100",
+}
+_wp_texts: dict[str, dict[str, str] | None] = {}  # per career page and process; a failed read is kept too
+
+
+def _link_key(url: str) -> str:
+    parts = urlparse(url)
+    return f"{parts.netloc.lower().removeprefix('www.')}{parts.path.rstrip('/').lower()}"
+
+
+def _wp_page_texts(page: str) -> dict[str, str] | None:
+    """The text of each published post of the page's endpoint, by `_link_key` of its link, read once a run (the first
+    100 posts; the three sites hold fewer than 25). A key two posts share is dropped. None when the endpoint could not
+    be read or has no text (one `::warning::` says which page, never the answer)."""
+    if page not in _wp_texts:
+        endpoint = WP_POSTS[page]
+        r = _get_on_host(endpoint, host_of(endpoint))
+        try:
+            posts = r.json() if r is not None else None
+        except ValueError:
+            posts = None
+        texts: dict[str, str] = {}
+        clashes: set[str] = set()
+        for entry in posts if isinstance(posts, list) else []:
+            content = entry.get("content") if isinstance(entry, dict) else None
+            rendered = content.get("rendered") if isinstance(content, dict) else None
+            link = entry.get("link") if isinstance(entry, dict) else None
+            text = html_to_text(rendered) if isinstance(rendered, str) and isinstance(link, str) else ""
+            key = _link_key(str(link)) if text else ""
+            if key in texts:
+                clashes.add(key)
+            elif key:
+                texts[key] = text
+        for key in clashes:
+            del texts[key]
+        if not texts:
+            print(f"::warning::the WordPress posts of {page} could not be read or gave no job text")
+        _wp_texts[page] = texts or None
+    return _wp_texts[page]
+
+
+def _wp_description(page: str, job: Job) -> tuple[str, dict[str, Any]] | None:
+    text = (_wp_page_texts(page) or {}).get(_link_key(str(job.get("url") or "")))
+    return (text, {}) if text else None
+
+
 def browser_description(slug: str, job: Job) -> tuple[str, dict[str, Any]] | None:
     """The text of a job found by the browser crawl: a job of a page in BOARD_PAGES takes the text of its company's
     public ATS board; an Eightfold job asks its own `position_details` JSON (the call the career page makes, under the
@@ -777,6 +840,8 @@ def browser_description(slug: str, job: Job) -> tuple[str, dict[str, Any]] | Non
     JobPosting JSON-LD. Never page text. None on any failure."""
     if slug in BOARD_PAGES:
         return _board_description(slug, job)
+    if slug in WP_POSTS:
+        return _wp_description(slug, job)
     detail = job.get("detail_url")
     if not detail:
         return _jsonld_page_text(job["url"], host_of(slug))
@@ -792,6 +857,8 @@ def browser_description(slug: str, job: Job) -> tuple[str, dict[str, Any]] | Non
 def _browser_wants_page(slug: str, job: Job) -> bool:
     if slug in BOARD_PAGES:
         return _board_job(slug, job) is not None  # no match, or a board that could not be read: no ask, no miss
+    if slug in WP_POSTS:
+        return _wp_description(slug, job) is not None  # the same: no match is no ask and no miss
     if job.get("detail_url"):
         return True
     return slug in JSONLD_PAGES and host_of(str(job.get("url"))) == host_of(slug)  # the career page's own host only

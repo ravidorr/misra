@@ -8,6 +8,12 @@ All notable changes are documented here. Format follows [Keep a Changelog](https
 
 - A "Hidden (n)" switch beside "Starred (n)": a view of its own that lists every company the visitor hid, one row each with "Unhide" (a company with no open role is listed too, so it can be unhidden without finding one of its roles), and every open role they hid one by one, as cards at full strength with "Unhide" and no "New" flag. The Hidden view also puts the coverage card away with the filters; the Starred view keeps it. It reads the choices kept today (this browser, or the account) and stores nothing new; a role hidden only because its company is hidden is covered by the company's row, and a hidden role leaves the list when its posting closes (the database deletes the discard). Two WebMCP tools: `list_hidden` and `unhide_company`.
 
+## [0.85.0] - 2026-11-20
+
+### Added
+
+- Text for the jobs of three browser companies that publish their postings through their own public WordPress REST API (`adapters.WP_POSTS`, by the maintainer's decision of 2026-11-20): Priority Software (`/wp-json/wp/v2/careers`), Mesh Payments (`cpt_careers`) and Lightbits Labs (`lb_position`), about 34 jobs. The endpoint of each was found by hand in the site's own `/wp-json/wp/v2/types`, answers publicly with no sign-in, and is allowed by the site's `robots.txt`. It is read once a run through `common.get` (robots.txt, one request a second, the project's User-Agent, redirects only on the same host), and a crawl job takes the `content` of the post whose link is its own (host without `www.`, path without the trailing slash, lower case); no post, two posts, or an endpoint that cannot be read gives no text and costs no miss (one `::warning::` line for the page). Pecan is not read: its host did not answer on 2026-11-20, so no endpoint could be checked.
+
 ## [0.84.0] - 2026-11-20
 
 ### Added

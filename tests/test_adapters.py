@@ -3144,3 +3144,89 @@ def test_varonis_goes_through_the_robots_gate_and_the_polite_get(monkeypatch: py
 
 def test_varonis_is_registered() -> None:
     assert adapters.ADAPTERS["varonis"] is adapters.varonis
+
+
+WP_PAGE = "https://www.meshpayments.com/careers"
+WP_ENDPOINT = adapters.WP_POSTS[WP_PAGE]
+
+
+def wp_post(link: str, html: str | None = "<p>Synthetic text</p>") -> dict[str, Any]:
+    return {"link": link, "content": {"rendered": html}}
+
+
+def wp_job(url: str) -> dict[str, Any]:
+    return {"job_id": url.rstrip("/"), "url": url}
+
+
+def test_a_wordpress_job_takes_the_text_of_the_post_with_its_link(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(adapters, "_wp_texts", {})
+    posts = [
+        wp_post("https://meshpayments.com/careers/a/", "<p>Text A</p>"),
+        wp_post("https://meshpayments.com/careers/b/"),
+    ]
+    urls = fake_get(monkeypatch, FakeHttpResponse(data=posts))
+    jobs = [wp_job("https://meshpayments.com/careers/A"), wp_job("https://www.meshpayments.com/careers/b/")]
+    assert adapters.add_descriptions("browser", WP_PAGE, "Mesh", jobs, set()) == (2, 2, 0)
+    assert [j["description"] for j in jobs] == ["Text A", "Synthetic text"]
+    assert urls == [WP_ENDPOINT]  # one request for the whole list, not one a job
+
+
+def test_a_wordpress_job_with_no_post_is_no_ask_and_no_miss(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(adapters, "_wp_texts", {})
+    fake_get(monkeypatch, FakeHttpResponse(data=[wp_post("https://meshpayments.com/careers/a/")]))
+    jobs = [wp_job("https://meshpayments.com/careers/other/"), {"job_id": "x"}]
+    assert adapters.add_descriptions("browser", WP_PAGE, "Mesh", jobs, set()) == (0, 0, 0)
+
+
+@pytest.mark.parametrize(
+    "answer",
+    [
+        None,
+        FakeHttpResponse(status_code=403),
+        FakeHttpResponse(json_error=True),
+        FakeHttpResponse(data={"code": "rest_forbidden"}),
+        FakeHttpResponse(data=[]),
+        FakeHttpResponse(
+            data=["x", {"link": 3}, wp_post("https://meshpayments.com/a", None), {"link": "u", "content": 1}]
+        ),
+        FakeHttpResponse(data=[wp_post("https://meshpayments.com/a", "<script>x</script>")]),
+    ],
+)
+def test_a_wordpress_endpoint_that_cannot_be_read_gives_one_warning_and_no_text(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], answer: FakeHttpResponse | None
+) -> None:
+    monkeypatch.setattr(adapters, "_wp_texts", {})
+    fake_get(monkeypatch, answer)
+    jobs = [wp_job("https://meshpayments.com/a"), wp_job("https://meshpayments.com/b")]
+    assert adapters.add_descriptions("browser", WP_PAGE, "Mesh", jobs, set()) == (0, 0, 0)
+    assert capsys.readouterr().out.count("::warning::the WordPress posts of " + WP_PAGE) == 1
+
+
+def test_a_link_two_posts_share_gets_no_text(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(adapters, "_wp_texts", {})
+    posts = [
+        wp_post("https://meshpayments.com/a"),
+        wp_post("https://www.meshpayments.com/a/"),
+        wp_post("https://meshpayments.com/b"),
+    ]
+    fake_get(monkeypatch, FakeHttpResponse(data=posts))
+    jobs = [wp_job("https://meshpayments.com/a"), wp_job("https://meshpayments.com/b")]
+    assert adapters.add_descriptions("browser", WP_PAGE, "Mesh", jobs, set()) == (1, 1, 0)
+    assert "description" not in jobs[0]
+
+
+def test_a_wordpress_endpoint_that_redirects_to_another_host_is_not_followed(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(adapters, "_wp_texts", {})
+    urls = fake_get(monkeypatch, redirect("https://elsewhere.test/wp-json/"))
+    assert adapters._wp_page_texts(WP_PAGE) is None
+    assert urls == [WP_ENDPOINT]
+
+
+def test_the_wordpress_pages_are_career_pages_of_the_list_with_public_endpoints_on_their_own_host() -> None:
+    companies = json.loads(FROZEN_COMPANIES.read_text(encoding="utf-8"))
+    browser = {c["slug"] for c in companies if c["ats"] == "browser"}
+    assert browser >= set(adapters.WP_POSTS)
+    for page, endpoint in adapters.WP_POSTS.items():
+        assert urlparse(endpoint).hostname == urlparse(page).hostname
+        assert urlparse(endpoint).path.startswith("/wp-json/wp/v2/")
+    assert not set(adapters.WP_POSTS) & (set(adapters.BOARD_PAGES) | adapters.JSONLD_PAGES)  # one source of text
