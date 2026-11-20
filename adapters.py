@@ -713,10 +713,69 @@ def _jsonld_job_pages(
     return fetch, wants
 
 
+# Career pages of the browser crawl whose company embeds a public board of an ATS we already read (the page's own data
+# names it, or its job pages load the ATS's script with the company's id), found by hand on 2026-11-20: the career page
+# -> (the ATS's adapter, its slug). The crawl keeps its list and its job ids; the text is the board's, joined to the
+# crawl's job by the id in the job's link, so the board is read once a run, not once a job, and nothing is re-pinned.
+BOARD_PAGES: dict[str, tuple[str, str]] = {
+    "https://monday.com/careers": ("ashby", "monday.com"),
+    "https://www.classiq.io/careers-page": ("comeet", "classiq/F7.008"),
+    "https://komodor.com/careers/": ("comeet", "komodor/96.005"),
+    "https://panorays.com/careers/": ("comeet", "panorays/97.00D"),
+    "https://www.oligo.security/company/careers": ("comeet", "oligosecurity/5A.00B"),
+    "https://www.lasso.security/careers": ("comeet", "lassosecurity/F9.008"),
+    "https://forsightrobotics.com/careers": ("comeet", "forsightrobotics/E9.008"),
+}
+_BOARD_UID = re.compile(r"(?<![0-9A-Z])[0-9A-F]{2}[._][0-9A-F]{3}(?![0-9A-Z])")  # Comeet uid 4E.47C, or 4E_47C
+_boards: dict[str, dict[str, Job] | None] = {}  # per career page and process; a failed read is kept too (one request)
+
+
+def _board(page: str) -> dict[str, Job] | None:
+    """The jobs of the career page's board with a text, by upper-cased id (an Ashby id, a Comeet uid), read once a
+    run; None when the board could not be read or holds none (one `::warning::` says which page, so a board that
+    disappeared is seen, not silent). A page shared by two companies could be read twice: harmless."""
+    if page not in _boards:
+        ats, board_slug = BOARD_PAGES[page]
+        try:
+            jobs = ADAPTERS[ats](board_slug)
+        except Exception as exc:  # a board that answers something unexpected costs the texts of its page only
+            print(f"::warning::the {ats} board of {page} could not be read: {type(exc).__name__}")
+            jobs = None
+        board = {str(j["job_id"]).upper(): j for j in jobs or [] if j.get("description")}
+        if not board:
+            print(f"::warning::the {ats} board of {page} gave no job text")
+        _boards[page] = board or None
+    return _boards[page]
+
+
+def _board_job(page: str, job: Job) -> Job | None:
+    """The board's job of a crawl job: an id that is a segment of the link's path (Ashby, a Comeet link
+    `/4E.47C/title/`), or a Comeet uid written in one (`position-4e_47c`). A link that names two board jobs matches
+    none: a wrong text is worse than none."""
+    board = _board(page)
+    if not board:
+        return None
+    for segment in reversed(urlparse(str(job.get("url") or "")).path.upper().strip("/").split("/")):
+        if segment in board:
+            return board[segment]
+        uids = {u.replace("_", ".") for u in _BOARD_UID.findall(segment)}
+        if uids & board.keys():
+            return board[uids.pop()] if len(uids) == 1 else None  # two uids in one segment: which job is it?
+    return None
+
+
+def _board_description(page: str, job: Job) -> tuple[str, dict[str, Any]] | None:
+    found = _board_job(page, job)
+    return (found["description"], found.get("details") or {}) if found else None
+
+
 def browser_description(slug: str, job: Job) -> tuple[str, dict[str, Any]] | None:
-    """The text of a job found by the browser crawl: an Eightfold job asks its own `position_details` JSON (the call the
-    career page makes, under the `/api/pcsx` path its search already uses); a job of a page in JSONLD_PAGES asks its
-    page and reads only the JobPosting JSON-LD. Never page text. None on any failure."""
+    """The text of a job found by the browser crawl: a job of a page in BOARD_PAGES takes the text of its company's
+    public ATS board; an Eightfold job asks its own `position_details` JSON (the call the career page makes, under the
+    `/api/pcsx` path its search already uses); a job of a page in JSONLD_PAGES asks its page and reads only the
+    JobPosting JSON-LD. Never page text. None on any failure."""
+    if slug in BOARD_PAGES:
+        return _board_description(slug, job)
     detail = job.get("detail_url")
     if not detail:
         return _jsonld_page_text(job["url"], host_of(slug))
@@ -730,6 +789,8 @@ def browser_description(slug: str, job: Job) -> tuple[str, dict[str, Any]] | Non
 
 
 def _browser_wants_page(slug: str, job: Job) -> bool:
+    if slug in BOARD_PAGES:
+        return _board_job(slug, job) is not None  # no match, or a board that could not be read: no ask, no miss
     if job.get("detail_url"):
         return True
     return slug in JSONLD_PAGES and host_of(str(job.get("url"))) == host_of(slug)  # the career page's own host only
