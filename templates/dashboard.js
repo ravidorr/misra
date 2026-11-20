@@ -331,6 +331,10 @@ function hiddenCompanies() {
 }
 const hiddenRoles = () =>
   JOBS.filter((j) => !companyHidden(j.c) && (account ? accountState(key(j)) === 'discard' : Boolean(gone[key(j)]) && !starred[key(j)]));
+/* Signed in, what is hidden is known once the account's choices have loaded: before that (or if they could not load) the
+   page does not know, so it shows no count and never says that nothing is hidden. */
+const hiddenKnown = () => !account || account.choicesState === 'loaded';
+const hiddenCount = () => (hiddenKnown() ? ` (${hiddenCompanies().length + hiddenRoles().length})` : '');
 const openRolesOf = (company) => JOBS.filter((j) => j.c === company).length;
 
 function loadPending(userId) {
@@ -1558,7 +1562,7 @@ function showView() {
   $('starredView').setAttribute('aria-pressed', String(view === 'starred'));
   $('starredView').textContent = `Starred (${starredItems().length})`;
   $('hiddenView').setAttribute('aria-pressed', String(view === 'hidden'));
-  $('hiddenView').textContent = `Hidden (${hiddenCompanies().length + hiddenRoles().length})`;
+  $('hiddenView').textContent = `Hidden${hiddenCount()}`;
 }
 
 function renderStarred() {
@@ -1591,9 +1595,11 @@ function hiddenCompanyEl(company) {
 
 /* The Hidden view draws its companies above the list and returns the roles for the list. The filters do not apply to it. */
 function renderHidden() {
-  const companies = hiddenCompanies();
-  const roles = hiddenRoles();
-  const summary = `${hiddenNote}${countOf(companies.length, 'hidden company', 'hidden companies')}, ${countOf(roles.length, 'hidden role', 'hidden roles')}. The filters do not apply to this list.`;
+  const known = hiddenKnown();
+  const companies = known ? hiddenCompanies() : [];
+  const roles = known ? hiddenRoles() : [];
+  const unknown = account?.choicesState === 'failed' ? 'Your hidden roles and companies could not be loaded.' : 'Loading your hidden roles and companies.';
+  const summary = known ? `${hiddenNote}${countOf(companies.length, 'hidden company', 'hidden companies')}, ${countOf(roles.length, 'hidden role', 'hidden roles')}. The filters do not apply to this list.` : unknown;
   hiddenNote = '';
   $('summary').textContent = summary;
   announce(summary);
@@ -1670,7 +1676,9 @@ function render(focusIdx) {
   if (res.length === 0) {
     let none = 'No roles match. Change the search or the filters.';
     if (starredView) none = 'No starred roles yet. Use Star on a role to keep it here.';
-    if (hiddenView) {
+    if (hiddenView && !hiddenKnown()) {
+      none = $('summary').textContent;
+    } else if (hiddenView) {
       none = hiddenCompanies().length === 0
         ? 'Nothing is hidden. "Not for me" on a role hides it, or its whole company, and it shows here.'
         : 'No role is hidden on its own.';
@@ -2251,7 +2259,11 @@ const TOOLS = [
     inputSchema: { type: 'object', properties: {} },
     annotations: { readOnlyHint: true },
     execute: () =>
-      Promise.resolve(reply({ companies: hiddenCompanies().map((company) => ({ company, openRoles: openRolesOf(company) })), roles: hiddenRoles().map(describe) })),
+      Promise.resolve(
+        hiddenKnown()
+          ? reply({ companies: hiddenCompanies().map((company) => ({ company, openRoles: openRolesOf(company) })), roles: hiddenRoles().map(describe) })
+          : reply({ error: 'The hidden companies are not loaded yet (see get_sync_status).' }, true),
+      ),
   },
   {
     name: 'unhide_company',
@@ -2260,6 +2272,7 @@ const TOOLS = [
     inputSchema: { type: 'object', properties: { company: { type: 'string' } }, required: ['company'] },
     execute: async (a) => {
       const company = (a ?? {}).company;
+      if (!hiddenKnown()) return reply({ error: 'The hidden companies are not loaded yet (see get_sync_status).' }, true);
       if (typeof company !== 'string' || !hiddenCompanies().includes(company)) {
         return reply({ error: 'unknown or not hidden company' }, true);
       }

@@ -2,6 +2,7 @@
 one by one and every company they hid (also one with no open role), each with a way back, signed out and signed in. It
 reads the choices that exist today and stores nothing new. Run in a real browser against the built page."""
 
+import asyncio
 import json
 import sqlite3
 from pathlib import Path
@@ -17,6 +18,7 @@ from tests.test_dashboard_page import (
     PHONE,
     TAP_MIN,
     WEBMCP,
+    AuthBackend,
     ChoicesBackend,
     build_site,
     serve,
@@ -33,7 +35,7 @@ from tests.test_job_choices import (
     summary,
     until,
 )
-from tests.test_sign_in import AXE_RUN, stored
+from tests.test_sign_in import AXE_RUN, come_back, start_sign_in, stored
 
 
 @pytest.fixture
@@ -312,3 +314,40 @@ async def test_signed_in_unhiding_a_company_leaves_a_role_hidden_on_its_own_and_
     assert choices.state_of("Acme", "1") == "discard"
     assert await page.locator(PM1).get_attribute("data-discarded") == "true"
     assert await page.evaluate("document.activeElement.id") == "hiddenRoles-h"
+
+
+async def test_while_the_account_choices_load_the_view_shows_no_count_and_no_false_empty(
+    page: Page, site: Path
+) -> None:
+    choices = ChoicesBackend([company_row(GHOST)])
+    choices.gate = asyncio.Event()
+    await page.add_init_script(WEBMCP)
+    auth = AuthBackend()
+    await serve(page, site, auth=auth, choices=choices)
+    await start_sign_in(page, auth)
+    await come_back(page)
+    await page.wait_for_selector("#accountUser:not([hidden])")
+    assert await label(page) == "Hidden"  # no count: it is not known yet
+    await open_hidden(page)
+    assert await summary(page) == "Loading your hidden roles and companies."
+    assert await page.locator("#list > li.empty").inner_text() == "Loading your hidden roles and companies."
+    assert "Nothing is hidden" not in await page.locator("main").inner_text()
+    assert "error" in await ask(page, "list_hidden")
+    assert "error" in await ask(page, "unhide_company", {"company": GHOST})
+    async with page.expect_response(lambda r: r.request.method == "GET" and "user_jobs" in r.url):
+        choices.gate.set()
+    await expect(page.locator("#hiddenView")).to_have_text("Hidden (1)")
+    assert await names(page) == [GHOST]
+
+
+async def test_when_the_account_choices_cannot_load_the_view_says_so_and_shows_no_count(page: Page, site: Path) -> None:
+    choices = ChoicesBackend([company_row(GHOST)], mode="load_down")
+    await sign_in(page, site, choices)
+    assert await label(page) == "Hidden"
+    await open_hidden(page)
+    assert await summary(page) == "Your hidden roles and companies could not be loaded."
+    assert "Nothing is hidden" not in await page.locator("main").inner_text()
+    await expect(page.locator("#syncNote .notice")).to_be_visible()
+    choices.mode = "ok"
+    await page.click("#syncRetry")
+    await expect(page.locator("#hiddenView")).to_have_text("Hidden (1)")
