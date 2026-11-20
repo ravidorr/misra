@@ -53,14 +53,6 @@ An item that has a date says `Due <date>` in its text. The dates were set on 202
   endpoint the page itself calls (as HiBob and Eightfold), or the company's ATS if it has a public one. Done when: a company on
   that list gives a text without scraping page text and without working around bot protection. Do not retry a plain request.
 
-- [ ] **Descriptions for the adapters not read yet (FR-4).** Trigger: the description slices cover Greenhouse, Lever,
-  Ashby, Workable, Comeet and Amazon (70 percent of open jobs at the first slice), Workday (a request per job, 40 a company
-  a run), HiBob, Eightfold and four JSON-LD career pages. Left: Phenom (89 jobs, a teaser only), Oracle HCM, `comeet_page`,
-  JazzHR and BambooHR (a request per job), and SmartRecruiters (skipped by `robots.txt`). The full text lives in Supabase
-  only, never in `data/jobs.db` or a committed file. Where: one adapter at a time, with the same per-company cap as Workday.
-  Done when: FR-4 acceptance criteria 1, 2, 3 and 9 hold for each of them and the share with a full description is printed in
-  the daily log.
-
 - [ ] **Refresh a stored description that changed.** Trigger: the job-page adapters (Workday) fetch a text only for a job
   Supabase holds none for, so a posting edited in place keeps its first text until it closes and reopens. Where:
   `adapters.add_descriptions`: also ask the pages of the jobs whose key hashes into today's slice (for example a job a day in
