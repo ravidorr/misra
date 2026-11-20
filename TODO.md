@@ -339,7 +339,7 @@ An item that has a date says `Due <date>` in its text. The dates were set on 202
        A Workable job link on a page is `apply.workable.com/j/<shortcode>`: it names no account (open it: it redirects
        to `apply.workable.com/<account>/j/<shortcode>`). `ATS_LINK` skips these links since 0.10.1.
     2. With an existing adapter, probe it from a shell (`adapters.ADAPTERS["greenhouse"]("slug")` and so on). Without
-       one, the browser crawler is the fallback: `browser_crawl.crawl_many([url])` (set `PW_CHROMIUM` to a Chromium
+       one, the browser crawler is the fallback: `list(browser_crawl.crawl_many([url]))` (set `PW_CHROMIUM` to a Chromium
        build, or run `playwright install chromium`) shows what it reads.
     3. Read the result before pinning. It needs real titles, distinct links and a location per job that the Israel matcher
        (`discover.ISRAEL`) can recognise, for the jobs that will appear and not only the ones there today. A list of

@@ -637,8 +637,8 @@ def test_a_crash_in_the_browser_crawl_keeps_the_api_companies_already_recorded(
 def test_a_crash_midway_in_the_browser_crawl_keeps_the_browser_companies_already_crawled(
     workdir: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Each browser company is recorded when its crawl finishes, so the ones done before the crash (or the step
-    timeout) are in the history, and the run is still red."""
+    """Each browser company is recorded once its pages are read and the next list arrives, or when the crawl
+    crashes, so the ones whose list arrived before the crash are in the history, and the run is still red."""
     write_json(
         workdir / "data" / "companies.json",
         [co("One", ats="browser", slug="https://one"), co("Two", ats="browser", slug="https://two")],
@@ -701,19 +701,31 @@ def test_a_browser_company_is_recorded_as_soon_as_the_next_list_arrives_when_its
         [co("One", ats="browser", slug="https://one"), co("Two", ats="browser", slug="https://two")],
     )
     read = threading.Event()
-    monkeypatch.setattr(run, "read_job_pages", lambda _co, _jobs: read.set())
+    real = run.read_pages_of
+
+    def wrapped(co: dict[str, Any], jobs: Any) -> Any:
+        done = real(co, jobs)
+        read.set()
+        return done
+
+    monkeypatch.setattr(run, "read_pages_of", wrapped)
+    monkeypatch.setattr(run, "read_job_pages", lambda _co, _jobs: None)
     seen: list[Any] = []
 
     def crawl(_urls: list[str]) -> Any:
         yield "https://one", [job("o1")]
-        read.wait(5)
-        time.sleep(0.2)  # the pool has returned the first company
+        assert read.wait(5)
+        time.sleep(0.5)  # the pool has handed the first company back
         yield "https://two", [job("t1")]
         seen.append(sqlite3.connect(run.DB).execute("SELECT company FROM jobs").fetchall())
 
     monkeypatch.setattr(run, "crawl_many", crawl)
     run.main()
     assert ("One",) in seen[0]
+
+
+def assert_set(event: threading.Event) -> None:
+    assert event.wait(5)
 
 
 def test_a_browser_company_whose_pages_are_still_being_read_waits_for_the_end_of_the_crawl(
@@ -724,7 +736,32 @@ def test_a_browser_company_whose_pages_are_still_being_read_waits_for_the_end_of
         [co("One", ats="browser", slug="https://one"), co("Two", ats="browser", slug="https://two")],
     )
     release = threading.Event()
-    monkeypatch.setattr(run, "read_job_pages", lambda _co, _jobs: release.wait(5))
+    monkeypatch.setattr(run, "read_job_pages", lambda _co, _jobs: assert_set(release))
+
+    def crawl(_urls: list[str]) -> Any:
+        yield "https://one", [job("o1")]
+        yield "https://two", [job("t1")]
+        check = sqlite3.connect(run.DB)
+        assert check.execute("SELECT COUNT(*) FROM jobs").fetchone() == (0,)  # nothing recorded while pages are read
+        check.close()
+        release.set()
+
+    monkeypatch.setattr(run, "crawl_many", crawl)
+    run.main()
+    check = sqlite3.connect(run.DB)
+    assert check.execute("SELECT company FROM jobs ORDER BY company").fetchall() == [("One",), ("Two",)]
+    check.close()
+
+
+def test_a_browser_company_that_cannot_be_recorded_does_not_cost_the_others_or_leave_half_of_itself(
+    workdir: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    write_json(
+        workdir / "data" / "companies.json",
+        [co("One", ats="browser", slug="https://one"), co("Two", ats="browser", slug="https://two")],
+    )
+    release = threading.Event()
+    monkeypatch.setattr(run, "read_job_pages", lambda _co, _jobs: assert_set(release))
 
     def crawl(_urls: list[str]) -> Any:
         yield "https://one", [job("o1")]
@@ -732,9 +769,19 @@ def test_a_browser_company_whose_pages_are_still_being_read_waits_for_the_end_of
         release.set()
 
     monkeypatch.setattr(run, "crawl_many", crawl)
-    run.main()
+    real = run.close_unseen
+
+    def boom(c: sqlite3.Connection, name: str, seen: set[str]) -> None:
+        if name == "One":
+            raise KeyError("bad page")
+        real(c, name, seen)
+
+    monkeypatch.setattr(run, "close_unseen", boom)
+    with pytest.raises(KeyError):
+        run.main()
     check = sqlite3.connect(run.DB)
-    assert check.execute("SELECT company FROM jobs ORDER BY company").fetchall() == [("One",), ("Two",)]
+    assert check.execute("SELECT company FROM jobs").fetchall() == [("Two",)]
+    assert check.execute("SELECT company FROM crawl_log").fetchall() == [("Two",)]
     check.close()
 
 
@@ -760,7 +807,7 @@ def test_a_crash_while_recording_a_company_keeps_the_ones_before_it_and_rolls_ba
     check.close()
 
 
-def test_the_job_pages_of_browser_companies_are_read_after_the_lists(
+def test_the_job_pages_of_browser_companies_are_read_after_their_list(
     workdir: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     write_json(workdir / "data" / "companies.json", [co("Br", ats="browser", slug="https://br.test/careers")])

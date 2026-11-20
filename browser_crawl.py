@@ -593,7 +593,7 @@ async def _run(urls: list[str], on_result: Callable[[str, list[dict[str, Any]] |
 
 def crawl_many(urls: Any) -> Iterator[tuple[str, list[dict[str, Any]] | None]]:
     """Yield (url, jobs) for each page as its crawl finishes, so a caller that records each one keeps the pages
-    already crawled when the browser crawl dies or the step times out. The crawl runs in a thread and the caller
+    already crawled when the browser crawl dies. The crawl runs in a thread and the caller
     reads on its own, so what the caller does between results never stalls the browser. A crash in the crawl is
     raised here after the results that came before it."""
     done: queue.Queue[tuple[str, list[dict[str, Any]] | None] | None] = queue.Queue()

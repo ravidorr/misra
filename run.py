@@ -365,9 +365,9 @@ def main() -> None:  # noqa: PLR0915
 
     def record(batch: list[tuple[dict[str, Any], list[dict[str, Any]] | None]]) -> None:  # noqa: PLR0912
         """Write the results of these companies into the history and commit them, company by company. A crash while
-        recording loses only the company being recorded, and a crash or timeout in the browser crawl keeps the API
-        companies and the browser companies already crawled: the workflow syncs after a failed crawl, so what was
-        recorded reaches Supabase, and the run is red anyway."""
+        recording loses only the company being recorded, and a crash in the browser crawl keeps the API companies
+        and the browser companies recorded before it (on a step timeout, the ones recorded so far): the workflow syncs
+        after a failed crawl, so what was recorded reaches Supabase, and the run is red anyway."""
         for co, fetched in batch:
             c.commit()  # the previous company is complete: keep it whatever comes next
             name = co["name"]
@@ -465,9 +465,9 @@ def main() -> None:  # noqa: PLR0915
 
         if by_slug:
             seen_slugs: set[str] = set()
-            # the job pages of each company are read in a pool, after its list; a company is recorded (in the order its
-            # list arrived) when its pages are read and the next list arrives or the crawl ends, so a crash or the step
-            # timeout keeps the ones finished before it
+            # the job pages of each company are read in a pool, after its list. A company is recorded, in the order
+            # its list arrived, when its pages are read and the next list arrives or the crawl ends. A crash keeps
+            # every company whose list arrived; a step timeout keeps the ones recorded before it
             with ThreadPoolExecutor(8) as ex:
                 waiting: deque[Future[tuple[dict[str, Any], list[dict[str, Any]] | None]]] = deque()
                 try:
@@ -480,9 +480,19 @@ def main() -> None:  # noqa: PLR0915
                         )
                         while waiting and waiting[0].done():
                             finish(waiting.popleft())
+                except BaseException:
+                    c.rollback()  # the company being recorded: the drain below must not commit half of it
+                    raise
                 finally:
-                    while waiting:
-                        finish(waiting.popleft())
+                    failure: Exception | None = None
+                    while waiting:  # one company that cannot be recorded must not cost the others
+                        try:
+                            finish(waiting.popleft())
+                        except Exception as exc:
+                            c.rollback()
+                            failure = failure or exc
+                    if failure:
+                        raise failure
             for slug in by_slug.keys() - seen_slugs:  # a page the crawl never reported is a failed crawl
                 for co in by_slug[slug]:
                     record([(co, None)])
