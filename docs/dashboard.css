@@ -946,6 +946,69 @@ a {
   z-index: 1;
 }
 
+/* The Hidden view: two visible headings, a plain list of hidden companies (name and count on the left, "Unhide" on the
+   right, wrapping on a narrow screen) and the hidden roles as normal cards. */
+.label.hidden-head {
+  margin: var(--space-6) 0 var(--space-3);
+  font-size: var(--text-lg);
+  font-weight: 800;
+}
+
+.hidden-head:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.hidden-companies[hidden],
+.hidden-head[hidden] {
+  display: none;
+}
+
+.hidden-company-list {
+  margin: 0;
+  padding: 0;
+  border-top: var(--border-width) solid var(--line);
+  list-style: none;
+}
+
+.hidden-company {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2) var(--space-4);
+  padding: var(--space-3) 0;
+  border-bottom: var(--border-width) solid var(--line);
+}
+
+.hidden-company-name {
+  margin: 0;
+  font-size: var(--text-md);
+  font-weight: 700;
+}
+
+.hidden-company-count {
+  margin: var(--space-1) 0 0;
+  color: var(--muted);
+  font-size: var(--text-sm);
+}
+
+.empty-title {
+  margin: 0 0 var(--space-2);
+  color: var(--ink);
+  font-size: var(--text-lg);
+  font-weight: 800;
+}
+
+.empty p {
+  margin: 0;
+}
+
+/* The Hidden view puts the coverage card away with the filters (the Starred view keeps it). */
+.gaps[data-away="true"] {
+  display: none;
+}
+
 /* Safe-area insets keep content clear of notches and the home indicator on phones. */
 .page {
   max-width: 760px;
@@ -1567,6 +1630,16 @@ html:has(.sheet:modal) {
   list-style: none;
 }
 
+/* The Hidden view: the roles are shown as cards at full strength (a faded card cannot be read and "Unhide" must not look
+   disabled), without the "New" flag, and sit close under their heading. */
+.feed[data-view="hidden"] {
+  margin-top: 0;
+}
+
+.feed[data-view="hidden"] .card[data-discarded="true"] {
+  opacity: 1;
+}
+
 .empty {
   padding: var(--space-6) 0;
   color: var(--muted);
@@ -1720,6 +1793,16 @@ html:has(.sheet:modal) {
 @media (width < 561px), (height < 500px) {
   .filters-open {
     display: inline-flex;
+  }
+
+  /* Three controls ("Filters", "Starred", "Hidden") share one row on a phone, so the first job stays on the first screen. */
+  .toolbar {
+    gap: var(--space-2);
+  }
+
+  .toolbar .filters-open,
+  .toolbar .chip {
+    padding-inline: var(--space-2);
   }
 
   .card-title {
