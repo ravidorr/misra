@@ -54,7 +54,6 @@ select = ["E", "F", "W", "I", "B", "UP", "SIM", "C4", "PL", "RUF"]
 # The browser tests reuse the `site` fixture of test_dashboard_page.py, imported by name.
 "tests/test_sign_in.py" = ["F811"]
 "tests/test_job_choices.py" = ["F811"]
-"tests/test_hidden_lists.py" = ["F811"]
 "tests/test_account_sync.py" = ["F811"]
 "tests/test_admin_page.py" = ["F811"]
 "tests/test_delete_account.py" = ["F811"]

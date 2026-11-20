@@ -3,11 +3,14 @@ one by one and every company they hid (also one with no open role), each with a 
 reads the choices that exist today and stores nothing new. Run in a real browser against the built page."""
 
 import json
+import sqlite3
 from pathlib import Path
 from typing import Any
 
+import pytest
 from playwright.async_api import Page
 
+import build_dashboard
 from tests.test_dashboard_page import (
     AXE,
     ISRAEL_JOBS,
@@ -15,8 +18,8 @@ from tests.test_dashboard_page import (
     TAP_MIN,
     WEBMCP,
     ChoicesBackend,
+    build_site,
     serve,
-    site,  # noqa: F401  (a fixture)
 )
 from tests.test_job_choices import (
     DISCARDED,
@@ -31,6 +34,13 @@ from tests.test_job_choices import (
     until,
 )
 from tests.test_sign_in import AXE_RUN, stored
+
+
+@pytest.fixture
+def site(db: sqlite3.Connection, workdir: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    monkeypatch.setattr(build_dashboard, "DIGEST_SIGNUP_ENABLED", False)
+    return build_site(db, workdir)
+
 
 COMPANIES = "il-jobs-discarded-companies-v1"
 GHOST = "Ghost"  # a hidden company with no open role
