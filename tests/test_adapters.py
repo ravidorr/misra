@@ -2631,9 +2631,12 @@ def test_varonis_a_place_without_a_city_and_a_missing_team_are_read(monkeypatch:
     ]
 
 
-def test_varonis_no_job_is_an_empty_list(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_varonis_an_empty_list_or_one_without_an_israel_job_is_a_failure(monkeypatch: pytest.MonkeyPatch) -> None:
     fake_eightfold(monkeypatch, varonis_answer([]))
-    assert adapters.varonis("careers.varonis.com") == []
+    assert adapters.varonis("careers.varonis.com") is None
+    elsewhere = varonis_item(jobLocations=[{"city": "Austin", "country": "United States"}])
+    fake_eightfold(monkeypatch, varonis_answer([elsewhere]))
+    assert adapters.varonis("careers.varonis.com") is None
 
 
 def test_varonis_a_list_at_the_cap_is_read_and_one_above_it_is_not(monkeypatch: pytest.MonkeyPatch) -> None:

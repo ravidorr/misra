@@ -1158,7 +1158,9 @@ def varonis(slug: str) -> list[Job] | None:
     VARONIS_MAX requisitions (a list that long may be cut short), no job is unreadable or twice and every job's
     `locationsCount` is the number of places it lists: a partial list would close the jobs it lacks. Of those, the
     jobs whose place text (city and country of each location) names Israel, by `common.ISRAEL`, are kept. The
-    answer has no job text and no date."""
+    answer has no job text and no date. An empty list, or one with no job in Israel, is a failure too (Varonis has
+    jobs in Israel, so an empty answer is a broken one, and a failure keeps the jobs listed; an empty list would close
+    them all)."""
     if slug != VARONIS_HOST:
         return None
     r = get(f"https://{VARONIS_HOST}/api/getRequisitions")
@@ -1174,7 +1176,7 @@ def varonis(slug: str) -> list[Job] | None:
     jobs = [j for j in read if j]
     if len(jobs) != len(items) or len({j["job_id"] for j in jobs}) != len(jobs):
         return None
-    return [j for j in jobs if ISRAEL.search(j["location"])]
+    return [j for j in jobs if ISRAEL.search(j["location"])] or None  # Varonis has jobs in Israel: none is a bad answer
 
 
 ADAPTERS: dict[str, Callable[[str], list[Job] | None]] = {
