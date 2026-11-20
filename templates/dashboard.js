@@ -1440,13 +1440,14 @@ const cutMark = (j) => j.sc && h('span', { 'aria-hidden': 'true', text: '…' })
 function discardControl(j, what, discarded) {
   const k = key(j);
   if (discarded) {
+    const unhide = view === 'hidden'; /* in the Hidden view the way back has one name, as for a company */
     return h('button', {
       type: 'button',
       class: 'btn btn-pill',
       'data-act': 'toggle',
       'data-k': k,
-      'aria-label': `Restore: ${what}`,
-      text: 'Restore',
+      'aria-label': `${unhide ? 'Unhide role' : 'Restore'}: ${what}`,
+      text: unhide ? 'Unhide' : 'Restore',
     });
   }
   const item = (act, text, label) =>
@@ -1498,7 +1499,7 @@ function cardEl(j) {
         text: 'Old?',
       }),
     );
-  } else if (isNew) {
+  } else if (isNew && view !== 'hidden') {
     art.append(h('span', { class: 'sticker card-flag', text: 'New' }));
   }
   art.append(
@@ -1558,6 +1559,8 @@ const searchPending = () => {
    type), so they are put away while it shows. */
 function showView() {
   const roles = view === 'roles';
+  $('list').dataset.view = view;
+  $('gapsCard').dataset.away = String(!roles);
   for (const id of ['moreFilters', 'searchBar', 'filtersOpen']) $(id).hidden = !roles;
   $('starredView').setAttribute('aria-pressed', String(view === 'starred'));
   $('starredView').textContent = `Starred (${starredItems().length})`;
@@ -1582,14 +1585,12 @@ let hiddenNote = ''; /* "Unhidden: Acme." for the next summary only (the visible
 /* A hidden company: its name, how many open roles it has, and "Unhide". */
 function hiddenCompanyEl(company) {
   const open = openRolesOf(company);
-  return h('li', {}, [
-    h('div', { class: 'card', 'data-hidden-company': company, 'data-pending': String(Boolean(account?.pending.has(companyKey(company)))) }, [
-      h('p', { class: 'card-company', text: company }),
-      h('p', { class: 'hidden-company-count', text: open === 0 ? 'No open roles' : countOf(open, 'open role', 'open roles') }),
-      h('p', { class: 'card-actions' }, [
-        h('button', { type: 'button', class: 'btn btn-pill', 'data-act': 'unhide-company', 'data-company': company, 'aria-label': `Unhide: ${company}`, text: 'Unhide' }),
-      ]),
+  return h('li', { class: 'hidden-company', 'data-hidden-company': company, 'data-pending': String(Boolean(account?.pending.has(companyKey(company)))) }, [
+    h('div', {}, [
+      h('p', { class: 'hidden-company-name', text: company }),
+      h('p', { class: 'hidden-company-count', text: open === 0 ? 'No open roles now' : `${countOf(open, 'open role', 'open roles')}, hidden with the company` }),
     ]),
+    h('button', { type: 'button', class: 'btn btn-pill', 'data-act': 'unhide-company', 'data-company': company, 'aria-label': `Unhide company: ${company}`, text: 'Unhide' }),
   ]);
 }
 
@@ -1679,11 +1680,12 @@ function render(focusIdx) {
     if (hiddenView && !hiddenKnown()) {
       none = $('summary').textContent;
     } else if (hiddenView) {
-      none = hiddenCompanies().length === 0
-        ? 'Nothing is hidden. "Not for me" on a role hides it, or its whole company, and it shows here.'
-        : 'No role is hidden on its own.';
+      none = hiddenCompanies().length === 0 ? null : 'No role is hidden on its own.';
     }
-    drawList([h('li', { class: 'empty', text: none })], focusIdx === undefined);
+    const note = none === null
+      ? [h('h2', { class: 'empty-title', text: 'Nothing hidden' }), h('p', { text: 'Use Not for me on a role to hide it or its company. It shows up here.' })]
+      : none;
+    drawList([h('li', { class: 'empty' }, Array.isArray(note) ? note : [note])], focusIdx === undefined);
     if (focusIdx !== undefined) $('list-h').focus(); /* the last role was starred or discarded: the focus stays on the page's list */
     $('pager').hidden = true;
     return;

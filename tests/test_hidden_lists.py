@@ -92,7 +92,11 @@ async def test_signed_out_nothing_hidden_says_how_to_hide_and_the_chip_toggles(p
     assert await page.locator("#starredView").get_attribute("aria-pressed") == "false"
     assert await page.locator("#hiddenCompanies").is_hidden()
     assert await page.locator("#hiddenRoles-h").is_hidden()
-    assert "Nothing is hidden." in await page.locator("#list > li.empty").inner_text()
+    empty = page.locator("#list > li.empty")
+    assert await empty.locator("h2").inner_text() == "Nothing hidden"
+    assert (
+        await empty.locator("p").inner_text() == "Use Not for me on a role to hide it or its company. It shows up here."
+    )
     assert await summary(page) == "0 hidden companies, 0 hidden roles. The filters do not apply to this list."
     assert await page.locator("#heroTop").inner_text() == "Hidden"
     for part in ("#moreFilters", "#searchBar", "#hiring", "#missing"):
@@ -126,9 +130,12 @@ async def test_signed_out_a_hidden_company_with_no_open_role_is_listed_and_unhid
     await open_hidden(page)
     assert await names(page) == ["Acme", GHOST]  # A to Z
     assert await page.locator("#hiddenCompanies-h").inner_text() == "Hidden companies (2)"
-    assert await page.locator(f"{GHOST_ROW} .hidden-company-count").inner_text() == "No open roles"
-    assert await page.locator(f"{ACME_ROW} .hidden-company-count").inner_text() == f"{ISRAEL_JOBS} open roles"
-    assert await page.locator(f"{GHOST_ROW} {UNHIDE}").get_attribute("aria-label") == "Unhide: Ghost"
+    assert await page.locator(f"{GHOST_ROW} .hidden-company-count").inner_text() == "No open roles now"
+    assert (
+        await page.locator(f"{ACME_ROW} .hidden-company-count").inner_text()
+        == f"{ISRAEL_JOBS} open roles, hidden with the company"
+    )
+    assert await page.locator(f"{GHOST_ROW} {UNHIDE}").get_attribute("aria-label") == "Unhide company: Ghost"
     assert await summary(page) == "2 hidden companies, 0 hidden roles. The filters do not apply to this list."
     assert await page.locator("#list > li.empty").inner_text() == "No role is hidden on its own."
     await page.click(f"{GHOST_ROW} {UNHIDE}")
@@ -159,7 +166,13 @@ async def test_signed_out_hidden_roles_are_cards_with_restore_and_a_company_hide
     assert await page.locator("#hiddenRoles-h").inner_text() == "Hidden roles (1)"
     assert await page.locator("#list article").count() == 1
     assert await page.locator(PM1).get_attribute("data-discarded") == "true"
-    assert await page.locator(f"{PM1} [data-act=toggle]").inner_text() == "Restore"
+    assert await page.locator(f"{PM1} [data-act=toggle]").inner_text() == "Unhide"
+    assert (await page.locator(f"{PM1} [data-act=toggle]").get_attribute("aria-label")).startswith("Unhide role: ")
+    assert await page.locator(f"{PM1} .card-flag").count() == 0  # no "New" flag here
+    assert (
+        await page.locator(PM1).evaluate("e => getComputedStyle(e).opacity") == "1"
+    )  # not faded: readable, not disabled
+    assert await page.locator("#gapsCard").is_hidden()  # the coverage card belongs to the feed
     await page.click(f"{PM1} [data-act=toggle]")
     assert await page.locator("#list > li.empty").inner_text() == "No role is hidden on its own."
     assert await page.locator("#hiddenRoles-h").is_hidden()
