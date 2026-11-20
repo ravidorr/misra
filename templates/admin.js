@@ -17,7 +17,8 @@ const CHECK_TIMEOUT_MS = 15000; /* the library retries a failing renewal for min
 const HTTP_CLIENT_ERROR = 400;
 const HTTP_SERVER_ERROR = 500;
 const MESSAGES = {
-  unavailable: 'This page could not load. Check your connection, then reload the page.',
+  unavailableTitle: 'This page could not load',
+  unavailable: 'Check your connection, then reload the page.',
   loading: 'Loading…',
   failed: 'Could not load this area.',
   retry: 'Try again',
@@ -34,7 +35,9 @@ const PAGE_TITLE = 'Admin';
 
 const main = $('main');
 const notFound = $('notFound');
+const notFoundTitle = document.querySelector('#notFound h1');
 const notFoundLine = $('notFoundLine');
+const NOT_FOUND_HEADING = notFoundTitle.textContent;
 const NOT_FOUND_LINE = notFoundLine.textContent; /* the 404's own words, as the file has them */
 const NOT_FOUND_TITLE = document.title;
 const opened = new Set(); /* the areas that have started loading */
@@ -47,7 +50,9 @@ function setState(state) {
   main.className = ready ? 'card admin' : 'card not-found';
   main.parentElement.classList.toggle('admin-page', ready); /* the wide page only for the admin: the 404 never changes width */
   notFound.hidden = state !== 'not-found' && state !== 'check-failed';
-  notFoundLine.textContent = state === 'check-failed' ? MESSAGES.unavailable : NOT_FOUND_LINE;
+  const failed = state === 'check-failed'; /* the same heading and line slots, so the card never changes size */
+  notFoundTitle.textContent = failed ? MESSAGES.unavailableTitle : NOT_FOUND_HEADING;
+  notFoundLine.textContent = failed ? MESSAGES.unavailable : NOT_FOUND_LINE;
   for (const part of main.querySelectorAll('[data-when]')) part.hidden = !part.dataset.when.split(' ').includes(state);
   if (ready) showArea(areaName(), false);
   else document.title = NOT_FOUND_TITLE;

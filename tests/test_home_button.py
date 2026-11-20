@@ -9,10 +9,12 @@ from playwright.async_api import Page
 import build_dashboard
 from tests.test_dashboard_page import PHONE, TAP_MIN, site  # noqa: F401  (site is a fixture)
 from tests.test_legal_pages import open_legal
+from tests.test_not_found_page import open_missing
 
 OTHER_PAGES = [
     "about.html",
     "admin.html",
+    "404.html",
     "assistant.html",
     "contact.html",
     "email.html",
@@ -20,7 +22,16 @@ OTHER_PAGES = [
     "security.html",
     "terms.html",
 ]
+HOME_HREF = "/misra/"  # the 404 page is served at any depth, so it links from the root
 STYLE = ["border-top-color", "border-top-width", "background-color", "box-shadow", "border-top-left-radius", "color"]
+
+
+async def open_page(page: Page, docs: Path, output: str) -> None:
+    """The 404 page is served for a missing address, as GitHub Pages does; the others at their own file."""
+    if output == "404.html":
+        await open_missing(page, docs)
+    else:
+        await open_legal(page, docs, output)
 
 
 def test_the_slots_fill_the_home_button_and_link_before_the_other_footer_links() -> None:
@@ -40,11 +51,11 @@ async def test_the_home_button_is_once_in_the_header_44px_and_leads_to_the_root(
     size: dict[str, int],
 ) -> None:
     await page.set_viewport_size(size)  # type: ignore[arg-type]
-    await open_legal(page, site, output)
+    await open_page(page, site, output)
     button = page.locator("header.top a#home")
     assert await page.locator("#home").count() == 1
     assert await button.count() == 1
-    assert await button.get_attribute("href") == "./"
+    assert await button.get_attribute("href") == (HOME_HREF if output == "404.html" else "./")
     assert await button.get_attribute("aria-label") == "Home"
     assert await button.get_attribute("title") == "Home"
     assert await button.locator("svg[aria-hidden='true']").count() == 1
@@ -62,12 +73,12 @@ async def test_the_home_button_is_once_in_the_header_44px_and_leads_to_the_root(
 
 @pytest.mark.parametrize("output", OTHER_PAGES)
 async def test_the_footer_says_home_first_and_the_logo_link_is_unchanged(page: Page, site: Path, output: str) -> None:  # noqa: F811
-    await open_legal(page, site, output)
+    await open_page(page, site, output)
     links = page.locator("footer.foot nav.foot-links a")
     first = links.first
     assert await first.inner_text() == "Home"
-    assert await first.get_attribute("href") == "./"
+    assert await first.get_attribute("href") == (HOME_HREF if output == "404.html" else "./")
     assert await first.get_attribute("aria-current") is None
-    assert await page.locator("a.top-home").get_attribute("href") == "./"
+    assert await page.locator("a.top-home").get_attribute("href") == (HOME_HREF if output == "404.html" else "./")
     assert await page.locator("a.top-home").get_attribute("aria-label") is None  # still named by "misra"
     assert await page.locator("a.top-home").inner_text() == "misra"
