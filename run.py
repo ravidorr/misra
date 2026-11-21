@@ -419,7 +419,7 @@ def recheck_jobs(targets: list[dict[str, Any]], found: Found | None = None, dead
             pages.setdefault((co.get("ats") == "browser" and co.get("slug")) or co["careers_url"], []).append(
                 co["name"]
             )
-    for url, jobs in crawl_many(list(pages)) if pages else ():
+    for url, jobs in crawl_many(list(pages)) if pages and time.monotonic() <= deadline else ():
         found.extend((name, jobs) for name in pages[url])
         if time.monotonic() > deadline:
             break
@@ -450,7 +450,8 @@ def recheck_step() -> int:
     """`python run.py --recheck`: its own workflow step, last before the failure alert. It reads the pulled company list
     only, writes nothing (no history, no table) and holds no secret; a company that shows Israel jobs is pinned by hand
     (TODO.md, Decisions on sources). A crash is a warning with what was read before it; the workflow stops the step
-    after 8 minutes with `timeout` and turns that into a warning, so a slow site cannot redden the run either."""
+    after 5 minutes with `timeout` (the script stops itself at 3) and turns that into a warning, so a slow site
+    cannot redden the run either."""
     found: Found = []
     crashed = False
     total = 0

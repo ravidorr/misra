@@ -143,10 +143,14 @@ def test_nothing_new_is_started_after_the_deadline_and_the_summary_says_of_how_m
     assert run.recheck_jobs(targets, deadline=-1.0) == []  # already late: no adapter call, no browser
     got = run.recheck_jobs(targets, deadline=float("inf"))
     assert [n for n, _ in got] == ["A", "B", "C"]
-    clock = iter([0.0, 0.0, 0.0, 5.0])  # all start, the first page result ends the reading
+    clock = iter([0.0, 0.0, 0.0, 0.0, 5.0])  # all start, the first page result ends the reading
     monkeypatch.setattr(run.time, "monotonic", lambda: next(clock))
     assert [n for n, _ in run.recheck_jobs(targets, deadline=1.0)] == ["A", "B"]
     assert run.recheck_summary(got, 3).startswith("::notice::recheck: 3 of 3 probed,")
+    late = iter([0.0, 5.0])  # the deadline passes while the pages are only queued: no browser starts
+    monkeypatch.setattr(run.time, "monotonic", lambda: next(late))
+    monkeypatch.setattr(run, "crawl_many", lambda urls: pytest.fail("the browser must not start"))
+    assert run.recheck_jobs(targets[1:2], deadline=1.0) == []
 
 
 def test_no_page_to_read_starts_no_browser(monkeypatch: pytest.MonkeyPatch) -> None:
