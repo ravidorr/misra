@@ -443,7 +443,7 @@ async def crawl_one(ctx: Any, url: str, sem: asyncio.Semaphore) -> list[dict[str
         open_calls: set[Any] = set()  # fetches and XHRs of the career page's own host that are still open
 
         def call_started(req: Any) -> None:
-            if req.resource_type in ("xhr", "fetch") and host_of(req.url) == host_of(url):
+            if req.resource_type in ("xhr", "fetch") and host_of(req.url) == host_of(page.url):
                 open_calls.add(req)
 
         page.on("request", call_started)
