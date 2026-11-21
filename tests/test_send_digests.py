@@ -357,6 +357,30 @@ def test_a_job_with_a_place_in_israel_but_no_region_counts_as_in_israel(rig: Rig
     assert "Acme/odd" in rig.mail.sent[0]["text"]
 
 
+def test_unknown_jobs_follow_a_chosen_region_only_when_unknown_is_chosen(rig: Rig) -> None:
+    """A job whose place is Unknown is in Israel for the digest: a subscriber with no region chosen gets it, and one who
+    picked regions gets it only by picking Unknown."""
+    rig.db.jobs += [
+        job_row("Acme", "nowhere", "Product Manager", location=""),
+        job_row("Acme", "hebrew", "Product Manager", location="גוש דן"),
+        job_row("Acme", "haifa", "Product Manager", location="Haifa, Israel"),
+    ]
+    assert emailed_ids_of(rig, {}) == {"nowhere", "hebrew", "haifa"}
+    assert emailed_ids_of(rig, {"regions": ["Haifa and the north"]}) == {"haifa"}
+    assert emailed_ids_of(rig, {"regions": ["Unknown"]}) == {"nowhere", "hebrew"}
+    assert emailed_ids_of(rig, {"regions": ["Unknown", "Haifa and the north"]}) == {"nowhere", "hebrew", "haifa"}
+
+
+def emailed_ids_of(rig: Rig, filters: dict[str, Any]) -> set[str]:
+    """The ids of the Acme jobs of this test that one subscriber with these filters is emailed."""
+    rig.db.subscriptions = [subscription(ANN, "ann@example.test", filters=filters)]
+    rig.mail.sent.clear()
+    rig.db.emailed.clear()
+    rig.go()
+    text = rig.mail.sent[0]["text"] if rig.mail.sent else ""
+    return {job_id for job_id in ("nowhere", "hebrew", "haifa") if f"Acme/{job_id}\n" in text + "\n"}
+
+
 def test_matches_unit() -> None:
     job = Job(
         "Acme",

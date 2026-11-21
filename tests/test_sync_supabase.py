@@ -50,6 +50,14 @@ def test_upserts_every_open_job_with_its_classification(jobs: sqlite3.Connection
     assert fake.table[("Beta", "9")]["regions"] == ["Haifa and the north", "Remote"]
 
 
+def test_a_job_with_an_empty_or_hebrew_location_is_sent_in_the_region_unknown(db: sqlite3.Connection) -> None:
+    add_job(db, "Acme", "1", "Junior Analyst", location="")
+    add_job(db, "Acme", "2", "Junior Analyst", location="גוש דן")
+    fake = FakeSupabase()
+    sync(db, client(fake))
+    assert [(r["regions"], r["locations"]) for r in fake.table.values()] == [(["Unknown"], [])] * 2
+
+
 def test_rows_have_identical_keys_and_never_carry_description_or_details(jobs: sqlite3.Connection) -> None:
     fake = FakeSupabase()
     sync(jobs, client(fake))
