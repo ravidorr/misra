@@ -121,9 +121,14 @@ def test_a_location_that_cannot_be_read_is_unknown(location: str | None) -> None
     assert regions.place(location) == regions.Place(israel=True, regions=(regions.UNKNOWN,))
 
 
-@pytest.mark.parametrize("location", ["London", "Remote", "New York, NY", "JAVA | NET."])
+@pytest.mark.parametrize("location", ["London", "Remote", "New York, NY", "JAVA | NET.", "Москва", "東京"])
 def test_a_readable_location_that_is_not_in_israel_is_not_unknown(location: str) -> None:
     assert regions.place(location) == regions.Place(israel=False)
+
+
+def test_any_hebrew_letter_without_a_known_city_is_unknown_even_beside_a_foreign_place() -> None:
+    """Said plainly: a Hebrew gloss makes the location unreadable to us, so it is Unknown, not Abroad."""
+    assert regions.place("Berlin, ברלין").regions == (regions.UNKNOWN,)
 
 
 def test_hebrew_that_names_a_known_city_is_placed_not_unknown() -> None:
@@ -170,7 +175,7 @@ def test_remote_counts_only_when_open_to_israel(location: str) -> None:
 
 
 @pytest.mark.parametrize("location", ["London, UK", "New York, NY", "Berlin, Germany"])
-def test_jobs_outside_israel_are_untouched(location: str | None) -> None:
+def test_jobs_outside_israel_are_untouched(location: str) -> None:
     assert regions.place(location) == regions.Place(israel=False)
 
 

@@ -365,7 +365,7 @@ def test_unknown_jobs_follow_a_chosen_region_only_when_unknown_is_chosen(rig: Ri
         job_row("Acme", "hebrew", "Product Manager", location="גוש דן"),
         job_row("Acme", "haifa", "Product Manager", location="Haifa, Israel"),
     ]
-    assert emailed_ids_of(rig, {}) >= {"nowhere", "hebrew", "haifa"}
+    assert emailed_ids_of(rig, {}) == {"nowhere", "hebrew", "haifa"}
     assert emailed_ids_of(rig, {"regions": ["Haifa and the north"]}) == {"haifa"}
     assert emailed_ids_of(rig, {"regions": ["Unknown"]}) == {"nowhere", "hebrew"}
     assert emailed_ids_of(rig, {"regions": ["Unknown", "Haifa and the north"]}) == {"nowhere", "hebrew", "haifa"}
