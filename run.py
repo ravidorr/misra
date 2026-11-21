@@ -1,5 +1,5 @@
 """Crawl all companies with a working ATS, diff against the history (data/jobs.db, a scratch file pulled from
-Supabase), mark new/closed. `--gaps` logs the coverage gaps."""
+Supabase), mark new/closed. `--gaps` logs the coverage gaps; `--recheck` probes the researched sites that may reopen."""
 
 import datetime
 import queue
@@ -374,6 +374,72 @@ def gaps_step() -> int:
         c.close()
 
 
+RECHECK_REASONS = (
+    "no_openings",
+    "crawl_failing",
+)  # the gap reasons checked again every day (TODO.md, Decisions on sources)
+
+
+def recheck_targets(companies: list[dict[str, Any]], excluded: list[str]) -> list[dict[str, Any]]:
+    """The researched records the daily recheck probes: not crawled, not excluded, a gap reason in RECHECK_REASONS and
+    an address to read. `bot_protection` records are never here: a protected site is put aside, not retried."""
+    return [
+        co
+        for co in companies
+        if co.get("crawl") is not True
+        and co.get("excluded") is None
+        and (co.get("gap") or {}).get("reason") in RECHECK_REASONS
+        and co.get("careers_url")
+        and not is_excluded(co["name"], excluded)
+    ]
+
+
+def recheck_jobs(targets: list[dict[str, Any]]) -> dict[str, list[dict[str, Any]] | None]:
+    """name -> the jobs the existing crawl path lists, None when the site could not be read (robots.txt included).
+    A record with a known board goes through its adapter, any other through the browser crawl of its address; both
+    take the same robots.txt rules and one request a second per host. Nothing is stored."""
+    found: dict[str, list[dict[str, Any]] | None] = {}
+    pages: dict[str, list[str]] = {}
+    for co in targets:
+        if co.get("ats") in ADAPTERS and co.get("slug"):
+            found[co["name"]] = fetch(co)
+        else:
+            pages.setdefault(co["slug"] if co.get("ats") == "browser" else co["careers_url"], []).append(co["name"])
+    for url, jobs in crawl_many(list(pages)) if pages else ():
+        for name in pages[url]:
+            found[name] = jobs
+    return found
+
+
+def recheck_summary(found: dict[str, list[dict[str, Any]] | None]) -> str:
+    """One log line: counts, and the names of the public companies that show an Israel job (never a posting). A job with
+    no readable location is only counted: a person decides whether the company is Israeli."""
+    israel = {n: sum(1 for j in jobs if ISRAEL.search(j["location"] or "")) for n, jobs in found.items() if jobs}
+    shown = {n: k for n, k in israel.items() if k}
+    unplaced = [n for n, jobs in found.items() if jobs and not israel[n] and any(not j["location"] for j in jobs)]
+    unreachable = sum(1 for jobs in found.values() if jobs is None)
+    names = ", ".join(f"{n} ({k})" for n, k in sorted(shown.items()))
+    return (
+        ("::notice::" if shown else "")
+        + f"recheck: {len(found)} probed, {len(shown)} with Israel jobs"
+        + (f": {names}" if names else "")
+        + f"; {len(unplaced)} with jobs of no readable location, {unreachable} unreachable"
+    )
+
+
+def recheck_step() -> int:
+    """`python run.py --recheck`: its own workflow step after the crawl. It reads the pulled company list only, writes
+    nothing (no history, no table) and holds no secret; a company that shows Israel jobs is pinned by hand with
+    companyctl. A crash is a warning, never a red run: the recheck is a convenience."""
+    try:
+        found = recheck_jobs(recheck_targets(load_companies(), load_excluded()))
+    except Exception as exc:
+        print(f"::warning::recheck failed, {type(exc).__name__}")
+        return 0
+    print(recheck_summary(found))
+    return 0
+
+
 def save_descriptions(texts: list[dict[str, Any]], crawled: list[tuple[str, list[dict[str, Any]]]]) -> None:
     """Hands the descriptions to the sync step and logs their share (FR-4 AC 3: counts only, no text). The texts go to
     a work file outside the checkout (descriptions.work_path), never into data/jobs.db or any committed file. A file
@@ -604,4 +670,6 @@ def main() -> None:  # noqa: PLR0915
 if __name__ == "__main__":
     if "--gaps" in sys.argv:
         sys.exit(gaps_step())
+    if "--recheck" in sys.argv:
+        sys.exit(recheck_step())
     main()

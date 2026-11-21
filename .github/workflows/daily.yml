@@ -147,6 +147,15 @@ jobs:
         # Its own step so a broken coverage check turns the run red (the failure alert fires) without stopping the sync.
         if: ${{ always() && steps.crawl.outcome == 'success' }}
         run: python run.py --gaps
+      - name: Recheck the researched sites
+        id: recheck
+        timeout-minutes: 10
+        # The researched records whose gap reason is no_openings or crawl_failing, probed through the same crawl path
+        # (robots.txt, one request a second): one log line of counts and the names of the companies that show an Israel
+        # job, so they can be pinned by hand. Reads the pulled list only, stores nothing, holds no secret; it never
+        # turns the run red and never stops a later step.
+        if: ${{ always() && steps.crawl.outcome == 'success' }}
+        run: python run.py --recheck
       - name: Sync jobs to Supabase
         id: sync
         # Also after a crawl that failed part of the way: run.py commits each company as it goes, so what it recorded
