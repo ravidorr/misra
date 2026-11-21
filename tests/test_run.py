@@ -263,6 +263,16 @@ def test_sharp_drop_keeps_jobs_open_records_new_ones_and_says_why(
     assert f"FAILED  <- {held_note(RETURNED + 1)}" in out
 
 
+def test_a_held_crawl_logs_the_crawler_s_own_trace(workdir: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    seed()
+    trace = "load more: 1 clicks; 9->9 links, xhr [403], failed 0"
+    write_json(workdir / "data" / "companies.json", [BIG])
+    monkeypatch.setattr(run, "crawl_many", lambda urls: iter([(u, returned(RETURNED)) for u in urls]))
+    monkeypatch.setitem(run.WHY, BIG["slug"], trace)
+    run.main()
+    assert last_log() == (0, RETURNED, f"{held_note()} ({trace})")
+
+
 @pytest.mark.parametrize(
     ("open_before", "count", "open_after"),
     [(20, 9, 20), (20, 10, 10), (21, 10, 21), (21, 11, 11)],  # under half is held, half or more is believed

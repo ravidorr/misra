@@ -1141,3 +1141,62 @@ async def test_adjacent_cards_with_only_an_apply_link_are_ignored_as_on_main(lab
         link("/jobs/product-designer", label, both, leaves=both),
     ]
     assert await crawl_cards(links) == {}
+
+
+class AnsweringButton(FakeEl):
+    """A Load more button whose click makes the page's own XHR answer with `status` (or fail, when None)."""
+
+    def __init__(self, page: FakePage, status: int | None) -> None:
+        super().__init__()
+        self.page = page
+        self.status = status
+
+    async def click(self, timeout: int = 0) -> None:
+        await super().click(timeout)
+        if self.status is None:
+            for handler in self.page.handlers.get("requestfailed", []):
+                handler(SAME)
+        else:
+            for handler in self.page.handlers.get("response", []):
+                handler(FakeResp(SAME.url, status=self.status))
+
+
+async def test_load_more_trace_names_the_answer_of_the_page_s_own_call() -> None:
+    page = FakePage(count_fn=lambda _i: 9)
+    page.btn = AnsweringButton(page, 403)
+    assert await run(page) == []
+    assert WHY[URL].endswith("load more: 1 clicks; 9->9 links, xhr [403], failed 0")
+
+
+async def test_load_more_trace_counts_a_failed_call() -> None:
+    page = FakePage(count_fn=lambda _i: 9)
+    page.btn = AnsweringButton(page, None)
+    await run(page)
+    assert WHY[URL].endswith("9->9 links, xhr [], failed 1")
+
+
+async def test_load_more_trace_of_a_crawl_with_jobs_is_kept_for_the_log() -> None:
+    page = FakePage(count_fn=lambda _i: 9, ld=ld({"@type": "JobPosting", "url": "u1", "title": "T"}))
+    page.btn = AnsweringButton(page, 200)
+    assert await run(page) != []
+    assert WHY[URL] == "load more: 1 clicks; 9->9 links, xhr [200], failed 0"
+
+
+async def test_load_more_trace_ignores_other_hosts_and_resources() -> None:
+    page = FakePage(count_fn=lambda _i: 9)
+    btn = AnsweringButton(page, 200)
+    page.btn = btn
+    original = btn.click
+
+    async def other(timeout: int = 0) -> None:
+        await original(timeout)
+        for handler in page.handlers.get("response", []):
+            handler(FakeResp("https://tracker.test/collect", status=500))
+            handler(FakeResp("https://x.test/app.js", status=500, resource_type="script"))
+        for handler in page.handlers.get("requestfailed", []):
+            handler(Call("https://tracker.test/collect"))
+            handler(Call("https://x.test/app.js", "script"))
+
+    btn.click = other  # type: ignore[method-assign]
+    await run(page)
+    assert "xhr [200], failed 0" in WHY[URL]
