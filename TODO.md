@@ -415,6 +415,12 @@ recurring work.
     permission; find the portfolio companies by hand and add their own career pages.
   - Vendor-hosted career sites (Jibe, Eightfold, Phenom, TalentBrew): obeying the vendor host's `robots.txt` is enough, with
     no per-employer approval, provided only intentionally configured employers are read and a removal request is honoured.
+  - Maintainer rule, 2026-11-21 (extends the lawyer's four vendors): for any vendor-hosted career site, if the vendor host's
+    `robots.txt` allows the job pages, reading them is allowed, on the same conditions (only intentionally configured
+    employers, one request a second, a removal request honoured, bot protection never worked around). New vendors of the
+    same kind need no new approval. This never reaches the Israeli job boards (AllJobs, Drushim, JobMaster, and platforms of
+    that class), which stay out for good. First use: Aerospike (Rippling) and fintastic (Freshteam), pinned as browser
+    crawls on 2026-11-21.
   - Removal requests: the current process is sufficient (the `excluded` record is kept, the rows are deleted, the company is
     never crawled). Keep the written request as a paper trail.
 - **Recurring and open steps.**
