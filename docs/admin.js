@@ -357,7 +357,8 @@ const SEGMENTS = {
    check `companies_ats_known` of the migration lists them; tests/test_admin_companies.py keeps all three equal. */
 const PIN_ATS = [
   'greenhouse_url', 'greenhouse', 'lever', 'ashby', 'workable', 'smartrecruiters', 'comeet', 'workday', 'jazzhr',
-  'bamboohr', 'oraclehcm', 'amazon', 'phenom', 'comeet_page', 'avature', 'eightfold', 'jibe', 'varonis', 'breezy', 'browser',
+  'bamboohr', 'oraclehcm', 'amazon', 'phenom', 'comeet_page', 'avature', 'eightfold', 'jibe', 'varonis', 'breezy',
+  'teamtailor', 'pinpoint', 'jobvite', 'browser',
 ];
 /* The form of the slug, only where CONTRIBUTING.md ("Adding a company") or the adapter's own text documents it. */
 const PIN_HINTS = {
@@ -374,6 +375,9 @@ const PIN_HINTS = {
   jibe: 'The career site host, for example careers.se.com or www.pepsicojobs.com. Israel only.',
   varonis: 'Always careers.varonis.com (a reader for that one company). Israel only.',
   breezy: 'The <slug> of <slug>.breezy.hr, for example acme.',
+  teamtailor: 'The board host, for example vicarius.teamtailor.com (or the company\'s own domain).',
+  pinpoint: 'The board host, for example acme.pinpointhq.com (or the company\'s own domain).',
+  jobvite: 'The slug of jobs.jobvite.com/slug, for example forescout.',
   browser: 'The address of the career page, starting with https://, for example an Eightfold ...careers?location=Israel address.',
 };
 const PIN_ADDRESS = ['browser', 'comeet_page']; /* the slug of these is a career page address */
