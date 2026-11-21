@@ -1663,9 +1663,10 @@ def jobvite(slug: str) -> list[Job] | None:
                     return None  # a job whose places we cannot read might be in Israel: the list is not complete
             out.append(_job(job_id, title, where, f"https://{_JOBVITE_HOST}{href}", team=team))
     # a job the row markup did not yield (a changed layout) means the list is not complete
-    if not out or len(_JOBVITE_ANY_LINK.findall(board)) != len(out) or len({j["job_id"] for j in out}) != len(out):
-        return None
-    return out
+    unique = len({j["job_id"] for j in out}) == len(out)
+    # not one place among the jobs: the place cells changed, and a list the Israel filter empties would close all
+    complete = len(_JOBVITE_ANY_LINK.findall(board)) == len(out) and unique and any(j["location"] for j in out)
+    return out if out and complete else None
 
 
 ADAPTERS: dict[str, Callable[[str], list[Job] | None]] = {

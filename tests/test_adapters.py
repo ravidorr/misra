@@ -3725,6 +3725,7 @@ def test_jobvite_a_slug_that_is_not_a_slug_is_not_asked(monkeypatch: pytest.Monk
         jv_answer(jv_page(jv_table("A", jv_row(title="")))),
         jv_answer(jv_page(jv_table("A", jv_row()), '<td class="jv-job-list-name"><span>not a link</span></td>')),
         jv_answer(jv_page(jv_table("A", jv_row(), jv_row("oA1", "Same")))),
+        jv_answer(jv_page(jv_table("A", jv_row(place=" "), jv_row("oB2", place="")))),  # no place at all
     ],
 )
 def test_jobvite_a_page_that_does_not_read_is_a_failure(
