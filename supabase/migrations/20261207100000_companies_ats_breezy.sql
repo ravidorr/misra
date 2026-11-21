@@ -2,7 +2,7 @@
 -- set by 20261206100000_companies_ats_varonis.sql, lists the keys of `adapters.ADAPTERS` plus `browser`; a new adapter is
 -- a new key, so the check is dropped and added again with the list that has them. Nothing else changes, and no row is
 -- written: a row that names a feed is pinned afterwards on the Companies area of the admin page. Every row already in
--- the table passes (none names the new feeds yet, and the old names are all still in the list).
+-- the table passes (none names the new feed yet, and the old names are all still in the list).
 -- tests/test_migrations_companies.py and tests/test_admin_companies.py keep this list equal to `adapters.ADAPTERS` and
 -- to the admin page's `PIN_ATS`; supabase/tests/companies_ats_breezy.sql tests the check. Not applied by the pull
 -- request: apply it once after the merge, see supabase/README.md.

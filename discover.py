@@ -54,7 +54,10 @@ ATS_LINK = [
     ("smartrecruiters", re.compile(r"(?:jobs|careers)\.smartrecruiters\.com/([A-Za-z0-9_\-]+)", re.I)),
     ("jazzhr", re.compile(r"(?<![A-Za-z0-9_\-.%])(?!(?:www|api|app|help)\.)([A-Za-z0-9_\-]+)\.applytojob\.com", re.I)),
     ("bamboohr", re.compile(r"(?<![A-Za-z0-9_\-.%])(?!(?:www|api|app|help)\.)([A-Za-z0-9_\-]+)\.bamboohr\.com", re.I)),
-    ("breezy", re.compile(r"(?<![A-Za-z0-9_\-.%])(?!(?:www|api|app|help)\.)([A-Za-z0-9_\-]+)\.breezy\.hr", re.I)),
+    (
+        "breezy",
+        re.compile(r"(?<![A-Za-z0-9_\-.%])(?!(?:www|api|app|help)\.)([A-Za-z0-9][A-Za-z0-9\-]*)\.breezy\.hr", re.I),
+    ),
 ]
 COMEET_INIT = re.compile(r"COMEET\.init\(\{(.*?)\}\)", re.S)  # the snippet of a Comeet careers widget
 COMEET_NAME = re.compile(r'"company-name"\s*:\s*"([^"]+)"')
