@@ -95,7 +95,7 @@ def test_a_crash_keeps_what_was_read_before_it_and_a_record_without_a_slug_uses_
     assert urls == [["https://shell.example/careers", "https://noslug.example/careers"]]
     assert capsys.readouterr().out == (
         "::warning::recheck failed, RuntimeError\n"
-        "recheck: 1 probed, 0 with Israel jobs; 1 companies with jobs of no readable location, 0 unreachable\n"
+        "recheck: 1 of 3 probed, 0 with Israel jobs; 1 with jobs of no readable location, 0 unreachable\n"
     )
 
 
@@ -130,6 +130,25 @@ def test_two_records_with_the_same_name_are_both_probed_and_counted(monkeypatch:
     assert run.recheck_summary(found).startswith("::notice::recheck: 2 probed, 2 with Israel jobs: Twin (1), Twin (1);")
 
 
+def test_nothing_new_is_started_after_the_deadline_and_the_summary_says_of_how_many(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setitem(run.ADAPTERS, "fake", lambda slug: [job("Tel Aviv")])
+    monkeypatch.setattr(run, "crawl_many", lambda urls: iter([(u, [job("Haifa")]) for u in urls]))
+    targets = [
+        rec("A", "no_openings", ats="fake", slug="a"),
+        rec("B", "no_openings", careers_url="https://b/c"),
+        rec("C", "no_openings", careers_url="https://c/c"),
+    ]
+    assert run.recheck_jobs(targets, deadline=-1.0) == []  # already late: no adapter call, no browser
+    got = run.recheck_jobs(targets, deadline=float("inf"))
+    assert [n for n, _ in got] == ["A", "B", "C"]
+    clock = iter([0.0, 0.0, 0.0, 5.0])  # all start, the first page result ends the reading
+    monkeypatch.setattr(run.time, "monotonic", lambda: next(clock))
+    assert [n for n, _ in run.recheck_jobs(targets, deadline=1.0)] == ["A", "B"]
+    assert run.recheck_summary(got, 3).startswith("::notice::recheck: 3 of 3 probed,")
+
+
 def test_no_page_to_read_starts_no_browser(monkeypatch: pytest.MonkeyPatch) -> None:
     def boom(urls: list[str]) -> Any:
         raise AssertionError("the browser must not start")
@@ -151,7 +170,7 @@ def test_the_summary_names_companies_with_israel_jobs_and_only_counts_the_rest()
     )
     assert line == (
         "::notice::recheck: 6 probed, 2 with Israel jobs: A (1), B (2); "
-        "1 companies with jobs of no readable location, 1 unreachable"
+        "1 with jobs of no readable location, 1 unreachable"
     )
     assert "Unplaced" not in line
 
@@ -159,7 +178,7 @@ def test_the_summary_names_companies_with_israel_jobs_and_only_counts_the_rest()
 def test_a_quiet_recheck_is_no_notice() -> None:
     assert (
         run.recheck_summary([("Empty", []), ("Down", None)])
-        == "recheck: 2 probed, 0 with Israel jobs; 0 companies with jobs of no readable location, 1 unreachable"
+        == "recheck: 2 probed, 0 with Israel jobs; 0 with jobs of no readable location, 1 unreachable"
     )
 
 
@@ -178,8 +197,8 @@ def test_the_recheck_step_logs_one_line_and_is_green(
     monkeypatch.setattr(sys, "argv", ["run.py", "--recheck"])
     assert run.recheck_step() == 0
     assert capsys.readouterr().out == (
-        "::notice::recheck: 1 probed, 1 with Israel jobs: Page (1); "
-        "0 companies with jobs of no readable location, 0 unreachable\n"
+        "::notice::recheck: 1 of 1 probed, 1 with Israel jobs: Page (1); "
+        "0 with jobs of no readable location, 0 unreachable\n"
     )
 
 
@@ -190,7 +209,7 @@ def test_the_flag_runs_the_step(
     with pytest.raises(SystemExit) as done:
         runpy.run_module("run", run_name="__main__")
     assert done.value.code == 0
-    assert capsys.readouterr().out.startswith("recheck: 0 probed")
+    assert capsys.readouterr().out.startswith("recheck: 0 of 0 probed")
 
 
 def test_a_crash_is_a_warning_and_never_a_red_run(
