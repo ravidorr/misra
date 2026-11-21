@@ -133,6 +133,7 @@ class FakePage:
         self.responses: list[Any] = kw.get("responses", [])
         self.requests: list[Any] = kw.get("requests", [])
         self.ld: list[str] = kw.get("ld", [])
+        self.html: str = kw.get("html", "")
         self.link_fn: Callable[[int], list[Any]] = kw.get("link_fn", lambda _i: [])
         self.count_fn: Callable[[int], int] = kw.get("count_fn", lambda _i: 5)
         self.btn: FakeEl = kw.get("btn", FakeEl(visible=False))
@@ -173,6 +174,9 @@ class FakePage:
 
     async def title(self) -> str:
         return self.title_text
+
+    async def content(self) -> str:
+        return self.html
 
     async def wait_for_timeout(self, _ms: int) -> None:
         await asyncio.sleep(0)

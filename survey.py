@@ -5,7 +5,10 @@ Writes data/survey.json. Dev tool, not part of the daily run.
 printed to stdout, from the pulled company list and the public docs/jobs.json. It needs no browser.
 
 `python survey.py --candidates FILE` is the candidate script of PLAN_3.md step D3 (see `candidates_main`): it probes the
-companies of a CSV politely and prints a keep-or-skip table. It needs no browser either."""
+companies of a CSV politely and prints a keep-or-skip table. It needs no browser either.
+
+`python survey.py --boards FILE` is the script-loaded pages tool (see `boards_main`): for career pages whose jobs
+a plain read does not see, it finds the job board an embed or a script draws and counts what its adapter reads."""
 
 import argparse
 import asyncio
@@ -20,10 +23,12 @@ import re
 import sys
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any
+from urllib.parse import urlsplit
 
 from playwright.async_api import async_playwright
 
 from adapters import ADAPTERS
+from browser_crawl import EXE
 from common import (
     COMPANIES,
     HTTP_OK,
@@ -31,14 +36,17 @@ from common import (
     ExclusionError,
     crawled_companies,
     get,
+    host_of,
     is_excluded,
     load_companies,
     load_excluded,
+    reserve_slot,
     reset_robots_block,
+    robots_allows,
     robots_blocked,
     slug_candidates,
 )
-from discover import CAREER_PATHS, PROBE_ORDER, ats_in_text, israel_count
+from discover import CAREER_PATHS, COMEET_PLUGIN, PROBE_ORDER, ats_in_text, comeet_uid, israel_count
 
 ATS = re.compile(
     r"(myworkdayjobs\.com|workdayjobs|comeet\.com|greenhouse\.io|lever\.co|ashbyhq\.com|"
@@ -64,7 +72,7 @@ DURATION_HINT = (
 SKIP = {"Source", "Bank Leumi Tech", "Noname Security", "Run:ai", "Zebra Medical"}
 
 
-async def survey(ctx: Any, co: dict[str, Any], sem: asyncio.Semaphore) -> dict[str, Any]:
+async def survey(ctx: Any, co: dict[str, Any], sem: asyncio.Semaphore) -> dict[str, Any]:  # noqa: PLR0915
     async with sem:
         res: dict[str, Any] = {
             "name": co["name"],
@@ -74,10 +82,15 @@ async def survey(ctx: Any, co: dict[str, Any], sem: asyncio.Semaphore) -> dict[s
             "job_links": [],
             "final": "",
             "err": "",
+            "board": None,
+            "comeet_uid": None,
+            "comeet_plugin": False,
         }
+        asked: list[str] = []  # every address the page asked for, to find a board an embed or a script draws
         page = await ctx.new_page()
 
         def on_req(req: Any) -> None:
+            asked.append(req.url)
             m = ATS.search(req.url)
             if m:
                 res["ats_hits"].add(req.url[:140])
@@ -100,13 +113,18 @@ async def survey(ctx: Any, co: dict[str, Any], sem: asyncio.Semaphore) -> dict[s
 
         page.on("request", on_req)
         page.on("response", lambda r: asyncio.ensure_future(on_resp(r)))
-        urls = [co.get("careers_url")] if co.get("careers_url") else []
+        urls: list[str] = [co["careers_url"]] if co.get("careers_url") else []
         urls += [f"https://www.{co['domain']}/careers", f"https://{co['domain']}/careers"]
         try:
             for u in dict.fromkeys(urls):
+                if not await asyncio.to_thread(robots_allows, u):
+                    res["err"] = "robots.txt"  # not one request to a page the site's robots.txt refuses
+                    continue
+                await asyncio.sleep(reserve_slot(host_of(u)))  # this host's turn: one request a second
                 try:
                     r = await page.goto(u, timeout=40000, wait_until="domcontentloaded")
                     if r and r.status < HTTP_ERROR:
+                        res["err"] = ""  # a refused or failed address before this one is not the page's state
                         break
                 except Exception as e:
                     res["err"] = type(e).__name__
@@ -119,6 +137,11 @@ async def survey(ctx: Any, co: dict[str, Any], sem: asyncio.Semaphore) -> dict[s
             for f in page.frames:
                 if ATS.search(f.url):
                     res["ats_hits"].add("FRAME " + f.url[:140])
+            # the board an adapter can read: a link, a frame, a request or a widget snippet of the drawn page
+            seen_text = "\n".join([*(f.url for f in page.frames), *asked, await page.content()])
+            res["board"] = ats_in_text(seen_text)
+            res["comeet_uid"] = comeet_uid(seen_text)
+            res["comeet_plugin"] = COMEET_PLUGIN in seen_text
             links = await page.eval_on_selector_all(
                 "a[href]", "els=>els.map(e=>[e.href,(e.innerText||'').trim().slice(0,80)])"
             )
@@ -138,6 +161,7 @@ async def survey(ctx: Any, co: dict[str, Any], sem: asyncio.Semaphore) -> dict[s
         print(
             f"{co['name']:20s} ats={len(res['ats_hits'])} json={len(res['json_urls'])} "
             f"links={res.get('n_job_links')} {res['err']} {res.get('title', '')[:30]}",
+            file=sys.stderr,
             flush=True,
         )
         return res
@@ -535,6 +559,67 @@ def candidates_main(argv: list[str], companies_path: str = COMPANIES) -> int:
     return 0
 
 
+def read_board(board: tuple[str, str]) -> tuple[int, int] | None:
+    """(jobs, Israel jobs) of a board, read by its adapter, or None when it has no adapter or the adapter cannot read
+    it. Counts only: nothing of a posting is kept."""
+    if board[0] not in ADAPTERS:
+        return None
+    jobs = ADAPTERS[board[0]](board[1])
+    return None if jobs is None else (len(jobs), israel_count(jobs))
+
+
+def board_candidates(res: dict[str, Any], name: str, domain: str) -> list[tuple[str, str]]:
+    """The boards a drawn page can lead to, best first: the one it names; a Comeet account whose uid it shows but whose
+    name it does not (the name is guessed as `common.slug_candidates` does, and only a name that goes with the uid
+    gives a board); and the page itself when the Comeet WordPress plugin draws the list (`adapters.comeet_page`)."""
+    out = [(res["board"][0], res["board"][1])] if res["board"] else []
+    if res["comeet_uid"]:
+        out += [("comeet", f"{slug}/{res['comeet_uid']}") for slug in slug_candidates(name, domain)]
+    if res["comeet_plugin"]:
+        out.append(("comeet_page", res["final"]))
+    return list(dict.fromkeys(out))
+
+
+async def boards_main(path: str, companies_path: str = COMPANIES) -> int:
+    """`python3 survey.py --boards FILE`: FILE is a JSON list of {"name", "url"}, the career pages whose jobs a
+    plain read does not see. Each page is loaded once (robots.txt first, no page it refuses); every address it asks for,
+    every frame and the drawn page are searched for a board an adapter reads (`board_candidates`). Prints one line a
+    page: name, board and slug (or `-`), then the number of jobs and of Israel jobs the adapter read (or `-`).
+    Dev tool: writes nothing."""
+    if not os.path.exists(companies_path):
+        print(CANDIDATES_PULL_HINT.format(path=companies_path), file=sys.stderr)
+        return 1
+    excluded = load_excluded(companies_path)  # the legal opt-out: an excluded company's page is never visited
+    with open(path, encoding="utf-8") as fh:
+        pages = [pg for pg in json.load(fh) if not is_excluded(pg["name"], excluded)]
+    sem = asyncio.Semaphore(CANDIDATE_THREADS)
+    domains = [urlsplit(pg["url"]).netloc.removeprefix("www.") for pg in pages]
+    async with async_playwright() as p:
+        b = (
+            await p.chromium.launch(executable_path=EXE, args=["--no-sandbox"])
+            if EXE
+            else await p.chromium.launch(args=["--no-sandbox"])
+        )
+        ctx = await b.new_context(user_agent=USER_AGENT, locale="en-US")
+        found = await asyncio.gather(
+            *[
+                survey(ctx, {"name": pg["name"], "domain": domain, "careers_url": pg["url"]}, sem)
+                for pg, domain in zip(pages, domains, strict=True)
+            ]
+        )
+        await b.close()
+    for res, domain in zip(found, domains, strict=True):
+        candidates = board_candidates(res, res["name"], domain)
+        shown: tuple[str, ...] = (*candidates[0], "-", "-") if candidates else ("-", "-", "-", "-")
+        for board in candidates:
+            read = await asyncio.to_thread(read_board, board)
+            if read:
+                shown = (*board, *map(str, read))
+                break
+        print(res["name"], *shown, sep="\t")
+    return 0
+
+
 async def main() -> None:
     cos = [
         c
@@ -556,4 +641,6 @@ if __name__ == "__main__":
         sys.exit(baseline_main())
     if any(a == "--candidates" or a.startswith("--candidates=") for a in sys.argv[1:]):
         sys.exit(candidates_main(sys.argv[1:]))
+    if "--boards" in sys.argv[1:]:
+        sys.exit(asyncio.run(boards_main(sys.argv[sys.argv.index("--boards") + 1])))
     asyncio.run(main())

@@ -43,7 +43,9 @@ ATS_LINK = [
     ("comeet", re.compile(r"comeet\.com/jobs/([A-Za-z0-9_.\-]+/[A-Z0-9.]+)", re.I)),
     (
         "greenhouse",
-        re.compile(r"(?:boards|job-boards)(?:\.eu)?\.greenhouse\.io/(?:embed/job_board\?for=)?([A-Za-z0-9_\-]+)", re.I),
+        re.compile(
+            r"(?:boards|job-boards)(?:\.eu)?\.greenhouse\.io/(?:embed/job_board(?:/js)?\?for=)?([A-Za-z0-9_\-]+)", re.I
+        ),
     ),
     ("lever", re.compile(r"jobs\.lever\.co/([A-Za-z0-9_\-]+)", re.I)),
     ("ashby", re.compile(r"jobs\.ashbyhq\.com/([A-Za-z0-9_.\-%]+)", re.I)),
@@ -53,6 +55,11 @@ ATS_LINK = [
     ("jazzhr", re.compile(r"(?<![A-Za-z0-9_\-.%])(?!(?:www|api|app|help)\.)([A-Za-z0-9_\-]+)\.applytojob\.com", re.I)),
     ("bamboohr", re.compile(r"(?<![A-Za-z0-9_\-.%])(?!(?:www|api|app|help)\.)([A-Za-z0-9_\-]+)\.bamboohr\.com", re.I)),
 ]
+COMEET_INIT = re.compile(r"COMEET\.init\(\{(.*?)\}\)", re.S)  # the snippet of a Comeet careers widget
+COMEET_NAME = re.compile(r'"company-name"\s*:\s*"([^"]+)"')
+COMEET_UID = re.compile(r'"company-uid"\s*:\s*"([0-9A-Z]{2}\.[0-9A-Z]{3})"')
+COMEET_UID_ANY = re.compile(r"""company-uid["']?\s*[:=]\s*["']?([0-9A-Z]{2}\.[0-9A-Z]{3})\b""")
+COMEET_PLUGIN = "/wp-content/plugins/comeet-wp-plugin"  # the WordPress plugin that draws a Comeet list on the page
 HOST_BASED = {"jazzhr", "bamboohr"}  # the slug is a subdomain, not a path segment
 CAREER_PATHS = ["/careers", "/jobs", "/careers/", "/company/careers", "/about/careers", "/join-us", "/careers/jobs"]
 
@@ -64,7 +71,26 @@ def ats_in_text(text: str) -> tuple[str, str] | None:
         if m and m.group(1).lower() not in ("embed", "jobs", "careers"):
             # a host is case-insensitive and the adapters compare it with the lowercase one the response gives back
             return ats, m.group(1).lower() if ats in HOST_BASED else m.group(1)
-    return None
+    return comeet_widget(text)
+
+
+def comeet_widget(text: str) -> tuple[str, str] | None:
+    """A Comeet careers widget (`COMEET.init({"company-name": ..., "company-uid": ...})`, on the page itself or in the
+    DOM a script drew) names the account but never links to comeet.com: the slug is '<name>/<uid>', with the name as
+    Comeet writes it in its own address (lower case, a hyphen for each run of other characters)."""
+    init = COMEET_INIT.search(text)
+    name = init and COMEET_NAME.search(init[1])
+    uid = init and COMEET_UID.search(init[1])
+    slug = re.sub(r"[^a-z0-9]+", "-", name[1].lower()).strip("-") if name else ""
+    if not (slug and uid):  # a name with no Latin letter or digit gives no address
+        return None
+    return "comeet", slug + "/" + uid[1]
+
+
+def comeet_uid(text: str) -> str | None:
+    """The uid of the Comeet account a page or a widget address (`company-uid=71.008`) shows, with no name with it."""
+    m = COMEET_UID_ANY.search(text)
+    return m[1] if m else None
 
 
 def scan_page(url: str) -> tuple[str | None, str | None]:

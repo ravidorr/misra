@@ -7,7 +7,7 @@ from typing import Any
 import pytest
 
 import survey
-from tests.conftest import write_json
+from tests.conftest import excluded_record, write_json
 from tests.fakes import FakeCtx, FakeFrame, FakePage, FakePlaywright, FakeReq, FakeResp, Status
 
 BIG = '{"title": "x", "location": "y", "pad": "' + "z" * 900 + '"}'
@@ -196,3 +196,138 @@ def test_baseline_ranks_ties_by_label() -> None:
     assert "Crawled by ats (5):\n  alpha: 2\n  zed: 2\n  mid: 1\n" in report
     assert "multinational (israel_only): 0\n  startup (not israel_only): 5" in report
     assert "Crawled companies with at least one Israel job: 0\n" in report
+
+
+# the script-loaded pages tool (`--boards`): the board an embed or a script draws, found in the drawn page
+WIDGET = 'COMEET.init({ "token": "0A1B2C", "company-uid": "71.008", "company-name":"All Cloud" });'
+PAGES = [{"name": "A", "url": "https://a.test/c"}, {"name": "B", "url": "https://b.test/c"}]
+
+
+async def test_survey_finds_the_board_a_script_draws() -> None:
+    page = FakePage(goto_result=Status(200), html=f"<script>{WIDGET}</script>")
+    assert (await run(page))["board"] == ("comeet", "all-cloud/71.008")
+
+
+async def test_survey_finds_the_board_in_a_frame_or_a_request() -> None:
+    frame = FakePage(goto_result=Status(200), frames=[FakeFrame("https://jobs.lever.co/acme")])
+    assert (await run(frame))["board"] == ("lever", "acme")
+    asked = FakePage(
+        goto_result=Status(200), requests=[FakeReq("https://job-boards.greenhouse.io/embed/job_board/js?for=acme")]
+    )
+    assert (await run(asked))["board"] == ("greenhouse", "acme")
+
+
+async def test_survey_has_no_board_to_report() -> None:
+    assert (await run(FakePage(goto_result=Status(200))))["board"] is None
+
+
+async def test_survey_never_loads_a_page_robots_txt_refuses(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(survey, "robots_allows", lambda url: url != "https://n.com/jobs")
+    page = FakePage(goto_result=Status(200))
+    res = await run(page, {"name": "N", "domain": "n.com", "careers_url": "https://n.com/jobs"})
+    assert page.gotos == ["https://www.n.com/careers"]  # the refused page is skipped, the usual ones are tried
+    assert res["err"] == ""  # a page was read in the end, so the refusal is not its state
+    nothing = FakePage()
+    monkeypatch.setattr(survey, "robots_allows", lambda _url: False)
+    res = await run(nothing)
+    assert nothing.gotos == []
+    assert res["err"] == "robots.txt"
+
+
+def test_read_board_counts_what_the_adapter_reads(monkeypatch: pytest.MonkeyPatch) -> None:
+    jobs = [{"location": "Tel Aviv, Israel"}, {"location": "London"}, {"location": ""}]
+    monkeypatch.setitem(survey.ADAPTERS, "comeet", lambda slug: jobs if slug == "a/1" else None)  # type: ignore[arg-type]
+    assert survey.read_board(("comeet", "a/1")) == (3, 1)
+    assert survey.read_board(("comeet", "b/2")) is None  # a board the adapter cannot read
+    assert survey.read_board(("breezy", "x")) is None  # a board with no adapter
+
+
+async def test_survey_sees_a_comeet_uid_and_the_wordpress_plugin() -> None:
+    frame = FakeFrame("https://www.comeet.co/jobs/71.008/social?token=A1&company-uid=71.008&color=1")
+    plugin = "https://x.test/wp-content/plugins/comeet-wp-plugin-3.0/js/comeet.js"
+    page = FakePage(goto_result=Status(200), frames=[frame], requests=[FakeReq(plugin)])
+    res = await run(page)
+    assert res["board"] is None
+    assert res["comeet_uid"] == "71.008"
+    assert res["comeet_plugin"] is True
+    plain = await run(FakePage(goto_result=Status(200)))
+    assert plain["comeet_uid"] is None
+    assert plain["comeet_plugin"] is False
+
+
+def test_board_candidates_best_first() -> None:
+    named = {
+        "board": ("comeet", "acme/71.008"),
+        "comeet_uid": "71.008",
+        "comeet_plugin": True,
+        "final": "https://acme.io/c",
+    }
+    assert survey.board_candidates(named, "Acme Labs", "acme.io") == [
+        ("comeet", "acme/71.008"),  # the one the page names comes once, whatever else says the same
+        ("comeet", "acmelabs/71.008"),
+        ("comeet", "acme-labs/71.008"),
+        ("comeet", "acmehq/71.008"),
+        ("comeet", "acmeinc/71.008"),
+        ("comeet_page", "https://acme.io/c"),
+    ]
+    lone = {"board": None, "comeet_uid": None, "comeet_plugin": False, "final": "https://acme.io/c"}
+    assert survey.board_candidates(lone, "Acme", "acme.io") == []
+    other = {"board": ["lever", "acme"], "comeet_uid": None, "comeet_plugin": False, "final": "https://acme.io/c"}
+    assert survey.board_candidates(other, "Acme", "acme.io") == [("lever", "acme")]
+
+
+async def test_boards_main_prints_one_line_a_page(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    write_json(
+        tmp_path / "pages.json",
+        [*PAGES, {"name": "C", "url": "https://www.c.test/c"}, {"name": "gone co", "url": "https://gone.test/c"}],
+    )
+    write_json(tmp_path / "companies.json", [excluded_record("Gone Co")])  # an opt-out is never visited
+    companies = str(tmp_path / "companies.json")
+    quiet = {"board": None, "comeet_uid": None, "comeet_plugin": False, "final": ""}
+    results = {
+        "A": {"name": "A", "board": ["comeet", "a/1"], "comeet_uid": "1", "comeet_plugin": False, "final": ""},
+        "B": {"name": "B", **quiet},
+        "C": {"name": "C", **quiet, "board": ["lever", "c"]},
+    }
+    seen: list[dict[str, Any]] = []
+
+    async def fake_survey(_ctx: object, co: dict[str, Any], _sem: asyncio.Semaphore) -> dict[str, Any]:
+        seen.append(co)
+        return results[co["name"]]
+
+    launches: list[dict[str, Any]] = []
+    monkeypatch.setattr(survey, "async_playwright", lambda: FakePlaywright(launches))
+    monkeypatch.setattr(survey, "survey", fake_survey)
+    monkeypatch.setattr(survey, "EXE", "")
+    monkeypatch.setitem(survey.ADAPTERS, "comeet", lambda slug: [{"location": "Haifa"}] if slug == "a/1" else None)  # type: ignore[arg-type]
+    monkeypatch.setitem(survey.ADAPTERS, "lever", lambda _slug: None)  # a named board the adapter cannot read
+    assert await survey.boards_main(str(tmp_path / "pages.json"), companies) == 0
+    assert capsys.readouterr().out.splitlines() == [
+        "A\tcomeet\ta/1\t1\t1",
+        "B\t-\t-\t-\t-",
+        "C\tlever\tc\t-\t-",
+    ]
+    assert seen[0] == {"name": "A", "domain": "a.test", "careers_url": "https://a.test/c"}
+    assert seen[2]["domain"] == "c.test"  # `www.` is not part of the domain a name is guessed from
+    assert launches == [{"args": ["--no-sandbox"]}]
+    monkeypatch.setattr(survey, "EXE", "/x/chrome")
+    launches.clear()
+    await survey.boards_main(str(tmp_path / "pages.json"), companies)
+    assert launches == [{"executable_path": "/x/chrome", "args": ["--no-sandbox"]}]
+
+
+async def test_boards_main_needs_the_pulled_list(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    assert await survey.boards_main(str(tmp_path / "pages.json"), str(tmp_path / "missing.json")) == 1
+    assert "missing.json" in capsys.readouterr().err
+
+
+def test_run_as_script_with_boards(workdir: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    write_json(workdir / "data" / "companies.json", [])
+    write_json(tmp_path / "pages.json", [])
+    monkeypatch.setattr("playwright.async_api.async_playwright", lambda: FakePlaywright([]))
+    monkeypatch.setattr("sys.argv", ["survey.py", "--boards", str(tmp_path / "pages.json")])
+    with pytest.raises(SystemExit) as stop:
+        runpy.run_module("survey", run_name="__main__")
+    assert stop.value.code == 0

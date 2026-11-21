@@ -49,6 +49,19 @@ def test_scan_page(monkeypatch: pytest.MonkeyPatch) -> None:
         ("https%3A%2F%2Facme.applytojob.com", (None, "https://final.test/c")),
         ("https://sub.acme.bamboohr.com/careers", (None, "https://final.test/c")),
         ("https://jobs.lever.co/first and https://acme.bamboohr.com/careers", ("lever", "first")),
+        ("https://job-boards.greenhouse.io/embed/job_board/js?for=acme", ("greenhouse", "acme")),
+        (
+            'COMEET.init({"token": "A1B2", "company-uid": "71.008", "company-name":"All Cloud"});',
+            ("comeet", "all-cloud/71.008"),
+        ),
+        ('COMEET.init({"company-name": "Acme", "company-uid": "0B.00C", "token": "A1"})', ("comeet", "acme/0B.00C")),
+        ('COMEET.init({"token": "A1B2", "company-uid": "71.008"})', (None, "https://final.test/c")),
+        ('COMEET.init({"token": "A1B2", "company-name": "Acme"})', (None, "https://final.test/c")),
+        ('"company-uid": "71.008", "company-name": "Acme"', (None, "https://final.test/c")),
+        (
+            'COMEET.init({"token": "A1", "company-uid": "71.008", "company-name": "\u05d0\u05d1"})',
+            (None, "https://final.test/c"),
+        ),
     ],
 )
 def test_scan_page_ats_links(
@@ -367,3 +380,18 @@ def test_main_new_only_discovers_just_the_records_without_a_status_and_leaves_th
     out = run_main(workdir, monkeypatch, "--new-only")
     assert out[:-1] == working
     assert out[-1]["name"] == "New Co" and out[-1]["status"] == "not_found"
+
+
+@pytest.mark.parametrize(
+    ("text", "uid"),
+    [
+        ("https://www.comeet.co/jobs/71.008/social?token=A1&company-uid=71.008&color=1", "71.008"),
+        ('COMEET.init({"token": "A1", "company-uid": "0B.00C"})', "0B.00C"),
+        ("company-uid: '68.00C'", "68.00C"),
+        ("company-uid=71.0089", None),
+        ("company-uid=nothing", None),
+        ("no widget", None),
+    ],
+)
+def test_comeet_uid(text: str, uid: str | None) -> None:
+    assert discover.comeet_uid(text) == uid

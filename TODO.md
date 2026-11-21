@@ -468,6 +468,14 @@ recurring work.
   6. Re-check `no_openings` and dead sites twice, then drop a record that still has nothing.
   7. Repeat the diff against a newer export of the directory each quarter, keeping the same rules. Due 2027-02-20,
      then every three months.
+  - Script-loaded career pages (2026-11-21). Of the 125 Goozali career pages the browser reader reads as zero jobs,
+    `survey.py --boards` found a board an adapter reads on 35 (20 Comeet widgets, 12 Comeet plugin pages, 2 BambooHR, 1
+    Greenhouse), 25 with Israel jobs. The maintainer pins them (`proposals/script-loaded-sites.md` of the session, tag
+    `script-loaded`). The rest: 13 vendor boards with no adapter (Breezy 3, Personio, Teamtailor, Jobvite, iCIMS, Dayforce,
+    SumTotal, HiBob, Phenom, Taleo, Workable on its own subdomain), 5 boards seen but not read, 5 pages whose job links
+    carry only an Apply label or a card the reader cannot title, 6 Hebrew pages, 2 on an Israeli recruiting board (never), 1
+    bot protection (never), 1 timeout and 57 with no job list in the page. A Breezy adapter is the next one with three
+    companies waiting; write it when the maintainer says so.
   - Done when: every Goozali company with a usable website is crawled, or has a gap `reason` that says why not, and the
     unsurveyed note is gone.
 
