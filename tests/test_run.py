@@ -964,3 +964,12 @@ def test_short_reason_strips_url_queries_and_trims() -> None:
     assert "TOKEN" not in run.short_reason("HTTPS://a.com/x?q=a)b&t=TOKEN")
     assert "\n" not in out
     assert len(out) == run.REASON_MAX
+
+
+def test_a_crawl_that_is_not_held_logs_no_trace(workdir: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    seed()
+    write_json(workdir / "data" / "companies.json", [BIG])
+    monkeypatch.setattr(run, "crawl_many", lambda urls: iter([(u, returned(OPEN)) for u in urls]))
+    monkeypatch.setitem(run.WHY, BIG["slug"], "load more: 1 click(s); 9->9 links, xhr [200], failed 0")
+    run.main()
+    assert last_log() == (1, OPEN, "")

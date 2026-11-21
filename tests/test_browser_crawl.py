@@ -1165,7 +1165,7 @@ async def test_load_more_trace_names_the_answer_of_the_page_s_own_call() -> None
     page = FakePage(count_fn=lambda _i: 9)
     page.btn = AnsweringButton(page, 403)
     assert await run(page) == []
-    assert WHY[URL].endswith("load more: 1 clicks; 9->9 links, xhr [403], failed 0")
+    assert WHY[URL].endswith("load more: 1 click(s); 9->9 links, xhr [403], failed 0")
 
 
 async def test_load_more_trace_counts_a_failed_call() -> None:
@@ -1179,7 +1179,7 @@ async def test_load_more_trace_of_a_crawl_with_jobs_is_kept_for_the_log() -> Non
     page = FakePage(count_fn=lambda _i: 9, ld=ld({"@type": "JobPosting", "url": "u1", "title": "T"}))
     page.btn = AnsweringButton(page, 200)
     assert await run(page) != []
-    assert WHY[URL] == "load more: 1 clicks; 9->9 links, xhr [200], failed 0"
+    assert WHY[URL] == "load more: 1 click(s); 9->9 links, xhr [200], failed 0"
 
 
 async def test_load_more_trace_ignores_other_hosts_and_resources() -> None:
@@ -1200,3 +1200,21 @@ async def test_load_more_trace_ignores_other_hosts_and_resources() -> None:
     btn.click = other  # type: ignore[method-assign]
     await run(page)
     assert "xhr [200], failed 0" in WHY[URL]
+
+
+async def test_load_more_trace_names_a_click_that_raised() -> None:
+    page = FakePage(count_fn=lambda _i: 9, btn=FakeEl(click_error=True))
+    await run(page)
+    assert WHY[URL].endswith("load more: 2 click(s); click raised RuntimeError; click raised RuntimeError")
+
+
+async def test_load_more_trace_keeps_three_clicks_of_many() -> None:
+    page = FakePage(btn=FakeEl(), count_fn=lambda i: i)
+    await run(page)
+    assert f"{SCROLL_CAP} click(s)" in WHY[URL]
+    assert WHY[URL].count("links, xhr") == THREE
+
+
+async def test_a_crawl_with_no_load_more_button_leaves_no_trace() -> None:
+    await run(FakePage(ld=ld({"@type": "JobPosting", "url": "u1", "title": "T"})))
+    assert WHY == {}

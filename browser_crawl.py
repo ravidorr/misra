@@ -500,7 +500,11 @@ async def crawl_one(ctx: Any, url: str, sem: asyncio.Semaphore) -> list[dict[str
                         answers.clear()
                         failed_calls[0] = 0
                         await _polite(page.url)
-                        await btn.click(timeout=2000)
+                        try:
+                            await btn.click(timeout=2000)
+                        except Exception as exc:
+                            clicks.append(f"click raised {type(exc).__name__}")
+                            raise
                         grew = await _list_grew(page, before, open_calls, asked)
                         after = await page.eval_on_selector_all("a[href]", "e=>e.length")
                         clicks.append(f"{before}->{after} links, xhr {sorted(answers)}, failed {failed_calls[0]}")
@@ -612,7 +616,7 @@ async def crawl_one(ctx: Any, url: str, sem: asyncio.Semaphore) -> list[dict[str
                     break
             trace = "no load more"
             if clicks:
-                trace = f"load more: {len(clicks)} clicks" + "".join(f"; {c}" for c in clicks[:3])
+                trace = f"load more: {len(clicks)} click(s)" + "".join(f"; {c}" for c in clicks[:3])
             if not out:
                 WHY[url] = f"no jobs found, title={title!r}, final={page.url[:80]}, links={link_count}; {trace}"
             elif clicks:

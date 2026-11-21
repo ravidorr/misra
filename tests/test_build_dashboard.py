@@ -21,6 +21,7 @@ from tests.conftest import FROZEN_COMPANIES, add_job, write_json
         ("HTTP 403, title='x'", "its site blocks automated access from GitHub's servers"),
         ("blocked page", "its site blocks automated access from GitHub's servers"),
         ("x" * 200, "x" * 120),
+        ("sharp drop: got 9, 21 open before (load more: 1 click(s); xhr [500])", "sharp drop: got 9, 21 open before"),
         ("", "the last crawl failed"),
         (None, "the last crawl failed"),
     ],
