@@ -177,6 +177,124 @@ async def test_load_more_that_loads_nothing_is_pressed_once() -> None:
     assert waits.count(POLL_MS) == SETTLE_POLLS  # one bounded wait, then the loop ends
 
 
+class Call:
+    """A request of the page: what `page.on("request")` hands over."""
+
+    def __init__(self, url: str, resource_type: str = "xhr") -> None:
+        self.url = url
+        self.resource_type = resource_type
+
+
+class AjaxButton(FakeEl):
+    """A Load more button whose click sends one `calls` entry per click (the last repeated) and closes it after the
+    matching `open_for` polls of 250 ms (None: never). `polls` counts those polls only."""
+
+    def __init__(
+        self, page: FakePage, calls: list[Call], open_for: list[int | None], before: Call | None = None
+    ) -> None:
+        super().__init__()
+        self.before = before
+        self.page = page
+        self.calls = calls
+        self.open_for = open_for
+        self.polls = 0
+        self.due: list[tuple[int, Call, str]] = []
+        original = page.wait_for_timeout
+        page.btn = self
+
+        async def tick(ms: int) -> None:
+            if ms == POLL_MS:
+                self.polls += 1
+            for item in [d for d in self.due if d[0] <= self.polls]:
+                self.due.remove(item)
+                self.emit(item[2], item[1])
+            await original(ms)
+
+        page.wait_for_timeout = tick  # type: ignore[method-assign]
+
+    def emit(self, event: str, call: Call) -> None:
+        for handler in self.page.handlers.get(event, []):
+            handler(call)
+
+    async def is_visible(self, timeout: int = 0) -> bool:
+        if self.before is not None:
+            self.emit("request", self.before)  # a call already open when the click comes
+            self.before = None
+        return True
+
+    async def click(self, timeout: int = 0) -> None:
+        await super().click(timeout)
+        if not self.calls:
+            return
+        n = min(self.clicks, len(self.calls)) - 1
+        self.emit("request", self.calls[n])
+        end = self.open_for[min(n, len(self.open_for) - 1)]
+        if end is not None:
+            self.due.append((self.polls + end, self.calls[n], "requestfinished"))
+
+
+SAME = Call("https://x.test/wp-admin/admin-ajax.php")
+SLOW_REQUEST_POLLS = 100  # 25 s, far past SETTLE_POLLS
+QUIET_POLLS = browser_crawl.QUIET_POLLS
+
+
+async def test_load_more_waits_while_its_own_request_is_open() -> None:
+    page = FakePage()
+    btn = AjaxButton(page, [SAME, SAME], [SLOW_REQUEST_POLLS, 0])
+    page.count_fn = lambda _i: 21 if btn.polls > SLOW_REQUEST_POLLS else 9
+    await run(page)
+    # the first press waited out its slow request; the second (answered at once) ends after the usual wait
+    assert btn.clicks == TWO
+    assert SLOW_REQUEST_POLLS + SETTLE_POLLS <= btn.polls < SLOW_REQUEST_POLLS + SETTLE_POLLS + 20
+
+
+async def test_load_more_gives_up_on_a_request_that_never_answers() -> None:
+    page = FakePage(count_fn=lambda _i: 9)
+    btn = AjaxButton(page, [SAME], [None])
+    await run(page)
+    assert btn.clicks == 1
+    assert btn.polls == browser_crawl.SLOW_POLLS
+
+
+@pytest.mark.parametrize(
+    "call",
+    [
+        Call("https://tracker.test/collect"),
+        Call("https://x.test/style.css", "stylesheet"),
+        Call("https://x.test/app.js", "script"),
+    ],
+)
+async def test_load_more_ignores_other_hosts_and_pages(call: Call) -> None:
+    page = FakePage(count_fn=lambda _i: 9)  # never answered, yet it is not the list's request
+    btn = AjaxButton(page, [call], [None])
+    await run(page)
+    assert btn.polls == SETTLE_POLLS
+
+
+async def test_load_more_ignores_a_failed_call() -> None:
+    page = FakePage(count_fn=lambda _i: 9)
+    btn = AjaxButton(page, [SAME], [None])
+    page.on("request", lambda c: btn.due.append((btn.polls + 1, c, "requestfailed")))  # fails at once
+    await run(page)
+    assert btn.polls == SETTLE_POLLS  # the failed call is not waited for
+
+
+async def test_load_more_does_not_wait_for_a_call_open_before_the_click() -> None:
+    page = FakePage(count_fn=lambda _i: 9)
+    btn = AjaxButton(page, [], [None], before=SAME)  # a never-ending call is open when the button is pressed
+    await run(page)
+    assert btn.clicks == 1
+    assert btn.polls == SETTLE_POLLS
+
+
+async def test_load_more_waits_a_second_for_the_page_to_show_the_answer() -> None:
+    page = FakePage()
+    btn = AjaxButton(page, [SAME], [SLOW_REQUEST_POLLS])
+    page.count_fn = lambda _i: 21 if btn.polls >= SLOW_REQUEST_POLLS + QUIET_POLLS - 1 else 9
+    await run(page)
+    assert btn.clicks == TWO  # the list showed up within the grace polls after its request closed
+
+
 async def test_collect_link_filters_and_titles() -> None:
     wd = "https://acme.myworkdayjobs.com/en-US/ext/job/Tel-Aviv-Israel/Product-Manager_R1/apply"
     links = [
