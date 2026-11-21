@@ -17,7 +17,8 @@ All notable changes are documented here. Format follows [Keep a Changelog](https
 ### Fixed
 
 - The `browser` reader no longer ends a list silently when a cookie banner covers the pager: a click that fails is sent to the control as an event, and a pager that cannot be pressed at all, or a page that cannot be read after a press, is a failure, not a short list (Rapid7 returned 30 of its 44 jobs). Before, a failed press just ended the crawl with the jobs of the pages so far.
-- The `browser` reader reads the list of a career page that draws it in a frame of its own site (iCIMS: MaxLinear reads 38 jobs, with the "Next page of results" pager), skips iCIMS's hidden "Location : Location" and "Job Posting Title" labels and its welcome page, and reads cards up to 1000 characters (iCIMS puts a description in each card, which hid the place that sits before the title).
+- The `browser` reader reads the list of a career page that draws it in a frame of its own site (iCIMS: MaxLinear reads 38 jobs, with the "Next page of results" pager), skips iCIMS's hidden "Location : Location" and "Job Posting Title" labels and its welcome page, and reads cards up to 1000 characters in such a frame (iCIMS puts a description in each card, which hid the place that sits before the title).
+- Regression run on 2026-11-21 over the 110 live `browser` records, before and after: no job lost; the only differences were two new postings at Applied Materials and Qualcomm, and Stratasys, which answered HTTP 503 (site maintenance) to both versions.
 - A row of a table with a header for each cell gives the place from the column named Location, Place, City or Office and drops a requisition id column (Rapid7: the place was read as the id).
 
 ## [0.90.0] - 2026-11-21

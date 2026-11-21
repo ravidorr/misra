@@ -79,7 +79,8 @@ EXE = os.environ.get("PW_CHROMIUM") or (
 
 HTTP_OK = 200
 HTTP_ERROR = 400
-CARD_MAX = 1000  # the card script never climbs to an ancestor with more text than this
+CARD_MAX = 600  # the card script never climbs to an ancestor with more text than this
+FRAME_CARD_MAX = 1000  # the same in a frame of the site (iCIMS puts a description in each card, before its place)
 CARD_JS = r"""(els, cfg) => {
     const job = new RegExp(cfg.job, 'i'), skip = new RegExp(cfg.skip, 'i'), id = new RegExp(cfg.id, 'i');
     const button = /^(apply|view|read|learn|see|more|details|save|share)\b/i;
@@ -559,12 +560,13 @@ async def crawl_one(ctx: Any, url: str, sem: asyncio.Semaphore) -> list[dict[str
                             out.append(attach(_job(d["url"], d.get("title", ""), L, d["url"]), text, details))
 
             scope: Any = page  # where the job links are: the page, or a frame of the same site that holds the list
+            card_max = CARD_MAX
 
             # 2. job-looking links, across paginated result pages
             async def collect() -> int:
                 nonlocal link_count
                 found = 0
-                links = await scope.eval_on_selector_all("a[href]", CARD_JS, CARD_ARGS)
+                links = await scope.eval_on_selector_all("a[href]", CARD_JS, CARD_ARGS | {"max": card_max})
                 link_count = len(links)
                 # links with a title of their own first, so a label link never claims a job before its titled twin
                 links.sort(key=lambda row: not _WORD.search(row[1]) or _label(row[1]) in LINK_NOISE)
@@ -582,7 +584,7 @@ async def crawl_one(ctx: Any, url: str, sem: asyncio.Semaphore) -> list[dict[str
                     if not lines:
                         # a link that is only an icon or a button label ("Details"): the title is in its card, unless
                         # the card has a titled link of its own, which this one only repeats
-                        if others or not 0 < len(card) <= CARD_MAX or _label(text) in CARD_CHROME:
+                        if others or not 0 < len(card) <= card_max or _label(text) in CARD_CHROME:
                             continue  # an Apply link never starts a card: it only goes with a titled link
                         lines = _card_lines(leaves)
                         from_card = True
@@ -590,7 +592,7 @@ async def crawl_one(ctx: Any, url: str, sem: asyncio.Semaphore) -> list[dict[str
                         continue
                     elif heading_first:  # the heading is the title, whatever the lines above it hold (a department)
                         lines = [head, *(ln for ln in lines if ln != head)]
-                    elif len(lines) == 1 and 0 < len(card) <= CARD_MAX:
+                    elif len(lines) == 1 and 0 < len(card) <= card_max:
                         # bare title link: location sits in the surrounding card
                         lines = [lines[0], *_card_extras(card, lines[0])]
                     parsed = _parse_card(lines, heading_first)
@@ -613,11 +615,11 @@ async def crawl_one(ctx: Any, url: str, sem: asyncio.Semaphore) -> list[dict[str
                     if host_of(frame.url) == host_of(page.url):
                         with contextlib.suppress(Exception):  # a frame that is still drawing its list
                             await frame.wait_for_load_state("networkidle", timeout=15000)
-                        scope = frame
+                        scope, card_max = frame, FRAME_CARD_MAX
                         if await collect():
                             break
                 else:
-                    scope = page
+                    scope, card_max = page, CARD_MAX
             for _ in range(60):  # pagination: stop when "next" is missing/disabled or yields nothing new
                 nxt = None
                 for sel in NEXT_SELS:  # first *visible* match (a <link rel=next> in <head> is not clickable)

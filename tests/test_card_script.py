@@ -13,8 +13,8 @@ from browser_crawl import CARD_ARGS, CARD_JS, CARD_MAX
 BASE = "https://x.test"
 MAX_LEVELS = 4
 EXTRA_LEVELS = 2
-TEXT_WIDTH = 1000
-OVERSIZE = 1100
+TEXT_WIDTH = 600
+OVERSIZE = 700
 
 
 async def cards(page: Page, html: str) -> dict[str, str]:

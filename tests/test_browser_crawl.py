@@ -409,7 +409,7 @@ async def test_card_line_limit_is_inclusive(length: int, kept: bool) -> None:
 
 
 async def test_card_limits_are_the_documented_numbers() -> None:
-    assert (browser_crawl.CARD_MAX, browser_crawl.CARD_LINE_MAX) == (1000, 120)
+    assert (browser_crawl.CARD_MAX, browser_crawl.CARD_LINE_MAX) == (600, 120)
 
 
 async def test_a_place_above_the_title_is_found_among_the_lines_around_it() -> None:
@@ -465,7 +465,7 @@ async def test_multi_line_link_text_does_not_borrow_from_the_card() -> None:
 
 
 async def test_a_card_longer_than_the_limit_is_not_one_job() -> None:
-    links = [link("/jobs/pm-role", "Product Manager", "Product Manager\nHaifa\n" + "x " * 600)]
+    links = [link("/jobs/pm-role", "Product Manager", "Product Manager\nHaifa\n" + "x " * 300)]
     assert await crawl_cards(links) == {"Product Manager": ("", "")}
 
 
@@ -1102,16 +1102,20 @@ def test_the_icims_pager_is_a_pager() -> None:
 
 async def test_an_icims_card_gives_its_place_title_and_team_without_the_screen_reader_labels() -> None:
     """MaxLinear: "Location : Location" and "Job Posting Title" are hidden labels of the card; the description makes
-    the card longer than the old limit of 600 characters."""
+    the card longer than the limit of 600 characters of a page (1000 in a frame)."""
     card = (
         "Location : Location\nISR-Petah Tikva\nJob Posting Title\nSenior Staff Software Engineer\n"
         + "A long description of the job. " * 20
         + "\nCategory Software Engineering\nID 2026-3159"
     )
     row = link("/jobs/3159/senior-staff/job", "Job Posting Title\nSenior Staff Software Engineer", card)
-    assert await crawl_cards([row]) == {
-        "Senior Staff Software Engineer": ("ISR-Petah Tikva", "Category Software Engineering")
-    }
+    assert await crawl_cards([row]) == {"Senior Staff Software Engineer": ("", "")}  # on the page: past the limit
+    frame = FakeFrame("https://x.test/jobs/search?in_iframe=1", link_fn=lambda i: [row] if i == 1 else [])
+    jobs = await run(FakePage(frames=[FakeFrame("https://x.test/careers"), frame]))
+    assert jobs is not None
+    assert [(j["title"], j["location"], j["team"]) for j in jobs] == [
+        ("Senior Staff Software Engineer", "ISR-Petah Tikva", "Category Software Engineering")
+    ]  # in the frame of the site: the limit is 1000
 
 
 @pytest.mark.parametrize("label", ["SEND RESUME >>", "Send CV  »", "opens In A New Tab", "Submit CV"])
