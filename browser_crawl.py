@@ -157,7 +157,18 @@ CARD_CHROME = frozenset(
     {"save job", "share job", "apply", "apply now", "send resume", "send cv", "submit cv", "opens in a new tab"}
 )
 BUTTON_LINES = frozenset(
-    {"view position", "view role", "view job", "view full details", "learn more", "read more", "details"}
+    {
+        "view position",
+        "view the position",
+        "view full position",
+        "apply for this position",
+        "view role",
+        "view job",
+        "view full details",
+        "learn more",
+        "read more",
+        "details",
+    }
 )
 LOCATION_LABELS = frozenset({"location", "location:", "location : location"})
 LINK_NOISE = CARD_CHROME | BUTTON_LINES | LOCATION_LABELS | {"department", "job posting title"}

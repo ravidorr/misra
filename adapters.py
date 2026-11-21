@@ -325,12 +325,14 @@ def jazzhr(slug: str) -> list[Job] | None:
 _COMEET_UID = r"[0-9A-F]{2}\.[0-9A-F]{3}(?:-[0-9A-F]{2}\.[0-9A-F]{3})*"
 _COMEET_COMMENT = re.compile(r"<!--.*?-->", re.S)
 _COMEET_LINK = re.compile(
-    rf'<a\b[^>]*?\bhref="([^"]*/co/([a-z0-9-]+)/({_COMEET_UID})/[a-z0-9-]+/?[^"]*)"[^>]*>(.*?)</a>', re.S | re.I
+    rf'<a\b[^>]*?\bhref="([^"]*/co/([a-z0-9-]+)/({_COMEET_UID})/[a-z0-9%-]+/?[^"]*)"[^>]*>(.*?)</a>', re.S | re.I
 )
 _COMEET_ANY_UID = re.compile(rf"/co/[^/\"'\s<>]+/({_COMEET_UID})/", re.I)  # wider than the card link on purpose
 _COMEET_SCRIPT = re.compile(r"<(script|style)\b.*?</\1>", re.S | re.I)
 _COMEET_HEADING = re.compile(r"<h[1-6]\b[^>]*>(.*?)</h[1-6]>", re.S | re.I)
-_COMEET_NAME = re.compile(r'class="comeet-position-name"[^>]*>(.*?)(?:<br|<span|</div>)', re.S | re.I)
+_COMEET_NAME = re.compile(
+    r'class="(?:comeet-position-name|careers-listing-name)"[^>]*>(.*?)(?:<br|<span|</div>)', re.S | re.I
+)
 _COMEET_TEAM = re.compile(
     r'<span[^>]*class="[^"]*(?:department|(?<![\w-])position(?![\w-]))[^"]*"[^>]*>(.*?)</span>', re.S | re.I
 )

@@ -1408,6 +1408,13 @@ COMEET_NONE = (
     '<div class="comeet-outer-wrapper">We don&#8217;t have any open positions at this time. Please visit again soon.'
     "<!-- Plugin version data --></div>"
 )
+COMEET_TRULLION = (
+    '<ul><li><a class="careers-listing-link" href="//ree.test/careers/co/london/45.47A/customer-success-manager/all">'
+    '<div class="careers-listing-name"> Customer Success Manager </div>'
+    '<div class="careers-listing-location">London</div></a></li>'
+    '<li><a class="comeet-position" href="//ree.test/careers/co/ramat-gan/1A.C62/%d7%a0%d7%a6%d7%99%d7%92/all">'
+    '<div class="comeet-position-name"> נציג/ת מכירות </div></a></li></ul>'
+)
 COMEET_URL = "https://ree.test/careers/"
 
 
@@ -1415,6 +1422,16 @@ COMEET_URL = "https://ree.test/careers/"
 def test_comeet_page_failure_returns_none(monkeypatch: pytest.MonkeyPatch, resp: FakeHttpResponse | None) -> None:
     fake_get(monkeypatch, resp)
     assert adapters.comeet_page(COMEET_URL) is None
+
+
+def test_comeet_page_reads_a_theme_card_name_and_a_percent_encoded_slug(monkeypatch: pytest.MonkeyPatch) -> None:
+    fake_get(monkeypatch, FakeHttpResponse(text=COMEET_TRULLION, url=COMEET_URL))
+    jobs = adapters.comeet_page(COMEET_URL)
+    assert jobs is not None
+    assert [(j["job_id"], j["title"], j["location"]) for j in jobs] == [
+        ("45.47A", "Customer Success Manager", "london"),
+        ("1A.C62", "נציג/ת מכירות", "ramat gan"),
+    ]
 
 
 def test_comeet_page_reads_the_plugin_cards(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -1496,7 +1513,7 @@ def test_comeet_page_a_page_that_says_no_open_position_is_empty(monkeypatch: pyt
         # a job link outside any card we read (the markup changed) makes the list partial
         (COMEET_REE + '<script>{"href":"/co/israel/AA.111/lost-job/"}</script>', COMEET_URL),
         (COMEET_REE.replace("/co/israel-glil-yam/", "/co/Tel-Aviv/") + "<p>/co/israel/FF.666/lost/</p>", COMEET_URL),
-        (COMEET_REE.replace("motion-control-sw-engineer", "%D7%9E%D7%94"), COMEET_URL),  # a slug the card regex skips
+        (COMEET_REE.replace("motion-control-sw-engineer", "~motion"), COMEET_URL),  # a slug the card regex skips
         (
             COMEET_NONE.replace("We don", "<script>We don").replace("soon.", "soon.</script>"),
             COMEET_URL,

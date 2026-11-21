@@ -1129,6 +1129,19 @@ async def test_a_button_label_is_no_job_title(label: str) -> None:
     }
 
 
+@pytest.mark.parametrize("label", ["View Full Position", "View The Position", "Apply for this position"])
+async def test_a_view_or_apply_label_link_takes_its_title_from_the_card(label: str) -> None:
+    """Nanomotion, Variscite and Jungo: the link says only what the button does; the title is a heading in its card."""
+    row = link(
+        "/jobs/hardware-engineer/",
+        label,
+        "Hardware Engineer\nDepartment: R&D",
+        head="Hardware Engineer",
+        leaves="Hardware Engineer\nDepartment: R&D\n" + label,
+    )
+    assert await crawl_cards([row]) == {"Hardware Engineer": ("Department: R&D", "")}
+
+
 async def test_the_list_in_a_frame_of_the_same_site_is_read_and_paged() -> None:
     """iCIMS: the career page holds a frame of its own site that draws the list and its pager."""
     el = FakeEl()
