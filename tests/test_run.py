@@ -143,17 +143,26 @@ def test_main_israel_only_keeps_israel_jobs(workdir: Path, adapter: dict[str, An
     il = {**job("new-il"), "location": "Haifa, IL"}
     us = {**job("new-us"), "location": "Chicago, IL"}
     nowhere = {**job("no-loc"), "location": None}
-    adapter["big"] = [[{**job("old-il"), "location": "Tel Aviv, Israel"}, il, us, nowhere]]
-    adapter["plain"] = [[{**job("p1"), "location": "Austin, TX"}]]
+    hebrew = {**job("heb-loc"), "location": "גוש דן"}
+    adapter["big"] = [[{**job("old-il"), "location": "Tel Aviv, Israel"}, il, us, nowhere, hebrew]]
+    adapter["plain"] = [
+        [
+            {**job("p1"), "location": "Austin, TX"},
+            {**job("p-none"), "location": None},
+            {**job("p-heb"), "location": "גוש דן"},
+        ]
+    ]
     run.main()
     check = sqlite3.connect(run.DB)
     rows = {(r[0], r[1]): r[2] for r in check.execute("SELECT company,job_id,status FROM jobs")}
     assert rows[("Big", "old-il")] == "open"
     assert rows[("Big", "new-il")] == "open"
     assert ("Big", "new-us") not in rows  # not stored
-    assert ("Big", "no-loc") not in rows
+    assert ("Big", "no-loc") not in rows  # israel_only: an empty or unreadable location is not confirmed, so dropped
+    assert ("Big", "heb-loc") not in rows
     assert rows[("Big", "old-us")] == "closed"  # was stored before the flag: closes
     assert rows[("Plain", "p1")] == "open"  # no flag: kept whatever the location
+    assert rows[("Plain", "p-none")] == rows[("Plain", "p-heb")] == "open"  # and listed as Unknown by regions.place
     logged = dict(check.execute("SELECT company, n_jobs FROM crawl_log"))
     assert logged["Big"] == 2 + 0
     check.close()

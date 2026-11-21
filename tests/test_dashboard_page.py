@@ -1099,7 +1099,7 @@ async def test_fr3_ac8_jobs_outside_israel_are_the_abroad_region(page: Page, sit
     assert await shown(page) == {"pmj"}
     names = await page.locator("#regions .chip").all_text_contents()
     assert names[:2] == ["All", TEL_AVIV]
-    assert names[-2:] == [REMOTE, "Abroad"]
+    assert names[-3:] == [REMOTE, "Unknown", "Abroad"]
 
 
 async def test_fr3_ac8_the_assistant_asks_for_abroad_as_a_region(page: Page, site: Path) -> None:
@@ -1271,7 +1271,26 @@ async def test_the_page_data_carries_the_names_the_filters_are_built_from(page: 
     assert meta["levels"] == ["Intern", "Junior", "Not specified"]
     assert meta["roleTypes"][0] == "Product"
     assert meta["roleTypes"][-1] == "Other"
-    assert meta["regions"] == [TEL_AVIV, SHARON, "Center", JERUSALEM, NORTH, "South", REMOTE]
+    assert meta["regions"] == [TEL_AVIV, SHARON, "Center", JERUSALEM, NORTH, "South", REMOTE, "Unknown"]
+
+
+async def test_a_role_with_an_unknown_place_is_listed_under_the_unknown_region(page: Page, site: Path) -> None:
+    """A role whose location is empty or unreadable is in Israel for the page, in the region Unknown: shown by default,
+    a chip of its own, found by the assistant under that name, and never mixed into a chosen city region."""
+    rows = [*filter_rows(), job("unk", "Product Analyst", "", role_types=["Product"], regions=["Unknown"])]
+    await page.add_init_script(WEBMCP)
+    await serve(page, site, backend=Backend(rows))
+    assert await shown(page) == ISRAEL_IDS | {"unk"}
+    assert await page.locator("article[data-job-id='Acme|unk']").get_attribute("data-regions") == "Unknown"
+    assert "Region: Unknown" in await tags(page, "unk")
+    await choose(page, "regions", "Unknown")
+    assert await shown(page) == {"unk"}
+    await choose(page, "regions", "Unknown")
+    await choose(page, "regions", SHARON)
+    assert await shown(page) == {"pmj"}
+    assert await found(page, {"regions": ["Unknown"]}) == {"unk"}
+    filters = await ask(page, "list_filters")
+    assert {f["name"]: f["roles"] for f in filters["regions"]}["Unknown"] == 1
 
 
 async def test_the_filters_read_well_on_a_phone(page: Page, site: Path) -> None:

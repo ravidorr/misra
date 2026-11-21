@@ -96,7 +96,7 @@ def test_regions_of_real_locations(location: str, expected: tuple[str, ...]) -> 
         assert placed.locations == ()
 
 
-def test_regions_come_in_the_agreed_order_and_are_seven() -> None:
+def test_regions_come_in_the_agreed_order_and_are_eight() -> None:
     assert regions.REGION_NAMES == (
         "Tel Aviv area",
         "Sharon",
@@ -105,6 +105,7 @@ def test_regions_come_in_the_agreed_order_and_are_seven() -> None:
         "Haifa and the north",
         "South",
         "Remote",
+        "Unknown",
     )
 
 
@@ -112,6 +113,33 @@ def test_regions_come_in_the_agreed_order_and_are_seven() -> None:
 def test_israel_alone_is_city_not_given(location: str) -> None:
     placed = regions.place(location)
     assert placed == regions.Place(israel=True, regions=(), locations=(CITY_NOT_GIVEN,))
+
+
+@pytest.mark.parametrize("location", [None, "", "  ", "-", "12", "ישראל", "גוש דן", "SYSTEM | גוש דן"])
+def test_a_location_that_cannot_be_read_is_unknown(location: str | None) -> None:
+    """Empty, no Latin letter, or Hebrew naming no place of the table: in the region Unknown, as in Israel."""
+    assert regions.place(location) == regions.Place(israel=True, regions=(regions.UNKNOWN,))
+
+
+@pytest.mark.parametrize("location", ["London", "Remote", "New York, NY", "JAVA | NET.", "Москва", "東京"])
+def test_a_readable_location_that_is_not_in_israel_is_not_unknown(location: str) -> None:
+    assert regions.place(location) == regions.Place(israel=False)
+
+
+def test_any_hebrew_letter_without_a_known_city_is_unknown_even_beside_a_foreign_place() -> None:
+    """Said plainly: a Hebrew gloss makes the location unreadable to us, so it is Unknown, not Abroad."""
+    assert regions.place("Berlin, ברלין").regions == (regions.UNKNOWN,)
+
+
+def test_hebrew_that_names_a_known_city_is_placed_not_unknown() -> None:
+    assert regions.place("SYSTEM | תל אביב").regions == ("Tel Aviv area",)
+
+
+def test_report_leaves_unknown_jobs_out_of_the_share_and_counts_them() -> None:
+    text = regions.report(["Tel Aviv, IL", None, "גוש דן", "London, UK"])
+    lines = text.splitlines()
+    assert lines[0] == "Regions: 100.0% of 1 jobs in Israel that name a city are in a region"
+    assert "  Unknown: 2" in lines
 
 
 def test_multiple_locations_with_no_city_is_city_not_given() -> None:
@@ -146,8 +174,8 @@ def test_remote_counts_only_when_open_to_israel(location: str) -> None:
     assert REMOTE not in placed.regions
 
 
-@pytest.mark.parametrize("location", ["London, UK", "New York, NY", "Berlin, Germany", "", None])
-def test_jobs_outside_israel_are_untouched(location: str | None) -> None:
+@pytest.mark.parametrize("location", ["London, UK", "New York, NY", "Berlin, Germany"])
+def test_jobs_outside_israel_are_untouched(location: str) -> None:
     assert regions.place(location) == regions.Place(israel=False)
 
 

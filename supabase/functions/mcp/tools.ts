@@ -16,7 +16,7 @@ export const ROLE_TYPES = [
   'Customer success & support',
   'Other',
 ] as const;
-export const REGIONS = ['Tel Aviv area', 'Sharon', 'Center', 'Jerusalem', 'Haifa and the north', 'South', 'Remote'] as const;
+export const REGIONS = ['Tel Aviv area', 'Sharon', 'Center', 'Jerusalem', 'Haifa and the north', 'South', 'Remote', 'Unknown'] as const;
 
 export const DEFAULT_LIMIT = 20;
 export const MAX_LIMIT = 50;

@@ -626,12 +626,13 @@ def main() -> None:
     )
     covered = companies_covered(companies)
     payload = dump_json({"jobs": jobs, "gaps": gaps, "covered": covered, "generated": generated})
+    # A job whose place is Unknown is not claimed to be in Israel for search engines: it is in jobs.json only.
     listing = {
         "@context": "https://schema.org",
         "@type": "ItemList",
         "itemListElement": [
             {"@type": "ListItem", "position": n, "item": job_posting(j)}
-            for n, j in enumerate((j for j in jobs if j["il"]), start=1)
+            for n, j in enumerate((j for j in jobs if j["il"] and j["rg"] != [regions.UNKNOWN]), start=1)
         ],
     }
     out = Path("docs")
