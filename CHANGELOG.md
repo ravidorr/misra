@@ -8,6 +8,12 @@ All notable changes are documented here. Format follows [Keep a Changelog](https
 
 - A "Hidden (n)" switch beside "Starred (n)": a view of its own that lists every company the visitor hid, one row each with "Unhide" (a company with no open role is listed too, so it can be unhidden without finding one of its roles), and every open role they hid one by one, as cards at full strength with "Unhide" and no "New" flag. The Hidden view also puts the coverage card away with the filters; the Starred view keeps it. It reads the choices kept today (this browser, or the account) and stores nothing new; a role hidden only because its company is hidden is covered by the company's row, and a hidden role leaves the list when its posting closes (the database deletes the discard). Two WebMCP tools: `list_hidden` and `unhide_company`.
 
+## [0.86.1] - 2026-11-21
+
+### Changed
+
+- A browser crawl that pressed a "Load more" button records what happened (clicks, links before and after each, the HTTP statuses of the page's own XHR and fetch requests, how many failed; counts only, no address or content). A crawl held as a sharp drop now keeps that trace in the `crawl_log` note, next to the hold: Priority Software still reads 9 of 21 roles on the runner after 0.85.2, and the note will show whether the page's own request is refused or never made.
+
 ## [0.86.0] - 2026-11-21
 
 ### Added
