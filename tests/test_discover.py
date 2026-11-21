@@ -51,6 +51,13 @@ def test_scan_page(monkeypatch: pytest.MonkeyPatch) -> None:
         ("https://API.BambooHR.com/x https://help.applytojob.com/y", (None, "https://final.test/c")),
         ("https%3A%2F%2Facme.applytojob.com", (None, "https://final.test/c")),
         ("https://sub.acme.bamboohr.com/careers", (None, "https://final.test/c")),
+        ("<a href='https://Acme-Labs.teamtailor.com/jobs/12-x'>x</a>", ("teamtailor", "acme-labs.teamtailor.com")),
+        ("https://career.teamtailor.com/jobs https://www.teamtailor.com/", (None, "https://final.test/c")),
+        ("https://myinterview.pinpointhq.com/#js-careers-jobs-block", ("pinpoint", "myinterview.pinpointhq.com")),
+        ("https://help.pinpointhq.com/x", (None, "https://final.test/c")),
+        ("https://jobs.jobvite.com/forescout/job/oopoAfwv", ("jobvite", "forescout")),
+        ("https://jobs.jobvite.com/careers/Acme/jobs", ("jobvite", "Acme")),
+        ("https://jobs.jobvite.com/embed", (None, "https://final.test/c")),
         ("https://jobs.lever.co/first and https://acme.bamboohr.com/careers", ("lever", "first")),
         ("https://job-boards.greenhouse.io/embed/job_board/js?for=acme", ("greenhouse", "acme")),
         (

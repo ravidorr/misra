@@ -3423,3 +3423,332 @@ def test_breezy_a_job_twice_is_a_failure(monkeypatch: pytest.MonkeyPatch) -> Non
 
 def test_breezy_is_registered() -> None:
     assert adapters.ADAPTERS["breezy"] is adapters.breezy
+
+
+TT_HOST = "acme.teamtailor.com"
+TT_NS = 'xmlns:tt="https://teamtailor.com/locations"'
+
+
+def tt_item(
+    job_id: Any = "101",
+    title: str = "Engineer",
+    host: str = TT_HOST,
+    link: str | None = None,
+    places: tuple[tuple[str, str], ...] = (("Tel Aviv", "Israel"),),
+) -> str:
+    url = link if link is not None else f"https://{host}/jobs/{job_id}-engineer"
+    where = "".join(f"<tt:location><tt:city>{c}</tt:city><tt:country>{k}</tt:country></tt:location>" for c, k in places)
+    return (
+        f"<item><title>{title}</title><link>{url}</link><pubDate>Mon, 16 Nov 2026 10:25:07 +0100</pubDate>"
+        f"<tt:locations>{where}</tt:locations><tt:department>R&amp;D</tt:department></item>"
+    )
+
+
+def tt_feed(*items: str, root: str = "rss", host: str = TT_HOST) -> FakeHttpResponse:
+    body = f"<{root} {TT_NS}><channel><title>t</title>{''.join(items)}</channel></{root}>"
+    return FakeHttpResponse(text=body, url=f"https://{host}/jobs.rss")
+
+
+def test_teamtailor_reads_the_feed_places_team_and_date(monkeypatch: pytest.MonkeyPatch) -> None:
+    urls = fake_get(
+        monkeypatch,
+        tt_feed(
+            tt_item(),
+            tt_item(202, "Designer", places=(("Haifa", "Israel"), ("Haifa", "Israel"), ("Berlin", ""))),
+            tt_item(303, "Remote Writer", places=()),
+        ),
+    )
+    jobs = adapters.teamtailor(TT_HOST)
+    assert urls == [f"https://{TT_HOST}/jobs.rss"]
+    assert jobs == [
+        {
+            "job_id": "101",
+            "title": "Engineer",
+            "location": "Tel Aviv, Israel",
+            "url": f"https://{TT_HOST}/jobs/101-engineer",
+            "team": "R&D",
+            "posted": "2026-11-16",
+        },
+        {
+            "job_id": "202",
+            "title": "Designer",
+            "location": "Haifa, Israel; Berlin",
+            "url": f"https://{TT_HOST}/jobs/202-engineer",
+            "team": "R&D",
+            "posted": "2026-11-16",
+        },
+        {
+            "job_id": "303",
+            "title": "Remote Writer",
+            "location": "",
+            "url": f"https://{TT_HOST}/jobs/303-engineer",
+            "team": "R&D",
+            "posted": "2026-11-16",
+        },
+    ]
+
+
+def test_teamtailor_no_job_is_an_empty_board(monkeypatch: pytest.MonkeyPatch) -> None:
+    fake_get(monkeypatch, tt_feed())
+    assert adapters.teamtailor(TT_HOST) == []
+
+
+@pytest.mark.parametrize("slug", ["", "acme", "acme.teamtailor.com/jobs", "Acme.teamtailor.com", "a b.test"])
+def test_teamtailor_a_slug_that_is_not_a_host_is_not_asked(monkeypatch: pytest.MonkeyPatch, slug: str) -> None:
+    urls = fake_get(monkeypatch, tt_feed())
+    assert adapters.teamtailor(slug) is None
+    assert urls == []
+
+
+@pytest.mark.parametrize(
+    "answer",
+    [
+        None,
+        FakeHttpResponse(status_code=404, text="<rss/>", url=f"https://{TT_HOST}/jobs.rss"),
+        tt_feed(host="elsewhere.test"),  # an own domain that sends the visitor away
+        FakeHttpResponse(text="<html><body>", url=f"https://{TT_HOST}/jobs.rss"),
+        tt_feed(root="feed"),
+        FakeHttpResponse(text="<rss/>", url=f"https://{TT_HOST}/jobs.rss"),  # no channel
+        tt_feed(tt_item(title="")),
+        tt_feed(tt_item(host="other.test")),
+        tt_feed(tt_item(link=f"http://{TT_HOST}/jobs/101-x")),
+        tt_feed(tt_item(link=f"https://{TT_HOST}/about")),
+        tt_feed(tt_item(101), tt_item(101, "Same number")),
+        tt_feed(tt_item(places=()), tt_item(102, places=())),  # jobs and no place at all: the place fields changed
+    ],
+)
+def test_teamtailor_an_answer_that_does_not_read_is_a_failure(
+    monkeypatch: pytest.MonkeyPatch, answer: FakeHttpResponse | None
+) -> None:
+    fake_get(monkeypatch, answer)
+    assert adapters.teamtailor(TT_HOST) is None
+
+
+PP_HOST = "acme.pinpointhq.com"
+
+
+def pp_posting(
+    job_id: Any = "9", title: str = "Engineer", host: str = PP_HOST, url: Any = None, **extra: Any
+) -> dict[str, Any]:
+    return {
+        "id": job_id,
+        "title": title,
+        "url": f"https://{host}/en/postings/{job_id}" if url is None else url,
+        "location": {"city": "Tel Aviv", "province": "Tel Aviv District", "name": "Tel Aviv"},
+        "job": {"department": {"name": "Sales"}},
+        **extra,
+    }
+
+
+def pp_answer(data: Any, host: str = PP_HOST, **kw: Any) -> FakeHttpResponse:
+    return FakeHttpResponse(data=data, url=f"https://{host}/postings.json", **kw)
+
+
+def test_pinpoint_reads_title_place_and_department(monkeypatch: pytest.MonkeyPatch) -> None:
+    urls = fake_get(
+        monkeypatch,
+        pp_answer({"data": [pp_posting(), pp_posting(10, "Remote", location=None, job=None), pp_posting(11, job={})]}),
+    )
+    jobs = adapters.pinpoint(PP_HOST)
+    assert urls == [f"https://{PP_HOST}/postings.json"]
+    assert jobs == [
+        {
+            "job_id": "9",
+            "title": "Engineer",
+            "location": "Tel Aviv, Tel Aviv District",
+            "url": f"https://{PP_HOST}/en/postings/9",
+            "team": "Sales",
+            "posted": "",
+        },
+        {
+            "job_id": "10",
+            "title": "Remote",
+            "location": "",
+            "url": f"https://{PP_HOST}/en/postings/10",
+            "team": "",
+            "posted": "",
+        },
+        {
+            "job_id": "11",
+            "title": "Engineer",
+            "location": "Tel Aviv, Tel Aviv District",
+            "url": f"https://{PP_HOST}/en/postings/11",
+            "team": "",
+            "posted": "",
+        },
+    ]
+
+
+def test_pinpoint_no_posting_is_an_empty_board(monkeypatch: pytest.MonkeyPatch) -> None:
+    fake_get(monkeypatch, pp_answer({"data": []}))
+    assert adapters.pinpoint(PP_HOST) == []
+
+
+def test_pinpoint_a_slug_that_is_not_a_host_is_not_asked(monkeypatch: pytest.MonkeyPatch) -> None:
+    urls = fake_get(monkeypatch, pp_answer({"data": []}))
+    assert adapters.pinpoint("acme") is None
+    assert urls == []
+
+
+@pytest.mark.parametrize(
+    "answer",
+    [
+        None,
+        pp_answer({"data": []}, status_code=404),
+        pp_answer({"data": []}, host="elsewhere.test"),
+        pp_answer(None, json_error=True),
+        pp_answer({}),
+        pp_answer(None),
+        pp_answer({"data": "no"}),
+        pp_answer({"data": ["a posting"]}),
+        pp_answer({"data": [pp_posting(job_id="")]}),
+        pp_answer({"data": [pp_posting(title=" ")]}),
+        pp_answer({"data": [pp_posting(title=None)]}),
+        pp_answer({"data": [pp_posting(host="other.test")]}),
+        pp_answer({"data": [pp_posting(url=7)]}),
+        pp_answer({"data": [pp_posting(title=5)]}),
+        pp_answer({"data": [pp_posting(location="Tel Aviv")]}),
+        pp_answer({"data": [pp_posting(url=f"http://{PP_HOST}/en/postings/9")]}),
+        pp_answer({"data": [pp_posting(), pp_posting(title="Again")]}),
+        pp_answer({"data": [pp_posting(location=None), pp_posting(10, location={})]}),  # no place at all
+    ],
+)
+def test_pinpoint_an_answer_that_does_not_read_is_a_failure(
+    monkeypatch: pytest.MonkeyPatch, answer: FakeHttpResponse | None
+) -> None:
+    fake_get(monkeypatch, answer)
+    assert adapters.pinpoint(PP_HOST) is None
+
+
+def jv_row(job_id: str = "oA1", title: str = "Engineer", place: str = "Tel Aviv,\n  Israel", slug: str = "acme") -> str:
+    return (
+        f'<tr><td class="jv-job-list-name"><a href="/{slug}/job/{job_id}">{title}</a></td>'
+        f'<td class="jv-job-list-location">\n  {place}\n</td></tr>'
+    )
+
+
+def jv_table(heading: str, *rows: str) -> str:
+    return f'<h3 class="h2">{heading}</h3><table class="jv-job-list"><tbody>{"".join(rows)}</tbody></table>'
+
+
+def jv_page(*tables: str) -> str:
+    return f"<h3>Open Positions</h3>{''.join(tables)}<h3>Footer</h3>"
+
+
+JV_DETAIL = (
+    "<h2>Sr Engineer</h2><p class=\"jv-job-detail-meta\">\n Engineering<span class='jv-inline-separator'></span>"
+    ' Dallas, Texas <span class="jv-inline-separator"></span> Tel Aviv, Israel '
+    '<span class="jv-inline-separator"></span> Dallas, Texas</p>'
+)
+
+
+def fake_jobvite(
+    monkeypatch: pytest.MonkeyPatch,
+    page: FakeHttpResponse | None,
+    detail: FakeHttpResponse | None = None,
+) -> list[str]:
+    urls: list[str] = []
+
+    def _get(url: str, **_kw: Any) -> FakeHttpResponse | None:
+        urls.append(url)
+        return detail if "/job/" in url else page
+
+    monkeypatch.setattr(adapters, "get", _get)
+    return urls
+
+
+def jv_answer(text: str, **kw: Any) -> FakeHttpResponse:
+    return FakeHttpResponse(text=text, url=kw.pop("url", "https://jobs.jobvite.com/acme"), **kw)
+
+
+def test_jobvite_reads_the_board_by_department_and_the_places_of_a_many_place_job(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    page = jv_page(
+        jv_table("Engineering", jv_row(), jv_row("oB2", "Sr Engineer", '<div class="jv-meta">3 Locations</div>')),
+        jv_table("Sales", jv_row("oC3", "AE &amp; BDR", "London,\n United Kingdom")),
+    )
+    urls = fake_jobvite(monkeypatch, jv_answer(page), FakeHttpResponse(text=JV_DETAIL))
+    jobs = adapters.jobvite("acme")
+    assert urls == ["https://jobs.jobvite.com/acme", "https://jobs.jobvite.com/acme/job/oB2"]
+    assert jobs == [
+        {
+            "job_id": "oA1",
+            "title": "Engineer",
+            "location": "Tel Aviv, Israel",
+            "url": "https://jobs.jobvite.com/acme/job/oA1",
+            "team": "Engineering",
+            "posted": "",
+        },
+        {
+            "job_id": "oB2",
+            "title": "Sr Engineer",
+            "location": "Dallas, Texas; Tel Aviv, Israel",
+            "url": "https://jobs.jobvite.com/acme/job/oB2",
+            "team": "Engineering",
+            "posted": "",
+        },
+        {
+            "job_id": "oC3",
+            "title": "AE & BDR",
+            "location": "London, United Kingdom",
+            "url": "https://jobs.jobvite.com/acme/job/oC3",
+            "team": "Sales",
+            "posted": "",
+        },
+    ]
+
+
+def test_jobvite_a_table_with_no_heading_has_no_team(monkeypatch: pytest.MonkeyPatch) -> None:
+    fake_jobvite(monkeypatch, jv_answer(f'<table class="jv-job-list">{jv_row()}</table>'))
+    jobs = adapters.jobvite("acme")
+    assert jobs is not None
+    assert jobs[0]["team"] == ""
+
+
+@pytest.mark.parametrize("slug", ["", "a b", "acme/jobs", "acme.test"])
+def test_jobvite_a_slug_that_is_not_a_slug_is_not_asked(monkeypatch: pytest.MonkeyPatch, slug: str) -> None:
+    urls = fake_jobvite(monkeypatch, jv_answer(jv_page(jv_table("A", jv_row()))))
+    assert adapters.jobvite(slug) is None
+    assert urls == []
+
+
+@pytest.mark.parametrize(
+    "answer",
+    [
+        None,
+        jv_answer(jv_page(jv_table("A", jv_row())), status_code=404),
+        # a board that moved to another host (Shutterfly's goes to a protected one)
+        jv_answer(jv_page(jv_table("A", jv_row())), url="https://acme.ttcportals.test/?p=jobs"),
+        jv_answer("<html>Just a moment...</html>"),  # no job at all: not the same as no open job
+        jv_answer(jv_page(jv_table("A", jv_row(slug="other")))),
+        jv_answer(jv_page(jv_table("A", jv_row(title="")))),
+        jv_answer(jv_page(jv_table("A", jv_row()), '<td class="jv-job-list-name"><span>not a link</span></td>')),
+        jv_answer(jv_page(jv_table("A", jv_row(), jv_row("oA1", "Same")))),
+        jv_answer(jv_page(jv_table("A", jv_row(place=" "), jv_row("oB2", place="")))),  # no place at all
+    ],
+)
+def test_jobvite_a_page_that_does_not_read_is_a_failure(
+    monkeypatch: pytest.MonkeyPatch, answer: FakeHttpResponse | None
+) -> None:
+    fake_jobvite(monkeypatch, answer)
+    assert adapters.jobvite("acme") is None
+
+
+@pytest.mark.parametrize(
+    "detail",
+    [
+        None,
+        FakeHttpResponse(status_code=404, text=JV_DETAIL),
+        FakeHttpResponse(text="<html>no facts line</html>"),
+        FakeHttpResponse(text='<p class="jv-job-detail-meta">Engineering</p>'),  # a department and no place
+        # three places where the row says four: one went missing
+        FakeHttpResponse(text=JV_DETAIL),
+    ],
+)
+def test_jobvite_a_many_place_job_whose_page_does_not_read_fails_the_list(
+    monkeypatch: pytest.MonkeyPatch, detail: FakeHttpResponse | None
+) -> None:
+    page = jv_page(jv_table("A", jv_row("oB2", "Sr Engineer", '<div class="jv-meta">4 Locations</div>')))
+    fake_jobvite(monkeypatch, jv_answer(page), detail)
+    assert adapters.jobvite("acme") is None
