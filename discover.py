@@ -81,9 +81,10 @@ def comeet_widget(text: str) -> tuple[str, str] | None:
     init = COMEET_INIT.search(text)
     name = init and COMEET_NAME.search(init[1])
     uid = init and COMEET_UID.search(init[1])
-    if not (name and uid):
+    slug = re.sub(r"[^a-z0-9]+", "-", name[1].lower()).strip("-") if name else ""
+    if not (slug and uid):  # a name with no Latin letter or digit gives no address
         return None
-    return "comeet", re.sub(r"[^a-z0-9]+", "-", name[1].lower()).strip("-") + "/" + uid[1]
+    return "comeet", slug + "/" + uid[1]
 
 
 def comeet_uid(text: str) -> str | None:

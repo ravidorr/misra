@@ -17,7 +17,7 @@ All notable changes are documented here. Format follows [Keep a Changelog](https
 
 ### Changed
 
-- `survey.survey` never loads a page that robots.txt refuses (it skipped the check before), and records the board, the Comeet uid and the Comeet plugin of the drawn page.
+- `survey.survey` never loads a page that robots.txt refuses (it skipped the check before), waits for the host's turn (one request a second) before each page, prints its progress lines to stderr, and records the board, the Comeet uid and the Comeet plugin of the drawn page. `survey.py --boards` needs the pulled company list and never visits an excluded company. A Comeet widget whose name has no Latin letter gives no board.
 
 ## [0.86.0] - 2026-11-21
 

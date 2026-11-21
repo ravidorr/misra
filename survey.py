@@ -36,9 +36,11 @@ from common import (
     ExclusionError,
     crawled_companies,
     get,
+    host_of,
     is_excluded,
     load_companies,
     load_excluded,
+    reserve_slot,
     reset_robots_block,
     robots_allows,
     robots_blocked,
@@ -118,9 +120,11 @@ async def survey(ctx: Any, co: dict[str, Any], sem: asyncio.Semaphore) -> dict[s
                 if not await asyncio.to_thread(robots_allows, u):
                     res["err"] = "robots.txt"  # not one request to a page the site's robots.txt refuses
                     continue
+                await asyncio.sleep(reserve_slot(host_of(u)))  # this host's turn: one request a second
                 try:
                     r = await page.goto(u, timeout=40000, wait_until="domcontentloaded")
                     if r and r.status < HTTP_ERROR:
+                        res["err"] = ""  # a refused or failed address before this one is not the page's state
                         break
                 except Exception as e:
                     res["err"] = type(e).__name__
@@ -157,6 +161,7 @@ async def survey(ctx: Any, co: dict[str, Any], sem: asyncio.Semaphore) -> dict[s
         print(
             f"{co['name']:20s} ats={len(res['ats_hits'])} json={len(res['json_urls'])} "
             f"links={res.get('n_job_links')} {res['err']} {res.get('title', '')[:30]}",
+            file=sys.stderr,
             flush=True,
         )
         return res
@@ -575,14 +580,18 @@ def board_candidates(res: dict[str, Any], name: str, domain: str) -> list[tuple[
     return list(dict.fromkeys(out))
 
 
-async def boards_main(path: str) -> int:
+async def boards_main(path: str, companies_path: str = COMPANIES) -> int:
     """`python3 survey.py --boards FILE`: FILE is a JSON list of {"name", "url"}, the career pages whose jobs a
     plain read does not see. Each page is loaded once (robots.txt first, no page it refuses); every address it asks for,
     every frame and the drawn page are searched for a board an adapter reads (`board_candidates`). Prints one line a
     page: name, board and slug (or `-`), then the number of jobs and of Israel jobs the adapter read (or `-`).
     Dev tool: writes nothing."""
+    if not os.path.exists(companies_path):
+        print(CANDIDATES_PULL_HINT.format(path=companies_path), file=sys.stderr)
+        return 1
+    excluded = load_excluded(companies_path)  # the legal opt-out: an excluded company's page is never visited
     with open(path, encoding="utf-8") as fh:
-        pages = json.load(fh)
+        pages = [pg for pg in json.load(fh) if not is_excluded(pg["name"], excluded)]
     sem = asyncio.Semaphore(CANDIDATE_THREADS)
     domains = [urlsplit(pg["url"]).netloc.removeprefix("www.") for pg in pages]
     async with async_playwright() as p:
@@ -600,13 +609,13 @@ async def boards_main(path: str) -> int:
         )
         await b.close()
     for res, domain in zip(found, domains, strict=True):
-        shown: tuple[str, ...] = ("-", "-", "-", "-")
-        for board in board_candidates(res, res["name"], domain):
+        candidates = board_candidates(res, res["name"], domain)
+        shown: tuple[str, ...] = (*candidates[0], "-", "-") if candidates else ("-", "-", "-", "-")
+        for board in candidates:
             read = await asyncio.to_thread(read_board, board)
             if read:
                 shown = (*board, *map(str, read))
                 break
-            shown = (*board, "-", "-")  # a board that is named but not read; a later one may be
         print(res["name"], *shown, sep="\t")
     return 0
 

@@ -7,7 +7,7 @@ from typing import Any
 import pytest
 
 import survey
-from tests.conftest import write_json
+from tests.conftest import excluded_record, write_json
 from tests.fakes import FakeCtx, FakeFrame, FakePage, FakePlaywright, FakeReq, FakeResp, Status
 
 BIG = '{"title": "x", "location": "y", "pad": "' + "z" * 900 + '"}'
@@ -226,7 +226,7 @@ async def test_survey_never_loads_a_page_robots_txt_refuses(monkeypatch: pytest.
     page = FakePage(goto_result=Status(200))
     res = await run(page, {"name": "N", "domain": "n.com", "careers_url": "https://n.com/jobs"})
     assert page.gotos == ["https://www.n.com/careers"]  # the refused page is skipped, the usual ones are tried
-    assert res["err"] == "robots.txt"
+    assert res["err"] == ""  # a page was read in the end, so the refusal is not its state
     nothing = FakePage()
     monkeypatch.setattr(survey, "robots_allows", lambda _url: False)
     res = await run(nothing)
@@ -279,7 +279,12 @@ def test_board_candidates_best_first() -> None:
 async def test_boards_main_prints_one_line_a_page(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    write_json(tmp_path / "pages.json", [*PAGES, {"name": "C", "url": "https://www.c.test/c"}])
+    write_json(
+        tmp_path / "pages.json",
+        [*PAGES, {"name": "C", "url": "https://www.c.test/c"}, {"name": "gone co", "url": "https://gone.test/c"}],
+    )
+    write_json(tmp_path / "companies.json", [excluded_record("Gone Co")])  # an opt-out is never visited
+    companies = str(tmp_path / "companies.json")
     quiet = {"board": None, "comeet_uid": None, "comeet_plugin": False, "final": ""}
     results = {
         "A": {"name": "A", "board": ["comeet", "a/1"], "comeet_uid": "1", "comeet_plugin": False, "final": ""},
@@ -298,7 +303,7 @@ async def test_boards_main_prints_one_line_a_page(
     monkeypatch.setattr(survey, "EXE", "")
     monkeypatch.setitem(survey.ADAPTERS, "comeet", lambda slug: [{"location": "Haifa"}] if slug == "a/1" else None)  # type: ignore[arg-type]
     monkeypatch.setitem(survey.ADAPTERS, "lever", lambda _slug: None)  # a named board the adapter cannot read
-    assert await survey.boards_main(str(tmp_path / "pages.json")) == 0
+    assert await survey.boards_main(str(tmp_path / "pages.json"), companies) == 0
     assert capsys.readouterr().out.splitlines() == [
         "A\tcomeet\ta/1\t1\t1",
         "B\t-\t-\t-\t-",
@@ -309,11 +314,17 @@ async def test_boards_main_prints_one_line_a_page(
     assert launches == [{"args": ["--no-sandbox"]}]
     monkeypatch.setattr(survey, "EXE", "/x/chrome")
     launches.clear()
-    await survey.boards_main(str(tmp_path / "pages.json"))
+    await survey.boards_main(str(tmp_path / "pages.json"), companies)
     assert launches == [{"executable_path": "/x/chrome", "args": ["--no-sandbox"]}]
 
 
-def test_run_as_script_with_boards(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_boards_main_needs_the_pulled_list(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    assert await survey.boards_main(str(tmp_path / "pages.json"), str(tmp_path / "missing.json")) == 1
+    assert "missing.json" in capsys.readouterr().err
+
+
+def test_run_as_script_with_boards(workdir: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    write_json(workdir / "data" / "companies.json", [])
     write_json(tmp_path / "pages.json", [])
     monkeypatch.setattr("playwright.async_api.async_playwright", lambda: FakePlaywright([]))
     monkeypatch.setattr("sys.argv", ["survey.py", "--boards", str(tmp_path / "pages.json")])

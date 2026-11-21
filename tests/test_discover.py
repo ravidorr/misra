@@ -58,6 +58,10 @@ def test_scan_page(monkeypatch: pytest.MonkeyPatch) -> None:
         ('COMEET.init({"token": "A1B2", "company-uid": "71.008"})', (None, "https://final.test/c")),
         ('COMEET.init({"token": "A1B2", "company-name": "Acme"})', (None, "https://final.test/c")),
         ('"company-uid": "71.008", "company-name": "Acme"', (None, "https://final.test/c")),
+        (
+            'COMEET.init({"token": "A1", "company-uid": "71.008", "company-name": "\u05d0\u05d1"})',
+            (None, "https://final.test/c"),
+        ),
     ],
 )
 def test_scan_page_ats_links(
