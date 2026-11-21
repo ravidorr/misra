@@ -263,6 +263,18 @@ def test_sharp_drop_keeps_jobs_open_records_new_ones_and_says_why(
     assert f"FAILED  <- {held_note(RETURNED + 1)}" in out
 
 
+def test_a_breezy_board_that_turns_empty_is_held_like_a_browser_crawl(
+    workdir: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    few = 3
+    seed(count=few)
+    write_json(workdir / "data" / "companies.json", [co("Big", ats="breezy", slug="acme")])
+    monkeypatch.setitem(run.ADAPTERS, "breezy", lambda slug: [])
+    run.main()
+    assert open_jobs() == few  # an empty list is not believed at once
+    assert last_log() == (0, 0, f"{run.DROP_NOTE}: got 0, {few} open before")
+
+
 def test_a_held_crawl_logs_the_crawler_s_own_trace(workdir: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     seed()
     trace = "load more: 1 clicks; 9->9 links, xhr [403], failed 0"

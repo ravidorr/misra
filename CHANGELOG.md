@@ -8,11 +8,17 @@ All notable changes are documented here. Format follows [Keep a Changelog](https
 
 - A "Hidden (n)" switch beside "Starred (n)": a view of its own that lists every company the visitor hid, one row each with "Unhide" (a company with no open role is listed too, so it can be unhidden without finding one of its roles), and every open role they hid one by one, as cards at full strength with "Unhide" and no "New" flag. The Hidden view also puts the coverage card away with the filters; the Starred view keeps it. It reads the choices kept today (this browser, or the account) and stores nothing new; a role hidden only because its company is hidden is covered by the company's row, and a hidden role leaves the list when its posting closes (the database deletes the discard). Two WebMCP tools: `list_hidden` and `unhide_company`.
 
-## [0.88.0] - 2026-11-21
+## [0.89.0] - 2026-11-21
 
 ### Added
 
 - A daily recheck of the researched sites: `python run.py --recheck`, the last step of the daily workflow, after the backup. The records whose `gap.reason` is `no_openings` or `crawl_failing` and that have a careers address are read again through the existing crawl path (the board's adapter, else the browser crawl; `robots.txt` honoured, one request a second), and one log line gives counts and the names of the companies that show an Israel job, so they can be pinned by hand. It stores nothing, holds no secret and never turns the run red (it runs last, a timeout is a warning). `bot_protection` records are never retried. The browser crawl's wait for results can now end at a deadline (`crawl_many(urls, deadline)`), so a stalled page cannot cost the recheck its summary. `AGENTS.md` names this recheck as the one exception to "`crawl: true` is the only thing that makes the pipeline request a site".
+
+## [0.88.0] - 2026-11-21
+
+### Added
+
+- The `breezy` job feed, for the Breezy boards (`<slug>.breezy.hr`) the browser reader reads zero jobs on: `adapters.breezy(slug)` reads `https://<slug>.breezy.hr/json`, the public list the board page itself is drawn from (the site's `robots.txt` does not disallow it), through `common.get` (robots.txt, the project's User-Agent, one request a second). It gives every job of the board with its place written as 'city, country' (a job of several places lists them all), so that `israel_only` decides, as for BambooHR. A list that is not a JSON list, an entry that cannot be read, a link on another host, a job twice and a refusal (an unknown slug answers 404) are failures, never a partial list. The list has no job text, so these jobs have no description for now. The slug is the subdomain; `discover.ats_in_text` finds Breezy links. A new migration, `20261207100000_companies_ats_breezy.sql`, adds the name to the check `companies_ats_known` (not applied by the pull request), with a SQL test; the admin page's feed list and slug hint have it. Read on 2026-11-21: Veev 4 jobs (none in Israel), Drimz 1 (Tel Aviv), Peer39 1 (none in Israel). HiBob needs no adapter: the browser reader already reads its `/api/job-ad` list, with the descriptions. No company is pinned yet.
 
 ## [0.87.0] - 2026-11-21
 
