@@ -394,41 +394,45 @@ def recheck_targets(companies: list[dict[str, Any]], excluded: list[str]) -> lis
     ]
 
 
-def recheck_jobs(
-    targets: list[dict[str, Any]], found: dict[str, list[dict[str, Any]] | None] | None = None
-) -> dict[str, list[dict[str, Any]] | None]:
-    """name -> the jobs the existing crawl path lists, None when the site could not be read (robots.txt included).
-    A record with a known board and a slug goes through its adapter; a `browser` record is crawled at its slug and any
-    other at its `careers_url`. All take the same robots.txt rules and one request a second per host. Nothing is
-    stored. `found` is filled as the results come, so a crash keeps what was read before it."""
-    found = {} if found is None else found
+Found = list[tuple[str, list[dict[str, Any]] | None]]  # (company, its jobs, None when the site could not be read)
+
+
+def recheck_jobs(targets: list[dict[str, Any]], found: Found | None = None) -> Found:
+    """One (name, jobs) per target through the existing crawl path; jobs is None when the site could not be read
+    (robots.txt included). A record with a known board and a slug goes through its adapter; a `browser` record is
+    crawled at its slug and any other at its `careers_url`. All take the same robots.txt rules and one request a second
+    per host. Nothing is stored. `found` is filled as the results come, so a crash keeps what was read before it."""
+    found = [] if found is None else found
     pages: dict[str, list[str]] = {}
     for co in targets:
         if co.get("ats") in ADAPTERS and co.get("slug"):
-            found[co["name"]] = fetch(co)
+            found.append((co["name"], fetch(co)))
         else:
             pages.setdefault((co.get("ats") == "browser" and co.get("slug")) or co["careers_url"], []).append(
                 co["name"]
             )
     for url, jobs in crawl_many(list(pages)) if pages else ():
-        for name in pages[url]:
-            found[name] = jobs
+        found.extend((name, jobs) for name in pages[url])
     return found
 
 
-def recheck_summary(found: dict[str, list[dict[str, Any]] | None]) -> str:
+def recheck_summary(found: Found) -> str:
     """One log line: counts, and the names of the companies that show an Israel job (never a posting). A company with no
     Israel job and a job of no readable location is only counted: a person decides whether it is Israeli."""
-    israel = {n: sum(1 for j in jobs if ISRAEL.search(j.get("location") or "")) for n, jobs in found.items() if jobs}
-    shown = {n: k for n, k in israel.items() if k}
-    unplaced = [n for n, jobs in found.items() if jobs and not israel[n] and any(not j.get("location") for j in jobs)]
-    unreachable = sum(1 for jobs in found.values() if jobs is None)
-    names = ", ".join(f"{n} ({k})" for n, k in sorted(shown.items()))
+    counts = [
+        (name, sum(1 for j in jobs if ISRAEL.search(j.get("location") or "")), any(not j.get("location") for j in jobs))
+        for name, jobs in found
+        if jobs
+    ]
+    shown = sorted((n, k) for n, k, _ in counts if k)
+    unplaced = sum(1 for _, k, blank in counts if blank and not k)
+    unreachable = sum(1 for _, jobs in found if jobs is None)
+    names = ", ".join(f"{n} ({k})" for n, k in shown)
     return (
         ("::notice::" if shown else "")
         + f"recheck: {len(found)} probed, {len(shown)} with Israel jobs"
         + (f": {names}" if names else "")
-        + f"; {len(unplaced)} companies with jobs of no readable location, {unreachable} unreachable"
+        + f"; {unplaced} companies with jobs of no readable location, {unreachable} unreachable"
     )
 
 
@@ -437,7 +441,7 @@ def recheck_step() -> int:
     only, writes nothing (no history, no table) and holds no secret; a company that shows Israel jobs is pinned by hand
     (TODO.md, Decisions on sources). A crash is a warning with what was read before it; the workflow stops the step
     after 8 minutes with `timeout` and turns that into a warning, so a slow site cannot redden the run either."""
-    found: dict[str, list[dict[str, Any]] | None] = {}
+    found: Found = []
     crashed = False
     try:
         recheck_jobs(recheck_targets(load_companies(), load_excluded()), found)

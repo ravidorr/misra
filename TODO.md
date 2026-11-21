@@ -400,7 +400,7 @@ recurring work.
     same kind need no new approval. This never reaches the Israeli job boards (AllJobs, Drushim, JobMaster, and platforms of
     that class), which stay out for good. First use: Aerospike (Rippling) and fintastic (Freshteam), pinned as browser
     crawls on 2026-11-21.
-  - Maintainer rule, 2026-11-21, researched records by `gap.reason`: `no_openings` (44) and `crawl_failing` (1) are checked
+  - Maintainer rule, 2026-11-21, researched records by `gap.reason` (counts as the maintainer gave them that day): `no_openings` (44) and `crawl_failing` (1) are checked
     again every day (`python run.py --recheck`, the "Recheck the researched sites" step of `daily.yml`: the same crawl path,
     `robots.txt` honoured, one request a second; one log line of counts and the names of the companies that show an Israel
     job, nothing stored, no key; pin such a company by hand with `companyctl`). `bot_protection` (20) is put aside: never

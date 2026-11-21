@@ -62,13 +62,13 @@ def test_a_known_board_goes_through_its_adapter_and_a_page_through_the_browser_c
         rec("Shell", "no_openings", ats="browser", slug="https://shell.example/jobs"),
     ]
     found = run.recheck_jobs(targets)
-    assert found == {
-        "Board": [job("Tel Aviv")],
-        "Dead": None,
-        "Page": [job("")],
-        "Twin": [job("")],
-        "Shell": None,
-    }
+    assert found == [
+        ("Board", [job("Tel Aviv")]),
+        ("Dead", None),
+        ("Page", [job("")]),
+        ("Twin", [job("")]),
+        ("Shell", None),
+    ]
     assert seen == [["https://page.example/c", "https://shell.example/jobs"]]
 
 
@@ -99,24 +99,55 @@ def test_a_crash_keeps_what_was_read_before_it_and_a_record_without_a_slug_uses_
     )
 
 
+def test_an_adapter_that_raises_and_a_robots_refusal_are_unreachable_not_a_crash(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def boom(slug: str) -> Any:
+        raise ValueError("adapter bug")
+
+    def refused(slug: str) -> Any:
+        monkeypatch.setattr(run.common, "robots_blocked", lambda: "host.example")  # a refused request
+        return [job("Tel Aviv")]
+
+    monkeypatch.setitem(run.ADAPTERS, "boom", boom)
+    monkeypatch.setitem(run.ADAPTERS, "refused", refused)
+    monkeypatch.setattr(run, "crawl_many", lambda urls: iter(()))
+    found = run.recheck_jobs(
+        [rec("Boom", "no_openings", ats="boom", slug="x"), rec("Refused", "no_openings", ats="refused", slug="y")]
+    )
+    assert found == [("Boom", None), ("Refused", None)]
+    assert run.WHY["x"].startswith("adapter error: ValueError")
+    assert run.WHY["y"].startswith(run.ROBOTS_NOTE)
+
+
+def test_two_records_with_the_same_name_are_both_probed_and_counted(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setitem(run.ADAPTERS, "fake", lambda slug: [job("Tel Aviv")])
+    monkeypatch.setattr(run, "crawl_many", lambda urls: iter([(u, [job("Haifa")]) for u in urls]))
+    found = run.recheck_jobs(
+        [rec("Twin", "no_openings", ats="fake", slug="a"), rec("Twin", "no_openings", careers_url="https://t/c")]
+    )
+    assert [n for n, _ in found] == ["Twin", "Twin"]
+    assert run.recheck_summary(found).startswith("::notice::recheck: 2 probed, 2 with Israel jobs: Twin (1), Twin (1);")
+
+
 def test_no_page_to_read_starts_no_browser(monkeypatch: pytest.MonkeyPatch) -> None:
     def boom(urls: list[str]) -> Any:
         raise AssertionError("the browser must not start")
 
     monkeypatch.setattr(run, "crawl_many", boom)
-    assert run.recheck_jobs([]) == {}
+    assert run.recheck_jobs([]) == []
 
 
 def test_the_summary_names_companies_with_israel_jobs_and_only_counts_the_rest() -> None:
     line = run.recheck_summary(
-        {
-            "B": [job("Tel Aviv, Israel"), job("Paris"), job("Herzliya")],
-            "A": [job("Haifa")],
-            "Unplaced": [job(""), job("Paris")],
-            "Foreign": [job("Paris")],
-            "Empty": [],
-            "Down": None,
-        }
+        [
+            ("B", [job("Tel Aviv, Israel"), job("Paris"), job("Herzliya")]),
+            ("A", [job("Haifa")]),
+            ("Unplaced", [job(""), job("Paris")]),
+            ("Foreign", [job("Paris")]),
+            ("Empty", []),
+            ("Down", None),
+        ]
     )
     assert line == (
         "::notice::recheck: 6 probed, 2 with Israel jobs: A (1), B (2); "
@@ -127,7 +158,7 @@ def test_the_summary_names_companies_with_israel_jobs_and_only_counts_the_rest()
 
 def test_a_quiet_recheck_is_no_notice() -> None:
     assert (
-        run.recheck_summary({"Empty": [], "Down": None})
+        run.recheck_summary([("Empty", []), ("Down", None)])
         == "recheck: 2 probed, 0 with Israel jobs; 0 companies with jobs of no readable location, 1 unreachable"
     )
 
