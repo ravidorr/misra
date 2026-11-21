@@ -215,6 +215,9 @@ BOARD_URLS = {
     "comeet": "https://www.comeet.com/jobs/{slug}",
     "bamboohr": "https://{slug}.bamboohr.com/careers",
     "jazzhr": "https://{slug}.applytojob.com/apply",
+    "teamtailor": "https://{slug}/jobs",
+    "pinpoint": "https://{slug}",
+    "jobvite": "https://jobs.jobvite.com/{slug}",
 }
 
 

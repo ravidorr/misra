@@ -84,6 +84,9 @@ The slug for the systems where it is not obvious:
 | Workday | `tenant/wdN/site`, from `<tenant>.<wdN>.myworkdayjobs.com/<site>`. Israel only. |
 | JazzHR | `<slug>` of `<slug>.applytojob.com`. Read from the board page. |
 | BambooHR | `<slug>` of `<slug>.bamboohr.com`. Read from its `/careers/list` JSON. |
+| Teamtailor | The board host: `<name>.teamtailor.com` or the company's own domain, for example `vicarius.teamtailor.com`. Read from the public RSS feed `https://<host>/jobs.rss`. |
+| Pinpoint | The board host: `<name>.pinpointhq.com` or the company's own domain, for example `myinterview.pinpointhq.com`. Read from the public list `https://<host>/postings.json`. |
+| Jobvite | `<slug>` of `jobs.jobvite.com/<slug>`, for example `forescout`. Read from the board page (HTML, a heading per department); a job that shows only "N Locations" has its own page read for the places. A board that moved to another host (Shutterfly's goes to a Cloudflare challenge) is a failure. |
 | Oracle Fusion HCM | `host/site`. Read from the public requisition search. Israel only. |
 | Amazon | `ISR`. Read from the amazon.jobs search JSON for that one country. |
 | Phenom | `host/country/lang`. Read from the search widget, filtered to Israel. |

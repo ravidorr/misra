@@ -10,6 +10,7 @@ from collections import Counter
 from collections.abc import Callable, Iterable, Iterator
 from datetime import UTC, datetime
 from email.utils import parsedate_to_datetime
+from itertools import pairwise
 from typing import Any
 from urllib.parse import parse_qsl, urljoin, urlparse
 
@@ -1440,6 +1441,148 @@ def varonis(slug: str) -> list[Job] | None:
     return [j for j in jobs if ISRAEL.search(j["location"])] or None  # Varonis has jobs in Israel: none is a bad answer
 
 
+_BOARD_HOST = re.compile(r"[a-z0-9-]+(?:\.[a-z0-9-]+)+")
+_TEAMTAILOR_JOB_ID = re.compile(r"/jobs/(\d+)(?:-|$)")
+
+
+def _teamtailor_job(host: str, item: ET.Element, ns: dict[str, str]) -> Job | None:
+    """One job of the feed, or None when it lacks a title or a link, or the link is no job of the board's host."""
+    title = (item.findtext("title") or "").strip()
+    link = (item.findtext("link") or "").strip()
+    found = _TEAMTAILOR_JOB_ID.search(urlparse(link).path)
+    if not (title and found and host_of(link) == host and link.startswith("https://")):
+        return None
+    places = [
+        ", ".join(dict.fromkeys(x for x in (loc.findtext(f"tt:{f}", "", ns).strip() for f in ("city", "country")) if x))
+        for loc in item.findall("tt:locations/tt:location", ns)
+    ]
+    return _job(
+        found[1],
+        title,
+        "; ".join(dict.fromkeys(p for p in places if p)),
+        link,
+        team=item.findtext("tt:department", "", ns),
+        posted=_avature_posted(item.findtext("pubDate")),
+    )
+
+
+def teamtailor(slug: str) -> list[Job] | None:
+    """slug is the host of a Teamtailor career site: `<name>.teamtailor.com` or the company's own domain. Read from its
+    public RSS feed `https://<host>/jobs.rss` (its `robots.txt` allows it), one request: every open job with its
+    title, its place (city and country of each location, none for a remote job) and its department.
+    Only a feed of the board's own host that reads cleanly is a list: a closed account answers 404, an own domain may
+    redirect elsewhere, and a job that cannot be read or is there twice
+    means a partial list, which would close the stored jobs."""
+    if not _BOARD_HOST.fullmatch(slug):
+        return None
+    r = get(f"https://{slug}/jobs.rss")
+    if r is None or r.status_code != HTTP_OK or host_of(r.url) != slug:
+        return None
+    try:
+        root = ET.fromstring(r.text)
+    except ET.ParseError:
+        return None
+    if root.tag != "rss" or root.find("channel") is None:
+        return None
+    ns = {"tt": "https://teamtailor.com/locations"}
+    out = [_teamtailor_job(slug, item, ns) for item in root.findall("./channel/item")]
+    jobs = [j for j in out if j]
+    if len(jobs) != len(out) or len({j["job_id"] for j in jobs}) != len(jobs):
+        return None
+    return jobs
+
+
+def _pinpoint_job(host: str, j: Any) -> Job | None:
+    """One posting of the list, or None when it has no id or title, or its link is not on the board's own host."""
+    if not isinstance(j, dict) or not j.get("id") or not (j.get("title") or "").strip():
+        return None
+    url = j.get("url") or ""
+    if not (isinstance(url, str) and url.startswith("https://") and host_of(url) == host):
+        return None
+    where, job = j.get("location") or {}, j.get("job") or {}
+    place = ", ".join(dict.fromkeys(x for x in (where.get("city"), where.get("province"), where.get("name")) if x))
+    return _job(j["id"], j["title"], place, url, team=(job.get("department") or {}).get("name"))
+
+
+def pinpoint(slug: str) -> list[Job] | None:
+    """slug is the host of a Pinpoint career site: `<name>.pinpointhq.com` or the company's own domain. Read from
+    the board's public list `https://<host>/postings.json`, one request (its `robots.txt` allows it): every open posting
+    with its title, place (city, province and place name, no country: Pinpoint does not give one) and department. Only
+    the board's own JSON that reads cleanly is a list: anything else is None, never a partial list."""
+    if not _BOARD_HOST.fullmatch(slug):
+        return None
+    r = get(f"https://{slug}/postings.json")
+    if r is None or r.status_code != HTTP_OK or host_of(r.url) != slug:
+        return None
+    try:
+        postings = r.json()["data"]
+    except (ValueError, KeyError, TypeError):  # not JSON, or not the board's list
+        return None
+    if not isinstance(postings, list):
+        return None
+    out = [_pinpoint_job(slug, j) for j in postings]
+    jobs = [j for j in out if j]
+    if len(jobs) != len(out) or len({j["job_id"] for j in jobs}) != len(jobs):
+        return None
+    return jobs
+
+
+_JOBVITE_HOST = "jobs.jobvite.com"
+_JOBVITE_HEADING = re.compile(r"<h3\b[^>]*>(.*?)</h3>", re.S | re.I)
+_JOBVITE_ROW = re.compile(
+    r'<td class="jv-job-list-name">\s*<a href="([^"]*)">(.*?)</a>\s*</td>\s*'
+    r'<td class="jv-job-list-location">(.*?)</td>',
+    re.S | re.I,
+)
+_JOBVITE_ANY_LINK = re.compile(r'class="jv-job-list-name"', re.I)
+_JOBVITE_MANY = re.compile(r"\d+ Locations?", re.I)  # what the list shows for a job of several places
+_JOBVITE_META = re.compile(r'<p class="jv-job-detail-meta">(.*?)</p>', re.S | re.I)
+_JOBVITE_SEPARATOR = re.compile(r"<span[^>]*jv-inline-separator[^>]*></span>", re.I)
+
+
+def _jobvite_places(href: str) -> str | None:
+    """The places of a job whose list row says only '4 Locations', read from its own page (the facts line: department,
+    then each place, one separator between), or None when the page does not read."""
+    r = get(f"https://{_JOBVITE_HOST}{href}")
+    meta = _JOBVITE_META.search(r.text) if r is not None and r.status_code == HTTP_OK else None
+    places = [_page_text(x) for x in _JOBVITE_SEPARATOR.split(meta[1])[1:]] if meta else []
+    return "; ".join(dict.fromkeys(p for p in places if p)) or None
+
+
+def jobvite(slug: str) -> list[Job] | None:
+    """slug is the `<slug>` of `jobs.jobvite.com/<slug>` (its `robots.txt` answers 404, so no rule applies; one request
+    a second and the project's User-Agent do). Jobvite has no public feed for it: the board page lists the jobs as HTML,
+    under one heading per department, each with a link and the place as the company wrote it (a job of several places
+    shows only '4 Locations': its own page is read for them, one more request a job). Only a page that reads
+    cleanly is a list: a board that moved (Shutterfly's goes to another host), a changed layout, a job that cannot be
+    read, a job twice or a page with no job at all is None, because an empty list would close every stored job."""
+    if not re.fullmatch(r"[A-Za-z0-9_-]+", slug):
+        return None
+    r = get(f"https://{_JOBVITE_HOST}/{slug}")
+    if r is None or r.status_code != HTTP_OK or host_of(r.url) != _JOBVITE_HOST:
+        return None
+    board = r.text
+    out: list[Job] = []
+    parts = re.split(r'<table class="jv-job-list"', board)
+    for before, chunk in pairwise(parts):
+        team = _page_text((_JOBVITE_HEADING.findall(before) or [""])[-1])  # the heading just above the table
+        for href, name, place in _JOBVITE_ROW.findall(chunk.partition("</table>")[0]):
+            job_id = href.rstrip("/").rpartition("/")[2]
+            title = _page_text(name)
+            if not (job_id and title and href.startswith(f"/{slug}/job/")):
+                return None
+            where = _page_text(place)
+            if _JOBVITE_MANY.fullmatch(where):
+                where = _jobvite_places(href) or ""
+                if not where:
+                    return None  # a job whose places we cannot read might be in Israel: the list is not complete
+            out.append(_job(job_id, title, where, f"https://{_JOBVITE_HOST}{href}", team=team))
+    # a job the row markup did not yield (a changed layout) means the list is not complete
+    if not out or len(_JOBVITE_ANY_LINK.findall(board)) != len(out) or len({j["job_id"] for j in out}) != len(out):
+        return None
+    return out
+
+
 ADAPTERS: dict[str, Callable[[str], list[Job] | None]] = {
     "greenhouse_url": greenhouse_url,
     "greenhouse": greenhouse,
@@ -1459,4 +1602,7 @@ ADAPTERS: dict[str, Callable[[str], list[Job] | None]] = {
     "eightfold": eightfold,
     "jibe": jibe,
     "varonis": varonis,
+    "teamtailor": teamtailor,
+    "pinpoint": pinpoint,
+    "jobvite": jobvite,
 }
