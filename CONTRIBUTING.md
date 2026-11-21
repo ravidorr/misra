@@ -66,7 +66,7 @@ through the report form on the coverage gap card or the Contact page; the mainta
    discovery run, from a blocked runner for example, cannot switch working companies off.
 
 Set `israel_only` to true on a record to keep only the jobs located in Israel. Use it for large multinational boards.
-Without it, a job whose location is empty, has no Latin letter or has a Hebrew letter (and names no city of `regions.PLACES`)
+Without it, a job whose location is empty, has no letter or has a Hebrew letter (and names no city of `regions.PLACES`)
 is kept in the region Unknown (`regions.UNKNOWN`), so an Israeli employer with Hebrew or empty locations is not
 discarded: pin it without `israel_only`. With `israel_only` such a job is dropped, because its location confirms nothing.
 Unknown is a region like the others: it is a chip on the dashboard, in `jobs.json` and in the job alert filters, and the
