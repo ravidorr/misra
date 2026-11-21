@@ -1504,11 +1504,22 @@ def _pinpoint_job(host: str, j: Any) -> Job | None:
     return _job(j["id"], j["title"], place, url, team=(job.get("department") or {}).get("name"))
 
 
+def _pinpoint_jobs(host: str, postings: list[Any]) -> list[Job] | None:
+    try:
+        out = [_pinpoint_job(host, j) for j in postings]
+    except (AttributeError, TypeError):  # a field of another type than the board's own
+        return None
+    jobs = [j for j in out if j]
+    if len(jobs) != len(out) or len({j["job_id"] for j in jobs}) != len(jobs):
+        return None
+    return jobs
+
+
 def pinpoint(slug: str) -> list[Job] | None:
-    """slug is the host of a Pinpoint career site: `<name>.pinpointhq.com` or the company's own domain. Read from
-    the board's public list `https://<host>/postings.json`, one request (its `robots.txt` allows it): every open posting
-    with its title, place (city, province and place name, no country: Pinpoint does not give one) and department. Only
-    the board's own JSON that reads cleanly is a list: anything else is None, never a partial list."""
+    """slug is the host of a Pinpoint career site: `<name>.pinpointhq.com` or the company's own domain. Read from the
+    board's public list `https://<host>/postings.json`, one request (its `robots.txt` allows it): every open posting
+    with its title, place (city, province and place name, no country: Pinpoint does not give one) and department.
+    Only the board's own JSON that reads cleanly is a list: anything else is None, never a partial list."""
     if not _BOARD_HOST.fullmatch(slug):
         return None
     r = get(f"https://{slug}/postings.json")
@@ -1520,11 +1531,7 @@ def pinpoint(slug: str) -> list[Job] | None:
         return None
     if not isinstance(postings, list):
         return None
-    out = [_pinpoint_job(slug, j) for j in postings]
-    jobs = [j for j in out if j]
-    if len(jobs) != len(out) or len({j["job_id"] for j in jobs}) != len(jobs):
-        return None
-    return jobs
+    return _pinpoint_jobs(slug, postings)
 
 
 _JOBVITE_HOST = "jobs.jobvite.com"
@@ -1535,18 +1542,21 @@ _JOBVITE_ROW = re.compile(
     re.S | re.I,
 )
 _JOBVITE_ANY_LINK = re.compile(r'class="jv-job-list-name"', re.I)
-_JOBVITE_MANY = re.compile(r"\d+ Locations?", re.I)  # what the list shows for a job of several places
+_JOBVITE_MANY = re.compile(r"(\d+) Locations?", re.I)  # what the list shows for a job of several places
 _JOBVITE_META = re.compile(r'<p class="jv-job-detail-meta">(.*?)</p>', re.S | re.I)
 _JOBVITE_SEPARATOR = re.compile(r"<span[^>]*jv-inline-separator[^>]*></span>", re.I)
 
 
-def _jobvite_places(href: str) -> str | None:
-    """The places of a job whose list row says only '4 Locations', read from its own page (the facts line: department,
-    then each place, one separator between), or None when the page does not read."""
+def _jobvite_places(href: str, count: int) -> str | None:
+    """The places of a job whose list row says only 'N Locations', read from its own page (the facts line: the
+    department, then each place, one separator between), or None when the page does not read or does not list N places
+    (a place dropped could be the one in Israel)."""
     r = get(f"https://{_JOBVITE_HOST}{href}")
     meta = _JOBVITE_META.search(r.text) if r is not None and r.status_code == HTTP_OK else None
     places = [_page_text(x) for x in _JOBVITE_SEPARATOR.split(meta[1])[1:]] if meta else []
-    return "; ".join(dict.fromkeys(p for p in places if p)) or None
+    if len(places) != count or not all(places):
+        return None
+    return "; ".join(dict.fromkeys(places))
 
 
 def jobvite(slug: str) -> list[Job] | None:
@@ -1572,8 +1582,9 @@ def jobvite(slug: str) -> list[Job] | None:
             if not (job_id and title and href.startswith(f"/{slug}/job/")):
                 return None
             where = _page_text(place)
-            if _JOBVITE_MANY.fullmatch(where):
-                where = _jobvite_places(href) or ""
+            many = _JOBVITE_MANY.fullmatch(where)
+            if many:
+                where = _jobvite_places(href, int(many[1])) or ""
                 if not where:
                     return None  # a job whose places we cannot read might be in Israel: the list is not complete
             out.append(_job(job_id, title, where, f"https://{_JOBVITE_HOST}{href}", team=team))

@@ -3457,6 +3457,8 @@ def test_pinpoint_a_slug_that_is_not_a_host_is_not_asked(monkeypatch: pytest.Mon
         pp_answer({"data": [pp_posting(title=None)]}),
         pp_answer({"data": [pp_posting(host="other.test")]}),
         pp_answer({"data": [pp_posting(url=7)]}),
+        pp_answer({"data": [pp_posting(title=5)]}),
+        pp_answer({"data": [pp_posting(location="Tel Aviv")]}),
         pp_answer({"data": [pp_posting(url=f"http://{PP_HOST}/en/postings/9")]}),
         pp_answer({"data": [pp_posting(), pp_posting(title="Again")]}),
     ],
@@ -3513,7 +3515,7 @@ def test_jobvite_reads_the_board_by_department_and_the_places_of_a_many_place_jo
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     page = jv_page(
-        jv_table("Engineering", jv_row(), jv_row("oB2", "Sr Engineer", '<div class="jv-meta">2 Locations</div>')),
+        jv_table("Engineering", jv_row(), jv_row("oB2", "Sr Engineer", '<div class="jv-meta">3 Locations</div>')),
         jv_table("Sales", jv_row("oC3", "AE &amp; BDR", "London,\n United Kingdom")),
     )
     urls = fake_jobvite(monkeypatch, jv_answer(page), FakeHttpResponse(text=JV_DETAIL))
@@ -3589,6 +3591,8 @@ def test_jobvite_a_page_that_does_not_read_is_a_failure(
         FakeHttpResponse(status_code=404, text=JV_DETAIL),
         FakeHttpResponse(text="<html>no facts line</html>"),
         FakeHttpResponse(text='<p class="jv-job-detail-meta">Engineering</p>'),  # a department and no place
+        # three places where the row says four: one went missing
+        FakeHttpResponse(text=JV_DETAIL),
     ],
 )
 def test_jobvite_a_many_place_job_whose_page_does_not_read_fails_the_list(
