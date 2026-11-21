@@ -419,7 +419,7 @@ def recheck_jobs(targets: list[dict[str, Any]], found: Found | None = None, dead
             pages.setdefault((co.get("ats") == "browser" and co.get("slug")) or co["careers_url"], []).append(
                 co["name"]
             )
-    for url, jobs in crawl_many(list(pages)) if pages and time.monotonic() <= deadline else ():
+    for url, jobs in crawl_many(list(pages), deadline) if pages and time.monotonic() <= deadline else ():
         found.extend((name, jobs) for name in pages[url])
         if time.monotonic() > deadline:
             break

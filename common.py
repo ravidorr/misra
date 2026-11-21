@@ -155,7 +155,9 @@ def https_only(url: str) -> str:
 def crawled_companies(companies: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """The companies the pipeline crawls: `crawl` is exactly true and there is no exclusion. The others are researched
     sites kept for the coverage card (`gap`) and the companies that asked to be removed (`excluded`, a legal
-    commitment): none is ever requested. A record that does not say `crawl` is not crawled."""
+    commitment): none is crawled, and none is requested except by the read-only daily recheck of the researched records
+    with the gap reasons `no_openings` and `crawl_failing` (`run.recheck_targets`). A record that does not say `crawl`
+    is not crawled."""
     return [c for c in companies if c.get("crawl") is True and c.get("excluded") is None]
 
 

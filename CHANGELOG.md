@@ -12,7 +12,7 @@ All notable changes are documented here. Format follows [Keep a Changelog](https
 
 ### Added
 
-- A daily recheck of the researched sites: `python run.py --recheck`, the last step of the daily workflow, after the backup. The records whose `gap.reason` is `no_openings` or `crawl_failing` and that have a careers address are read again through the existing crawl path (the board's adapter, else the browser crawl; `robots.txt` honoured, one request a second), and one log line gives counts and the names of the companies that show an Israel job, so they can be pinned by hand. It stores nothing, holds no secret and never turns the run red (it runs last, a timeout is a warning). `bot_protection` records are never retried.
+- A daily recheck of the researched sites: `python run.py --recheck`, the last step of the daily workflow, after the backup. The records whose `gap.reason` is `no_openings` or `crawl_failing` and that have a careers address are read again through the existing crawl path (the board's adapter, else the browser crawl; `robots.txt` honoured, one request a second), and one log line gives counts and the names of the companies that show an Israel job, so they can be pinned by hand. It stores nothing, holds no secret and never turns the run red (it runs last, a timeout is a warning). `bot_protection` records are never retried. The browser crawl's wait for results can now end at a deadline (`crawl_many(urls, deadline)`), so a stalled page cannot cost the recheck its summary. `AGENTS.md` names this recheck as the one exception to "`crawl: true` is the only thing that makes the pipeline request a site".
 
 ## [0.87.0] - 2026-11-21
 
