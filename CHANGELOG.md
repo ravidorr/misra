@@ -8,6 +8,12 @@ All notable changes are documented here. Format follows [Keep a Changelog](https
 
 - A "Hidden (n)" switch beside "Starred (n)": a view of its own that lists every company the visitor hid, one row each with "Unhide" (a company with no open role is listed too, so it can be unhidden without finding one of its roles), and every open role they hid one by one, as cards at full strength with "Unhide" and no "New" flag. The Hidden view also puts the coverage card away with the filters; the Starred view keeps it. It reads the choices kept today (this browser, or the account) and stores nothing new; a role hidden only because its company is hidden is covered by the company's row, and a hidden role leaves the list when its posting closes (the database deletes the discard). Two WebMCP tools: `list_hidden` and `unhide_company`.
 
+## [0.85.2] - 2026-11-21
+
+### Fixed
+
+- The browser crawl waits for a "Load more" answer as long as the click's own request is open, up to 40 seconds, instead of 8 seconds flat. Priority Software loads its other 12 roles with one `admin-ajax.php` call (`load_filt`) after the first 9; from the runner that call took longer than 8 seconds on four runs in a row (2026-11-20 and 2026-11-21), so the crawl read 9 of 21 roles and the sharp-drop guard held the company back (it would have closed 12 roles on 2026-11-23). Reproduced locally by delaying that call by 12 seconds: 9 roles before, 21 after. A fetch or XHR of the career page's own host that the click starts keeps the wait going; with none open, a click that shows nothing still ends the loop after 8 seconds, so a button that loads no jobs costs what it did. The job keys do not change, so no role closes and reopens.
+
 ## [0.85.1] - 2026-11-20
 
 ### Changed
