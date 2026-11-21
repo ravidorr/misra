@@ -1453,14 +1453,17 @@ def _day(stamp: Any) -> str:
 
 def _breezy_place(j: dict[str, Any]) -> str:
     """The places of a job: each location (a job of several lists them in `locations`, else the one in `location`) as
-    'city, country', the country written out, so that the place alone shows Israel."""
+    'city, country', the country written out, so that the place alone shows Israel. A location with no city or country
+    name gives its own `name` ('Tel Aviv, IL'); one with nothing readable gives no place."""
     places = j.get("locations") or [j.get("location")]
     out = []
     for loc in places:
         if isinstance(loc, dict):
             country = loc.get("country")
             parts = [loc.get("city"), country.get("name") if isinstance(country, dict) else None]
-            out.append(", ".join(p.strip() for p in parts if isinstance(p, str) and p.strip()))
+            text = ", ".join(p.strip() for p in parts if isinstance(p, str) and p.strip())
+            name = loc.get("name")
+            out.append(text or (name.strip() if isinstance(name, str) else ""))
     return "; ".join(dict.fromkeys(p for p in out if p))
 
 
@@ -1485,11 +1488,13 @@ def _breezy_job(host: str, j: Any) -> Job | None:
 
 
 def breezy(slug: str) -> list[Job] | None:
-    """slug is the `<slug>` of `<slug>.breezy.hr`. The board page is drawn from `/json`, a public JSON list of every
-    open job (the page's own data, for any visitor; the site's robots.txt does not disallow it and the request goes
-    through `common.get`). The list is trusted only when it is a JSON list, every entry reads and no job comes twice: an
-    unknown slug answers HTTP 404, and a partial list would close the jobs it lacks. Every job is returned (the
-    company's `israel_only` decides, as for BambooHR). The list has no job text, so there is no description for now."""
+    """slug is the lowercase `<slug>` of `<slug>.breezy.hr`. The board page is drawn from `/json`, a public JSON list of
+    every open job (the page's own data, for any visitor; the request goes through `common.get`, which enforces
+    robots.txt). The list is trusted only when it is a JSON list, every entry reads and no job comes twice. A slug
+    that is not a lowercase subdomain, any answer but HTTP 200 (an unknown slug gets 404), a redirect to another host
+    and an entry on another host (a board on a custom domain) are failures: a partial list would close the jobs it
+    lacks. Every job is returned (the company's `israel_only` decides, as for BambooHR). An empty list is `[]`; run.py
+    holds a sudden empty list like a browser crawl. The list has no job text, so there is no description for now."""
     if not _SUBDOMAIN_SLUG.fullmatch(slug):
         return None
     host = f"{slug}.breezy.hr"

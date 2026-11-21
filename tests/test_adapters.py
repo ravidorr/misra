@@ -3341,6 +3341,22 @@ def test_breezy_reads_the_json_list(monkeypatch: pytest.MonkeyPatch) -> None:
     ]
 
 
+def test_breezy_the_locations_win_over_the_location_and_a_nameless_one_gives_its_name(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    only = {"locations": [{"country": {"name": "Israel"}, "city": "Haifa"}]}
+    named = {"location": {"country": "IL", "name": " Tel Aviv, IL "}}
+    junk = {"locations": ["junk"], "location": {"city": "Elsewhere"}}
+    fake_get(
+        monkeypatch,
+        breezy_answer([breezy_job("aa11", **only), breezy_job("bb22", **named), breezy_job("cc33", **junk)]),
+    )
+    jobs = adapters.breezy("acme")
+    assert jobs is not None
+    assert [j["location"] for j in jobs] == ["Haifa, Israel", "Tel Aviv, IL", ""]
+    assert [bool(common.ISRAEL.search(j["location"])) for j in jobs] == [True, True, False]
+
+
 def test_breezy_a_country_with_no_city_or_name_is_still_read(monkeypatch: pytest.MonkeyPatch) -> None:
     data = [breezy_job(location={"country": {"name": "Israel"}}), breezy_job("bb22", location={"country": "IL"})]
     fake_get(monkeypatch, breezy_answer(data))
