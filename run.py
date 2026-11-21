@@ -33,7 +33,11 @@ from common import (
     open_history,
 )
 
-SHARP_DROP_ATS = ("browser", "breezy")  # boards a wrongly empty list cannot be told from a closed one (see sharp_drop)
+SHARP_DROP_ATS = (
+    "browser",
+    "breezy",
+    "recruitee",
+)  # boards a wrongly empty list cannot be told from a closed one (see sharp_drop)
 DROP_MIN_OPEN = 10  # fewer open jobs swing too much to judge a drop; this many returning nothing is a broken page
 
 
@@ -45,7 +49,8 @@ def init() -> sqlite3.Connection:
 
 
 def sharp_drop(c: sqlite3.Connection, name: str, n: int, today: str) -> tuple[str, bool]:
-    """(crawl log note, held) for a browser or Breezy crawl that returned n jobs. No note when it is not a sharp drop.
+    """(crawl log note, held) for a browser, Breezy or Recruitee crawl that returned n jobs. No note when it is not a
+    sharp drop.
 
     A sharp drop is fewer than half the jobs open before, or no jobs at all when any were open. A site that starts
     paginating or capping its list, or a page the extractor can no longer read, looks like a company that closed

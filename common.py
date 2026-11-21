@@ -10,7 +10,7 @@ from urllib.parse import unquote, urlsplit
 
 import requests
 
-VERSION = "0.90.0"  # equal to the version in package.json and pyproject.toml (a test checks it)
+VERSION = "0.91.0"  # equal to the version in package.json and pyproject.toml (a test checks it)
 SITE_URL = "https://ravidorr.github.io/misra/"
 CONTACT = "raanan@avidor.org"
 ROBOTS_TOKEN = "Misra"  # the product token that robots.txt groups name
@@ -345,7 +345,9 @@ def slug_candidates(name: str, domain: str) -> list[str]:
 
 _PLACES = re.compile(
     r"israel|tel[ -]?aviv|jerusalem|haifa|herzliya|ra'?anana|petah|petach|\bramat|netanya|rehovot|yokneam|kfar"
-    r"|beer[ -]?sheva|holon|rishon|hod hasharon|airport city|migdal|\bISR\b",
+    r"|be'?er[ -]?sheva|holon|rishon|hod hasharon|airport city|migdal|\bISR\b"
+    r"|ash(?:k|q)elon|ashdod|[kq]iryat|yoqneam|dimona|nes[ -]ziona|\blod\b|modi'?in|caesarea|misgav|karmiel|eilat"
+    r"|ramat[ -]gan|givatayim|bnei[ -]brak|bat[ -]yam|rosh[ -]ha'?ayin|hadera|afula|tiberias",
     re.I,
 )
 _US_WORDS = re.compile(

@@ -203,3 +203,23 @@ async def test_emphasis_inside_a_title_is_one_line_and_a_br_or_a_block_is_a_boun
     )
     leaves = (await row_for(page, html, "/careers/x-role"))[5]
     assert leaves == "Details\nSenior Backend Engineer\nHaifa\nHybrid\nSales\nR&D"
+
+
+TABLE = (
+    "<table><thead><tr><th>Title</th><th>Requisition Identifier</th><th>Department</th><th>Location</th></tr></thead>"
+    '<tbody><tr><td><a href="{base}/jobs/a-role">A Role</a></td><td>R1</td><td>Sales</td>'
+    "<td><ul><li>Tel Aviv, Israel</li><li>Berlin, Germany</li></ul></td></tr>"
+    '<tr><td><a href="{base}/jobs/b-role">B Role</a></td><td>R2</td><td>R&amp;D</td><td>Haifa</td></tr></tbody></table>'
+)
+
+
+async def test_a_table_row_labels_the_cell_under_a_place_header_and_drops_the_id(page: Page) -> None:
+    card = (await cards(page, TABLE.replace("{base}", BASE)))["A Role"]
+    assert card == "A Role\nSales\nLocation\nTel Aviv, Israel | Berlin, Germany"
+
+
+async def test_a_row_whose_cells_do_not_match_the_headers_is_read_as_it_is(page: Page) -> None:
+    html = TABLE.replace("{base}", BASE).replace("<th>Department</th>", "")
+    card = (await cards(page, html))["A Role"]
+    assert "Location" not in card.split("\n")
+    assert "Tel Aviv, Israel" in card
