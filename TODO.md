@@ -13,7 +13,7 @@ An item that has a date says `Due <date>` in its text. The dates were set on 202
 
 | Due | What | Item |
 | --- | --- | --- |
-| 2026-11-21 | Review the 04:23 UTC daily run: the 24 Goozali companies, REE Automotive, Priority Software | "Check the daily run of 2026-11-21" |
+| 2026-11-23 | Check that REE Automotive closed, and the Priority Software, RiT Technologies and NeuReality crawls | "Check the daily run of 2026-11-23" |
 | 2026-11-27, then every Friday | Weekly triage of reported sites and the coverage card | "More companies" |
 | 2026-12-04, then each quarter | Recheck `site_unusable`, `no_openings` and the `bot_protection` decision | "More companies" |
 | 2026-12-16 | Size of `crawl_log` and `jobs`, and of the description text (30 days after the move) | "Measure the size" |
@@ -350,19 +350,20 @@ An item that has a date says `Due <date>` in its text. The dates were set on 202
     describes).
   - Done when: no row of the `companies` table has a `gap`, or every remaining one has a `reason` that says why it cannot be done.
 
-## Check the daily run of 2026-11-21
+## Check the daily run of 2026-11-23
 
-- [ ] **Review the 04:23 UTC run of 2026-11-21.** Due 2026-11-21. Three things from 2026-11-20, counts only (Actions logs
+- [ ] **Review the 04:23 UTC run of 2026-11-23.** Due 2026-11-23. From the run of 2026-11-21, counts only (Actions logs
   are public, so no row contents):
-  - REE Automotive was pinned to the `browser` reader on 2026-11-20 (journal entry 218): its careers page no longer uses
-    Comeet and says "No open positions at the moment". The first run on the new reader should read zero jobs and close its
-    stored ones. Undo: `companyctl.py revert 218 --apply`.
-  - Priority Software read 9 jobs against 23 on 2026-11-20 and the sharp-drop guard held it (nothing closed); a local crawl
-    read 21 three times. If it is held again on two runs in a row, look at the runner's behaviour and the "Load more" wait
-    (`SETTLE_POLLS` in `browser_crawl.py`).
-  - The 24 Goozali companies: each `ok` with jobs, no more than 3 new failures against the known set (the 25 Workday
-    tenants, the 5 SmartRecruiters companies skipped by `robots.txt`, Check Point).
-  Done when: all three are checked and this item is deleted.
+  - REE Automotive (journal entry 218, `browser` reader, says "No open positions at the moment"): the sharp-drop guard held
+    it on 2026-11-21; after 3 held days it should close its stored job. Undo: `companyctl.py revert 218 --apply`.
+  - Priority Software read 9 jobs against 21 on the runner in four runs in a row (21 locally); the guard holds it and would
+    close 12 jobs after 3 held days. A PR to read all of them on the runner is in progress; confirm 21 jobs.
+  - RiT Technologies met a SiteGround robot challenge once on 2026-11-21 (`ok` with 1 job before); NeuReality failed once
+    with "request failed". If either fails on two more runs in a row, park it (`bot_protection` for a challenge; never worked
+    around).
+  - Upstream Security (Goozali batch 1) showed a Cloudflare challenge on the runner and was parked as `bot_protection` on
+    2026-11-21 (journal entry 360); the other 23 companies of batch 1 read `ok` with jobs.
+  Done when: all four are checked and this item is deleted.
 
 ## More companies (the rules and open steps of the former PLAN_3)
 
@@ -490,13 +491,6 @@ recurring work.
 Added when the history moved to Supabase (v0.53.0; `CONTRIBUTING.md`, "The history lives in Supabase"). What the rehearsal
 could not prove: a real PostgREST, a real Supabase project and a real Actions run. The restore was rehearsed on 2026-11-19 against a local Supabase (`CONTRIBUTING.md`, "Rehearsal, 2026-11-19"); a hosted project and a real Actions run are still unproven.
 
-- [ ] **Check the first daily runs after the move.** Due 2026-11-21 (the runs since 2026-11-17 have been green; read the log lines below once and delete). Trigger: the PR of step 9.1 is merged and the one-time copy of the
-  old history is done. Status (2026-11-17): the 04:30 UTC cron-job.org run was green; two other runs that morning failed
-  at the commit step on a stale checkout, fixed in #152 (`ref: main`); no run after #152 yet. How: in the log of the first run, `pull` says `pulled <jobs> jobs and <log> crawl log rows`, the
-  sync says `<n> crawl log rows written` and a second run the next day does not repeat them; `docs/` is committed and
-  `data/` is not; the `backup` step commits to `ravidorr/misra-backups` with `jobs` and `crawl_log` in its counts. Done
-  when two runs in a row after #152 are green and the coverage card and the robots.txt deletion still work (the five SmartRecruiters
-  companies lose their `jobs` rows on the first sync after v0.57.0: the log says `Supabase: robots.txt, deleted <n> jobs of 5 companies`).
 - [ ] **Measure the size of `crawl_log` and `jobs`, and of the description text, after a month.** Due 2026-12-16 (30 days
   after the move; the first descriptions were written on 2026-11-16). How: Supabase dashboard, Reports, Database.
   `crawl_log` keeps 90 days (`CRAWL_LOG_DAYS`, about 250 rows a day, more since the table grew to 979 companies), the pull
