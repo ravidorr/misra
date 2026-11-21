@@ -72,6 +72,33 @@ def test_a_known_board_goes_through_its_adapter_and_a_page_through_the_browser_c
     assert seen == [["https://page.example/c", "https://shell.example/jobs"]]
 
 
+def test_a_crash_keeps_what_was_read_before_it_and_a_record_without_a_slug_uses_its_address(
+    workdir: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    write_json(
+        workdir / "data" / "companies.json",
+        [
+            rec("Board", "no_openings", ats="fake", slug="ok"),
+            rec("Shell", "no_openings", ats="browser", slug=""),
+            rec("NoSlug", "no_openings", ats="fake", slug=""),
+        ],
+    )
+    monkeypatch.setitem(run.ADAPTERS, "fake", lambda slug: [{"job_id": "1", "title": "T", "location": None}])
+    urls: list[list[str]] = []
+
+    def crash(pages: list[str]) -> Any:
+        urls.append(pages)
+        raise RuntimeError("detail")
+
+    monkeypatch.setattr(run, "crawl_many", crash)
+    assert run.recheck_step() == 0
+    assert urls == [["https://shell.example/careers", "https://noslug.example/careers"]]
+    assert capsys.readouterr().out == (
+        "::warning::recheck failed, RuntimeError\n"
+        "recheck: 1 probed, 0 with Israel jobs; 1 companies with jobs of no readable location, 0 unreachable\n"
+    )
+
+
 def test_no_page_to_read_starts_no_browser(monkeypatch: pytest.MonkeyPatch) -> None:
     def boom(urls: list[str]) -> Any:
         raise AssertionError("the browser must not start")
@@ -93,7 +120,7 @@ def test_the_summary_names_companies_with_israel_jobs_and_only_counts_the_rest()
     )
     assert line == (
         "::notice::recheck: 6 probed, 2 with Israel jobs: A (1), B (2); "
-        "1 with jobs of no readable location, 1 unreachable"
+        "1 companies with jobs of no readable location, 1 unreachable"
     )
     assert "Unplaced" not in line
 
@@ -101,7 +128,7 @@ def test_the_summary_names_companies_with_israel_jobs_and_only_counts_the_rest()
 def test_a_quiet_recheck_is_no_notice() -> None:
     assert (
         run.recheck_summary({"Empty": [], "Down": None})
-        == "recheck: 2 probed, 0 with Israel jobs; 0 with jobs of no readable location, 1 unreachable"
+        == "recheck: 2 probed, 0 with Israel jobs; 0 companies with jobs of no readable location, 1 unreachable"
     )
 
 
@@ -121,7 +148,7 @@ def test_the_recheck_step_logs_one_line_and_is_green(
     assert run.recheck_step() == 0
     assert capsys.readouterr().out == (
         "::notice::recheck: 1 probed, 1 with Israel jobs: Page (1); "
-        "0 with jobs of no readable location, 0 unreachable\n"
+        "0 companies with jobs of no readable location, 0 unreachable\n"
     )
 
 

@@ -147,15 +147,6 @@ jobs:
         # Its own step so a broken coverage check turns the run red (the failure alert fires) without stopping the sync.
         if: ${{ always() && steps.crawl.outcome == 'success' }}
         run: python run.py --gaps
-      - name: Recheck the researched sites
-        id: recheck
-        timeout-minutes: 10
-        # The researched records whose gap reason is no_openings or crawl_failing, probed through the same crawl path
-        # (robots.txt, one request a second): one log line of counts and the names of the companies that show an Israel
-        # job, so they can be pinned by hand. Reads the pulled list only, stores nothing, holds no secret; it never
-        # turns the run red and never stops a later step.
-        if: ${{ always() && steps.crawl.outcome == 'success' }}
-        run: python run.py --recheck
       - name: Sync jobs to Supabase
         id: sync
         # Also after a crawl that failed part of the way: run.py commits each company as it goes, so what it recorded
@@ -255,6 +246,16 @@ jobs:
           python export_accounts.py "$BACKUP_WORK/export"
           . scripts/backup-key.sh
           python publish_backup.py "$BACKUP_WORK/export" "git@github.com:ravidorr/misra-backups.git" "$BACKUP_WORK/clone" $ALLOW_BACKUP_SHRINK_FLAG
+      - name: Recheck the researched sites
+        id: recheck
+        timeout-minutes: 10
+        # The researched records whose gap reason is no_openings or crawl_failing, probed through the same crawl path
+        # (robots.txt, one request a second): one log line of counts and the names of the companies that show an Israel
+        # job, so they can be pinned by hand. Reads the pulled list only, stores nothing, holds no secret. It runs last,
+        # after the sync, the digests, the push and the backup, so it never delays them, and it never turns the run red.
+        if: ${{ always() && steps.crawl.outcome == 'success' }}
+        # `timeout` stops it after 8 minutes and the `||` makes that a warning, so a slow site cannot redden the run.
+        run: timeout 480 python run.py --recheck || echo "::warning::the recheck stopped before it finished"
       - name: Email an alert if the run failed
         if: ${{ (failure() || cancelled()) && steps.checkout.outcome == 'success' }}
         env:

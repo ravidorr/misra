@@ -143,7 +143,7 @@ DETAIL_STATS: dict[str, tuple[str, int, int, int]] = {}  # company -> (ats, requ
 def read_job_pages(co: dict[str, Any], jobs: list[dict[str, Any]]) -> None:
     """Gives a company's jobs the descriptions its list lacks (adapters.add_descriptions) and records the counts."""
     if co.get("israel_only"):  # the jobs the history keeps, so no page is read for one that is dropped
-        jobs = [j for j in jobs if ISRAEL.search(j["location"] or "")]
+        jobs = [j for j in jobs if ISRAEL.search(j.get("location") or "")]
     try:
         stats = add_descriptions(co["ats"], co["slug"], co["name"], jobs, HELD_TEXTS, datetime.date.today().toordinal())
     except Exception as exc:  # the list is what matters: a failure here costs texts, never the company
@@ -394,17 +394,22 @@ def recheck_targets(companies: list[dict[str, Any]], excluded: list[str]) -> lis
     ]
 
 
-def recheck_jobs(targets: list[dict[str, Any]]) -> dict[str, list[dict[str, Any]] | None]:
+def recheck_jobs(
+    targets: list[dict[str, Any]], found: dict[str, list[dict[str, Any]] | None] | None = None
+) -> dict[str, list[dict[str, Any]] | None]:
     """name -> the jobs the existing crawl path lists, None when the site could not be read (robots.txt included).
-    A record with a known board goes through its adapter, any other through the browser crawl of its address; both
-    take the same robots.txt rules and one request a second per host. Nothing is stored."""
-    found: dict[str, list[dict[str, Any]] | None] = {}
+    A record with a known board and a slug goes through its adapter; a `browser` record is crawled at its slug and any
+    other at its `careers_url`. All take the same robots.txt rules and one request a second per host. Nothing is
+    stored. `found` is filled as the results come, so a crash keeps what was read before it."""
+    found = {} if found is None else found
     pages: dict[str, list[str]] = {}
     for co in targets:
         if co.get("ats") in ADAPTERS and co.get("slug"):
             found[co["name"]] = fetch(co)
         else:
-            pages.setdefault(co["slug"] if co.get("ats") == "browser" else co["careers_url"], []).append(co["name"])
+            pages.setdefault((co.get("ats") == "browser" and co.get("slug")) or co["careers_url"], []).append(
+                co["name"]
+            )
     for url, jobs in crawl_many(list(pages)) if pages else ():
         for name in pages[url]:
             found[name] = jobs
@@ -412,31 +417,35 @@ def recheck_jobs(targets: list[dict[str, Any]]) -> dict[str, list[dict[str, Any]
 
 
 def recheck_summary(found: dict[str, list[dict[str, Any]] | None]) -> str:
-    """One log line: counts, and the names of the public companies that show an Israel job (never a posting). A job with
-    no readable location is only counted: a person decides whether the company is Israeli."""
-    israel = {n: sum(1 for j in jobs if ISRAEL.search(j["location"] or "")) for n, jobs in found.items() if jobs}
+    """One log line: counts, and the names of the companies that show an Israel job (never a posting). A company with no
+    Israel job and a job of no readable location is only counted: a person decides whether it is Israeli."""
+    israel = {n: sum(1 for j in jobs if ISRAEL.search(j.get("location") or "")) for n, jobs in found.items() if jobs}
     shown = {n: k for n, k in israel.items() if k}
-    unplaced = [n for n, jobs in found.items() if jobs and not israel[n] and any(not j["location"] for j in jobs)]
+    unplaced = [n for n, jobs in found.items() if jobs and not israel[n] and any(not j.get("location") for j in jobs)]
     unreachable = sum(1 for jobs in found.values() if jobs is None)
     names = ", ".join(f"{n} ({k})" for n, k in sorted(shown.items()))
     return (
         ("::notice::" if shown else "")
         + f"recheck: {len(found)} probed, {len(shown)} with Israel jobs"
         + (f": {names}" if names else "")
-        + f"; {len(unplaced)} with jobs of no readable location, {unreachable} unreachable"
+        + f"; {len(unplaced)} companies with jobs of no readable location, {unreachable} unreachable"
     )
 
 
 def recheck_step() -> int:
-    """`python run.py --recheck`: its own workflow step after the crawl. It reads the pulled company list only, writes
-    nothing (no history, no table) and holds no secret; a company that shows Israel jobs is pinned by hand with
-    companyctl. A crash is a warning, never a red run: the recheck is a convenience."""
+    """`python run.py --recheck`: its own workflow step, last before the failure alert. It reads the pulled company list
+    only, writes nothing (no history, no table) and holds no secret; a company that shows Israel jobs is pinned by hand
+    (TODO.md, Decisions on sources). A crash is a warning with what was read before it; the workflow stops the step
+    after 8 minutes with `timeout` and turns that into a warning, so a slow site cannot redden the run either."""
+    found: dict[str, list[dict[str, Any]] | None] = {}
+    crashed = False
     try:
-        found = recheck_jobs(recheck_targets(load_companies(), load_excluded()))
+        recheck_jobs(recheck_targets(load_companies(), load_excluded()), found)
     except Exception as exc:
+        crashed = True
         print(f"::warning::recheck failed, {type(exc).__name__}")
-        return 0
-    print(recheck_summary(found))
+    if found or not crashed:
+        print(recheck_summary(found))
     return 0
 
 
@@ -507,7 +516,7 @@ def main() -> None:  # noqa: PLR0915
             # large multinational boards: keep Israel jobs only. A location that is empty or cannot be read does not
             # match, so such a job is dropped here; without the flag it is kept and regions.place calls it Unknown.
             if fetched is not None and co.get("israel_only"):
-                jobs = [j for j in fetched if ISRAEL.search(j["location"] or "")]
+                jobs = [j for j in fetched if ISRAEL.search(j.get("location") or "")]
             drop, held = (
                 sharp_drop(c, name, len(jobs), now[:10]) if jobs is not None and co["ats"] == "browser" else ("", False)
             )

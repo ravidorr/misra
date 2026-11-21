@@ -387,12 +387,13 @@ def test_the_shrink_override_is_a_boolean_input_that_only_adds_the_flag_to_the_p
     assert "inputs." not in pull.split("run:", 1)[1]
 
 
-def test_the_recheck_step_follows_the_gaps_step_holds_no_secret_and_never_reddens_the_run() -> None:
+def test_the_recheck_step_runs_last_holds_no_secret_and_never_reddens_the_run() -> None:
     ids = order()
-    assert ids.index("gaps") + 1 == ids.index("recheck") < ids.index("sync")
+    assert ids.index("backup") < ids.index("recheck") < ids.index("Email an alert if the run failed")
+    assert "run: timeout 480 python run.py --recheck || echo " in steps()["recheck"]  # a timeout is a warning
+    assert "continue-on-error" not in steps()["recheck"]
     step = steps()["recheck"]
     assert "if: ${{ always() && steps.crawl.outcome == 'success' }}" in step
-    assert "run: python run.py --recheck\n" in step
     assert re.search(r"timeout-minutes: \d+", step)
     assert "secrets." not in step and "ssh-key" not in step
     for name, other in steps().items():  # nothing waits on it and the alert does not list it
