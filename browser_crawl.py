@@ -657,18 +657,19 @@ async def crawl_one(ctx: Any, url: str, sem: asyncio.Semaphore) -> list[dict[str
                     WHY[url] = f"next page not pressed ({type(exc).__name__}), title={title!r}, final={page.url[:80]}"
                     return None
                 found = 0
-                read = False
+                failure = ""  # what the last poll raised: a page still loading at the end is not a read page
                 for _poll in range(SETTLE_POLLS):  # wait for new job links; a pager may clear the list first
                     await page.wait_for_timeout(250)
                     try:
                         found = await collect()
-                    except Exception:  # the page is loading the next page
+                    except Exception as exc:  # the page is loading the next page
+                        failure = type(exc).__name__
                         continue
-                    read = True
+                    failure = ""
                     if found:
                         break
-                if not read:  # not one poll could read the page: the pages from here on are not read
-                    WHY[url] = f"next page not readable, title={title!r}, final={page.url[:80]}"
+                if failure:  # the last poll could not read the page: the pages from here on are not read
+                    WHY[url] = f"next page not readable ({failure}), title={title!r}, final={page.url[:80]}"
                     return None
                 if not found:
                     break

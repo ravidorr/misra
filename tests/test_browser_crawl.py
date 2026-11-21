@@ -525,6 +525,14 @@ async def test_a_page_that_is_loading_is_read_again_and_one_that_never_reads_is_
     assert jobs is not None
     assert [j["title"] for j in jobs][:2] == ["Job One", "Job Two"]
 
+    def late(i: int) -> list[Any]:  # one stale read, then the page navigates and never reads again
+        if i <= TWO:
+            return [link("/jobs/job-one", "Job One")]
+        raise RuntimeError("Execution context was destroyed")
+
+    assert await run(FakePage(link_fn=late, locators={"body a.link-next": FakeLoc(1, FakeEl())})) is None
+    assert WHY[URL].startswith("next page not readable (RuntimeError)")
+
     def never(i: int) -> list[Any]:
         if i == 1:
             return [link("/jobs/job-one", "Job One")]

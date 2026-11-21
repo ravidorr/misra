@@ -93,7 +93,7 @@ def test_https_only_changes_only_the_scheme_http_to_https(url: str, expected: st
         "Ashkelon", "Ashqelon, Israel", "Kiryat Gat", "Qiryat Shmona", "Yokneam", "Yoqneam Illit", "Petah Tikva",
         "Petach Tikva", "Be'er Sheva", "Beer Sheva", "Dimona", "Ramat Gan", "Herzliya", "Rehovot", "Nes Ziona", "Lod",
         "Modiin", "Modi'in", "Kfar Saba", "Hod Hasharon", "Netanya", "Haifa", "Caesarea", "Misgav", "Karmiel", "Eilat",
-        "Ashdod",
+        "Ashdod", "Givatayim", "Bnei Brak", "Bat Yam", "Rosh Ha'ayin", "Hadera", "Afula", "Tiberias",
     ],
 )  # fmt: skip
 def test_israeli_cities_and_their_spellings_are_israel(place: str) -> None:

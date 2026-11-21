@@ -12,7 +12,7 @@ All notable changes are documented here. Format follows [Keep a Changelog](https
 
 ### Added
 
-- The `recruitee` job feed (`adapters.recruitee`, slug `<slug>` of `<slug>.recruitee.com`), read from the board's own public list `/api/offers/` through `common.get`: every offer with its places (`city, country`, one for each), department and date. An offer that does not read, a link off the board's host, an offer twice or an answer that is not the list is a failure, never a partial list, and a sudden empty list is held like a browser crawl. Tether (206 offers, 8 naming Tel Aviv) is the first board. Needs `supabase/migrations/20261209100000_companies_ats_recruitee.sql` applied after the merge, and the admin page's pin list and discovery know the feed.
+- The `recruitee` job feed (`adapters.recruitee`, slug `<slug>` of `<slug>.recruitee.com`), read from the board's own public list `/api/offers/` through `common.get`: every offer with its places (`city, country`, one for each), department and date. An offer that does not read, a link off the board's host, an offer twice or an answer that is not the list is a failure, never a partial list, and a sudden empty list is held like a browser crawl. Tether (206 offers, 10 listing Tel Aviv among their places) is the first board. Needs `supabase/migrations/20261209100000_companies_ats_recruitee.sql` applied after the merge, and the admin page's pin list and discovery know the feed.
 
 ### Fixed
 
