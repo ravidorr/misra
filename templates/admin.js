@@ -358,7 +358,7 @@ const SEGMENTS = {
 const PIN_ATS = [
   'greenhouse_url', 'greenhouse', 'lever', 'ashby', 'workable', 'smartrecruiters', 'comeet', 'workday', 'jazzhr',
   'bamboohr', 'oraclehcm', 'amazon', 'phenom', 'comeet_page', 'avature', 'eightfold', 'jibe', 'varonis', 'breezy',
-  'teamtailor', 'pinpoint', 'jobvite', 'browser',
+  'teamtailor', 'pinpoint', 'jobvite', 'recruitee', 'browser',
 ];
 /* The form of the slug, only where CONTRIBUTING.md ("Adding a company") or the adapter's own text documents it. */
 const PIN_HINTS = {
@@ -378,6 +378,7 @@ const PIN_HINTS = {
   teamtailor: 'The board host, for example vicarius.teamtailor.com (or the company\'s own domain).',
   pinpoint: 'The board host, for example acme.pinpointhq.com (or the company\'s own domain).',
   jobvite: 'The slug of jobs.jobvite.com/slug, for example forescout.',
+  recruitee: 'The <slug> of <slug>.recruitee.com, for example tether.',
   browser: 'The address of the career page, starting with https://, for example an Eightfold ...careers?location=Israel address.',
 };
 const PIN_ADDRESS = ['browser', 'comeet_page']; /* the slug of these is a career page address */

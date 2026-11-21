@@ -1515,6 +1515,68 @@ def breezy(slug: str) -> list[Job] | None:
     return jobs
 
 
+def _recruitee_place(j: dict[str, Any]) -> str:
+    """The places of an offer, each as 'city, country' (the country written out, so that the place alone shows Israel),
+    from `locations` (an offer of several lists them all), else from the offer's own city and country. A location with
+    neither gives its `name`; nothing readable gives no place."""
+    places = [x for x in j.get("locations") or [] if isinstance(x, dict)] or [j]
+    out = []
+    for loc in places:
+        parts = [loc.get("city"), loc.get("country")]
+        name = loc.get("name")
+        text = ", ".join(p.strip() for p in parts if isinstance(p, str) and p.strip())
+        out.append(text or (name.strip() if isinstance(name, str) else ""))
+    return "; ".join(dict.fromkeys(p for p in out if p))
+
+
+def _recruitee_job(host: str, j: Any) -> Job | None:
+    """One offer of the list, or None when it lacks an id or a title, or its link is not the board's own page."""
+    if not isinstance(j, dict):
+        return None
+    job_id, title, url = j.get("id"), j.get("title"), j.get("careers_url")
+    if not (isinstance(job_id, int) and not isinstance(job_id, bool) and isinstance(title, str) and title.strip()):
+        return None
+    if not (isinstance(url, str) and url.startswith("https://") and host_of(url) == host):
+        return None
+    dept = j.get("department")
+    return _job(
+        str(job_id),
+        title,
+        _recruitee_place(j),
+        url,
+        team=dept if isinstance(dept, str) else "",
+        posted=_day(j.get("published_at")),
+    )
+
+
+def recruitee(slug: str) -> list[Job] | None:
+    """slug is the lowercase `<slug>` of `<slug>.recruitee.com`. The board page is drawn from `/api/offers/`, a public
+    JSON list of every open offer (the page's own data, for any visitor; the request goes through `common.get`, which
+    enforces robots.txt: the board's own disallows only `/v/`). The list is trusted only when it is `{"offers": [...]}`,
+    every entry reads and no offer comes twice. A slug that is not a lowercase subdomain, any answer but HTTP 200 (an
+    unknown slug gets 404), a redirect to another host and an offer on another host (a board on a custom domain) are
+    failures: a partial list would close the jobs it lacks. Every offer is returned (the company's `israel_only`
+    decides). An empty list is `[]`; run.py holds a sudden empty list like a browser crawl. The offer text is not
+    read."""
+    if not _SUBDOMAIN_SLUG.fullmatch(slug):
+        return None
+    host = f"{slug}.recruitee.com"
+    r = get(f"https://{host}/api/offers/")
+    if r is None or r.status_code != HTTP_OK or host_of(r.url) != host:
+        return None
+    try:
+        data = r.json()["offers"]
+    except (ValueError, KeyError, TypeError):
+        return None
+    if not isinstance(data, list):
+        return None
+    read = [_recruitee_job(host, j) for j in data]
+    jobs = [j for j in read if j]
+    if len(jobs) != len(data) or len({j["job_id"] for j in jobs}) != len(jobs):
+        return None
+    return jobs
+
+
 _BOARD_HOST = re.compile(r"[a-z0-9-]+(?:\.[a-z0-9-]+)+")
 _TEAMTAILOR_JOB_ID = re.compile(r"/jobs/(\d+)(?:-|$)")
 
@@ -1692,4 +1754,5 @@ ADAPTERS: dict[str, Callable[[str], list[Job] | None]] = {
     "teamtailor": teamtailor,
     "pinpoint": pinpoint,
     "jobvite": jobvite,
+    "recruitee": recruitee,
 }

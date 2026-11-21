@@ -8,7 +8,7 @@ import pytest
 import browser_crawl
 from browser_crawl import SETTLE_POLLS, WHY, crawl_one
 from common import ISRAEL
-from tests.fakes import FakeCtx, FakeEl, FakeLoc, FakePage, FakePlaywright, FakeResp, Status
+from tests.fakes import FakeCtx, FakeEl, FakeFrame, FakeLoc, FakePage, FakePlaywright, FakeResp, Status
 
 URL = "https://x.test/careers"
 SCROLL_CAP = 25
@@ -409,7 +409,7 @@ async def test_card_line_limit_is_inclusive(length: int, kept: bool) -> None:
 
 
 async def test_card_limits_are_the_documented_numbers() -> None:
-    assert (browser_crawl.CARD_MAX, browser_crawl.CARD_LINE_MAX) == (600, 120)
+    assert (browser_crawl.CARD_MAX, browser_crawl.CARD_LINE_MAX) == (1000, 120)
 
 
 async def test_a_place_above_the_title_is_found_among_the_lines_around_it() -> None:
@@ -465,7 +465,7 @@ async def test_multi_line_link_text_does_not_borrow_from_the_card() -> None:
 
 
 async def test_a_card_longer_than_the_limit_is_not_one_job() -> None:
-    links = [link("/jobs/pm-role", "Product Manager", "Product Manager\nHaifa\n" + "x " * 300)]
+    links = [link("/jobs/pm-role", "Product Manager", "Product Manager\nHaifa\n" + "x " * 600)]
     assert await crawl_cards(links) == {"Product Manager": ("", "")}
 
 
@@ -491,10 +491,47 @@ async def test_pagination_stops_when_disabled() -> None:
         assert el.clicks == 0
 
 
-async def test_pagination_click_error_stops() -> None:
-    jobs = await run(next_page(FakeEl(click_error=True), key="body a.link-next"))
+async def test_a_pager_under_a_banner_is_pressed_with_a_dispatched_click() -> None:
+    """Rapid7: a cookie banner over the pager makes the click fail; the control gets the click as an event instead,
+    and the pages after the first are read (before, the list ended there and 30 of 44 jobs were all there was)."""
+    el = FakeEl(click_error=True)
+    page = FakePage(
+        link_fn=lambda i: [link(f"/jobs/job-{i}", f"Job {i}")] if i <= THREE else [],
+        locators={"body a.link-next": FakeLoc(1, el)},
+    )
+    jobs = await run(page)
     assert jobs is not None
-    assert len(jobs) == 1
+    assert len(jobs) == THREE
+    assert el.clicks == THREE  # three clicks, each sent as an event: the third shows nothing new and ends the list
+
+
+async def test_a_pager_that_cannot_be_pressed_at_all_is_a_failure_not_a_short_list() -> None:
+    el = FakeEl(click_error=2)
+    jobs = await run(next_page(el, key="body a.link-next"))
+    assert jobs is None
+    assert WHY[URL].startswith("next page not pressed (RuntimeError)")
+
+
+async def test_a_page_that_is_loading_is_read_again_and_one_that_never_reads_is_a_failure() -> None:
+    def slow(i: int) -> list[Any]:
+        if i == 1:
+            return [link("/jobs/job-one", "Job One")]
+        if i <= THREE:
+            raise RuntimeError("Execution context was destroyed")  # the next page is being loaded
+        return [link("/jobs/job-two", "Job Two")]
+
+    el = FakeEl()
+    jobs = await run(FakePage(link_fn=slow, locators={"body a.link-next": FakeLoc(1, el)}, count_fn=lambda _i: 5))
+    assert jobs is not None
+    assert [j["title"] for j in jobs][:2] == ["Job One", "Job Two"]
+
+    def never(i: int) -> list[Any]:
+        if i == 1:
+            return [link("/jobs/job-one", "Job One")]
+        raise RuntimeError("Execution context was destroyed")
+
+    assert await run(FakePage(link_fn=never, locators={"body a.link-next": FakeLoc(1, FakeEl())})) is None
+    assert WHY[URL].startswith("next page not readable")
 
 
 async def test_pagination_stops_when_nothing_new() -> None:
@@ -1052,6 +1089,52 @@ def test_a_country_chooser_is_not_a_job_link() -> None:
 
 def test_apple_next_page_button_is_a_pager() -> None:
     assert 'button[aria-label="Next page" i]' in browser_crawl.NEXT_SELS
+
+
+def test_an_icims_welcome_page_is_not_a_job_link() -> None:
+    assert browser_crawl.NOT_JOB.search("https://careers.x.test/jobs/intro?hashed=-1")
+    assert not browser_crawl.NOT_JOB.search("https://careers.x.test/jobs/3159/engineer/job?in_iframe=1")
+
+
+def test_the_icims_pager_is_a_pager() -> None:
+    assert 'a:has-text("Next page of results")' in browser_crawl.NEXT_SELS
+
+
+async def test_an_icims_card_gives_its_place_title_and_team_without_the_screen_reader_labels() -> None:
+    """MaxLinear: "Location : Location" and "Job Posting Title" are hidden labels of the card; the description makes
+    the card longer than the old limit of 600 characters."""
+    card = (
+        "Location : Location\nISR-Petah Tikva\nJob Posting Title\nSenior Staff Software Engineer\n"
+        + "A long description of the job. " * 20
+        + "\nCategory Software Engineering\nID 2026-3159"
+    )
+    row = link("/jobs/3159/senior-staff/job", "Job Posting Title\nSenior Staff Software Engineer", card)
+    assert await crawl_cards([row]) == {
+        "Senior Staff Software Engineer": ("ISR-Petah Tikva", "Category Software Engineering")
+    }
+
+
+async def test_the_list_in_a_frame_of_the_same_site_is_read_and_paged() -> None:
+    """iCIMS: the career page holds a frame of its own site that draws the list and its pager."""
+    el = FakeEl()
+    frame = FakeFrame(
+        "https://x.test/jobs/search?in_iframe=1",
+        link_fn=lambda i: [link(f"/jobs/role-{i}/job", f"Role {i}")] if i <= THREE else [],
+    )
+    frame.locators["body a.link-next"] = FakeLoc(1, el)
+    other = FakeFrame("https://consent.test/banner", link_fn=lambda _i: [link("/jobs/9/banner/job", "Banner Role")])
+    quiet = FakeFrame("https://x.test/widget")
+    jobs = await run(FakePage(frames=[FakeFrame("https://x.test/careers"), other, quiet, frame]))
+    assert jobs is not None
+    assert [j["title"] for j in jobs] == ["Role 1", "Role 2", "Role 3"]
+    assert el.clicks == THREE
+
+
+async def test_a_page_with_a_frame_of_its_site_that_holds_no_job_reads_its_own_links() -> None:
+    frame = FakeFrame("https://x.test/widget")
+    page = FakePage(frames=[FakeFrame("https://x.test/careers"), frame])
+    assert await run(page) == []
+    assert frame._links_calls == 1  # asked once, then the page's own links are the list again
 
 
 async def test_a_bare_title_link_with_a_heading_inside_keeps_the_place_of_its_card() -> None:

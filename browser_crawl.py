@@ -26,7 +26,7 @@ JOBLINK = re.compile(
 )
 JOB_ID = re.compile(r"[?&](job_id=[^&#]+)", re.I)  # Tower: /job-description/?job_id=9672, the query is the job
 NOT_JOB = re.compile(
-    r"/(department|departments|category|team|teams|locations?|working-at|life-at|benefits|students?|early-careers?|login|search|saved|talent-network|choose-country\S*)\b|#",
+    r"/(department|departments|category|team|teams|locations?|working-at|life-at|benefits|students?|early-careers?|login|search|saved|talent-network|intro|choose-country\S*)\b|#",
     re.I,
 )
 NEXT_SELS = [
@@ -43,6 +43,7 @@ NEXT_SELS = [
     'a:text-is("Next")',
     'button:text-is("Next")',
     'a:text-is("Next >")',
+    'a:has-text("Next page of results")',  # iCIMS: the words are for a screen reader, next to an arrow
 ]
 EF_SEARCH = "/api/pcsx/search"  # Eightfold career sites: the page's own search request
 EF_NEXT = 'button[aria-label="Next jobs" i]'
@@ -78,7 +79,7 @@ EXE = os.environ.get("PW_CHROMIUM") or (
 
 HTTP_OK = 200
 HTTP_ERROR = 400
-CARD_MAX = 600  # the card script never climbs to an ancestor with more text than this
+CARD_MAX = 1000  # the card script never climbs to an ancestor with more text than this
 CARD_JS = r"""(els, cfg) => {
     const job = new RegExp(cfg.job, 'i'), skip = new RegExp(cfg.skip, 'i'), id = new RegExp(cfg.id, 'i');
     const button = /^(apply|view|read|learn|see|more|details|save|share)\b/i;
@@ -134,7 +135,16 @@ CARD_JS = r"""(els, cfg) => {
             cur += t.textContent;
         }
         flush();
-        const card = text(n).slice(0, cfg.max + 1);
+        let card = text(n);
+        const table = n.tagName === 'TR' ? n.closest('table') : null;  // a row of a table with a header for each cell
+        const heads = table ? [...table.querySelectorAll('th')].map(h => text(h)) : [];
+        if (table && heads.length === n.cells.length) {  // the column named for a place gets a "Location" label
+            const id = /requisition|^(job )?id$/i;
+            const kept = [...n.cells].map((c, i) => [c, heads[i]]).filter(([, h]) => !id.test(h));
+            card = kept.map(([c, h]) => (/location|place|city|office/i.test(h) ? 'Location\n' : '')
+                + text(c).replace(/\n+/g, ' | ')).join('\n');  // the id of a job is no team
+        }
+        card = card.slice(0, cfg.max + 1);
         return [href(e), text(e), card, own ? text(own) : '', others, leaves.join('\n')];
     });
 }"""  # the card: the widest ancestor, up to 4 levels, with one job's title link and a card's worth of text
@@ -146,8 +156,8 @@ CARD_CHROME = frozenset({"save job", "share job", "apply", "apply now"})
 BUTTON_LINES = frozenset(
     {"view position", "view role", "view job", "view full details", "learn more", "read more", "details"}
 )
-LOCATION_LABELS = frozenset({"location", "location:"})
-LINK_NOISE = CARD_CHROME | BUTTON_LINES | LOCATION_LABELS | {"department"}
+LOCATION_LABELS = frozenset({"location", "location:", "location : location"})
+LINK_NOISE = CARD_CHROME | BUTTON_LINES | LOCATION_LABELS | {"department", "job posting title"}
 
 WHY: dict[str, str] = {}  # url -> reason, filled for failed or empty crawls, printed by run.py
 
@@ -182,7 +192,10 @@ CARD_NOISE = {
     "share job",
     "location",
     "location:",
+    "location : location",
     "department",
+    "category",
+    "job posting title",
 }
 _COUNTRIES = (
     "israel|united states|usa|united kingdom|uk|germany|india|canada|france|spain|poland|romania|brazil|singapore"
@@ -538,11 +551,13 @@ async def crawl_one(ctx: Any, url: str, sem: asyncio.Semaphore) -> list[dict[str
                             text, details = jsonld_description(d)
                             out.append(attach(_job(d["url"], d.get("title", ""), L, d["url"]), text, details))
 
+            scope: Any = page  # where the job links are: the page, or a frame of the same site that holds the list
+
             # 2. job-looking links, across paginated result pages
             async def collect() -> int:
                 nonlocal link_count
                 found = 0
-                links = await page.eval_on_selector_all("a[href]", CARD_JS, CARD_ARGS)
+                links = await scope.eval_on_selector_all("a[href]", CARD_JS, CARD_ARGS)
                 link_count = len(links)
                 # links with a title of their own first, so a label link never claims a job before its titled twin
                 links.sort(key=lambda row: not _WORD.search(row[1]) or row[1].strip().lower() in LINK_NOISE)
@@ -586,10 +601,18 @@ async def crawl_one(ctx: Any, url: str, sem: asyncio.Semaphore) -> list[dict[str
                 return found
 
             await collect()
+            if not out:  # an iCIMS career page draws its list in a frame of its own site: read the links there
+                for frame in page.frames[1:]:
+                    if host_of(frame.url) == host_of(page.url):
+                        scope = frame
+                        if await collect():
+                            break
+                else:
+                    scope = page
             for _ in range(60):  # pagination: stop when "next" is missing/disabled or yields nothing new
                 nxt = None
                 for sel in NEXT_SELS:  # first *visible* match (a <link rel=next> in <head> is not clickable)
-                    cand = page.locator("body " + sel if not sel.startswith("body") else sel).locator("visible=true")
+                    cand = scope.locator("body " + sel if not sel.startswith("body") else sel).locator("visible=true")
                     if await cand.count():
                         nxt = cand.first
                         break
@@ -604,15 +627,27 @@ async def crawl_one(ctx: Any, url: str, sem: asyncio.Semaphore) -> list[dict[str
                     if re.search(r"disabled|true", cls, re.I) or await nxt.is_disabled():
                         break
                     await _polite(page.url)
-                    await nxt.click(timeout=3000)
-                except Exception:
-                    break
+                    try:
+                        await nxt.click(timeout=3000)
+                    except Exception:  # a cookie banner over the pager: send the click to the control itself
+                        await nxt.dispatch_event("click")
+                except Exception as exc:  # a pager that cannot be pressed: the pages after this one are not read
+                    WHY[url] = f"next page not pressed ({type(exc).__name__}), title={title!r}, final={page.url[:80]}"
+                    return None
                 found = 0
+                read = False
                 for _poll in range(SETTLE_POLLS):  # wait for new job links; a pager may clear the list first
                     await page.wait_for_timeout(250)
-                    found = await collect()
+                    try:
+                        found = await collect()
+                    except Exception:  # the page is loading the next page
+                        continue
+                    read = True
                     if found:
                         break
+                if not read:  # not one poll could read the page: the pages from here on are not read
+                    WHY[url] = f"next page not readable, title={title!r}, final={page.url[:80]}"
+                    return None
                 if not found:
                     break
             trace = "no load more"

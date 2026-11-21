@@ -8,6 +8,18 @@ All notable changes are documented here. Format follows [Keep a Changelog](https
 
 - A "Hidden (n)" switch beside "Starred (n)": a view of its own that lists every company the visitor hid, one row each with "Unhide" (a company with no open role is listed too, so it can be unhidden without finding one of its roles), and every open role they hid one by one, as cards at full strength with "Unhide" and no "New" flag. The Hidden view also puts the coverage card away with the filters; the Starred view keeps it. It reads the choices kept today (this browser, or the account) and stores nothing new; a role hidden only because its company is hidden is covered by the company's row, and a hidden role leaves the list when its posting closes (the database deletes the discard). Two WebMCP tools: `list_hidden` and `unhide_company`.
 
+## [0.91.0] - 2026-11-21
+
+### Added
+
+- The `recruitee` job feed (`adapters.recruitee`, slug `<slug>` of `<slug>.recruitee.com`), read from the board's own public list `/api/offers/` through `common.get`: every offer with its places (`city, country`, one for each), department and date. An offer that does not read, a link off the board's host, an offer twice or an answer that is not the list is a failure, never a partial list, and a sudden empty list is held like a browser crawl. Tether (206 offers, 8 naming Tel Aviv) is the first board. Needs `supabase/migrations/20261209100000_companies_ats_recruitee.sql` applied after the merge, and the admin page's pin list and discovery know the feed.
+
+### Fixed
+
+- The `browser` reader no longer ends a list silently when a cookie banner covers the pager: a click that fails is sent to the control as an event, and a pager that cannot be pressed at all, or a page that cannot be read after a press, is a failure, not a short list (Rapid7 returned 30 of its 44 jobs). Before, a failed press just ended the crawl with the jobs of the pages so far.
+- The `browser` reader reads the list of a career page that draws it in a frame of its own site (iCIMS: MaxLinear reads 38 jobs, with the "Next page of results" pager), skips iCIMS's hidden "Location : Location" and "Job Posting Title" labels and its welcome page, and reads cards up to 1000 characters (iCIMS puts a description in each card, which hid the place that sits before the title).
+- A row of a table with a header for each cell gives the place from the column named Location, Place, City or Office and drops a requisition id column (Rapid7: the place was read as the id).
+
 ## [0.90.0] - 2026-11-21
 
 ### Added

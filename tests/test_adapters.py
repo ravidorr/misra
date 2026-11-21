@@ -3425,6 +3425,143 @@ def test_breezy_is_registered() -> None:
     assert adapters.ADAPTERS["breezy"] is adapters.breezy
 
 
+RECRUITEE_URL = "https://acme.recruitee.com/api/offers/"
+RECRUITEE_PAGE = "https://acme.recruitee.com/o/"
+
+
+def recruitee_offer(number: int = 11, **over: Any) -> dict[str, Any]:
+    return {
+        "id": number,
+        "title": "Engineer",
+        "careers_url": f"{RECRUITEE_PAGE}engineer-{number}",
+        "published_at": "2026-11-20 11:15:31 UTC",
+        "department": "R&D",
+        "city": "Tel Aviv",
+        "country": "Israel",
+        "locations": [],
+        **over,
+    }
+
+
+def recruitee_answer(offers: Any, url: str = RECRUITEE_URL) -> FakeHttpResponse:
+    return FakeHttpResponse(data={"offers": offers}, url=url)
+
+
+def test_recruitee_reads_the_offer_list(monkeypatch: pytest.MonkeyPatch) -> None:
+    several = {
+        "locations": [
+            {"city": "NYC", "country": "United States", "name": "United States, NYC"},
+            {"city": "Haifa", "country": "Israel"},
+            {"city": "Haifa", "country": "Israel"},
+            {"name": " Remote "},
+            {"city": None, "country": None, "name": None},
+            "not a place",
+        ]
+    }
+    remote = {"city": None, "country": None, "department": None, "published_at": "soon"}
+    data = [recruitee_offer(11), recruitee_offer(22, **several), recruitee_offer(33, **remote)]
+    urls = fake_get(monkeypatch, recruitee_answer(data))
+    jobs = adapters.recruitee("acme")
+    assert urls == [RECRUITEE_URL]
+    assert jobs == [
+        {
+            "job_id": "11",
+            "title": "Engineer",
+            "location": "Tel Aviv, Israel",
+            "url": f"{RECRUITEE_PAGE}engineer-11",
+            "team": "R&D",
+            "posted": "2026-11-20",
+        },
+        {
+            "job_id": "22",
+            "title": "Engineer",
+            "location": "NYC, United States; Haifa, Israel; Remote",
+            "url": f"{RECRUITEE_PAGE}engineer-22",
+            "team": "R&D",
+            "posted": "2026-11-20",
+        },
+        {
+            "job_id": "33",
+            "title": "Engineer",
+            "location": "",
+            "url": f"{RECRUITEE_PAGE}engineer-33",
+            "team": "",
+            "posted": "",
+        },
+    ]
+    assert [bool(common.ISRAEL.search(j["location"])) for j in jobs] == [True, True, False]
+
+
+def test_recruitee_a_board_with_no_offer_is_empty_not_a_failure(monkeypatch: pytest.MonkeyPatch) -> None:
+    fake_get(monkeypatch, recruitee_answer([]))
+    assert adapters.recruitee("acme") == []
+
+
+@pytest.mark.parametrize("slug", ["", "Acme", "a.b", "-acme", "acme/x", "acme.recruitee.com"])
+def test_recruitee_a_slug_that_is_not_a_subdomain_is_refused_without_a_request(
+    monkeypatch: pytest.MonkeyPatch, slug: str
+) -> None:
+    urls = fake_get(monkeypatch, recruitee_answer([]))
+    assert adapters.recruitee(slug) is None
+    assert urls == []
+
+
+@pytest.mark.parametrize("resp", [None, FakeHttpResponse(status_code=404, url=RECRUITEE_URL)])
+def test_recruitee_a_refusal_is_a_failure(monkeypatch: pytest.MonkeyPatch, resp: FakeHttpResponse | None) -> None:
+    fake_get(monkeypatch, resp)
+    assert adapters.recruitee("acme") is None
+
+
+def test_recruitee_an_answer_from_another_host_is_a_failure(monkeypatch: pytest.MonkeyPatch) -> None:
+    fake_get(monkeypatch, recruitee_answer([recruitee_offer()], url="https://recruitee.com/api/offers/"))
+    assert adapters.recruitee("acme") is None
+
+
+@pytest.mark.parametrize(
+    "answer",
+    [
+        FakeHttpResponse(json_error=True, url=RECRUITEE_URL),
+        FakeHttpResponse(data=["a list"], url=RECRUITEE_URL),
+        FakeHttpResponse(data={"error": 1}, url=RECRUITEE_URL),
+        recruitee_answer({"a": "dict"}),
+    ],
+)
+def test_recruitee_an_answer_that_is_not_an_offer_list_is_a_failure(
+    monkeypatch: pytest.MonkeyPatch, answer: Any
+) -> None:
+    fake_get(monkeypatch, answer)
+    assert adapters.recruitee("acme") is None
+
+
+@pytest.mark.parametrize(
+    "bad",
+    [
+        "a string",
+        recruitee_offer(id="12"),
+        recruitee_offer(id=True),
+        recruitee_offer(title="  "),
+        recruitee_offer(title=None),
+        recruitee_offer(careers_url=None),
+        recruitee_offer(careers_url="http://acme.recruitee.com/o/x"),
+        recruitee_offer(careers_url="https://other.recruitee.com/o/x"),
+    ],
+)
+def test_recruitee_one_unreadable_offer_fails_the_crawl_instead_of_closing_its_job(
+    monkeypatch: pytest.MonkeyPatch, bad: Any
+) -> None:
+    fake_get(monkeypatch, recruitee_answer([recruitee_offer(22), bad]))
+    assert adapters.recruitee("acme") is None
+
+
+def test_recruitee_an_offer_twice_is_a_failure(monkeypatch: pytest.MonkeyPatch) -> None:
+    fake_get(monkeypatch, recruitee_answer([recruitee_offer(), recruitee_offer()]))
+    assert adapters.recruitee("acme") is None
+
+
+def test_recruitee_is_registered() -> None:
+    assert adapters.ADAPTERS["recruitee"] is adapters.recruitee
+
+
 TT_HOST = "acme.teamtailor.com"
 TT_NS = 'xmlns:tt="https://teamtailor.com/locations"'
 

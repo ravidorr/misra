@@ -239,7 +239,7 @@ def test_read_board_counts_what_the_adapter_reads(monkeypatch: pytest.MonkeyPatc
     monkeypatch.setitem(survey.ADAPTERS, "comeet", lambda slug: jobs if slug == "a/1" else None)  # type: ignore[arg-type]
     assert survey.read_board(("comeet", "a/1")) == (3, 1)
     assert survey.read_board(("comeet", "b/2")) is None  # a board the adapter cannot read
-    assert survey.read_board(("recruitee", "x")) is None  # a board with no adapter
+    assert survey.read_board(("icims", "x")) is None  # a board with no adapter
 
 
 async def test_survey_sees_a_comeet_uid_and_the_wordpress_plugin() -> None:
