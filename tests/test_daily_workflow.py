@@ -385,3 +385,18 @@ def test_the_shrink_override_is_a_boolean_input_that_only_adds_the_flag_to_the_p
     assert "ALLOW_SHRINK_FLAG: ${{ inputs.allow_shrink && '--allow-shrink' || '' }}" in pull
     assert "run: python sync_supabase.py --pull $ALLOW_SHRINK_FLAG\n" in pull
     assert "inputs." not in pull.split("run:", 1)[1]
+
+
+def test_the_recheck_step_runs_last_holds_no_secret_and_never_reddens_the_run() -> None:
+    ids = order()
+    assert ids.index("backup") < ids.index("recheck") < ids.index("Email an alert if the run failed")
+    assert "run: timeout 300 python run.py --recheck || echo " in steps()["recheck"]  # a failure is a warning
+    assert "status $?" in steps()["recheck"]
+    assert int(re.search(r"timeout-minutes: (\d+)", steps()["recheck"])[1]) * 60 > 5 * 60  # the step limit is the last
+    assert "continue-on-error" not in steps()["recheck"]
+    step = steps()["recheck"]
+    assert "if: ${{ always() && steps.crawl.outcome == 'success' }}" in step
+    assert re.search(r"timeout-minutes: \d+", step)
+    assert "secrets." not in step and "ssh-key" not in step
+    for name, other in steps().items():  # nothing waits on it and the alert does not list it
+        assert name == "recheck" or "steps.recheck" not in other, name

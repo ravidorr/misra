@@ -1,5 +1,5 @@
 """Crawl all companies with a working ATS, diff against the history (data/jobs.db, a scratch file pulled from
-Supabase), mark new/closed. `--gaps` logs the coverage gaps."""
+Supabase), mark new/closed. `--gaps` logs the coverage gaps; `--recheck` probes the researched sites that may reopen."""
 
 import datetime
 import queue
@@ -144,7 +144,7 @@ DETAIL_STATS: dict[str, tuple[str, int, int, int]] = {}  # company -> (ats, requ
 def read_job_pages(co: dict[str, Any], jobs: list[dict[str, Any]]) -> None:
     """Gives a company's jobs the descriptions its list lacks (adapters.add_descriptions) and records the counts."""
     if co.get("israel_only"):  # the jobs the history keeps, so no page is read for one that is dropped
-        jobs = [j for j in jobs if ISRAEL.search(j["location"] or "")]
+        jobs = [j for j in jobs if ISRAEL.search(j.get("location") or "")]
     try:
         stats = add_descriptions(co["ats"], co["slug"], co["name"], jobs, HELD_TEXTS, datetime.date.today().toordinal())
     except Exception as exc:  # the list is what matters: a failure here costs texts, never the company
@@ -375,6 +375,99 @@ def gaps_step() -> int:
         c.close()
 
 
+RECHECK_REASONS = (
+    "no_openings",
+    "crawl_failing",
+)  # the gap reasons checked again every day (TODO.md, Decisions on sources)
+
+
+def recheck_targets(companies: list[dict[str, Any]], excluded: list[str]) -> list[dict[str, Any]]:
+    """The researched records the daily recheck probes: not crawled, not excluded, a gap reason in RECHECK_REASONS and
+    an address to read. `bot_protection` records are never here: a protected site is put aside, not retried."""
+    return [
+        co
+        for co in companies
+        if co.get("crawl") is not True
+        and co.get("excluded") is None
+        and (co.get("gap") or {}).get("reason") in RECHECK_REASONS
+        and co.get("careers_url")
+        and not is_excluded(co["name"], excluded)
+    ]
+
+
+Found = list[tuple[str, list[dict[str, Any]] | None]]  # (company, its jobs, None when the site could not be read)
+
+
+RECHECK_SECONDS = (
+    240  # the recheck stops reading here and reports what it has; the workflow's `timeout` is the backstop
+)
+
+
+def recheck_jobs(targets: list[dict[str, Any]], found: Found | None = None, deadline: float = float("inf")) -> Found:
+    """One (name, jobs) per target through the existing crawl path; jobs is None when the site could not be read
+    (robots.txt included). A record with a known board and a slug goes through its adapter; a `browser` record is
+    crawled at its slug and any other at its `careers_url`. All take the same robots.txt rules and one request a second
+    per host. Nothing is stored. `found` is filled as the results come, so a crash keeps what was read before it, and
+    nothing new is started after `deadline` (a time.monotonic value)."""
+    found = [] if found is None else found
+    pages: dict[str, list[str]] = {}
+    for co in targets:
+        if time.monotonic() > deadline:
+            break
+        if co.get("ats") in ADAPTERS and co.get("slug"):
+            found.append((co["name"], fetch(co)))
+        else:
+            pages.setdefault((co.get("ats") == "browser" and co.get("slug")) or co["careers_url"], []).append(
+                co["name"]
+            )
+    for url, jobs in crawl_many(list(pages), deadline) if pages and time.monotonic() <= deadline else ():
+        found.extend((name, jobs) for name in pages[url])
+        if time.monotonic() > deadline:
+            break
+    return found
+
+
+def recheck_summary(found: Found, total: int | None = None) -> str:
+    """One log line: counts, and the names of the companies that show an Israel job (never a posting). A company with no
+    Israel job and a job of no readable location is only counted: a person decides whether it is Israeli."""
+    counts = [
+        (name, sum(1 for j in jobs if ISRAEL.search(j.get("location") or "")), any(not j.get("location") for j in jobs))
+        for name, jobs in found
+        if jobs
+    ]
+    shown = sorted((n, k) for n, k, _ in counts if k)
+    unplaced = sum(1 for _, k, blank in counts if blank and not k)
+    unreachable = sum(1 for _, jobs in found if jobs is None)
+    names = ", ".join(f"{n} ({k})" for n, k in shown)
+    return (
+        ("::notice::" if shown else "")
+        + f"recheck: {len(found)}{'' if total is None else f' of {total}'} probed, {len(shown)} with Israel jobs"
+        + (f": {names}" if names else "")
+        + f"; {unplaced} with jobs of no readable location, {unreachable} unreachable"
+    )
+
+
+def recheck_step() -> int:
+    """`python run.py --recheck`: its own workflow step, last before the failure alert. It reads the pulled company list
+    only, writes nothing (no history, no table) and holds no secret; a company that shows Israel jobs is pinned by hand
+    (TODO.md, Decisions on sources). A crash is a warning with what was read before it; the workflow stops the step
+    after 5 minutes with `timeout` (the script stops itself at 3) and turns that into a warning, so a slow site
+    cannot redden the run either."""
+    found: Found = []
+    crashed = False
+    total = 0
+    try:
+        targets = recheck_targets(load_companies(), load_excluded())
+        total = len(targets)
+        recheck_jobs(targets, found, time.monotonic() + RECHECK_SECONDS)
+    except Exception as exc:
+        crashed = True
+        print(f"::warning::recheck failed, {type(exc).__name__}")
+    if found or not crashed:
+        print(recheck_summary(found, total))
+    return 0
+
+
 def save_descriptions(texts: list[dict[str, Any]], crawled: list[tuple[str, list[dict[str, Any]]]]) -> None:
     """Hands the descriptions to the sync step and logs their share (FR-4 AC 3: counts only, no text). The texts go to
     a work file outside the checkout (descriptions.work_path), never into data/jobs.db or any committed file. A file
@@ -442,7 +535,7 @@ def main() -> None:  # noqa: PLR0915
             # large multinational boards: keep Israel jobs only. A location that is empty or cannot be read does not
             # match, so such a job is dropped here; without the flag it is kept and regions.place calls it Unknown.
             if fetched is not None and co.get("israel_only"):
-                jobs = [j for j in fetched if ISRAEL.search(j["location"] or "")]
+                jobs = [j for j in fetched if ISRAEL.search(j.get("location") or "")]
             drop, held = (
                 sharp_drop(c, name, len(jobs), now[:10])
                 if jobs is not None and co["ats"] in SHARP_DROP_ATS
@@ -607,4 +700,6 @@ def main() -> None:  # noqa: PLR0915
 if __name__ == "__main__":
     if "--gaps" in sys.argv:
         sys.exit(gaps_step())
+    if "--recheck" in sys.argv:
+        sys.exit(recheck_step())
     main()

@@ -1,5 +1,6 @@
 import asyncio
 import json
+import time
 from typing import Any
 
 import pytest
@@ -894,6 +895,20 @@ def test_crawl_many_hands_over_the_pages_done_before_a_crash_and_then_raises(mon
         for item in browser_crawl.crawl_many(["a", "b"]):
             got.append(item)
     assert got == [("a", [])]
+
+
+def test_crawl_many_stops_waiting_at_its_deadline_when_a_crawl_stalls(monkeypatch: pytest.MonkeyPatch) -> None:
+    async def fake_crawl(_ctx: object, url: str, _sem: asyncio.Semaphore) -> list[dict[str, Any]] | None:
+        if url == "b":
+            await asyncio.sleep(2)  # stalls past the deadline; the thread ends on its own a moment later
+        return []
+
+    monkeypatch.setattr(browser_crawl, "async_playwright", lambda: FakePlaywright([]))
+    monkeypatch.setattr(browser_crawl, "crawl_one", fake_crawl)
+    started = time.monotonic()
+    got = list(browser_crawl.crawl_many(["a", "b"], deadline=started + 0.3))
+    assert got == [("a", [])]  # what finished before the deadline is kept, the stalled page is given up
+    assert time.monotonic() - started < 1.5  # noqa: PLR2004
 
 
 async def test_an_eightfold_search_without_a_domain_gives_no_job_page_to_read() -> None:
