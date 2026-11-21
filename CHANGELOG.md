@@ -8,6 +8,17 @@ All notable changes are documented here. Format follows [Keep a Changelog](https
 
 - A "Hidden (n)" switch beside "Starred (n)": a view of its own that lists every company the visitor hid, one row each with "Unhide" (a company with no open role is listed too, so it can be unhidden without finding one of its roles), and every open role they hid one by one, as cards at full strength with "Unhide" and no "New" flag. The Hidden view also puts the coverage card away with the filters; the Starred view keeps it. It reads the choices kept today (this browser, or the account) and stores nothing new; a role hidden only because its company is hidden is covered by the company's row, and a hidden role leaves the list when its posting closes (the database deletes the discard). Two WebMCP tools: `list_hidden` and `unhide_company`.
 
+## [0.86.0] - 2026-11-21
+
+### Added
+
+- `python3 survey.py --boards FILE`, a dev tool for the career pages whose jobs a plain read does not see (a JSON list of `{"name", "url"}`). It loads each page once (robots.txt first, no page it refuses) and searches every address the page asks for, every frame and the drawn page for a job board an existing adapter reads: a link, a `COMEET.init({"company-name", "company-uid"})` widget snippet (`discover.comeet_widget`), a Comeet account whose uid shows but whose name does not (the name is guessed as `common.slug_candidates` does, and only a name that goes with the uid gives a board), or the Comeet WordPress plugin (`comeet_page`). It prints one line a page: the board, its slug, and the jobs and Israel jobs its adapter read (counts only). Of the 125 Goozali career pages that read as zero jobs on 2026-11-21, 35 lead to a board the adapters read (20 Comeet, 12 Comeet plugin pages, 2 BambooHR, 1 Greenhouse), 25 of them with Israel jobs (106 in all).
+- `discover.ats_in_text` also finds a Comeet careers widget snippet and the Greenhouse `embed/job_board/js?for=` address, so `discover.py` and `survey.py --candidates` see a board a page draws by script.
+
+### Changed
+
+- `survey.survey` never loads a page that robots.txt refuses (it skipped the check before), and records the board, the Comeet uid and the Comeet plugin of the drawn page.
+
 ## [0.85.2] - 2026-11-21
 
 ### Fixed
