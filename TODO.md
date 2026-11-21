@@ -400,11 +400,11 @@ recurring work.
     same kind need no new approval. This never reaches the Israeli job boards (AllJobs, Drushim, JobMaster, and platforms of
     that class), which stay out for good. First use: Aerospike (Rippling) and fintastic (Freshteam), pinned as browser
     crawls on 2026-11-21.
-  - Maintainer rule, 2026-11-21, researched records by `gap.reason` (counts as the maintainer gave them that day): `no_openings` (44) and `crawl_failing` (1) are checked
+  - Maintainer rule, 2026-11-21, researched records by `gap.reason`: `no_openings` and `crawl_failing` are checked
     again every day (`python run.py --recheck`, the "Recheck the researched sites" step of `daily.yml`: the same crawl path,
     `robots.txt` honoured, one request a second; one log line of counts and the names of the companies that show an Israel
-    job, nothing stored, no key; pin such a company by hand with `companyctl`). `bot_protection` (20) is put aside: never
-    retried and never worked around. `site_unusable` (9) stays listed as it is. `needs_reader` gets a reader (separate
+    job, nothing stored, no key; pin such a company by hand with `companyctl`). `bot_protection` is put aside: never
+    retried and never worked around. `site_unusable` stays listed as it is. `needs_reader` gets a reader (separate
     work). `no_feed_found` and `no_careers_url` are being researched again by hand.
   - Removal requests: the current process is sufficient (the `excluded` record is kept, the rows are deleted, the company is
     never crawled). Keep the written request as a paper trail.
@@ -430,7 +430,7 @@ recurring work.
     lawyer's advice was to ask them); keep a written confirmation (an email) as the paper trail. The first read on
     2026-11-20 gave 433 rows (426 distinct), 54 already in the table and 372 new names with no websites; the website
     search for those is done in four chunks. Done when: every new verified company is crawled or has a reason.
-  - [ ] **Quarterly recheck of `site_unusable` (9).** Due 2026-12-04, then each quarter (next 2027-03-04): a site that is
+  - [ ] **Quarterly recheck of `site_unusable`.** Due 2026-12-04, then each quarter (next 2027-03-04): a site that is
     back moves to the crawl. `no_openings` and `crawl_failing` are rechecked every day and `bot_protection` is put aside
     (see "Decisions on sources"); record each decision in the `gap.note` with the date so nobody retries.
   - [ ] **Research `no_careers_url` (22), `no_feed_found` (20) and `needs_reader` (16).** No date: batches of at most 25,
