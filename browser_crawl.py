@@ -152,7 +152,9 @@ CARD_ARGS = {"job": JOBLINK.pattern, "skip": NOT_JOB.pattern, "id": JOB_ID.patte
 CARD_LINE_MAX = 120  # a longer card line is a job description, not a title, place or team
 CARD_BEFORE = 2  # lines above the title that can still be its place or team
 CARD_AFTER = 3  # and below it
-CARD_CHROME = frozenset({"save job", "share job", "apply", "apply now"})
+CARD_CHROME = frozenset(
+    {"save job", "share job", "apply", "apply now", "send resume", "send cv", "submit cv", "opens in a new tab"}
+)
 BUTTON_LINES = frozenset(
     {"view position", "view role", "view job", "view full details", "learn more", "read more", "details"}
 )
@@ -223,6 +225,11 @@ MAX_ACRONYM_LEN = 4
 MAX_REMOTE_WORDS = 4
 
 
+def _label(line: str) -> str:
+    """A card line as compared with the button labels: lowercase, without the arrows after it ("SEND RESUME >>")."""
+    return line.strip().lower().rstrip(" >»→")
+
+
 def _is_location(line: str) -> bool:
     """A card line that names a place: "TEL AVIV, ISRAEL", "Dallas, US", "REMOTE (US)", "IL". A line with a job-role
     word is a title even when it mentions a town ("Customer Engineer - Kiryat Gat")."""
@@ -288,7 +295,7 @@ def _card_extras(card: str, title: str) -> list[str]:
     label and the place under it count as one line, so a date or a team before them cannot push the place out."""
     low = title.lower()
     lines = [ln.strip() for ln in card.split("\n")]
-    lines = [ln for ln in lines if ln and len(ln) <= CARD_LINE_MAX and ln.lower() not in CARD_CHROME | BUTTON_LINES]
+    lines = [ln for ln in lines if ln and len(ln) <= CARD_LINE_MAX and _label(ln) not in CARD_CHROME | BUTTON_LINES]
     fused: list[str] = []
     for ln in lines:
         if fused and fused[-1].lower() in LOCATION_LABELS and ln.lower() != low:
@@ -311,7 +318,7 @@ def _card_lines(leaves: str) -> list[str]:
     return [
         ln
         for ln in lines
-        if ln and len(ln) <= CARD_LINE_MAX and ln.lower() not in LINK_NOISE - LOCATION_LABELS and _WORD.search(ln)
+        if ln and len(ln) <= CARD_LINE_MAX and _label(ln) not in LINK_NOISE - LOCATION_LABELS and _WORD.search(ln)
     ]
 
 
@@ -560,7 +567,7 @@ async def crawl_one(ctx: Any, url: str, sem: asyncio.Semaphore) -> list[dict[str
                 links = await scope.eval_on_selector_all("a[href]", CARD_JS, CARD_ARGS)
                 link_count = len(links)
                 # links with a title of their own first, so a label link never claims a job before its titled twin
-                links.sort(key=lambda row: not _WORD.search(row[1]) or row[1].strip().lower() in LINK_NOISE)
+                links.sort(key=lambda row: not _WORD.search(row[1]) or _label(row[1]) in LINK_NOISE)
                 for href, text, card, head, others, leaves in links:
                     key = _job_key(href)
                     if key in seen or not JOBLINK.search(href) or NOT_JOB.search(href):
@@ -568,14 +575,14 @@ async def crawl_one(ctx: Any, url: str, sem: asyncio.Semaphore) -> list[dict[str
                     lines = [
                         ln.strip()
                         for ln in text.split("\n")
-                        if ln.strip().lower() not in LINK_NOISE | {""} and _WORD.search(ln)
+                        if _label(ln) not in LINK_NOISE | {""} and _WORD.search(ln)
                     ]
                     heading_first = len(lines) > 1 and head in lines and _usable_heading(head)
                     from_card = False
                     if not lines:
                         # a link that is only an icon or a button label ("Details"): the title is in its card, unless
                         # the card has a titled link of its own, which this one only repeats
-                        if others or not 0 < len(card) <= CARD_MAX or text.strip().lower() in CARD_CHROME:
+                        if others or not 0 < len(card) <= CARD_MAX or _label(text) in CARD_CHROME:
                             continue  # an Apply link never starts a card: it only goes with a titled link
                         lines = _card_lines(leaves)
                         from_card = True

@@ -1114,6 +1114,17 @@ async def test_an_icims_card_gives_its_place_title_and_team_without_the_screen_r
     }
 
 
+@pytest.mark.parametrize("label", ["SEND RESUME >>", "Send CV  »", "opens In A New Tab", "Submit CV"])
+async def test_a_button_label_is_no_job_title(label: str) -> None:
+    """SeeTrue ("SEND RESUME >>") and Nucleai ("opens In A New Tab") read as jobs titled by a button; their cards are
+    a whole posting, longer than a card, so the link is skipped."""
+    card = "A long posting. " * 80
+    assert await crawl_cards([link("/jobs/x-role/apply", label, card)]) == {}
+    assert await crawl_cards([link("/jobs/x-role/apply", "Engineer\n" + label, "Engineer\nHaifa")]) == {
+        "Engineer": ("Haifa", "")
+    }
+
+
 async def test_the_list_in_a_frame_of_the_same_site_is_read_and_paged() -> None:
     """iCIMS: the career page holds a frame of its own site that draws the list and its pager."""
     el = FakeEl()
