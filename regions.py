@@ -3,6 +3,9 @@
 `place(location)` says whether the location is in Israel and, if so, which of the seven regions it names. A string can
 name several places ("Israel, Yokneam; Israel, Tel Aviv"), and the job belongs to every region it names. Places we do
 not group keep their own location string and a job in Israel is never dropped. Jobs outside Israel are left alone.
+A location that is empty, has no Latin letter or has a Hebrew letter, and names no place we know, cannot be placed:
+the job is in the region Unknown. Only `run.py` decides whether such a job is stored: an `israel_only` company never
+stores one (it keeps the jobs `common.ISRAEL` finds in the location), so only an employer without that flag has them.
 The places are a table (`PLACES`), so a new city is one string.
 """
 
@@ -20,7 +23,10 @@ JERUSALEM = "Jerusalem"
 NORTH = "Haifa and the north"
 SOUTH = "South"
 REMOTE = "Remote"
-REGION_NAMES = (TEL_AVIV, SHARON, CENTER, JERUSALEM, NORTH, SOUTH, REMOTE)
+# A job whose location is empty or cannot be read (Hebrew only, symbols): the employer is not crawled with
+# `israel_only`, so the job is kept and listed here, as in Israel, rather than guessed to be abroad.
+UNKNOWN = "Unknown"
+REGION_NAMES = (TEL_AVIV, SHARON, CENTER, JERUSALEM, NORTH, SOUTH, REMOTE, UNKNOWN)
 
 # What a job in Israel gets when the location names the country and no city.
 CITY_NOT_GIVEN = "Israel, city not given"
@@ -77,6 +83,7 @@ _CITIES = compile_places(PLACES)
 _DISTRICTS = {re.compile(pattern): region for pattern, region in DISTRICTS.items()}
 _DISTRICT_WORDS = re.compile(r"(?:tel aviv|haifa|jerusalem|center|central|south|southern|north|northern) district")
 _REMOTE = re.compile(r"remote|עבודה מרחוק")
+_UNREADABLE = re.compile(r"[\u0590-\u05ff]|^[^a-z]*$", re.I)  # a Hebrew letter, or no Latin letter at all
 THREE_FIELDS = 3
 # "TLV" is the airport code of Tel Aviv: Israeli, though `common.ISRAEL` does not know it. A city of the table below
 # also makes a string Israeli, since `common.ISRAEL` knows only a few places (not Ashdod or Givatayim).
@@ -136,7 +143,8 @@ def place(location: str | None) -> Place:
     also names Israel; "Remote, US" or a bare "Remote" is left alone, as an unknown or foreign place."""
     text = (location or "").strip()
     if not _in_israel(text):
-        return Place(israel=False)
+        # a place we cannot read is not a place abroad: say so rather than drop the job
+        return Place(israel=False) if not _UNREADABLE.search(text) else Place(israel=True, regions=(UNKNOWN,))
     regions: set[str] = set()
     unmapped: list[str] = []
     for segment in (s.strip() for s in text.split(";")):
@@ -156,7 +164,7 @@ def report(locations: Iterable[str | None], sample: int = 20) -> str:
     jobs with no city (they cannot be placed, so they are counted apart, not in the share), and the most common places
     left unmapped, so the table above can be improved."""
     placed = [p for p in (place(location) for location in locations) if p.israel]
-    named = [p for p in placed if p.regions or p.locations != (CITY_NOT_GIVEN,)]
+    named = [p for p in placed if p.regions != (UNKNOWN,) and (p.regions or p.locations != (CITY_NOT_GIVEN,))]
     in_region = sum(1 for p in named if p.regions)
     unmapped: Counter[str] = Counter()
     for p in placed:

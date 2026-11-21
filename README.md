@@ -69,6 +69,9 @@ The browser crawler reads:
 - HiBob and Eightfold boards
 - Any custom career page, from its JSON-LD or its job-looking links
 
+A job whose location is empty or cannot be read (Hebrew only, for example) is kept and listed under the location
+Unknown, unless its company has `israel_only` (then it is dropped, as every job not confirmed in Israel is).
+
 A company seen for the first time is baselined silently, so adding companies never floods the job alerts.
 To add one, see [Adding a company](./CONTRIBUTING.md#adding-a-company).
 

@@ -196,7 +196,7 @@ def test_main_builds_dashboard(db: sqlite3.Connection, workdir: Path, capsys: py
     assert jobs["1"]["rg"] == ["Tel Aviv area"]
     assert jobs["1"]["lo"] == []
     assert jobs["1"]["il"] is True
-    assert jobs["3"]["il"] is False
+    assert (jobs["3"]["il"], jobs["3"]["rg"]) == (True, ["Unknown"])  # no location: Unknown, not abroad
     assert jobs["3"]["f"] == ""
     assert len(jobs["4"]["l"]) == len("London " + "y" * 100) - 27
     assert jobs["1"]["n"] is False
@@ -293,6 +293,7 @@ def test_site_files_are_written_next_to_the_page(db: sqlite3.Connection, workdir
     write_unresolved(workdir)
     add_job(db, "Acme", "1", "Product Manager </script> é")
     add_job(db, "Acme", "2", "Accountant", location="London")
+    add_job(db, "Acme", "3", "Data Analyst", location="")  # Unknown: in jobs.json, left out of the JSON-LD
     db.close()
     build_dashboard.main()
     docs = workdir / "docs"
@@ -346,6 +347,8 @@ def test_site_files_are_written_next_to_the_page(db: sqlite3.Connection, workdir
     listing = json.loads((docs / "jobs.jsonld").read_text(encoding="utf-8"))
     assert [i["item"]["title"] for i in listing["itemListElement"]] == ["Product Manager </script> é"]
     assert listing["itemListElement"][0]["position"] == 1
+    unknown = next(j for j in json.loads((docs / "jobs.json").read_text(encoding="utf-8"))["jobs"] if j["i"] == "3")
+    assert (unknown["il"], unknown["rg"], unknown["lo"]) == (True, ["Unknown"], [])
     assert "é" in (docs / "jobs.json").read_text(encoding="utf-8")
 
 

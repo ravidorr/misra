@@ -438,7 +438,9 @@ def main() -> None:  # noqa: PLR0915
                 )
                 continue
             attempted.add(name)
-            if fetched is not None and co.get("israel_only"):  # large multinational boards: keep Israel jobs only
+            # large multinational boards: keep Israel jobs only. A location that is empty or cannot be read does not
+            # match, so such a job is dropped here; without the flag it is kept and regions.place calls it Unknown.
+            if fetched is not None and co.get("israel_only"):
                 jobs = [j for j in fetched if ISRAEL.search(j["location"] or "")]
             drop, held = (
                 sharp_drop(c, name, len(jobs), now[:10]) if jobs is not None and co["ats"] == "browser" else ("", False)
