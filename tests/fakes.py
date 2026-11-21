@@ -122,6 +122,7 @@ class FakeFrame:
         self.url = url
         self.link_fn = link_fn or (lambda _i: [])
         self.locators: dict[str, FakeLoc] = {}
+        self.idle_error = False
         self._links_calls = 0
 
     async def eval_on_selector_all(self, _selector: str, _js: str, _arg: Any = None) -> Any:
@@ -130,6 +131,10 @@ class FakeFrame:
 
     def locator(self, key: str) -> FakeLoc:
         return self.locators.get(key, FakeLoc(0))
+
+    async def wait_for_load_state(self, _state: str, timeout: int = 0) -> None:
+        if self.idle_error:
+            raise TimeoutError("idle")
 
 
 class FakePage:

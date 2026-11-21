@@ -604,6 +604,8 @@ async def crawl_one(ctx: Any, url: str, sem: asyncio.Semaphore) -> list[dict[str
             if not out:  # an iCIMS career page draws its list in a frame of its own site: read the links there
                 for frame in page.frames[1:]:
                     if host_of(frame.url) == host_of(page.url):
+                        with contextlib.suppress(Exception):  # a frame that is still drawing its list
+                            await frame.wait_for_load_state("networkidle", timeout=15000)
                         scope = frame
                         if await collect():
                             break

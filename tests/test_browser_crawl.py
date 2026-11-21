@@ -1124,6 +1124,7 @@ async def test_the_list_in_a_frame_of_the_same_site_is_read_and_paged() -> None:
     frame.locators["body a.link-next"] = FakeLoc(1, el)
     other = FakeFrame("https://consent.test/banner", link_fn=lambda _i: [link("/jobs/9/banner/job", "Banner Role")])
     quiet = FakeFrame("https://x.test/widget")
+    quiet.idle_error = True  # a frame that never goes quiet is read all the same
     jobs = await run(FakePage(frames=[FakeFrame("https://x.test/careers"), other, quiet, frame]))
     assert jobs is not None
     assert [j["title"] for j in jobs] == ["Role 1", "Role 2", "Role 3"]
