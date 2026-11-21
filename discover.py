@@ -54,13 +54,14 @@ ATS_LINK = [
     ("smartrecruiters", re.compile(r"(?:jobs|careers)\.smartrecruiters\.com/([A-Za-z0-9_\-]+)", re.I)),
     ("jazzhr", re.compile(r"(?<![A-Za-z0-9_\-.%])(?!(?:www|api|app|help)\.)([A-Za-z0-9_\-]+)\.applytojob\.com", re.I)),
     ("bamboohr", re.compile(r"(?<![A-Za-z0-9_\-.%])(?!(?:www|api|app|help)\.)([A-Za-z0-9_\-]+)\.bamboohr\.com", re.I)),
+    ("breezy", re.compile(r"(?<![A-Za-z0-9_\-.%])(?!(?:www|api|app|help)\.)([A-Za-z0-9_\-]+)\.breezy\.hr", re.I)),
 ]
 COMEET_INIT = re.compile(r"COMEET\.init\(\{(.*?)\}\)", re.S)  # the snippet of a Comeet careers widget
 COMEET_NAME = re.compile(r'"company-name"\s*:\s*"([^"]+)"')
 COMEET_UID = re.compile(r'"company-uid"\s*:\s*"([0-9A-Z]{2}\.[0-9A-Z]{3})"')
 COMEET_UID_ANY = re.compile(r"""company-uid["']?\s*[:=]\s*["']?([0-9A-Z]{2}\.[0-9A-Z]{3})\b""")
 COMEET_PLUGIN = "/wp-content/plugins/comeet-wp-plugin"  # the WordPress plugin that draws a Comeet list on the page
-HOST_BASED = {"jazzhr", "bamboohr"}  # the slug is a subdomain, not a path segment
+HOST_BASED = {"jazzhr", "bamboohr", "breezy"}  # the slug is a subdomain, not a path segment
 CAREER_PATHS = ["/careers", "/jobs", "/careers/", "/company/careers", "/about/careers", "/join-us", "/careers/jobs"]
 
 

@@ -474,8 +474,8 @@ recurring work.
     `script-loaded`). The rest: 13 vendor boards with no adapter (Breezy 3, Personio, Teamtailor, Jobvite, iCIMS, Dayforce,
     SumTotal, HiBob, Phenom, Taleo, Workable on its own subdomain), 5 boards seen but not read, 5 pages whose job links
     carry only an Apply label or a card the reader cannot title, 6 Hebrew pages, 2 on an Israeli recruiting board (never), 1
-    bot protection (never), 1 timeout and 57 with no job list in the page. A Breezy adapter is the next one with three
-    companies waiting; write it when the maintainer says so.
+    bot protection (never), 1 timeout and 57 with no job list in the page. The Breezy adapter is written (0.88.0); the three
+    boards have no Israel job today but Drimz's. HiBob needs none: the browser reader already reads its list.
   - Done when: every Goozali company with a usable website is crawled, or has a gap `reason` that says why not, and the
     unsurveyed note is gone.
 

@@ -1440,6 +1440,75 @@ def varonis(slug: str) -> list[Job] | None:
     return [j for j in jobs if ISRAEL.search(j["location"])] or None  # Varonis has jobs in Israel: none is a bad answer
 
 
+_SUBDOMAIN_SLUG = re.compile(r"[a-z0-9][a-z0-9-]*")
+
+
+def _day(stamp: Any) -> str:
+    """The date of an ISO time (`2026-11-17T21:03:28.209Z`) as YYYY-MM-DD, or '' when it is missing or not a date."""
+    try:
+        return datetime.strptime(stamp[:10], "%Y-%m-%d").date().isoformat()
+    except (TypeError, ValueError):
+        return ""
+
+
+def _breezy_place(j: dict[str, Any]) -> str:
+    """The places of a job: each location (a job of several lists them in `locations`, else the one in `location`) as
+    'city, country', the country written out, so that the place alone shows Israel."""
+    places = j.get("locations") or [j.get("location")]
+    out = []
+    for loc in places:
+        if isinstance(loc, dict):
+            country = loc.get("country")
+            parts = [loc.get("city"), country.get("name") if isinstance(country, dict) else None]
+            out.append(", ".join(p.strip() for p in parts if isinstance(p, str) and p.strip()))
+    return "; ".join(dict.fromkeys(p for p in out if p))
+
+
+def _breezy_job(host: str, j: Any) -> Job | None:
+    """One job of the list, or None when it lacks an id or a title, or its link is not the board's own page."""
+    if not isinstance(j, dict):
+        return None
+    job_id, title, url = j.get("id"), j.get("name"), j.get("url")
+    if not (isinstance(job_id, str) and job_id and isinstance(title, str) and title.strip()):
+        return None
+    if not (isinstance(url, str) and url.startswith("https://") and host_of(url) == host):
+        return None
+    dept = j.get("department")
+    return _job(
+        job_id,
+        title,
+        _breezy_place(j),
+        url,
+        team=dept if isinstance(dept, str) else "",
+        posted=_day(j.get("published_date")),
+    )
+
+
+def breezy(slug: str) -> list[Job] | None:
+    """slug is the `<slug>` of `<slug>.breezy.hr`. The board page is drawn from `/json`, a public JSON list of every
+    open job (the page's own data, for any visitor; the site's robots.txt does not disallow it and the request goes
+    through `common.get`). The list is trusted only when it is a JSON list, every entry reads and no job comes twice: an
+    unknown slug answers HTTP 404, and a partial list would close the jobs it lacks. Every job is returned (the
+    company's `israel_only` decides, as for BambooHR). The list has no job text, so there is no description for now."""
+    if not _SUBDOMAIN_SLUG.fullmatch(slug):
+        return None
+    host = f"{slug}.breezy.hr"
+    r = get(f"https://{host}/json")
+    if r is None or r.status_code != HTTP_OK or host_of(r.url) != host:
+        return None
+    try:
+        data = r.json()
+    except ValueError:
+        return None
+    if not isinstance(data, list):
+        return None
+    read = [_breezy_job(host, j) for j in data]
+    jobs = [j for j in read if j]
+    if len(jobs) != len(data) or len({j["job_id"] for j in jobs}) != len(jobs):
+        return None
+    return jobs
+
+
 ADAPTERS: dict[str, Callable[[str], list[Job] | None]] = {
     "greenhouse_url": greenhouse_url,
     "greenhouse": greenhouse,
@@ -1459,4 +1528,5 @@ ADAPTERS: dict[str, Callable[[str], list[Job] | None]] = {
     "eightfold": eightfold,
     "jibe": jibe,
     "varonis": varonis,
+    "breezy": breezy,
 }
