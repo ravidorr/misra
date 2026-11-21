@@ -3277,6 +3277,154 @@ def test_a_wordpress_endpoint_redirected_on_its_own_host_is_followed(monkeypatch
     assert calls == [False, False]
 
 
+BREEZY_URL = "https://acme.breezy.hr/json"
+BREEZY_PAGE = "https://acme.breezy.hr/p/"
+
+
+def breezy_job(number: str = "aa11", **over: Any) -> dict[str, Any]:
+    return {
+        "id": number,
+        "friendly_id": f"{number}-engineer",
+        "name": "Engineer",
+        "url": f"{BREEZY_PAGE}{number}-engineer",
+        "published_date": "2026-11-17T21:03:28.209Z",
+        "department": "R&D",
+        "location": {"country": {"name": "Israel", "id": "IL"}, "city": "Tel Aviv", "name": "Tel Aviv, IL"},
+        "locations": [],
+        **over,
+    }
+
+
+def breezy_answer(data: Any, url: str = BREEZY_URL) -> FakeHttpResponse:
+    return FakeHttpResponse(data=data, url=url)
+
+
+def test_breezy_reads_the_json_list(monkeypatch: pytest.MonkeyPatch) -> None:
+    several = {
+        "locations": [
+            {"country": {"name": "United States"}, "state": {"name": "New York"}, "city": "NYC"},
+            {"country": {"name": "Israel"}, "city": "Haifa"},
+            {"country": {"name": "Israel"}, "city": "Haifa"},
+            "not a place",
+        ]
+    }
+    remote = {"location": {"is_remote": True}, "department": None, "published_date": "soon"}
+    data = [breezy_job("aa11"), breezy_job("bb22", **several), breezy_job("cc33", **remote)]
+    urls = fake_get(monkeypatch, breezy_answer(data))
+    jobs = adapters.breezy("acme")
+    assert urls == [BREEZY_URL]
+    assert jobs == [
+        {
+            "job_id": "aa11",
+            "title": "Engineer",
+            "location": "Tel Aviv, Israel",
+            "url": f"{BREEZY_PAGE}aa11-engineer",
+            "team": "R&D",
+            "posted": "2026-11-17",
+        },
+        {
+            "job_id": "bb22",
+            "title": "Engineer",
+            "location": "NYC, United States; Haifa, Israel",
+            "url": f"{BREEZY_PAGE}bb22-engineer",
+            "team": "R&D",
+            "posted": "2026-11-17",
+        },
+        {
+            "job_id": "cc33",
+            "title": "Engineer",
+            "location": "",
+            "url": f"{BREEZY_PAGE}cc33-engineer",
+            "team": "",
+            "posted": "",
+        },
+    ]
+
+
+def test_breezy_the_locations_win_over_the_location_and_a_nameless_one_gives_its_name(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    only = {"locations": [{"country": {"name": "Israel"}, "city": "Haifa"}]}
+    named = {"location": {"country": "IL", "name": " Tel Aviv, IL "}}
+    junk = {"locations": ["junk"], "location": {"city": "Elsewhere"}}
+    fake_get(
+        monkeypatch,
+        breezy_answer([breezy_job("aa11", **only), breezy_job("bb22", **named), breezy_job("cc33", **junk)]),
+    )
+    jobs = adapters.breezy("acme")
+    assert jobs is not None
+    assert [j["location"] for j in jobs] == ["Haifa, Israel", "Tel Aviv, IL", ""]
+    assert [bool(common.ISRAEL.search(j["location"])) for j in jobs] == [True, True, False]
+
+
+def test_breezy_a_country_with_no_city_or_name_is_still_read(monkeypatch: pytest.MonkeyPatch) -> None:
+    data = [breezy_job(location={"country": {"name": "Israel"}}), breezy_job("bb22", location={"country": "IL"})]
+    fake_get(monkeypatch, breezy_answer(data))
+    jobs = adapters.breezy("acme")
+    assert jobs is not None
+    assert [j["location"] for j in jobs] == ["Israel", ""]
+
+
+def test_breezy_a_board_with_no_job_is_empty_not_a_failure(monkeypatch: pytest.MonkeyPatch) -> None:
+    fake_get(monkeypatch, breezy_answer([]))
+    assert adapters.breezy("acme") == []
+
+
+@pytest.mark.parametrize("slug", ["", "Acme", "a.b", "-acme", "acme/x", "acme.breezy.hr"])
+def test_breezy_a_slug_that_is_not_a_subdomain_is_refused_without_a_request(
+    monkeypatch: pytest.MonkeyPatch, slug: str
+) -> None:
+    urls = fake_get(monkeypatch, breezy_answer([]))
+    assert adapters.breezy(slug) is None
+    assert urls == []
+
+
+@pytest.mark.parametrize("resp", [None, FakeHttpResponse(status_code=404, url=BREEZY_URL)])
+def test_breezy_a_refusal_is_a_failure(monkeypatch: pytest.MonkeyPatch, resp: FakeHttpResponse | None) -> None:
+    fake_get(monkeypatch, resp)
+    assert adapters.breezy("acme") is None
+
+
+def test_breezy_an_answer_from_another_host_is_a_failure(monkeypatch: pytest.MonkeyPatch) -> None:
+    fake_get(monkeypatch, breezy_answer([breezy_job()], url="https://breezy.hr/json"))
+    assert adapters.breezy("acme") is None
+
+
+@pytest.mark.parametrize("answer", [FakeHttpResponse(json_error=True, url=BREEZY_URL), breezy_answer({"error": 1})])
+def test_breezy_an_answer_that_is_not_a_list_is_a_failure(monkeypatch: pytest.MonkeyPatch, answer: Any) -> None:
+    fake_get(monkeypatch, answer)
+    assert adapters.breezy("acme") is None
+
+
+@pytest.mark.parametrize(
+    "bad",
+    [
+        "a string",
+        breezy_job(id=""),
+        breezy_job(id=5),
+        breezy_job(name="  "),
+        breezy_job(name=None),
+        breezy_job(url=None),
+        breezy_job(url="http://acme.breezy.hr/p/aa11"),
+        breezy_job(url="https://other.breezy.hr/p/aa11"),
+    ],
+)
+def test_breezy_one_unreadable_entry_fails_the_crawl_instead_of_closing_its_job(
+    monkeypatch: pytest.MonkeyPatch, bad: Any
+) -> None:
+    fake_get(monkeypatch, breezy_answer([breezy_job("bb22"), bad]))
+    assert adapters.breezy("acme") is None
+
+
+def test_breezy_a_job_twice_is_a_failure(monkeypatch: pytest.MonkeyPatch) -> None:
+    fake_get(monkeypatch, breezy_answer([breezy_job(), breezy_job()]))
+    assert adapters.breezy("acme") is None
+
+
+def test_breezy_is_registered() -> None:
+    assert adapters.ADAPTERS["breezy"] is adapters.breezy
+
+
 TT_HOST = "acme.teamtailor.com"
 TT_NS = 'xmlns:tt="https://teamtailor.com/locations"'
 
@@ -3366,6 +3514,7 @@ def test_teamtailor_a_slug_that_is_not_a_host_is_not_asked(monkeypatch: pytest.M
         tt_feed(tt_item(link=f"http://{TT_HOST}/jobs/101-x")),
         tt_feed(tt_item(link=f"https://{TT_HOST}/about")),
         tt_feed(tt_item(101), tt_item(101, "Same number")),
+        tt_feed(tt_item(places=()), tt_item(102, places=())),  # jobs and no place at all: the place fields changed
     ],
 )
 def test_teamtailor_an_answer_that_does_not_read_is_a_failure(
@@ -3461,6 +3610,7 @@ def test_pinpoint_a_slug_that_is_not_a_host_is_not_asked(monkeypatch: pytest.Mon
         pp_answer({"data": [pp_posting(location="Tel Aviv")]}),
         pp_answer({"data": [pp_posting(url=f"http://{PP_HOST}/en/postings/9")]}),
         pp_answer({"data": [pp_posting(), pp_posting(title="Again")]}),
+        pp_answer({"data": [pp_posting(location=None), pp_posting(10, location={})]}),  # no place at all
     ],
 )
 def test_pinpoint_an_answer_that_does_not_read_is_a_failure(

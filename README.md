@@ -59,7 +59,7 @@ Hosted job boards:
 
 - Greenhouse, Lever, Ashby, Workable, SmartRecruiters
 - Comeet: public pages and WordPress plugin pages
-- JazzHR, BambooHR, Teamtailor, Pinpoint, Jobvite
+- JazzHR, BambooHR, Breezy, Teamtailor, Pinpoint, Jobvite
 - Workday, Oracle Fusion HCM, Phenom, Avature, Eightfold and Jibe: jobs in Israel only
 - Varonis' own careers site
 - Amazon (amazon.jobs)

@@ -42,7 +42,7 @@ begin
 
   -- every feed that was known before still is, and so is no feed at all
   foreach feed in array array['greenhouse_url', 'greenhouse', 'lever', 'ashby', 'workable', 'smartrecruiters', 'comeet',
-    'workday', 'jazzhr', 'bamboohr', 'oraclehcm', 'amazon', 'phenom', 'comeet_page', 'avature', 'eightfold', 'jibe', 'varonis', 'browser', ''] loop
+    'workday', 'jazzhr', 'bamboohr', 'oraclehcm', 'amazon', 'phenom', 'comeet_page', 'avature', 'eightfold', 'jibe', 'varonis', 'breezy', 'browser', ''] loop
     assert pg_temp.violated('insert into public.companies (name, domain, crawl, ats) values (''Old-'' || ' || quote_literal(feed) || ', ''old' || feed || '.test'', true, ' || quote_literal(feed) || ')') = 'accepted', 'ats ' || feed;
   end loop;
 
