@@ -10,7 +10,7 @@ from urllib.parse import unquote, urlsplit
 
 import requests
 
-VERSION = "0.89.0"  # equal to the version in package.json and pyproject.toml (a test checks it)
+VERSION = "0.90.0"  # equal to the version in package.json and pyproject.toml (a test checks it)
 SITE_URL = "https://ravidorr.github.io/misra/"
 CONTACT = "raanan@avidor.org"
 ROBOTS_TOKEN = "Misra"  # the product token that robots.txt groups name
@@ -155,7 +155,9 @@ def https_only(url: str) -> str:
 def crawled_companies(companies: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """The companies the pipeline crawls: `crawl` is exactly true and there is no exclusion. The others are researched
     sites kept for the coverage card (`gap`) and the companies that asked to be removed (`excluded`, a legal
-    commitment): none is ever requested. A record that does not say `crawl` is not crawled."""
+    commitment): none is crawled, and none is requested except by the read-only daily recheck of the researched records
+    with the gap reasons `no_openings` and `crawl_failing` (`run.recheck_targets`). A record that does not say `crawl`
+    is not crawled."""
     return [c for c in companies if c.get("crawl") is True and c.get("excluded") is None]
 
 

@@ -9,6 +9,7 @@ import os
 import queue
 import re
 import threading
+import time
 from collections.abc import Callable, Iterator
 from typing import Any, cast
 from urllib.parse import parse_qs, urlencode, urlsplit
@@ -646,11 +647,12 @@ async def _run(urls: list[str], on_result: Callable[[str, list[dict[str, Any]] |
         await b.close()
 
 
-def crawl_many(urls: Any) -> Iterator[tuple[str, list[dict[str, Any]] | None]]:
+def crawl_many(urls: Any, deadline: float | None = None) -> Iterator[tuple[str, list[dict[str, Any]] | None]]:
     """Yield (url, jobs) for each page as its crawl finishes, so a caller that records each one keeps the pages
     already crawled when the browser crawl dies. The crawl runs in a thread and the caller
     reads on its own, so what the caller does between results never stalls the browser. A crash in the crawl is
-    raised here after the results that came before it."""
+    raised here after the results that came before it. With a `deadline` (a time.monotonic value) the wait for the next
+    result ends there: the generator stops and the crawl thread is left to die with the process."""
     done: queue.Queue[tuple[str, list[dict[str, Any]] | None] | None] = queue.Queue()
     failure: list[BaseException] = []
 
@@ -663,7 +665,15 @@ def crawl_many(urls: Any) -> Iterator[tuple[str, list[dict[str, Any]] | None]]:
             done.put(None)
 
     threading.Thread(target=work, daemon=True).start()
-    while (item := done.get()) is not None:
+    while True:
+        try:
+            item = done.get(
+                timeout=None if deadline is None else min(max(0.0, deadline - time.monotonic()), threading.TIMEOUT_MAX)
+            )
+        except queue.Empty:
+            return
+        if item is None:
+            break
         yield item
     if failure:
         raise failure[0]

@@ -1,0 +1,239 @@
+import runpy
+import sys
+from pathlib import Path
+from typing import Any
+
+import pytest
+
+import run
+from tests.conftest import write_json
+
+
+def rec(name: str, reason: str, **kw: Any) -> dict[str, Any]:
+    base: dict[str, Any] = {
+        "name": name,
+        "crawl": False,
+        "careers_url": f"https://{name.lower()}.example/careers",
+        "ats": "",
+        "slug": "",
+        "gap": {"reason": reason, "note": ""},
+    }
+    return base | kw
+
+
+def job(location: str) -> dict[str, str]:
+    return {"job_id": "1", "title": "T", "location": location, "url": "u", "team": "", "posted": ""}
+
+
+def test_only_no_openings_and_crawl_failing_records_with_an_address_are_probed() -> None:
+    everyone = [
+        rec("Open", "no_openings"),
+        rec("Failing", "crawl_failing"),
+        rec("Protected", "bot_protection"),
+        rec("Unusable", "site_unusable"),
+        rec("Reader", "needs_reader"),
+        rec("Nofeed", "no_feed_found"),
+        rec("Nourl", "no_openings", careers_url=""),
+        rec("Crawled", "no_openings", crawl=True),
+        rec("Gone", "no_openings", excluded={"reason": "x", "date_added": "2026-01-01"}),
+        rec("Listed", "no_openings"),
+        {"name": "Plain", "crawl": False},
+    ]
+    names = [c["name"] for c in run.recheck_targets(everyone, ["listed"])]
+    assert names == ["Open", "Failing"]
+
+
+def test_a_known_board_goes_through_its_adapter_and_a_page_through_the_browser_crawl(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setitem(run.ADAPTERS, "fake", lambda slug: [job("Tel Aviv")] if slug == "ok" else None)
+    seen: list[list[str]] = []
+
+    deadlines: list[float | None] = []
+
+    def crawl_many(urls: list[str], deadline: float | None = None) -> Any:
+        seen.append(urls)
+        deadlines.append(deadline)
+        return iter([(u, [job("")] if "page" in u else None) for u in urls])
+
+    monkeypatch.setattr(run, "crawl_many", crawl_many)
+    targets = [
+        rec("Board", "no_openings", ats="fake", slug="ok"),
+        rec("Dead", "no_openings", ats="fake", slug="bad"),
+        rec("Page", "no_openings", careers_url="https://page.example/c"),
+        rec("Twin", "no_openings", careers_url="https://page.example/c"),
+        rec("Shell", "no_openings", ats="browser", slug="https://shell.example/jobs"),
+    ]
+    found = run.recheck_jobs(targets)
+    assert found == [
+        ("Board", [job("Tel Aviv")]),
+        ("Dead", None),
+        ("Page", [job("")]),
+        ("Twin", [job("")]),
+        ("Shell", None),
+    ]
+    assert seen == [["https://page.example/c", "https://shell.example/jobs"]]
+    assert deadlines == [float("inf")]  # the crawl is told the deadline too
+
+
+def test_a_crash_keeps_what_was_read_before_it_and_a_record_without_a_slug_uses_its_address(
+    workdir: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    write_json(
+        workdir / "data" / "companies.json",
+        [
+            rec("Board", "no_openings", ats="fake", slug="ok"),
+            rec("Shell", "no_openings", ats="browser", slug=""),
+            rec("NoSlug", "no_openings", ats="fake", slug=""),
+        ],
+    )
+    monkeypatch.setitem(run.ADAPTERS, "fake", lambda slug: [{"job_id": "1", "title": "T", "location": None}])
+    urls: list[list[str]] = []
+
+    def crash(pages: list[str], deadline: float | None = None) -> Any:
+        urls.append(pages)
+        raise RuntimeError("detail")
+
+    monkeypatch.setattr(run, "crawl_many", crash)
+    assert run.recheck_step() == 0
+    assert urls == [["https://shell.example/careers", "https://noslug.example/careers"]]
+    assert capsys.readouterr().out == (
+        "::warning::recheck failed, RuntimeError\n"
+        "recheck: 1 of 3 probed, 0 with Israel jobs; 1 with jobs of no readable location, 0 unreachable\n"
+    )
+
+
+def test_an_adapter_that_raises_and_a_robots_refusal_are_unreachable_not_a_crash(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def boom(slug: str) -> Any:
+        raise ValueError("adapter bug")
+
+    def refused(slug: str) -> Any:
+        monkeypatch.setattr(run.common, "robots_blocked", lambda: "host.example")  # a refused request
+        return [job("Tel Aviv")]
+
+    monkeypatch.setitem(run.ADAPTERS, "boom", boom)
+    monkeypatch.setitem(run.ADAPTERS, "refused", refused)
+    monkeypatch.setattr(run, "crawl_many", lambda urls, deadline=None: iter(()))
+    found = run.recheck_jobs(
+        [rec("Boom", "no_openings", ats="boom", slug="x"), rec("Refused", "no_openings", ats="refused", slug="y")]
+    )
+    assert found == [("Boom", None), ("Refused", None)]
+    assert run.WHY["x"].startswith("adapter error: ValueError")
+    assert run.WHY["y"].startswith(run.ROBOTS_NOTE)
+
+
+def test_two_records_with_the_same_name_are_both_probed_and_counted(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setitem(run.ADAPTERS, "fake", lambda slug: [job("Tel Aviv")])
+    monkeypatch.setattr(run, "crawl_many", lambda urls, deadline=None: iter([(u, [job("Haifa")]) for u in urls]))
+    found = run.recheck_jobs(
+        [rec("Twin", "no_openings", ats="fake", slug="a"), rec("Twin", "no_openings", careers_url="https://t/c")]
+    )
+    assert [n for n, _ in found] == ["Twin", "Twin"]
+    assert run.recheck_summary(found).startswith("::notice::recheck: 2 probed, 2 with Israel jobs: Twin (1), Twin (1);")
+
+
+def test_nothing_new_is_started_after_the_deadline_and_the_summary_says_of_how_many(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setitem(run.ADAPTERS, "fake", lambda slug: [job("Tel Aviv")])
+    monkeypatch.setattr(run, "crawl_many", lambda urls, deadline=None: iter([(u, [job("Haifa")]) for u in urls]))
+    targets = [
+        rec("A", "no_openings", ats="fake", slug="a"),
+        rec("B", "no_openings", careers_url="https://b/c"),
+        rec("C", "no_openings", careers_url="https://c/c"),
+    ]
+    assert run.recheck_jobs(targets, deadline=-1.0) == []  # already late: no adapter call, no browser
+    got = run.recheck_jobs(targets, deadline=float("inf"))
+    assert [n for n, _ in got] == ["A", "B", "C"]
+    clock = iter([0.0, 0.0, 0.0, 0.0, 5.0])  # all start, the first page result ends the reading
+    monkeypatch.setattr(run.time, "monotonic", lambda: next(clock))
+    assert [n for n, _ in run.recheck_jobs(targets, deadline=1.0)] == ["A", "B"]
+    assert run.recheck_summary(got, 3).startswith("::notice::recheck: 3 of 3 probed,")
+    late = iter([0.0, 5.0])  # the deadline passes while the pages are only queued: no browser starts
+    monkeypatch.setattr(run.time, "monotonic", lambda: next(late))
+    monkeypatch.setattr(run, "crawl_many", lambda urls, deadline=None: pytest.fail("the browser must not start"))
+    assert run.recheck_jobs(targets[1:2], deadline=1.0) == []
+
+
+def test_no_page_to_read_starts_no_browser(monkeypatch: pytest.MonkeyPatch) -> None:
+    def boom(urls: list[str], deadline: float | None = None) -> Any:
+        raise AssertionError("the browser must not start")
+
+    monkeypatch.setattr(run, "crawl_many", boom)
+    assert run.recheck_jobs([]) == []
+
+
+def test_the_summary_names_companies_with_israel_jobs_and_only_counts_the_rest() -> None:
+    line = run.recheck_summary(
+        [
+            ("B", [job("Tel Aviv, Israel"), job("Paris"), job("Herzliya")]),
+            ("A", [job("Haifa")]),
+            ("Unplaced", [job(""), job("Paris")]),
+            ("Foreign", [job("Paris")]),
+            ("Empty", []),
+            ("Down", None),
+        ]
+    )
+    assert line == (
+        "::notice::recheck: 6 probed, 2 with Israel jobs: A (1), B (2); "
+        "1 with jobs of no readable location, 1 unreachable"
+    )
+    assert "Unplaced" not in line
+
+
+def test_a_quiet_recheck_is_no_notice() -> None:
+    assert (
+        run.recheck_summary([("Empty", []), ("Down", None)])
+        == "recheck: 2 probed, 0 with Israel jobs; 0 with jobs of no readable location, 1 unreachable"
+    )
+
+
+def test_the_recheck_step_logs_one_line_and_is_green(
+    workdir: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    write_json(
+        workdir / "data" / "companies.json",
+        [
+            rec("Page", "no_openings"),
+            rec("Protected", "bot_protection"),
+            {"name": "Gone", "excluded": {"reason": "x", "date_added": "2026-01-01"}},
+        ],
+    )
+    monkeypatch.setattr(run, "crawl_many", lambda urls, deadline=None: iter([(u, [job("Tel Aviv")]) for u in urls]))
+    monkeypatch.setattr(sys, "argv", ["run.py", "--recheck"])
+    assert run.recheck_step() == 0
+    assert capsys.readouterr().out == (
+        "::notice::recheck: 1 of 1 probed, 1 with Israel jobs: Page (1); "
+        "0 with jobs of no readable location, 0 unreachable\n"
+    )
+
+
+def test_the_flag_runs_the_step(
+    workdir: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setattr(sys, "argv", ["run.py", "--recheck"])  # the list is empty: no site is read, no browser starts
+    with pytest.raises(SystemExit) as done:
+        runpy.run_module("run", run_name="__main__")
+    assert done.value.code == 0
+    assert capsys.readouterr().out.startswith("recheck: 0 of 0 probed")
+
+
+def test_a_crash_is_a_warning_and_never_a_red_run(
+    workdir: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    write_json(workdir / "data" / "companies.json", [rec("Page", "no_openings")])
+
+    def crash(urls: list[str], deadline: float | None = None) -> Any:
+        raise RuntimeError("secret detail")
+
+    monkeypatch.setattr(run, "crawl_many", crash)
+    assert run.recheck_step() == 0
+    assert capsys.readouterr().out == "::warning::recheck failed, RuntimeError\n"
+
+
+def test_a_missing_list_is_a_warning_too(workdir: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    (workdir / "data" / "companies.json").unlink()
+    assert run.recheck_step() == 0
+    assert capsys.readouterr().out.startswith("::warning::recheck failed, ")
