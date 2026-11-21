@@ -47,6 +47,8 @@ EF_SEARCH = "/api/pcsx/search"  # Eightfold career sites: the page's own search 
 EF_NEXT = 'button[aria-label="Next jobs" i]'
 EF_MAX_PAGES = 60  # ten jobs a page
 SETTLE_POLLS = 32  # at 250 ms: wait up to 8 s for a pagination or a "load more" click to show new job links
+SLOW_POLLS = 160  # at 250 ms: a "load more" click whose own request is still open is waited for up to 40 s
+QUIET_POLLS = 4  # polls with no request of the click open: its answer has had a second to reach the page
 MORE = re.compile(r"load more|show more|see more|view more|more jobs|more positions", re.I)
 LANGS = {
     "english",
@@ -382,6 +384,21 @@ async def _polite(url: str) -> None:
         await asyncio.sleep(wait)
 
 
+async def _list_grew(page: Any, before: int, open_calls: set[Any], asked: set[Any]) -> bool:
+    """After a "load more" click: True once the link count differs from `before`. A list that answers late (Priority
+    Software's admin-ajax took over 8 s from a runner) is waited for as long as a request the click started (not in
+    `asked`) is open, up to SLOW_POLLS; with none, SETTLE_POLLS ends it, so a dud button costs one wait."""
+    quiet = 0
+    for poll in range(SLOW_POLLS):
+        await page.wait_for_timeout(250)
+        if await page.eval_on_selector_all("a[href]", "e=>e.length") != before:
+            return True
+        quiet = 0 if open_calls - asked else quiet + 1
+        if poll + 1 >= SETTLE_POLLS and quiet >= QUIET_POLLS:
+            break
+    return False
+
+
 async def crawl_one(ctx: Any, url: str, sem: asyncio.Semaphore) -> list[dict[str, Any]] | None:  # noqa: PLR0911, PLR0912, PLR0915
     async with sem:
         if not await asyncio.to_thread(robots_gate, url):  # the fetch of robots.txt blocks, so it runs off the loop
@@ -423,6 +440,19 @@ async def crawl_one(ctx: Any, url: str, sem: asyncio.Semaphore) -> list[dict[str
                 if EF_SEARCH in resp.url and resp.request.resource_type in ("xhr", "fetch") and resp.status == HTTP_OK:
                     ef_jobs.extend(_eightfold_jobs(resp.url, await resp.json()))
 
+        open_calls: set[Any] = set()  # fetches and XHRs of the career page's own host that are still open
+
+        def call_started(req: Any) -> None:
+            if req.resource_type in ("xhr", "fetch") and host_of(req.url) == host_of(url):
+                open_calls.add(req)
+
+        page.on("request", call_started)
+
+        def call_ended(req: Any) -> None:
+            open_calls.discard(req)
+
+        page.on("requestfinished", call_ended)
+        page.on("requestfailed", call_ended)
         page.on("response", lambda r: asyncio.ensure_future(on_resp(r)))
         page.on("response", lambda r: asyncio.ensure_future(on_search(r)))
         try:
@@ -452,14 +482,11 @@ async def crawl_one(ctx: Any, url: str, sem: asyncio.Semaphore) -> list[dict[str
                     btn = page.get_by_role("button", name=MORE).first
                     if await btn.is_visible(timeout=300):
                         before = await page.eval_on_selector_all("a[href]", "e=>e.length")
+                        asked = set(open_calls)  # the requests the click did not start
                         await _polite(page.url)
                         await btn.click(timeout=2000)
-                        for _poll in range(SETTLE_POLLS):  # the list answers from a slow server: wait for new links
-                            await page.wait_for_timeout(250)
-                            if await page.eval_on_selector_all("a[href]", "e=>e.length") != before:
-                                break
-                        else:  # the click showed nothing within the wait: this button loads no jobs, stop pressing it
-                            break
+                        if not await _list_grew(page, before, open_calls, asked):
+                            break  # this button loads no jobs: stop pressing it
                 n = await page.eval_on_selector_all("a[href]", "e=>e.length")
                 if n == prev:
                     break
