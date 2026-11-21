@@ -450,7 +450,7 @@ def main() -> None:  # noqa: PLR0915
                 if reason.startswith((DROP_NOTE, DROP_BELIEVED)):
                     reason = ""  # our own note from an earlier run in this process, not the crawler's
                 WHY[co["slug"]] = f"{drop} ({reason})" if reason else drop
-            note = drop
+            note = WHY[co["slug"]] if drop else ""  # the hold plus the crawler's own reason
             if jobs is None:
                 note = WHY.get(co["slug"], "request failed")
             elif not jobs and co["ats"] == "browser":

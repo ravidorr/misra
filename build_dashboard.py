@@ -20,7 +20,7 @@ from markdown_it.token import Token
 
 import classify
 import regions
-from common import ROBOTS_NOTE, crawled_companies, is_excluded, load_companies, load_excluded, open_history
+from common import DROP_NOTE, ROBOTS_NOTE, crawled_companies, is_excluded, load_companies, load_excluded, open_history
 
 # Stylesheets bundled into docs/dashboard.css, in order. Raw colors live only in tokens.css.
 CSS_SOURCES = ("design-system/tokens.css", "design-system/components/*.css", "templates/dashboard.css")
@@ -199,6 +199,8 @@ def reason(note: str | None) -> str:
     n = note or ""
     if re.search(r"HTTP 40[13]|blocked page|Access Denied|Just a moment", n, re.I):
         return BLOCKED_WHY
+    if n.startswith(DROP_NOTE):
+        n = n.split(" (", 1)[0]  # the crawler's own trace after the hold is for the log, not the visitor
     return n[:120] or "the last crawl failed"
 
 
