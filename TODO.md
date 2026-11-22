@@ -1,6 +1,6 @@
 # TODO
 
-Open work, as of 2026-11-20. Each item says what triggers it, how to do it and when it is done. When one is finished,
+Open work, as of 2026-11-22. Each item says what triggers it, how to do it and when it is done. When one is finished,
 delete it and update the counts in the others: the researched count and the segment, reason and no-careers-URL counts in the research item (recounted on
 2026-11-19, see its status note; a pin removes one record from one segment and one reason).
 An item with a screenshot in `todo-images/` goes with it: delete the image file in the same PR.
@@ -336,7 +336,8 @@ An item that has a date says `Due <date>` in its text. The dates were set on 202
   - REE Automotive (journal entry 218, `browser` reader, says "No open positions at the moment"): the sharp-drop guard held
     it on 2026-11-21; after 3 held days it should close its stored job. Undo: `companyctl.py revert 218 --apply`.
   - Priority Software read 9 jobs against 21 on the runner in four runs in a row (21 locally); the guard holds it and would
-    close 12 jobs after 3 held days. A PR to read all of them on the runner is in progress; confirm 21 jobs.
+    close 12 jobs after 3 held days. The wait for a slow "Load more" answer (#267) and the log of what the click did (#271)
+    are merged; confirm 21 jobs, and if it is still 9, the #271 log line says why.
   - RiT Technologies met a SiteGround robot challenge once on 2026-11-21 (`ok` with 1 job before); NeuReality failed once
     with "request failed". If either fails on two more runs in a row, park it (`bot_protection` for a challenge; never worked
     around).
@@ -401,11 +402,11 @@ recurring work.
     that class), which stay out for good. First use: Aerospike (Rippling) and fintastic (Freshteam), pinned as browser
     crawls on 2026-11-21.
   - Maintainer rule, 2026-11-21, researched records by `gap.reason`: `no_openings` and `crawl_failing` are checked
-    again every day (`python run.py --recheck`, the "Recheck the researched sites" step of `daily.yml`: the same crawl path,
+    again every day (`python run.py --recheck`, built in #273, 0.89.0; the "Recheck the researched sites" step of `daily.yml`: the same crawl path,
     `robots.txt` honoured, one request a second; one log line of counts and the names of the companies that show an Israel
     job, nothing stored, no key; pin such a company by hand with `companyctl`). `bot_protection` is put aside: never
-    retried and never worked around. `site_unusable` stays listed as it is. `needs_reader` gets a reader (separate
-    work). `no_feed_found` and `no_careers_url` are being researched again by hand.
+    retried and never worked around. `site_unusable` stays listed as it is. `needs_reader` gets a reader (pagers,
+    frames and tables since #276, 0.91.0; the rest is separate work). `no_feed_found` and `no_careers_url` are being researched again by hand.
   - Removal requests: the current process is sufficient (the `excluded` record is kept, the rows are deleted, the company is
     never crawled). Keep the written request as a paper trail.
 - **Recurring and open steps.**
@@ -486,8 +487,10 @@ recurring work.
     `script-loaded`). The rest: 13 vendor boards with no adapter (Breezy 3, Personio, Teamtailor, Jobvite, iCIMS, Dayforce,
     SumTotal, HiBob, Phenom, Taleo, Workable on its own subdomain), 5 boards seen but not read, 5 pages whose job links
     carry only an Apply label or a card the reader cannot title, 6 Hebrew pages, 2 on an Israeli recruiting board (never), 1
-    bot protection (never), 1 timeout and 57 with no job list in the page. The Breezy adapter is written (0.88.0); the three
-    boards have no Israel job today but Drimz's. HiBob needs none: the browser reader already reads its list.
+    bot protection (never), 1 timeout and 57 with no job list in the page. The adapters for Breezy (0.88.0, #274), Teamtailor,
+    Pinpoint and Jobvite (0.90.0, #275) and Recruitee (0.91.0, #276) are merged, with their migrations; the maintainer pins
+    the companies (no company is pinned by those PRs). Still without an adapter: Personio, iCIMS, Dayforce, SumTotal, Phenom,
+    Taleo and Workable on its own subdomain. HiBob needs none: the browser reader already reads its list.
   - Done when: every Goozali company with a usable website is crawled, or has a gap `reason` that says why not, and the
     unsurveyed note is gone.
 
