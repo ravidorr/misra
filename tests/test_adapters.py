@@ -329,6 +329,7 @@ def fake_post(monkeypatch: pytest.MonkeyPatch, *responses: FakeHttpResponse | No
     queue = list(responses)
 
     def _post(url: str, **kw: Any) -> FakeHttpResponse | None:
+        assert kw["retry"] is True  # a Workday search is repeated after a timeout, 429 or 5xx
         bodies.append({"url": url, **kw["json"]})
         return queue.pop(0) if len(queue) > 1 else queue[0]
 

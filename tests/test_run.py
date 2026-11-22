@@ -615,6 +615,25 @@ def test_an_adapter_that_raises_fails_its_own_company_and_not_the_run(
     assert note == "adapter error: ValueError: unexpected shape"
 
 
+@pytest.mark.parametrize(("failure", "note"), [("HTTP 403", "request failed (HTTP 403)"), ("", "request failed")])
+def test_a_failed_request_is_logged_with_its_status_and_never_a_page(
+    workdir: Path, monkeypatch: pytest.MonkeyPatch, failure: str, note: str
+) -> None:
+    def refused(_slug: str) -> Any:
+        run.common._outcome.failure = failure
+        return None
+
+    monkeypatch.setitem(run.ADAPTERS, "refused", refused)
+    conn = run.init()
+    conn.close()
+    write_json(workdir / "data" / "companies.json", [co("Wd", ats="refused")])
+    run.main()
+    check = sqlite3.connect(run.DB)
+    logged = check.execute("SELECT ok, note FROM crawl_log WHERE company='Wd'").fetchone()
+    check.close()
+    assert logged == (0, note)
+
+
 def test_stored_jobs_also_make_a_company_known(workdir: Path, adapter: dict[str, Any]) -> None:
     conn = run.init()
     add_job(conn, "Acme", "old", "Old job")  # no crawl log at all: a database from before it existed
