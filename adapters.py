@@ -10,6 +10,7 @@ from collections import Counter
 from collections.abc import Callable, Iterable, Iterator
 from datetime import UTC, datetime
 from email.utils import parsedate_to_datetime
+from html.parser import HTMLParser
 from itertools import pairwise
 from typing import Any
 from urllib.parse import parse_qsl, unquote, urljoin, urlparse
@@ -45,6 +46,7 @@ BULLS_MAX = 500  # the most positions of the Bulls Media feed read (it lists abo
 ELBIT_MAX = 2000  # the most jobs of the Elbit Systems file read (it lists about 540): a longer list is a failure
 HAAT_MAX = 500  # the most entries of one Haat department list read (open and closed jobs, about 40 today)
 HAAT_MAX_DEPARTMENTS = 50  # the most departments of the Haat list read (it has 11): a longer list is a failure
+CAREERS_PAGE_MAX = 100  # the most roles of a small company's careers page read (Nucleai and ZIGIT list a handful)
 TALEO_MAX = 2000  # the most jobs of one Taleo career section read (Radware lists about 40): a longer list is a failure
 TALEO_MAX_PAGES = 100
 VARONIS_MAX = 200  # the most requisitions of Varonis' list read (it has no paging): a longer list is a failure
@@ -1770,6 +1772,201 @@ def haat(slug: str) -> list[Job] | None:
     return israel or None  # Haat has jobs in Israel: none is a bad answer
 
 
+class _RolesPage(HTMLParser):
+    """The roles of a small company's careers page, which lists them as plain text under one `h2` heading (`heading`,
+    the whole text of it). `found` says the heading was seen; `in_roles` is true from it to the next `h2`. A subclass
+    reads the tags and the text of that part in `start`, `end` and `text` (scripts and styles are never given)."""
+
+    heading = ""
+
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self.found = False
+        self.in_roles = False
+        self._h2: list[str] | None = None
+        self._skip = ""
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        if tag in ("script", "style"):
+            self._skip = tag
+        elif tag == "h2":
+            self._h2 = []
+        elif self.in_roles:
+            self.start(tag, dict(attrs))
+
+    def handle_endtag(self, tag: str) -> None:
+        if tag == self._skip:
+            self._skip = ""
+        elif tag == "h2" and self._h2 is not None:
+            self.in_roles = " ".join("".join(self._h2).split()) == self.heading
+            self.found = self.found or self.in_roles
+            self._h2 = None
+        elif self.in_roles:
+            self.end(tag)
+
+    def handle_data(self, data: str) -> None:
+        if self._skip:
+            return
+        if self._h2 is not None:
+            self._h2.append(data)
+        elif self.in_roles:
+            self.text(data)
+
+    def start(self, tag: str, attrs: dict[str, str | None]) -> None:
+        """A start tag inside the roles part."""
+
+    def end(self, tag: str) -> None:
+        """An end tag inside the roles part."""
+
+    def text(self, data: str) -> None:
+        """Text inside the roles part."""
+
+
+def _role_id(title: str) -> str:
+    """A stable id of a role that has none: its title in lowercase, every run of other characters one `-`."""
+    return re.sub(r"\W+", "-", title.lower()).strip("-")
+
+
+def _careers_roles[P: _RolesPage](host: str, path: str, parser: P) -> P | None:
+    """The careers page `https://<host><path>` read in one request through `common.get` and given to `parser`, or None
+    when the request fails, the answer is not HTTP 200, or the page has no roles heading (a changed shape)."""
+    r = get(f"https://{host}{path}")
+    if r is None or r.status_code != HTTP_OK:
+        return None
+    parser.feed(r.text)
+    parser.close()
+    return parser if parser.found else None
+
+
+def _listed(jobs: list[Job | None]) -> list[Job] | None:
+    """The roles of a careers page when they can be trusted, else None: at least one and at most CAREERS_PAGE_MAX, every
+    role read and no id twice (a duplicate title). An empty list is a failure too, as for the other dedicated readers
+    (a partial list would close the jobs it lacks, and an empty section may be a page that stopped showing them)."""
+    read = [j for j in jobs if j]
+    if not read or len(read) != len(jobs) or len(read) > CAREERS_PAGE_MAX:
+        return None
+    return read if len({j["job_id"] for j in read}) == len(read) else None
+
+
+NUCLEAI_HOST = "nucleai.ai"
+NUCLEAI_PATH = "/careers/"
+_NUCLEAI_PLACE = re.compile(r"\blocated in ([A-Z][^,.;()]{1,60})")
+
+
+class _NucleaiRoles(_RolesPage):
+    """The roles under the heading `Open Position(s)`: each is an `h4` (its title) followed by the text of the role."""
+
+    heading = "Open Position(s)"
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.roles: list[list[str]] = []  # [title, text of the role]
+        self._title: list[str] | None = None
+
+    def start(self, tag: str, attrs: dict[str, str | None]) -> None:
+        if tag == "h4":
+            self._title = []
+
+    def end(self, tag: str) -> None:
+        if tag == "h4" and self._title is not None:
+            self.roles.append([" ".join("".join(self._title).split()), ""])
+            self._title = None
+
+    def text(self, data: str) -> None:
+        if self._title is not None:
+            self._title.append(data)
+        elif self.roles:
+            self.roles[-1][1] += " " + data
+
+
+def _nucleai_job(title: str, text: str) -> Job | None:
+    """One role, or None when it cannot be read: no title, or no `located in <place>` in its text (the page gives the
+    place there and nowhere else). Only the place is taken from the text, the rest is not read. The role has no page of
+    its own (its Apply button goes to LinkedIn), so the link is the careers page with the id as a fragment, which
+    keeps the ids apart and is never sent to the site; the place gets ', Israel' after it, since it is a city
+    (`Tel Aviv-Yafo`)."""
+    found = _NUCLEAI_PLACE.search(" ".join(text.split()))
+    job_id = _role_id(title)
+    if not (job_id and found):
+        return None
+    return _job(job_id, title, f"{found.group(1).strip()}, Israel", f"https://{NUCLEAI_HOST}{NUCLEAI_PATH}#{job_id}")
+
+
+def nucleai(slug: str) -> list[Job] | None:
+    """slug is 'nucleai.ai', the only host this reader serves (a dedicated reader for one company, by the maintainer's
+    decision of 2026-11-22: the careers page lists its roles as plain text with no address of their own, so the browser
+    reader reads none). The page `https://nucleai.ai/careers/` is read in one request through `common.get` (its
+    robots.txt disallows only `/wp-admin/`; one request a second, the project's User-Agent, no login). The roles are
+    the `h4` titles under the heading `Open Position(s)` (see `_NucleaiRoles`); a page without that heading, an empty
+    list, more than CAREERS_PAGE_MAX roles, a role that does not read or a title twice is a failure, not a list. The
+    id of a role is its title as a slug, so the same role keeps its id. The text of a role is not read, except for its
+    place."""
+    if slug != NUCLEAI_HOST:
+        return None
+    page = _careers_roles(NUCLEAI_HOST, NUCLEAI_PATH, _NucleaiRoles())
+    return _listed([_nucleai_job(t, x) for t, x in page.roles]) if page else None
+
+
+ZIGIT_HOST = "www.zigit.co.il"
+ZIGIT_PATH = "/%d7%a7%d7%a8%d7%99%d7%99%d7%a8%d7%94/"  # the Hebrew word for careers
+ZIGIT_JOBS = f"https://{ZIGIT_HOST}/job-management/"
+
+
+class _ZigitRoles(_RolesPage):
+    """The roles under the heading `משרות חדשות` (new jobs): each is a card, a link (`card_box_main_wrp`) that holds a
+    `p` with the title."""
+
+    heading = "משרות חדשות"
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.cards: list[list[str]] = []  # [address, title]
+        self._card = False
+        self._title = False
+
+    def start(self, tag: str, attrs: dict[str, str | None]) -> None:
+        if tag == "a" and "card_box_main_wrp" in (attrs.get("class") or "").split():
+            self.cards.append([attrs.get("href") or "", ""])
+            self._card = True
+        elif tag == "p" and self._card:
+            self._title = True
+
+    def end(self, tag: str) -> None:
+        if tag == "p":
+            self._title = False
+        elif tag == "a":
+            self._card = False
+
+    def text(self, data: str) -> None:
+        if self._title:
+            self.cards[-1][1] += data
+
+
+def _zigit_job(href: str, title: str) -> Job | None:
+    """One card, or None when it cannot be read: no title, or an address that is not a page under `/job-management/`
+    of the site. The page gives no place (the company is in Israel), so the place is `Israel`."""
+    title = " ".join(title.split())
+    job_id = _role_id(title)
+    if not (job_id and href.startswith(ZIGIT_JOBS)):
+        return None
+    return _job(job_id, title, "Israel", href)
+
+
+def zigit(slug: str) -> list[Job] | None:
+    """slug is 'www.zigit.co.il', the only host this reader serves (a dedicated reader for one company, by the
+    maintainer's decision of 2026-11-22: the careers page lists its roles as cards the browser reader does not read).
+    The page `https://www.zigit.co.il/<careers in Hebrew>/` is read in one request through `common.get` (its robots.txt
+    disallows only `/wp-admin/`; one request a second, the project's User-Agent, no login). The roles are the cards
+    under the heading `משרות חדשות` (see `_ZigitRoles`); a page without that heading, an empty list, more than
+    CAREERS_PAGE_MAX roles, a card that does not read or a title twice is a failure, not a list. The id of a role is
+    its title as a slug, so the same role keeps its id; the link is the card's own page of the role, which is not
+    read."""
+    if slug != ZIGIT_HOST:
+        return None
+    page = _careers_roles(ZIGIT_HOST, ZIGIT_PATH, _ZigitRoles())
+    return _listed([_zigit_job(h, t) for h, t in page.cards]) if page else None
+
+
 _TALEO_SLUG = re.compile(r"([a-z0-9-]+(?:\.[a-z0-9-]+)+)/careersection/([A-Za-z0-9_-]+)")
 _TALEO_INPUT = re.compile(r"<input\b[^>]*>", re.I)
 _TALEO_ATTRIBUTE = re.compile(r'(?<![\w-])(name|value)="([^"]*)"')
@@ -2234,4 +2431,6 @@ ADAPTERS: dict[str, Callable[[str], list[Job] | None]] = {
     "elbit": elbit,
     "haat": haat,
     "taleo": taleo,
+    "nucleai": nucleai,
+    "zigit": zigit,
 }
