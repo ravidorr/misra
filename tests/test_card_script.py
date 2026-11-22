@@ -8,7 +8,7 @@ from typing import Any
 import pytest
 from playwright.async_api import Page
 
-from browser_crawl import CARD_ARGS, CARD_JS, CARD_MAX
+from browser_crawl import APPLY_LABELS, CARD_ARGS, CARD_JS, CARD_MAX, _label
 
 BASE = "https://x.test"
 MAX_LEVELS = 4
@@ -176,12 +176,110 @@ async def test_adjacent_cards_that_link_through_a_label_each_keep_their_own_card
     assert "Haifa" not in (await row_for(page, html, "/jobs/product-designer"))[2]
 
 
-async def test_an_apply_link_that_accompanies_a_titled_link_does_not_split_its_card(page: Page) -> None:
+async def test_an_apply_link_that_accompanies_a_titled_link_is_not_the_card_s_job(page: Page) -> None:
     html = (
         f'<div><div><a href="{BASE}/jobs/x-role">X Role</a></div><div>Haifa</div>'
         f'<div><a href="{BASE}/jobs/x-role/apply">Apply</a><a href="{BASE}/jobs/x-role/details">Details</a></div></div>'
     )
-    assert (await row_for(page, html, "/jobs/x-role/apply"))[2].startswith("X Role")
+    assert (await row_for(page, html, "/jobs/x-role/apply"))[2] == "Apply"  # it stops at the Details link: no title
+
+
+async def test_adjacent_cards_that_only_link_through_an_apply_link_each_keep_their_own_card(page: Page) -> None:
+    """Mobilicom: the title and the place are text in the card, the only link is "APPLY NOW"."""
+    html = (
+        "<div>"
+        + label_card("/careers/backend-engineer", "Backend Engineer", "Haifa", "APPLY NOW")
+        + label_card("/careers/product-designer", "Product Designer", "Berlin, Germany", "Apply")
+        + "</div>"
+    )
+    first = await row_for(page, html, "/careers/backend-engineer")
+    second = await row_for(page, html, "/careers/product-designer")
+    assert not first[4]
+    assert "Haifa" in first[2]
+    assert "Berlin" not in first[2]
+    assert "Berlin" in second[2]
+    assert "Haifa" not in second[2]
+
+
+async def test_an_apply_card_next_to_a_details_card_or_an_icon_card_is_two_cards(page: Page) -> None:
+    for other in ("Details", "→"):
+        apply_card = label_card("/careers/backend-engineer", "Backend Engineer", "Haifa", "Apply")
+        other_card = label_card("/careers/product-designer", "Product Designer", "Berlin, Germany", other)
+        html = "<div>" + apply_card + other_card + "</div>"
+        first = (await row_for(page, html, "/careers/backend-engineer"))[2]
+        assert "Haifa" in first
+        assert "Berlin" not in first
+
+
+async def test_apply_cards_told_apart_by_a_job_id_query_are_two_cards(page: Page) -> None:
+    html = (
+        "<div>"
+        + label_card("/careers/apply?job_id=1234", "Backend Engineer", "Haifa", "Apply")
+        + label_card("/careers/apply?job_id=5678", "Product Designer", "Berlin, Germany", "Apply")
+        + "</div>"
+    )
+    assert "Berlin" not in (await row_for(page, html, "job_id=1234"))[2]
+    assert "Haifa" not in (await row_for(page, html, "job_id=5678"))[2]
+
+
+async def test_an_apply_link_beside_another_link_of_its_card_reports_others(page: Page) -> None:
+    """Details and Apply in one card: the Apply link is skipped (the Details link is the card's link)."""
+    html = (
+        f'<div><div class="c"><span>Backend Engineer</span><span>Haifa</span>'
+        f'<a href="{BASE}/careers/backend-engineer">Details</a>'
+        f'<a href="{BASE}/careers/backend-engineer/apply">Apply</a></div></div>'
+    )
+    assert (await row_for(page, html, "/careers/backend-engineer/apply"))[4]
+
+
+async def test_a_longer_apply_label_is_read_as_on_main_whatever_else_links_in_its_card(page: Page) -> None:
+    """Jungo: "Apply for this position" is the title link's own text; a second link in the card does not hide it."""
+    html = (
+        f'<div class="c"><span>FPGA Engineer</span><a href="{BASE}/career/fpga-engineer/">Apply for this position</a>'
+        f'<a href="{BASE}/about">About</a></div>'
+    )
+    assert not (await row_for(page, html, "/career/fpga-engineer/"))[4]
+
+
+@pytest.mark.parametrize("label", ["Apply →", "Apply »", "Apply now >", "APPLY NOW >>", "apply  →"])
+async def test_adjacent_cards_with_an_arrowed_apply_link_are_two_cards(page: Page, label: str) -> None:
+    html = (
+        "<div>"
+        + label_card("/careers/backend-engineer", "Backend Engineer", "Haifa", label)
+        + label_card("/careers/product-designer", "Product Designer", "Berlin, Germany", label)
+        + "</div>"
+    )
+    first = await row_for(page, html, "/careers/backend-engineer")
+    second = await row_for(page, html, "/careers/product-designer")
+    assert "Haifa" in first[2]
+    assert "Berlin" not in first[2]
+    assert "Berlin" in second[2]
+    assert "Haifa" not in second[2]
+
+
+@pytest.mark.parametrize(
+    "label",
+    [
+        "Apply",
+        "apply now",
+        "Apply →",
+        "Apply »",
+        "Apply now >",
+        "Apply now >>",
+        "Apply for this position",
+        "Applying",
+        "Details →",
+        "",
+    ],
+)
+async def test_the_script_and_the_crawler_agree_on_what_an_apply_label_is(page: Page, label: str) -> None:
+    """The script counts a link as Apply (a second link in its card then reports `others`) as `_label()` would."""
+    html = (
+        f'<div class="c"><span>Backend Engineer</span><a href="{BASE}/careers/backend-engineer">{label}</a>'
+        f'<a href="{BASE}/about">About</a></div>'
+    )
+    reported = bool((await row_for(page, html, "/careers/backend-engineer"))[4])
+    assert reported == (_label(label) in APPLY_LABELS)
 
 
 async def test_adjacent_label_cards_with_numbered_addresses_are_two_cards(page: Page) -> None:
