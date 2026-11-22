@@ -12,7 +12,7 @@ from datetime import UTC, datetime
 from email.utils import parsedate_to_datetime
 from itertools import pairwise
 from typing import Any
-from urllib.parse import parse_qsl, urljoin, urlparse
+from urllib.parse import parse_qsl, unquote, urljoin, urlparse
 
 import requests
 
@@ -45,6 +45,8 @@ BULLS_MAX = 500  # the most positions of the Bulls Media feed read (it lists abo
 ELBIT_MAX = 2000  # the most jobs of the Elbit Systems file read (it lists about 540): a longer list is a failure
 HAAT_MAX = 500  # the most entries of one Haat department list read (open and closed jobs, about 40 today)
 HAAT_MAX_DEPARTMENTS = 50  # the most departments of the Haat list read (it has 11): a longer list is a failure
+TALEO_MAX = 2000  # the most jobs of one Taleo career section read (Radware lists about 40): a longer list is a failure
+TALEO_MAX_PAGES = 100
 VARONIS_MAX = 200  # the most requisitions of Varonis' list read (it has no paging): a longer list is a failure
 EIGHTFOLD_MAX = 100  # the most positions of one Eightfold search read (ten an answer): a board with more is not read
 
@@ -1768,6 +1770,151 @@ def haat(slug: str) -> list[Job] | None:
     return israel or None  # Haat has jobs in Israel: none is a bad answer
 
 
+_TALEO_SLUG = re.compile(r"([a-z0-9-]+(?:\.[a-z0-9-]+)+)/careersection/([A-Za-z0-9_-]+)")
+_TALEO_INPUT = re.compile(r"<input\b[^>]*>", re.I)
+_TALEO_ATTRIBUTE = re.compile(r'(?<![\w-])(name|value)="([^"]*)"')
+_TALEO_NUMBER = re.compile(r"[0-9A-Za-z]{1,20}")
+_TALEO_LIST = "requisitionListInterface"
+_TALEO_CHOICES = ("dropListSize", "dropSortBy")  # jobs a page, and the order (10: posting date, newest first)
+TALEO_ROW = 42  # the fields of one job in the list answer; the last job of a page has three fewer
+TALEO_LEAD = 3  # the fields before the first job
+TALEO_JOB_FIELDS = 31  # the fields of a job that are read, up to its "Submission for the position" line
+
+
+def _taleo_form(page: str) -> dict[str, str]:
+    """The named `<input>` fields of the job list page (name -> value): the page's own form, which it sends back with
+    every request it makes."""
+    form: dict[str, str] = {}
+    for tag in _TALEO_INPUT.findall(page):
+        attributes = {k: html.unescape(v) for k, v in _TALEO_ATTRIBUTE.findall(tag)}
+        if attributes.get("name"):
+            form[attributes["name"]] = attributes.get("value", "")
+    return form
+
+
+def _taleo_answer(text: str, head: str, total: int) -> tuple[list[str], dict[str, str]] | None:
+    """The job fields and the list's own values of a list answer (the first page's `initialHistory` value, or the answer
+    of the page's own call), or None when it is not shaped like one: the part that names the list does not begin with
+    `head`, there is no `ftlerrors` part, errors are listed, or the list's `nbElements` is not `total`. The parts are
+    split by `!$!` (`!%24!` in an attribute) and the fields by `!|!`; the part before `ftlerrors` holds the jobs."""
+    parts = text.replace("!%24!", "!$!").split("!$!")
+    at = next((i for i, part in enumerate(parts) if part.startswith("ftlerrors!|!")), 0)
+    if at <= 1 or not parts[1].startswith(head):
+        return None
+    tail = parts[at].split("!|!")
+    values = dict(zip(tail[2::2], tail[3::2], strict=False))
+    if tail[1] or values.get("listRequisition.nbElements") != str(total):
+        return None
+    return parts[at - 1].split("!|!"), values
+
+
+def _taleo_posted(text: str) -> str:
+    """The date of a job's `Nov 22, 2026` as YYYY-MM-DD, or '' when it is not one."""
+    try:
+        return datetime.strptime(text.strip(), "%b %d, %Y").date().isoformat()
+    except ValueError:
+        return ""
+
+
+def _taleo_job(base: str, row: list[str]) -> Job | None:
+    """One job of a page, or None when it cannot be read. A job is 31 fields: the requisition's id and title, each one
+    twice (the page draws the same job in several places), the five ids that follow, the job number, the place, the
+    date, and the line the page gives its apply button, `Submission for the position: <title> - (Job Number: <number>)`.
+    The text of a field has its `%`-escapes (`%26` for `&`, `%5C` for a backslash) undone. The job is trusted only
+    when these agree, so a list that changed shape is a failure and never a wrong job. The link is the page of the job
+    (`jobdetail.ftl?job=<number>`), the one the page opens from its own list."""
+    if not row[0] or len({row[0], row[2], *row[4:9]}) != 1 or row[1] != row[3]:
+        return None
+    title, number, place = unquote(row[1]).strip(), row[9], unquote(row[10]).strip()
+    if not (title and place and _TALEO_NUMBER.fullmatch(number)):
+        return None
+    if f"(Job Number: {number})" not in unquote(row[30]).replace("\\", ""):
+        return None
+    return _job(number, title, place, f"{base}/jobdetail.ftl?job={number}", posted=_taleo_posted(row[17]))
+
+
+def _taleo_jobs(base: str, fields: list[str], count: int) -> list[Job] | None:
+    """The `count` jobs of a page's fields, or None when there are not exactly that many or one cannot be read."""
+    body = fields[TALEO_LEAD:]
+    if len(body) + TALEO_LEAD != TALEO_ROW * count:
+        return None
+    rows = [body[i * TALEO_ROW : i * TALEO_ROW + TALEO_JOB_FIELDS] for i in range(count)]
+    read = [_taleo_job(base, row) for row in rows]
+    return [j for j in read if j] if all(read) else None
+
+
+def _taleo_call(base: str, form: dict[str, str], page: int) -> str | None:
+    """The answer of the page's own call for page number `page` of the list, one request: the form the list page sent
+    with `rlPager.currentPage` set to `page`, as the page's script does when a visitor presses a page number. None
+    when the request fails or the answer is not HTTP 200."""
+    query = {
+        "ftlpageid": form["ftlpageid"],
+        "ftlinterfaceid": _TALEO_LIST,
+        "ftlcompid": "rlPager",
+        "jsfCmdId": "rlPager",
+        "ftlcompclass": "PagerComponent",
+        "ftlcallback": "ftlPager_processResponse",
+        "ftlajaxid": f"ftlx{page}",
+    }
+    r = post(f"{base}/joblist.ajax", params=query, data={**form, "rlPager.currentPage": str(page)})
+    return r.text if r is not None and r.status_code == HTTP_OK else None
+
+
+def _taleo_sizes(form: dict[str, str]) -> tuple[int, int] | None:
+    """`(jobs in the list, jobs of a page)` of the list page's form, or None when the form has no page id, is not the
+    first page, has numbers that are not whole, a list that is empty or has more than TALEO_MAX jobs, or one of more
+    than TALEO_MAX_PAGES pages."""
+    numbers = [form.get("listRequisition.nbElements", ""), form.get("listRequisition.size", "")]
+    if not (form.get("ftlpageid") and form.get("rlPager.currentPage") == "1" and all(n.isdigit() for n in numbers)):
+        return None
+    total, size = int(numbers[0]), int(numbers[1])
+    ok = 0 < total <= TALEO_MAX and size > 0 and -(-total // size) <= TALEO_MAX_PAGES
+    return (total, size) if ok else None
+
+
+def taleo(slug: str) -> list[Job] | None:
+    """slug is '<host>/careersection/<section>' of an Oracle Taleo career section, for example
+    'radware.taleo.net/careersection/ex'. Its list page `https://<host>/careersection/<section>/joblist.ftl` is read
+    once: it holds the first page of the list (25 jobs) in the form field `initialHistory`, with the list's size
+    (`listRequisition.nbElements`) and the page's session fields. Every further page is the page's own call, a POST of
+    that form to `joblist.ajax` with the page number (the one a visitor's press of "2" makes) and the two selects the
+    page's script fills in (`dropListSize`, `dropSortBy`, read from the first page: without the order the server
+    answers another one and the pages overlap). All requests go through `common.get` and `common.post`: the host's
+    robots.txt, one request a second to a host, the project's User-Agent, no login. The list is trusted only when every
+    answer is shaped as the page's (`_taleo_answer`), the form has a page id, the list has at least one and at most
+    TALEO_MAX jobs, every page has the jobs it should (`_taleo_jobs`) and no job comes twice: a partial list would
+    close the jobs it lacks, and an empty one is a failure too. The job's place is the list's own text
+    (`IL-IL-Tel Aviv`), which `common.ISRAEL` and the regions find; the Israel filter is the company's `israel_only`.
+    The text of a job is on its own page and is not read."""
+    found = _TALEO_SLUG.fullmatch(slug)
+    if not found:
+        return None
+    base = f"https://{found[1]}/careersection/{found[2]}"
+    r = get(f"{base}/joblist.ftl")
+    if r is None or r.status_code != HTTP_OK:
+        return None
+    form = _taleo_form(r.text)
+    sizes = _taleo_sizes(form)
+    if sizes is None:
+        return None
+    total, size = sizes
+    first = _taleo_answer(form.get("initialHistory", ""), f"{_TALEO_LIST}!|!listRequisition!|!rlPager", total)
+    if first is None or not all(first[1].get(k, "").isdigit() for k in _TALEO_CHOICES):
+        return None
+    form |= {k: first[1][k] for k in _TALEO_CHOICES}  # the selects the page's script fills in, sent with every call
+    jobs: list[Job] = []
+    for page in range(1, -(-total // size) + 1):
+        answer: tuple[list[str], dict[str, str]] | None = first
+        if page > 1:
+            head = f"{_TALEO_LIST}!|!rlPager!|!listRequisition!|!{page}!|!"
+            answer = _taleo_answer(_taleo_call(base, form, page) or "", head, total)
+        more = _taleo_jobs(base, answer[0], min(size, total - (page - 1) * size)) if answer else None
+        if more is None:
+            return None
+        jobs += more
+    return jobs if len({j["job_id"] for j in jobs}) == len(jobs) else None
+
+
 _SUBDOMAIN_SLUG = re.compile(r"[a-z0-9][a-z0-9-]*")
 
 
@@ -2086,4 +2233,5 @@ ADAPTERS: dict[str, Callable[[str], list[Job] | None]] = {
     "bulls_media": bulls_media,
     "elbit": elbit,
     "haat": haat,
+    "taleo": taleo,
 }

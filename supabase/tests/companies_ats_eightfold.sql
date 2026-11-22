@@ -46,13 +46,13 @@ begin
   end loop;
 
   -- an unknown name and a name in another case are refused by this check, by its name
-  foreach feed in array array['taleo', 'Eightfold', 'EIGHTFOLD', 'eightfold ', 'eightfolds', 'icims'] loop
+  foreach feed in array array['personio', 'Eightfold', 'EIGHTFOLD', 'eightfold ', 'eightfolds', 'icims'] loop
     assert pg_temp.violated('insert into public.companies (name, domain, crawl, ats) values (''Bad-'' || ' || quote_literal(feed) || ', ''bad' || md5(feed) || '.test'', true, ' || quote_literal(feed) || ')') = 'companies_ats_known', 'ats ' || feed;
   end loop;
 
   -- an update to the new feed is accepted, to an unknown one refused
   assert pg_temp.violated('update public.companies set ats = ''eightfold'' where name = ''Old-lever''') = 'accepted';
-  assert pg_temp.violated('update public.companies set ats = ''taleo'' where name = ''Old-lever''') = 'companies_ats_known';
+  assert pg_temp.violated('update public.companies set ats = ''personio'' where name = ''Old-lever''') = 'companies_ats_known';
 end $$;
 
 rollback;
