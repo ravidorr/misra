@@ -299,7 +299,7 @@ begin
   end loop;
   assert pg_temp.violated('insert into public.companies (name, domain, crawl, links) values (''Links'', ''links.test'', true, ''{"israel": "https://x.test/il", "global": "https://x.test/"}'')') = 'accepted';
   -- the feed
-  assert pg_temp.violated('insert into public.companies (name, domain, crawl, ats) values (''Taleo'', ''taleo.test'', true, ''taleo'')') = 'companies_ats_known';
+  assert pg_temp.violated('insert into public.companies (name, domain, crawl, ats) values (''Personio'', ''personio.test'', true, ''personio'')') = 'companies_ats_known';
   assert pg_temp.violated('insert into public.companies (name, domain, crawl, ats) values (''Case'', ''case.test'', true, ''Greenhouse'')') = 'companies_ats_known';
   foreach col in array array['browser', 'phenom', 'comeet_page', 'greenhouse', ''] loop
     assert pg_temp.violated('insert into public.companies (name, domain, crawl, ats) values (''Ats-'' || ' || quote_literal(col) || ', ''ats' || col || '.test'', true, ' || quote_literal(col) || ')') = 'accepted', 'ats ' || col;
