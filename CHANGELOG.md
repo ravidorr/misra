@@ -14,10 +14,6 @@ All notable changes are documented here. Format follows [Keep a Changelog](https
 
 - A dedicated reader for the recruiting site of Elbit Systems: `adapters.elbit` (feed `elbit`, slug `elbitsystemscareer.com`) reads the site's own file `cron/jobs.json` (about 540 jobs) in one request, through `common.get` (robots.txt, one request a second, the project's User-Agent), and links each job to the site's own page `/job/?jid=<jobId>`. Every job is in Israel (the place is the region the site names, `North`, `Sharon`, `Shfela`, `Center`, `South` or `Jerusalem Area`, then `Israel`). It reads no job text, and treats a changed shape, a job twice, more than 2000 jobs or an empty list as a failure. The migration `20261211100000_companies_ats_elbit.sql` adds the key to the check `companies_ats_known` and the admin page lists it; apply the migration after the merge, then pin the company.
 
-### Fixed
-
-- The browser reader reads a career page whose jobs are cards with the title and the place as text and only an "Apply" or "Apply now" link (Mobilicom). The card climb counts an Apply link as a job of its own (it stops before the next card instead of swallowing the whole list), and an Apply link with no titled link in its card starts a card; "Save job" and "Send CV" links still never do.
-
 ## [0.94.2] - 2026-11-22
 
 ### Fixed

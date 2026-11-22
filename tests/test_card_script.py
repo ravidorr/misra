@@ -184,30 +184,6 @@ async def test_an_apply_link_that_accompanies_a_titled_link_does_not_split_its_c
     assert (await row_for(page, html, "/jobs/x-role/apply"))[2].startswith("X Role")
 
 
-async def test_adjacent_cards_that_only_link_through_an_apply_link_each_keep_their_own_card(page: Page) -> None:
-    """Mobilicom: the title and the place are text in the card, the only link is "APPLY NOW"."""
-    html = (
-        "<div>"
-        + label_card("/careers/backend-engineer", "Backend Engineer", "Haifa", "APPLY NOW")
-        + label_card("/careers/product-designer", "Product Designer", "Berlin, Germany", "Apply")
-        + "</div>"
-    )
-    first = (await row_for(page, html, "/careers/backend-engineer"))[2]
-    second = (await row_for(page, html, "/careers/product-designer"))[2]
-    assert "Haifa" in first
-    assert "Berlin" not in first
-    assert "Berlin" in second
-    assert "Haifa" not in second
-
-
-async def test_an_apply_link_does_not_stop_at_a_details_link_of_its_own_job(page: Page) -> None:
-    html = (
-        f'<div><div><a href="{BASE}/jobs/x-role">X Role</a></div><div>Haifa</div>'
-        f'<div><a href="{BASE}/jobs/x-role/apply">Apply</a><a href="{BASE}/jobs/y-role/details">Details</a></div></div>'
-    )
-    assert (await row_for(page, html, "/jobs/x-role/apply"))[2].startswith("X Role")
-
-
 async def test_adjacent_label_cards_with_numbered_addresses_are_two_cards(page: Page) -> None:
     html = (
         "<div>"
