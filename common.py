@@ -166,13 +166,12 @@ def host_of(url: str) -> str:
     return re.sub(r"^https?://([^/]+).*", r"\1", url)
 
 
-def reserve_slot(host: str, delay: float | None = None) -> float:
+def reserve_slot(host: str) -> float:
     """Claim the next turn on a host and return the seconds to wait before using it. Every client of the project (the
     adapters' requests and the browser crawl) takes its turns here, so one host sees at most one request a DELAY."""
     with _lock:
-        gap = DELAY if delay is None else delay
-        wait = _last.get(host, 0) + gap - time.time()
-        _last[host] = max(time.time(), _last.get(host, 0) + gap)
+        wait = _last.get(host, 0) + DELAY - time.time()
+        _last[host] = max(time.time(), _last.get(host, 0) + DELAY)
     return wait
 
 
@@ -241,6 +240,22 @@ def _wait_to_repeat(r: requests.Response | None, attempt: int, pool: str) -> boo
     return True
 
 
+def _await_paced_turn(host: str, pool: str) -> None:
+    """Wait until the host's turn AND the group's turn are both due, then take them at that same moment (it is the time
+    the request is sent, in both schedules). The clocks are read again after every sleep, so a refusal that pushed the
+    group back while this request slept is respected."""
+    gap = PACES[pool].gap
+    while True:
+        with _lock:
+            now = time.time()
+            due = max(_last.get(host, 0) + DELAY, _last.get(pool, 0) + gap)
+            if due <= now:
+                _last[host] = _last[pool] = now
+                _pool_requests[pool] = _pool_requests.get(pool, 0) + 1
+                return
+        time.sleep(due - now)
+
+
 def _send(method: str, url: str, retry: bool = False, pool: str = "", **kw: Any) -> requests.Response | None:
     """One request on its turn. With retry, a timeout, 429 or 5xx is tried again up to RETRIES times after a wait.
     Each try takes its turn on the host, so the one-request-a-second rule holds, and on the pace of its `pool` when it
@@ -254,12 +269,9 @@ def _send(method: str, url: str, retry: bool = False, pool: str = "", **kw: Any)
         return None
     attempt = 0
     while True:
-        wait = reserve_slot(host)
         if paced:
-            wait = max(wait, reserve_slot(pool, PACES[pool].gap))
-            with _lock:
-                _pool_requests[pool] = _pool_requests.get(pool, 0) + 1
-        if wait > 0:
+            _await_paced_turn(host, pool)
+        elif (wait := reserve_slot(host)) > 0:
             time.sleep(wait)
         r: requests.Response | None = None
         try:

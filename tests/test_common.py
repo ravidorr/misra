@@ -185,25 +185,40 @@ def paced(monkeypatch: pytest.MonkeyPatch, gap: float = 2.0, budget: float = 180
     monkeypatch.setattr(common, "PACES", {"workday": common.Pace(gap=gap, retry_after_max=60.0, budget=budget)})
 
 
-def clock(monkeypatch: pytest.MonkeyPatch) -> None:
-    """A frozen clock, so the turns of a test do not depend on how fast it runs."""
-    monkeypatch.setattr(common.time, "time", lambda: 1000.0)
+def clock(monkeypatch: pytest.MonkeyPatch) -> list[float]:
+    """A fake clock that only moves when a test sleeps (scripted() records the sleeps; this makes them advance it)."""
+    now = [1000.0]
+    monkeypatch.setattr(common.time, "time", lambda: now[0])
+    return now
+
+
+def scripted_on(
+    now: list[float], monkeypatch: pytest.MonkeyPatch, *answers: FakeHttpResponse | Exception
+) -> tuple[ScriptedSession, list[float]]:
+    s, sleeps = scripted(monkeypatch, *answers)
+
+    def sleep(seconds: float) -> None:
+        sleeps.append(seconds)
+        now[0] += seconds
+
+    monkeypatch.setattr(common.time, "sleep", sleep)
+    return s, sleeps
 
 
 def test_pooled_requests_to_different_hosts_wait_for_one_shared_turn(monkeypatch: pytest.MonkeyPatch) -> None:
     paced(monkeypatch)
-    clock(monkeypatch)
-    s, sleeps = scripted(monkeypatch, *[FakeHttpResponse()] * 3)
+    now = clock(monkeypatch)
+    s, sleeps = scripted_on(now, monkeypatch, *[FakeHttpResponse()] * 3)
     for host in ("a.test", "b.test", "c.test"):
         assert common.post(f"https://{host}/x", pool="workday") is not None
-    assert (s.calls, sleeps) == (3, [2.0, 4.0])  # the first goes at once, then one every gap, whatever the host
+    assert (s.calls, sleeps) == (3, [2.0, 2.0])  # the first goes at once, then one every gap, whatever the host
     assert "workday 3 requests" in common.pool_report()
 
 
 def test_an_unpooled_request_ignores_the_pace(monkeypatch: pytest.MonkeyPatch) -> None:
     paced(monkeypatch)
-    clock(monkeypatch)
-    s, sleeps = scripted(monkeypatch, *[FakeHttpResponse()] * 2)
+    now = clock(monkeypatch)
+    s, sleeps = scripted_on(now, monkeypatch, *[FakeHttpResponse()] * 2)
     common.post("https://a.test/x", pool="workday")
     common.post("https://b.test/x")
     assert (s.calls, sleeps) == (2, [])
@@ -213,20 +228,20 @@ def test_a_pooled_refusal_pushes_back_the_whole_group_and_honours_a_long_retry_a
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     paced(monkeypatch)
-    clock(monkeypatch)
+    now = clock(monkeypatch)
     busy = FakeHttpResponse(status_code=429)
     busy.headers["Retry-After"] = "45"
-    s, sleeps = scripted(monkeypatch, busy, FakeHttpResponse())
+    s, sleeps = scripted_on(now, monkeypatch, busy, FakeHttpResponse())
     assert common.post("https://a.test/x", retry=True, pool="workday") is not None
     assert (s.calls, sleeps, common.last_failure()) == (2, [47.0], "")  # the 45 s asked for, then the turn
-    assert common.reserve_slot("workday", 2.0) > 0  # another board waits behind it too
+    assert common._last["workday"] == now[0]  # the refusal pushed every board back, not only this one
     assert "45s waited" in common.pool_report()
 
 
 def test_a_persistent_429_gives_the_host_up_for_the_run(monkeypatch: pytest.MonkeyPatch) -> None:
     paced(monkeypatch)
-    clock(monkeypatch)
-    s, sleeps = scripted(monkeypatch, *[FakeHttpResponse(status_code=429)] * 3, FakeHttpResponse())
+    now = clock(monkeypatch)
+    s, sleeps = scripted_on(now, monkeypatch, *[FakeHttpResponse(status_code=429)] * 3, FakeHttpResponse())
     r = common.post("https://a.test/x", retry=True, pool="workday")
     assert r is not None
     assert (s.calls, sleeps) == (3, [7.0, 12.0])  # the try and two repeats, each after the doubled wait and the turn
@@ -238,8 +253,8 @@ def test_a_persistent_429_gives_the_host_up_for_the_run(monkeypatch: pytest.Monk
 
 def test_the_waiting_after_refusals_is_bounded_by_the_group_budget(monkeypatch: pytest.MonkeyPatch) -> None:
     paced(monkeypatch, budget=7.0)
-    clock(monkeypatch)
-    s, sleeps = scripted(monkeypatch, *[FakeHttpResponse(status_code=503)] * 2)
+    now = clock(monkeypatch)
+    s, sleeps = scripted_on(now, monkeypatch, *[FakeHttpResponse(status_code=503)] * 2)
     r = common.post("https://a.test/x", retry=True, pool="workday")
     assert r is not None
     assert (s.calls, sleeps, common.last_failure()) == (2, [7.0], "HTTP 503")  # 5 s fit the budget, 10 more do not
@@ -248,7 +263,43 @@ def test_the_waiting_after_refusals_is_bounded_by_the_group_budget(monkeypatch: 
 
 def test_a_pooled_timeout_is_repeated_and_never_gives_the_host_up(monkeypatch: pytest.MonkeyPatch) -> None:
     paced(monkeypatch, budget=0.0)
-    clock(monkeypatch)
-    s, _ = scripted(monkeypatch, requests.Timeout("slow"))
+    now = clock(monkeypatch)
+    s, _ = scripted_on(now, monkeypatch, requests.Timeout("slow"))
     assert common.post("https://a.test/x", retry=True, pool="workday") is None
     assert (s.calls, common.last_failure(), common._pool_given_up) == (1, "Timeout", set())
+
+
+def test_a_request_asleep_on_its_turn_respects_a_refusal_that_came_while_it_slept(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    paced(monkeypatch)
+    now = clock(monkeypatch)
+    common._last["workday"] = now[0]  # a request just went out: the next turn is 2 s away
+    seen: list[float] = []
+
+    def sleep(seconds: float) -> None:
+        seen.append(seconds)
+        if len(seen) == 1:  # while this one sleeps another worker is refused and the group is pushed back 30 s
+            common._last["workday"] = now[0] + 30.0
+        now[0] += seconds
+
+    monkeypatch.setattr(common.time, "sleep", sleep)
+    s = ScriptedSession(FakeHttpResponse())
+    monkeypatch.setattr(common, "_s", s)
+    assert common.post("https://a.test/x", pool="workday") is not None
+    assert seen == [2.0, 30.0]  # it woke at +2, saw the new cooldown, and slept the rest before sending
+    assert (s.calls, now[0]) == (1, 1032.0)
+
+
+def test_one_send_time_is_recorded_in_both_schedules_when_the_host_is_the_slower_one(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    paced(monkeypatch)
+    monkeypatch.setattr(common, "DELAY", 5.0)
+    now = clock(monkeypatch)
+    _s, sleeps = scripted_on(now, monkeypatch, *[FakeHttpResponse()] * 2)
+    common._last["a.test"] = now[0]  # the host was just used: its turn is 5 s away, the group's is free
+    common.post("https://a.test/x", pool="workday")
+    assert (sleeps, common._last["workday"], common._last["a.test"]) == ([5.0], 1005.0, 1005.0)  # the real send time
+    common.post("https://b.test/x", pool="workday")  # another tenant: a full gap after the send above, not before
+    assert sleeps == [5.0, 2.0]
