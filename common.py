@@ -11,7 +11,7 @@ from urllib.parse import unquote, urlsplit
 
 import requests
 
-VERSION = "0.94.7"  # equal to the version in package.json and pyproject.toml (a test checks it)
+VERSION = "0.94.8"  # equal to the version in package.json and pyproject.toml (a test checks it)
 SITE_URL = "https://ravidorr.github.io/misra/"
 CONTACT = "raanan@avidor.org"
 ROBOTS_TOKEN = "Misra"  # the product token that robots.txt groups name

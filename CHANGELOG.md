@@ -8,6 +8,12 @@ All notable changes are documented here. Format follows [Keep a Changelog](https
 
 - A "Hidden (n)" switch beside "Starred (n)": a view of its own that lists every company the visitor hid, one row each with "Unhide" (a company with no open role is listed too, so it can be unhidden without finding one of its roles), and every open role they hid one by one, as cards at full strength with "Unhide" and no "New" flag. The Hidden view also puts the coverage card away with the filters; the Starred view keeps it. It reads the choices kept today (this browser, or the account) and stores nothing new; a role hidden only because its company is hidden is covered by the company's row, and a hidden role leaves the list when its posting closes (the database deletes the discard). Two WebMCP tools: `list_hidden` and `unhide_company`.
 
+## [0.94.8] - 2026-11-22
+
+### Added
+
+- Readers for the careers pages of Nucleai and ZIGIT, by the maintainer's decision of 2026-11-22 (both pages list their roles as page text, which the browser reader reads as no job): `adapters.nucleai` (feed `nucleai`, slug `nucleai.ai`) and `adapters.zigit` (feed `zigit`, slug `www.zigit.co.il`). Each reads its page in one request through `common.get` (both `robots.txt` disallow only `/wp-admin/`; one request a second, the project's User-Agent, no login) and reads the server-rendered roles under the heading `Open Position(s)` (Nucleai: the `h4` titles, the place from `located in <city>` in the role's text) and `משרות חדשות` (ZIGIT: the cards, each with the link of its own page; the page gives no place, so `Israel`). The id of a role is its title as a slug, so the same role keeps its id; Nucleai's link is the careers page with `#<slug>` (the fragment only keeps the ids apart). A page without the heading, an empty section, more than 100 roles, a role that does not read or a title twice is a failure that keeps the existing jobs. No change to `regions` (`Tel Aviv-Yafo` is the Tel Aviv area; ZIGIT's `Israel` is a job in Israel with no city). The migration `20261214100000_companies_ats_nucleai_zigit.sql` adds the keys to the check `companies_ats_known` and the admin page lists them; apply the migration after the merge, then pin Nucleai (`nucleai`, `nucleai.ai`) and ZIGIT (`zigit`, `www.zigit.co.il`).
+
 ## [0.94.7] - 2026-11-22
 
 ### Fixed
