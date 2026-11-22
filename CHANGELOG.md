@@ -12,7 +12,7 @@ All notable changes are documented here. Format follows [Keep a Changelog](https
 
 ### Fixed
 
-- The browser reader reads a careers page whose cards hold only an "Apply" or "Apply now" link and no titled link (Mobilicom: three jobs, each a card with its title as plain text). An Apply link now counts as a job of its own in the card climb, only against other Apply links, and may start a card when the card has no titled link; "Save" and "Send" links still never do. A card with a titled link is read as before. Pin Mobilicom with `--ats browser --slug https://mobilicom.com/careers/`.
+- The browser reader reads a careers page whose cards hold only an "Apply" or "Apply now" link (Mobilicom: three jobs, each a card with its title as plain text). An Apply link alone in its card now starts the card, and in the card climb it stops at a neighbouring Apply, Details or icon link; an Apply link with any other link in its card is skipped as before, and "Save" and "Send" links still never start a card. Pin Mobilicom with `--ats browser --slug https://mobilicom.com/careers/`.
 
 ## [0.94.6] - 2026-11-22
 
