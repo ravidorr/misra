@@ -42,6 +42,7 @@ AVATURE_MAX = 20  # the most jobs an Avature feed gives (it has no paging): a fe
 JIBE_MAX = 100  # the most jobs of one Jibe search read (one answer): a board with more is not read
 DEEL_MAX = 1000  # the most jobs of the Deel careers page read (it lists about 230): a longer list is a failure
 BULLS_MAX = 500  # the most positions of the Bulls Media feed read (it lists about 15): a longer list is a failure
+ELBIT_MAX = 2000  # the most jobs of the Elbit Systems file read (it lists about 540): a longer list is a failure
 HAAT_MAX = 500  # the most entries of one Haat department list read (open and closed jobs, about 40 today)
 HAAT_MAX_DEPARTMENTS = 50  # the most departments of the Haat list read (it has 11): a longer list is a failure
 VARONIS_MAX = 200  # the most requisitions of Varonis' list read (it has no paging): a longer list is a failure
@@ -1612,6 +1613,60 @@ def bulls_media(slug: str) -> list[Job] | None:
     return [j for j in jobs if ISRAEL.search(j["location"])] or None  # Bulls Media has jobs in Israel: none is bad
 
 
+ELBIT_HOST = "elbitsystemscareer.com"
+ELBIT_AREAS = frozenset({"North", "Sharon", "Shfela", "Center", "South", "Jerusalem Area"})  # regions the site names
+
+
+def _elbit_job(item: Any) -> Job | None:
+    """One job of the file, or None when it cannot be read: not an object, a `jobId` that is not a positive whole
+    number or a `jobTitle` that is not text. The file is the recruiting site of Elbit Systems in Israel, so every job
+    is in Israel; the place is `<region>, Israel` when `area` is one of the regions the site names (`ELBIT_AREAS`),
+    else just `Israel` (a few jobs carry a word such as `Relocation`). The division (`employerName`) is the team. The
+    link is the site's own page of the job, `/job/?jid=<jobId>`."""
+    if not isinstance(item, dict):
+        return None
+    job_id, title = item.get("jobId"), item.get("jobTitle")
+    if not (isinstance(job_id, int) and not isinstance(job_id, bool) and job_id > 0):
+        return None
+    if not (isinstance(title, str) and title.strip()):
+        return None
+    area, team = item.get("area"), item.get("employerName")
+    return _job(
+        str(job_id),
+        title.strip(),
+        f"{area}, Israel" if area in ELBIT_AREAS else "Israel",
+        f"https://{ELBIT_HOST}/job/?jid={job_id}",
+        team=team.strip() if isinstance(team, str) else "",
+        posted=_day(item.get("openDate")),
+    )
+
+
+def elbit(slug: str) -> list[Job] | None:
+    """slug is 'elbitsystemscareer.com', the only host this reader serves (a dedicated reader for one company). The
+    recruiting site of Elbit Systems is an app that draws its jobs from one file of its own,
+    `https://elbitsystemscareer.com/cron/jobs.json`, read in one request through `common.get` (the site's robots.txt
+    answers 404, so nothing is disallowed; one request a second, the project's User-Agent). The file has no paging
+    and no total, so it is trusted only when it is a JSON list of at most ELBIT_MAX jobs and no job is unreadable or
+    twice: a partial list would close the jobs it lacks. The text of each job is in the file and is not read. An
+    empty list is a failure too (the site always has jobs, so an empty answer is a broken one)."""
+    if slug != ELBIT_HOST:
+        return None
+    r = get(f"https://{ELBIT_HOST}/cron/jobs.json")
+    if r is None or r.status_code != HTTP_OK:
+        return None
+    try:
+        data = r.json()
+    except ValueError:
+        return None
+    if not isinstance(data, list) or len(data) > ELBIT_MAX:
+        return None
+    jobs = [_elbit_job(i) for i in data]
+    read = [j for j in jobs if j]
+    if not read or len(read) != len(jobs) or len({j["job_id"] for j in read}) != len(read):
+        return None
+    return read
+
+
 HAAT_HOST = "careers.haat.delivery"
 HAAT_API = "https://hub-backend.haat.delivery/api/v1/careers/public"
 # Haat's own development team in India: the one place of the list that is not in Israel (Haat serves Israel only).
@@ -2029,5 +2084,6 @@ ADAPTERS: dict[str, Callable[[str], list[Job] | None]] = {
     "recruitee": recruitee,
     "deel": deel,
     "bulls_media": bulls_media,
+    "elbit": elbit,
     "haat": haat,
 }

@@ -1,6 +1,6 @@
 -- The job feed `haat` joins the feeds the crawler knows: the dedicated reader of the careers page of Haat Delivery (its
 -- own backend's public answers), by the maintainer's decision of 2026-11-22. The check `companies_ats_known`, last set
--- by 20261210100000_companies_ats_deel_bulls_media.sql, lists the keys of `adapters.ADAPTERS` plus `browser`; a new
+-- by 20261211100000_companies_ats_elbit.sql, lists the keys of `adapters.ADAPTERS` plus `browser`; a new
 -- adapter is a new key, so the check is dropped and added again with the list that has it.
 -- Nothing else changes, and no row is written: the row that names the feed is pinned afterwards on the Companies area of
 -- the admin page. Every row already in the table passes (none names the new feed yet, and the old names are all still in
@@ -14,5 +14,5 @@ alter table public.companies add constraint companies_ats_known check (
   ats is null or ats = '' or ats in (
     'greenhouse_url', 'greenhouse', 'lever', 'ashby', 'workable', 'smartrecruiters', 'comeet', 'workday', 'jazzhr',
     'bamboohr', 'oraclehcm', 'amazon', 'phenom', 'comeet_page', 'avature', 'eightfold', 'jibe', 'varonis', 'breezy',
-    'teamtailor', 'pinpoint', 'jobvite', 'recruitee', 'deel', 'bulls_media', 'haat', 'browser'
+    'teamtailor', 'pinpoint', 'jobvite', 'recruitee', 'deel', 'bulls_media', 'elbit', 'haat', 'browser'
   ));

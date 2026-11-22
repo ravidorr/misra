@@ -3676,6 +3676,99 @@ def test_haat_is_registered() -> None:
     assert adapters.ADAPTERS["haat"] is adapters.haat
 
 
+ELBIT_URL = "https://elbitsystemscareer.com/cron/jobs.json"
+
+
+def elbit_item(job_id: Any = 21229, **over: Any) -> dict[str, Any]:
+    return {
+        "jobId": job_id,
+        "jobTitle": "System Engineer for Cyber Defense",
+        "jobCode": "7405",
+        "openDate": "2026-11-19T09:32:00",
+        "area": "Shfela",
+        "employerName": "Division",
+        "description": "&lt;div&gt;posting text that is never read&lt;/div&gt;",
+        **over,
+    }
+
+
+def test_elbit_reads_every_job_as_a_job_in_israel_with_its_region(monkeypatch: pytest.MonkeyPatch) -> None:
+    items = [elbit_item(), elbit_item(7, jobTitle=" Student ", area="Relocation", employerName=None, openDate=None)]
+    calls = fake_eightfold(monkeypatch, FakeHttpResponse(data=items))
+    jobs = adapters.elbit("elbitsystemscareer.com")
+    assert calls == [{"url": ELBIT_URL}]
+    assert jobs == [
+        {
+            "job_id": "21229",
+            "title": "System Engineer for Cyber Defense",
+            "location": "Shfela, Israel",
+            "url": "https://elbitsystemscareer.com/job/?jid=21229",
+            "team": "Division",
+            "posted": "2026-11-19",
+        },
+        {
+            "job_id": "7",
+            "title": "Student",
+            "location": "Israel",
+            "url": "https://elbitsystemscareer.com/job/?jid=7",
+            "team": "",
+            "posted": "",
+        },
+    ]
+    assert "posting text" not in json.dumps(jobs)
+
+
+def test_elbit_a_list_at_the_cap_is_read_and_one_above_it_is_not(monkeypatch: pytest.MonkeyPatch) -> None:
+    fake_eightfold(monkeypatch, FakeHttpResponse(data=[elbit_item(i + 1) for i in range(adapters.ELBIT_MAX)]))
+    jobs = adapters.elbit("elbitsystemscareer.com")
+    assert jobs is not None
+    assert len(jobs) == adapters.ELBIT_MAX
+    fake_eightfold(monkeypatch, FakeHttpResponse(data=[elbit_item(i + 1) for i in range(adapters.ELBIT_MAX + 1)]))
+    assert adapters.elbit("elbitsystemscareer.com") is None
+
+
+@pytest.mark.parametrize(
+    "answer",
+    [
+        None,
+        FakeHttpResponse(status_code=403),
+        FakeHttpResponse(json_error=True),
+        FakeHttpResponse(data={}),
+        FakeHttpResponse(data=[]),  # the site always has jobs
+        FakeHttpResponse(data=["x"]),
+        FakeHttpResponse(data=[elbit_item(1), elbit_item(1)]),  # a job twice
+        FakeHttpResponse(data=[elbit_item(None)]),
+        FakeHttpResponse(data=[elbit_item("5")]),
+        FakeHttpResponse(data=[elbit_item(True)]),
+        FakeHttpResponse(data=[elbit_item(0)]),
+        FakeHttpResponse(data=[elbit_item(jobTitle=None)]),
+        FakeHttpResponse(data=[elbit_item(jobTitle="  ")]),
+        FakeHttpResponse(data=[elbit_item(1), elbit_item(2, jobTitle=5)]),  # one unreadable job: no partial list
+    ],
+)
+def test_elbit_an_answer_that_is_not_the_whole_readable_list_is_a_failure(
+    monkeypatch: pytest.MonkeyPatch, answer: FakeHttpResponse | None
+) -> None:
+    fake_eightfold(monkeypatch, answer)
+    assert adapters.elbit("elbitsystemscareer.com") is None
+
+
+def test_elbit_serves_only_its_own_host_without_a_request(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls = fake_eightfold(monkeypatch, FakeHttpResponse(data=[elbit_item()]))
+    assert adapters.elbit("slug") is None
+    assert calls == []
+
+
+def test_elbit_goes_through_the_robots_gate_and_the_polite_get(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(adapters, "get", common.get)
+    monkeypatch.setattr(common, "robots_gate", lambda url: False)
+    assert adapters.elbit("elbitsystemscareer.com") is None
+
+
+def test_elbit_is_registered() -> None:
+    assert adapters.ADAPTERS["elbit"] is adapters.elbit
+
+
 WP_PAGE = "https://www.meshpayments.com/careers"
 WP_ENDPOINT = adapters.WP_POSTS[WP_PAGE]
 
