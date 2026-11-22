@@ -218,6 +218,7 @@ BOARD_URLS = {
     "teamtailor": "https://{slug}/jobs",
     "pinpoint": "https://{slug}",
     "jobvite": "https://jobs.jobvite.com/{slug}",
+    "recruitee": "https://{slug}.recruitee.com",
 }
 
 

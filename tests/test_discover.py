@@ -48,6 +48,12 @@ def test_scan_page(monkeypatch: pytest.MonkeyPatch) -> None:
         ("https://acme-labs.breezy.hr/p/abc-engineer", ("breezy", "acme-labs")),
         ("https://Acme.Breezy.HR/", ("breezy", "acme")),
         ("https://www.breezy.hr/pricing https://static.breezy.hr/x https://breezy.hr/", (None, "https://final.test/c")),
+        ("https://tether.recruitee.com/o/some-job", ("recruitee", "tether")),
+        ("https://Acme-Labs.Recruitee.COM/", ("recruitee", "acme-labs")),
+        (
+            "https://www.recruitee.com/pricing https://api.recruitee.com/x https://recruitee.com/",
+            (None, "https://final.test/c"),
+        ),
         ("https://API.BambooHR.com/x https://help.applytojob.com/y", (None, "https://final.test/c")),
         ("https%3A%2F%2Facme.applytojob.com", (None, "https://final.test/c")),
         ("https://sub.acme.bamboohr.com/careers", (None, "https://final.test/c")),

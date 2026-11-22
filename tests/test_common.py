@@ -85,3 +85,21 @@ def test_slug_candidates_dedupes_and_skips_empty() -> None:
 )
 def test_https_only_changes_only_the_scheme_http_to_https(url: str, expected: str) -> None:
     assert common.https_only(url) == expected
+
+
+@pytest.mark.parametrize(
+    "place",
+    [
+        "Ashkelon", "Ashqelon, Israel", "Kiryat Gat", "Qiryat Shmona", "Yokneam", "Yoqneam Illit", "Petah Tikva",
+        "Petach Tikva", "Be'er Sheva", "Beer Sheva", "Dimona", "Ramat Gan", "Herzliya", "Rehovot", "Nes Ziona", "Lod",
+        "Modiin", "Modi'in", "Kfar Saba", "Hod Hasharon", "Netanya", "Haifa", "Caesarea", "Misgav", "Karmiel", "Eilat",
+        "Ashdod", "Givatayim", "Bnei Brak", "Bat Yam", "Rosh Ha'ayin", "Hadera", "Afula", "Tiberias",
+    ],
+)  # fmt: skip
+def test_israeli_cities_and_their_spellings_are_israel(place: str) -> None:
+    assert common.ISRAEL.search(place)
+
+
+@pytest.mark.parametrize("place", ["London", "Lodz, Poland", "Odessa", "Nazareth, PA, United States"])
+def test_other_places_are_not_israel_by_the_new_cities(place: str) -> None:
+    assert not common.ISRAEL.search(place)

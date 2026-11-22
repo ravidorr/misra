@@ -26,7 +26,7 @@ JOBLINK = re.compile(
 )
 JOB_ID = re.compile(r"[?&](job_id=[^&#]+)", re.I)  # Tower: /job-description/?job_id=9672, the query is the job
 NOT_JOB = re.compile(
-    r"/(department|departments|category|team|teams|locations?|working-at|life-at|benefits|students?|early-careers?|login|search|saved|talent-network|choose-country\S*)\b|#",
+    r"/(department|departments|category|team|teams|locations?|working-at|life-at|benefits|students?|early-careers?|login|search|saved|talent-network|intro|choose-country\S*)\b|#",
     re.I,
 )
 NEXT_SELS = [
@@ -43,6 +43,7 @@ NEXT_SELS = [
     'a:text-is("Next")',
     'button:text-is("Next")',
     'a:text-is("Next >")',
+    'a:has-text("Next page of results")',  # iCIMS: the words are for a screen reader, next to an arrow
 ]
 EF_SEARCH = "/api/pcsx/search"  # Eightfold career sites: the page's own search request
 EF_NEXT = 'button[aria-label="Next jobs" i]'
@@ -79,6 +80,7 @@ EXE = os.environ.get("PW_CHROMIUM") or (
 HTTP_OK = 200
 HTTP_ERROR = 400
 CARD_MAX = 600  # the card script never climbs to an ancestor with more text than this
+FRAME_CARD_MAX = 1000  # the same in a frame of the site (iCIMS puts a description in each card, before its place)
 CARD_JS = r"""(els, cfg) => {
     const job = new RegExp(cfg.job, 'i'), skip = new RegExp(cfg.skip, 'i'), id = new RegExp(cfg.id, 'i');
     const button = /^(apply|view|read|learn|see|more|details|save|share)\b/i;
@@ -134,7 +136,16 @@ CARD_JS = r"""(els, cfg) => {
             cur += t.textContent;
         }
         flush();
-        const card = text(n).slice(0, cfg.max + 1);
+        let card = text(n);
+        const table = n.tagName === 'TR' ? n.closest('table') : null;  // a row of a table with a header for each cell
+        const heads = table ? [...table.querySelectorAll('th')].map(h => text(h)) : [];
+        if (table && heads.length === n.cells.length) {  // the column named for a place gets a "Location" label
+            const id = /requisition|^(job )?id$/i;
+            const kept = [...n.cells].map((c, i) => [c, heads[i]]).filter(([, h]) => !id.test(h));
+            card = kept.map(([c, h]) => (/location|place|city|office/i.test(h) ? 'Location\n' : '')
+                + text(c).replace(/\n+/g, ' | ')).join('\n');  // the id of a job is no team
+        }
+        card = card.slice(0, cfg.max + 1);
         return [href(e), text(e), card, own ? text(own) : '', others, leaves.join('\n')];
     });
 }"""  # the card: the widest ancestor, up to 4 levels, with one job's title link and a card's worth of text
@@ -142,12 +153,25 @@ CARD_ARGS = {"job": JOBLINK.pattern, "skip": NOT_JOB.pattern, "id": JOB_ID.patte
 CARD_LINE_MAX = 120  # a longer card line is a job description, not a title, place or team
 CARD_BEFORE = 2  # lines above the title that can still be its place or team
 CARD_AFTER = 3  # and below it
-CARD_CHROME = frozenset({"save job", "share job", "apply", "apply now"})
-BUTTON_LINES = frozenset(
-    {"view position", "view role", "view job", "view full details", "learn more", "read more", "details"}
+CARD_CHROME = frozenset(
+    {"save job", "share job", "apply", "apply now", "send resume", "send cv", "submit cv", "opens in a new tab"}
 )
-LOCATION_LABELS = frozenset({"location", "location:"})
-LINK_NOISE = CARD_CHROME | BUTTON_LINES | LOCATION_LABELS | {"department"}
+BUTTON_LINES = frozenset(
+    {
+        "view position",
+        "view the position",
+        "view full position",
+        "apply for this position",
+        "view role",
+        "view job",
+        "view full details",
+        "learn more",
+        "read more",
+        "details",
+    }
+)
+LOCATION_LABELS = frozenset({"location", "location:", "location : location"})
+LINK_NOISE = CARD_CHROME | BUTTON_LINES | LOCATION_LABELS | {"department", "job posting title"}
 
 WHY: dict[str, str] = {}  # url -> reason, filled for failed or empty crawls, printed by run.py
 
@@ -182,7 +206,10 @@ CARD_NOISE = {
     "share job",
     "location",
     "location:",
+    "location : location",
     "department",
+    "category",
+    "job posting title",
 }
 _COUNTRIES = (
     "israel|united states|usa|united kingdom|uk|germany|india|canada|france|spain|poland|romania|brazil|singapore"
@@ -208,6 +235,11 @@ MAX_TEAM_WORDS = 2
 MIN_CARD_TITLE_WORDS = 2  # a title read from a card, not from the link, has a role word or this many words
 MAX_ACRONYM_LEN = 4
 MAX_REMOTE_WORDS = 4
+
+
+def _label(line: str) -> str:
+    """A card line as compared with the button labels: lowercase, without the arrows after it ("SEND RESUME >>")."""
+    return line.strip().lower().rstrip(" >»→")
 
 
 def _is_location(line: str) -> bool:
@@ -275,7 +307,7 @@ def _card_extras(card: str, title: str) -> list[str]:
     label and the place under it count as one line, so a date or a team before them cannot push the place out."""
     low = title.lower()
     lines = [ln.strip() for ln in card.split("\n")]
-    lines = [ln for ln in lines if ln and len(ln) <= CARD_LINE_MAX and ln.lower() not in CARD_CHROME | BUTTON_LINES]
+    lines = [ln for ln in lines if ln and len(ln) <= CARD_LINE_MAX and _label(ln) not in CARD_CHROME | BUTTON_LINES]
     fused: list[str] = []
     for ln in lines:
         if fused and fused[-1].lower() in LOCATION_LABELS and ln.lower() != low:
@@ -298,7 +330,7 @@ def _card_lines(leaves: str) -> list[str]:
     return [
         ln
         for ln in lines
-        if ln and len(ln) <= CARD_LINE_MAX and ln.lower() not in LINK_NOISE - LOCATION_LABELS and _WORD.search(ln)
+        if ln and len(ln) <= CARD_LINE_MAX and _label(ln) not in LINK_NOISE - LOCATION_LABELS and _WORD.search(ln)
     ]
 
 
@@ -538,14 +570,17 @@ async def crawl_one(ctx: Any, url: str, sem: asyncio.Semaphore) -> list[dict[str
                             text, details = jsonld_description(d)
                             out.append(attach(_job(d["url"], d.get("title", ""), L, d["url"]), text, details))
 
+            scope: Any = page  # where the job links are: the page, or a frame of the same site that holds the list
+            card_max = CARD_MAX
+
             # 2. job-looking links, across paginated result pages
             async def collect() -> int:
                 nonlocal link_count
                 found = 0
-                links = await page.eval_on_selector_all("a[href]", CARD_JS, CARD_ARGS)
+                links = await scope.eval_on_selector_all("a[href]", CARD_JS, CARD_ARGS | {"max": card_max})
                 link_count = len(links)
                 # links with a title of their own first, so a label link never claims a job before its titled twin
-                links.sort(key=lambda row: not _WORD.search(row[1]) or row[1].strip().lower() in LINK_NOISE)
+                links.sort(key=lambda row: not _WORD.search(row[1]) or _label(row[1]) in LINK_NOISE)
                 for href, text, card, head, others, leaves in links:
                     key = _job_key(href)
                     if key in seen or not JOBLINK.search(href) or NOT_JOB.search(href):
@@ -553,14 +588,14 @@ async def crawl_one(ctx: Any, url: str, sem: asyncio.Semaphore) -> list[dict[str
                     lines = [
                         ln.strip()
                         for ln in text.split("\n")
-                        if ln.strip().lower() not in LINK_NOISE | {""} and _WORD.search(ln)
+                        if _label(ln) not in LINK_NOISE | {""} and _WORD.search(ln)
                     ]
                     heading_first = len(lines) > 1 and head in lines and _usable_heading(head)
                     from_card = False
                     if not lines:
                         # a link that is only an icon or a button label ("Details"): the title is in its card, unless
                         # the card has a titled link of its own, which this one only repeats
-                        if others or not 0 < len(card) <= CARD_MAX or text.strip().lower() in CARD_CHROME:
+                        if others or not 0 < len(card) <= card_max or _label(text) in CARD_CHROME:
                             continue  # an Apply link never starts a card: it only goes with a titled link
                         lines = _card_lines(leaves)
                         from_card = True
@@ -568,7 +603,7 @@ async def crawl_one(ctx: Any, url: str, sem: asyncio.Semaphore) -> list[dict[str
                         continue
                     elif heading_first:  # the heading is the title, whatever the lines above it hold (a department)
                         lines = [head, *(ln for ln in lines if ln != head)]
-                    elif len(lines) == 1 and 0 < len(card) <= CARD_MAX:
+                    elif len(lines) == 1 and 0 < len(card) <= card_max:
                         # bare title link: location sits in the surrounding card
                         lines = [lines[0], *_card_extras(card, lines[0])]
                     parsed = _parse_card(lines, heading_first)
@@ -586,10 +621,20 @@ async def crawl_one(ctx: Any, url: str, sem: asyncio.Semaphore) -> list[dict[str
                 return found
 
             await collect()
+            if not out:  # an iCIMS career page draws its list in a frame of its own site: read the links there
+                for frame in page.frames[1:]:
+                    if host_of(frame.url) == host_of(page.url):
+                        with contextlib.suppress(Exception):  # a frame that is still drawing its list
+                            await frame.wait_for_load_state("networkidle", timeout=15000)
+                        scope, card_max = frame, FRAME_CARD_MAX
+                        if await collect():
+                            break
+                else:
+                    scope, card_max = page, CARD_MAX
             for _ in range(60):  # pagination: stop when "next" is missing/disabled or yields nothing new
                 nxt = None
                 for sel in NEXT_SELS:  # first *visible* match (a <link rel=next> in <head> is not clickable)
-                    cand = page.locator("body " + sel if not sel.startswith("body") else sel).locator("visible=true")
+                    cand = scope.locator("body " + sel if not sel.startswith("body") else sel).locator("visible=true")
                     if await cand.count():
                         nxt = cand.first
                         break
@@ -604,15 +649,28 @@ async def crawl_one(ctx: Any, url: str, sem: asyncio.Semaphore) -> list[dict[str
                     if re.search(r"disabled|true", cls, re.I) or await nxt.is_disabled():
                         break
                     await _polite(page.url)
-                    await nxt.click(timeout=3000)
-                except Exception:
-                    break
+                    try:
+                        await nxt.click(timeout=3000)
+                    except Exception:  # a cookie banner over the pager: send the click to the control itself
+                        await nxt.dispatch_event("click")
+                except Exception as exc:  # a pager that cannot be pressed: the pages after this one are not read
+                    WHY[url] = f"next page not pressed ({type(exc).__name__}), title={title!r}, final={page.url[:80]}"
+                    return None
                 found = 0
+                failure = ""  # what the last poll raised: a page still loading at the end is not a read page
                 for _poll in range(SETTLE_POLLS):  # wait for new job links; a pager may clear the list first
                     await page.wait_for_timeout(250)
-                    found = await collect()
+                    try:
+                        found = await collect()
+                    except Exception as exc:  # the page is loading the next page
+                        failure = type(exc).__name__
+                        continue
+                    failure = ""
                     if found:
                         break
+                if failure:  # the last poll could not read the page: the pages from here on are not read
+                    WHY[url] = f"next page not readable ({failure}), title={title!r}, final={page.url[:80]}"
+                    return None
                 if not found:
                     break
             trace = "no load more"

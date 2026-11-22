@@ -437,6 +437,12 @@ recurring work.
     each followed by a review of the next daily run. Find the real career page by hand (not by slug guessing), look for a
     JSON endpoint the page calls, group `needs_reader` by platform and check `robots.txt` first. Pillar Security needs a
     dedicated reader (its cards carry the city only as a section heading); Walnut is a researched record, not pinned.
+    Checked on 2026-11-21 (53 records): about 35 are the address of a board an adapter already reads (Comeet, Greenhouse,
+    Ashby, Pinpoint) and only need a pin; the rest are pages with no job list, a list drawn by a script with no links,
+    jobs as plain headings or "See details" buttons (Nucleai, Pillar, SQream, Deep Instinct, SeeTrue, Syte, TytoCare,
+    StoreDot, Swimm: no reader without a rule for each page), and sites that refuse a crawler (Google, Intuit, AMD).
+    The browser reader now reads Rapid7 (44 jobs) and MaxLinear (iCIMS frame, 38 jobs, 3 in Israel), and `recruitee`
+    reads Tether.
     Varonis is no longer a gap once pinned: the maintainer allowed a one-company reader on 2026-11-20 (`adapters.varonis`,
     slug `careers.varonis.com`, 11 Israel jobs of 80 on that day); after the merge apply the migration
     `20261206100000_companies_ats_varonis.sql`, then `companyctl pin Varonis` (a known-company check first). Wix (Velo

@@ -62,7 +62,7 @@ class FakeEl:
         self,
         attrs: dict[str, str] | None = None,
         disabled: bool = False,
-        click_error: bool = False,
+        click_error: int = 0,  # 1: the click fails; 2: the dispatched event fails as well
         visible: bool = True,
         on_click: Callable[[], None] | None = None,
     ) -> None:
@@ -88,6 +88,8 @@ class FakeEl:
         self.clicks += 1
 
     async def dispatch_event(self, _name: str) -> None:
+        if self.click_error > 1:
+            raise RuntimeError("dispatch failed")
         self.clicks += 1
         if self.on_click:
             self.on_click()
@@ -116,8 +118,23 @@ class FakeMouse:
 
 
 class FakeFrame:
-    def __init__(self, url: str) -> None:
+    def __init__(self, url: str, link_fn: Callable[[int], list[Any]] | None = None) -> None:
         self.url = url
+        self.link_fn = link_fn or (lambda _i: [])
+        self.locators: dict[str, FakeLoc] = {}
+        self.idle_error = False
+        self._links_calls = 0
+
+    async def eval_on_selector_all(self, _selector: str, _js: str, _arg: Any = None) -> Any:
+        self._links_calls += 1
+        return self.link_fn(self._links_calls)
+
+    def locator(self, key: str) -> FakeLoc:
+        return self.locators.get(key, FakeLoc(0))
+
+    async def wait_for_load_state(self, _state: str, timeout: int = 0) -> None:
+        if self.idle_error:
+            raise TimeoutError("idle")
 
 
 class FakePage:
