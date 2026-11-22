@@ -61,10 +61,11 @@ PLACES: dict[str, tuple[str, ...]] = {
 # A district alone ("Tel Aviv District, Israel") places a job only when no city is named.
 DISTRICTS: dict[str, str] = {
     r"tel aviv district": TEL_AVIV,
-    r"haifa district|northern": NORTH,
+    r"haifa district|northern|\bnorth\b": NORTH,
     r"jerusalem district": JERUSALEM,
-    r"center district|\bcenter\b|central": CENTER,
-    r"southern|south district": SOUTH,
+    r"center district|\bcenter\b|central|shfela|shephelah": CENTER,
+    r"\bsharon\b": SHARON,
+    r"southern|\bsouth\b": SOUTH,
 }
 
 # Words that say "Israel" or "somewhere" but name no city.
