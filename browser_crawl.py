@@ -20,8 +20,10 @@ from common import ISRAEL, ROBOTS_NOTE, USER_AGENT, host_of, reserve_slot, robot
 from descriptions import attach, html_to_text, jsonld_description
 
 JOBLINK = re.compile(
-    r"/(jobs?|positions?|careers?|details|cmcareer|openings?|vacanc\w+|job-?post\w*)/[^/?#]{4,}"
-    r"|[?&]job_id=[^&#]+",
+    r"/((?:open-)?jobs?|(?:open-)?positions?|careers?|details|cmcareer|openings?|vacanc\w+|job-?post\w*)/[^/?#]{4,}"
+    r"|/20\d\d/\d\d/\d\d/[^/?#]{4,}"  # a career page that posts each job as a dated post (PayMe): /2026/08/12/<title>/
+    r"|[?&]job_id=[^&#]+"
+    r"|/co/[^/?#]+/[0-9A-F]{2}\.[0-9A-F]{3}/[^/?#]+",  # the Comeet WordPress plugin: /co/<place>/<uid>/<title>
     re.I,
 )
 JOB_ID = re.compile(r"[?&](job_id=[^&#]+)", re.I)  # Tower: /job-description/?job_id=9672, the query is the job
@@ -161,6 +163,8 @@ BUTTON_LINES = frozenset(
         "view position",
         "view the position",
         "view full position",
+        "see position details",
+        "view opening",
         "apply for this position",
         "view role",
         "view job",

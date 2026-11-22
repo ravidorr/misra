@@ -8,6 +8,13 @@ All notable changes are documented here. Format follows [Keep a Changelog](https
 
 - A "Hidden (n)" switch beside "Starred (n)": a view of its own that lists every company the visitor hid, one row each with "Unhide" (a company with no open role is listed too, so it can be unhidden without finding one of its roles), and every open role they hid one by one, as cards at full strength with "Unhide" and no "New" flag. The Hidden view also puts the coverage card away with the filters; the Starred view keeps it. It reads the choices kept today (this browser, or the account) and stores nothing new; a role hidden only because its company is hidden is covered by the company's row, and a hidden role leaves the list when its posting closes (the database deletes the discard). Two WebMCP tools: `list_hidden` and `unhide_company`.
 
+## [0.93.0] - 2026-11-22
+
+### Fixed
+
+- The `browser` reader takes a link to `/open-position/<title>` (Pillar Security: 5 jobs), to a dated post `/YYYY/MM/DD/<title>/` (PayMe: 5 jobs in Tel Aviv) and to a Comeet plugin position `/co/<place>/<uid>/<title>` (Qwilt and SQream: 1 job each) for a job link. Before, those pages read zero jobs.
+- The `browser` reader takes the title from the card when the link says "See Position Details" (Balink: 3 jobs, one in Jerusalem) or "View Opening".
+
 ## [0.92.2] - 2026-11-22
 
 ### Changed

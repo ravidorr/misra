@@ -1084,6 +1084,14 @@ def test_parse_card_with_a_heading_title_skips_the_team_guesses() -> None:
         ("https://x.test/positions/account-executive", True),
         ("https://x.test/positions/ab", False),
         ("https://x.test/open-roles/account-executive", False),
+        ("https://x.test/open-position/senior-software-engineer", True),  # Pillar Security
+        ("https://x.test/open-positions/ab", False),
+        ("https://x.test/2026/08/12/sales-specialist/", True),  # PayMe posts each job as a dated post
+        ("https://x.test/2026/08/sales-specialist/", False),  # a monthly archive, not a post
+        ("https://x.test/2026/08/12/ab/", False),
+        ("https://x.test/careers/co/other/6E.358/global-cs-engineer/all", True),  # the Comeet plugin (Qwilt, SQream)
+        ("https://x.test/co/other/6E.358/", False),
+        ("https://x.test/co/thankyou", False),
     ],
 )
 def test_the_job_link_pattern(href: str, job: bool) -> None:
@@ -1137,9 +1145,13 @@ async def test_a_button_label_is_no_job_title(label: str) -> None:
     }
 
 
-@pytest.mark.parametrize("label", ["View Full Position", "View The Position", "Apply for this position"])
+@pytest.mark.parametrize(
+    "label",
+    ["View Full Position", "View The Position", "Apply for this position", "See Position Details", "View Opening"],
+)
 async def test_a_view_or_apply_label_link_takes_its_title_from_the_card(label: str) -> None:
-    """Nanomotion, Variscite and Jungo: the link says only what the button does; the title is a heading in its card."""
+    """Nanomotion, Variscite, Jungo, Balink and GeoEdge: the link says only what the button does; the title is a heading
+    in its card."""
     row = link(
         "/jobs/hardware-engineer/",
         label,
