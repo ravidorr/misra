@@ -84,6 +84,7 @@ EXE = os.environ.get("PW_CHROMIUM") or (
 
 HTTP_OK = 200
 HTTP_ERROR = 400
+LABEL_TAIL = " >»→"  # what _label() strips after a button label; the card script strips the same characters
 CARD_MAX = 600  # the card script never climbs to an ancestor with more text than this
 FRAME_CARD_MAX = 1000  # the same in a frame of the site (iCIMS puts a description in each card, before its place)
 CARD_JS = r"""(els, cfg) => {
@@ -98,7 +99,8 @@ CARD_JS = r"""(els, cfg) => {
     const jobLink = a => job.test(href(a)) && !skip.test(href(a));
     const titled = a => jobLink(a) && text(a) && !button.test(text(a));
     const nav = /^(view|read|learn|see|more|details)\b/i;  // not "Apply": that link only accompanies a job
-    const apply = a => /^apply( now)?$/i.test(text(a));  // "Apply" alone: a job only when no other link is in its card
+    const tail = new RegExp('[' + cfg.tail.replace(/[\]\\^-]/g, '\\$&') + ']+$');  // arrows after a label, as _label()
+    const apply = a => /^apply( now)?$/.test(text(a).toLowerCase().replace(tail, ''));  // "Apply →": a job only alone
     const label = a => !text(a) || !/\w/.test(text(a)) || nav.test(text(a));  // an icon, an arrow, "Details"
     const near = (x, y) => x === y || x.startsWith(y + '/') || y.startsWith(x + '/');  // "/jobs/x/apply" is "/jobs/x"
     const many = (n, e) => {  // two or more jobs in n? A label link e is one job, and other label links count too
@@ -157,6 +159,7 @@ CARD_JS = r"""(els, cfg) => {
     });
 }"""  # the card: the widest ancestor, up to 4 levels, with one job's title link and a card's worth of text
 CARD_ARGS = {
+    "tail": LABEL_TAIL,
     "job": f"{JOBLINK.pattern}|{DATED_POST.pattern}",
     "skip": NOT_JOB.pattern,
     "id": JOB_ID.pattern,
@@ -254,7 +257,7 @@ MAX_REMOTE_WORDS = 4
 
 def _label(line: str) -> str:
     """A card line as compared with the button labels: lowercase, without the arrows after it ("SEND RESUME >>")."""
-    return line.strip().lower().rstrip(" >»→")
+    return line.strip().lower().rstrip(LABEL_TAIL)
 
 
 def _is_location(line: str) -> bool:

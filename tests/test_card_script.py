@@ -8,7 +8,7 @@ from typing import Any
 import pytest
 from playwright.async_api import Page
 
-from browser_crawl import CARD_ARGS, CARD_JS, CARD_MAX
+from browser_crawl import APPLY_LABELS, CARD_ARGS, CARD_JS, CARD_MAX, _label
 
 BASE = "https://x.test"
 MAX_LEVELS = 4
@@ -239,6 +239,47 @@ async def test_a_longer_apply_label_is_read_as_on_main_whatever_else_links_in_it
         f'<a href="{BASE}/about">About</a></div>'
     )
     assert not (await row_for(page, html, "/career/fpga-engineer/"))[4]
+
+
+@pytest.mark.parametrize("label", ["Apply →", "Apply »", "Apply now >", "APPLY NOW >>", "apply  →"])
+async def test_adjacent_cards_with_an_arrowed_apply_link_are_two_cards(page: Page, label: str) -> None:
+    html = (
+        "<div>"
+        + label_card("/careers/backend-engineer", "Backend Engineer", "Haifa", label)
+        + label_card("/careers/product-designer", "Product Designer", "Berlin, Germany", label)
+        + "</div>"
+    )
+    first = await row_for(page, html, "/careers/backend-engineer")
+    second = await row_for(page, html, "/careers/product-designer")
+    assert "Haifa" in first[2]
+    assert "Berlin" not in first[2]
+    assert "Berlin" in second[2]
+    assert "Haifa" not in second[2]
+
+
+@pytest.mark.parametrize(
+    "label",
+    [
+        "Apply",
+        "apply now",
+        "Apply →",
+        "Apply »",
+        "Apply now >",
+        "Apply now >>",
+        "Apply for this position",
+        "Applying",
+        "Details →",
+        "",
+    ],
+)
+async def test_the_script_and_the_crawler_agree_on_what_an_apply_label_is(page: Page, label: str) -> None:
+    """The script counts a link as Apply (a second link in its card then reports `others`) as `_label()` would."""
+    html = (
+        f'<div class="c"><span>Backend Engineer</span><a href="{BASE}/careers/backend-engineer">{label}</a>'
+        f'<a href="{BASE}/about">About</a></div>'
+    )
+    reported = bool((await row_for(page, html, "/careers/backend-engineer"))[4])
+    assert reported == (_label(label) in APPLY_LABELS)
 
 
 async def test_adjacent_label_cards_with_numbered_addresses_are_two_cards(page: Page) -> None:
