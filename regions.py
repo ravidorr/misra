@@ -49,6 +49,7 @@ PLACES: dict[str, tuple[str, ...]] = {
     NORTH: (
         r"haifa|yo[kq]neam|mig(?:dal)? ?ha ?emek|yagur|tirat carmel|caesarea|nazareth|tel hai|kiryat shmona|karmiel",
         r"afula|tiberias|nesher|kiryat (?:ata|bialik|motzkin|yam)|krayot|hadera|zichron|\bacre\b|akko|nahariya|safed",
+        r"umm? ?al ?fah?e?m",
         r"חיפה|יקנעם|מגדל העמק|נצרת",
     ),
     SOUTH: (
@@ -64,7 +65,7 @@ DISTRICTS: dict[str, str] = {
     r"haifa district|northern|\bnorth\b": NORTH,
     r"jerusalem district": JERUSALEM,
     r"center district|\bcenter\b|central|shfela|shephelah": CENTER,
-    r"\bsharon\b": SHARON,
+    r"\b(?:ha)?sharon\b": SHARON,
     r"southern|\bsouth\b": SOUTH,
 }
 

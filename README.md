@@ -61,7 +61,7 @@ Hosted job boards:
 - Comeet: public pages and WordPress plugin pages
 - JazzHR, BambooHR, Breezy, Recruitee, Teamtailor, Pinpoint, Jobvite
 - Workday, Oracle Fusion HCM, Phenom, Avature, Eightfold and Jibe: jobs in Israel only
-- The own careers pages of Varonis, Deel, Bulls Media and Elbit Systems
+- The own careers pages of Varonis, Deel, Bulls Media, Elbit Systems and Haat Delivery
 - Amazon (amazon.jobs)
 
 The browser crawler reads:

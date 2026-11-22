@@ -43,6 +43,8 @@ JIBE_MAX = 100  # the most jobs of one Jibe search read (one answer): a board wi
 DEEL_MAX = 1000  # the most jobs of the Deel careers page read (it lists about 230): a longer list is a failure
 BULLS_MAX = 500  # the most positions of the Bulls Media feed read (it lists about 15): a longer list is a failure
 ELBIT_MAX = 2000  # the most jobs of the Elbit Systems file read (it lists about 540): a longer list is a failure
+HAAT_MAX = 500  # the most entries of one Haat department list read (open and closed jobs, about 40 today)
+HAAT_MAX_DEPARTMENTS = 50  # the most departments of the Haat list read (it has 11): a longer list is a failure
 VARONIS_MAX = 200  # the most requisitions of Varonis' list read (it has no paging): a longer list is a failure
 EIGHTFOLD_MAX = 100  # the most positions of one Eightfold search read (ten an answer): a board with more is not read
 
@@ -1665,6 +1667,107 @@ def elbit(slug: str) -> list[Job] | None:
     return read
 
 
+HAAT_HOST = "careers.haat.delivery"
+HAAT_API = "https://hub-backend.haat.delivery/api/v1/careers/public"
+# Haat's own development team in India: the one place of the list that is not in Israel (Haat serves Israel only).
+_HAAT_ABROAD = re.compile(
+    r"india|surat|ahmedabad|gurgaon|gurugram|mumbai|delhi|bangalore|bengaluru|pune|hyderabad", re.I
+)
+
+
+def _haat_department(item: Any) -> tuple[int, str, int] | None:
+    """`(id, name, count of open jobs)` of one department of the list, or None when it cannot be read: not an object, an
+    id or a count that is not an integer (a count below 0 too), no name, or an `isDeleted` that is not 0 or 1. A
+    deleted department has no open job."""
+    if not isinstance(item, dict):
+        return None
+    dep_id, name, count = item.get("departmentID"), item.get("departmentName"), item.get("numOfJobs")
+    if not (
+        type(dep_id) is int
+        and isinstance(name, str)
+        and name.strip()
+        and type(count) is int
+        and count >= 0
+        and item.get("isDeleted") in (0, 1)
+    ):
+        return None
+    return dep_id, name.strip(), count if item["isDeleted"] == 0 else 0
+
+
+def _haat_job(item: dict[str, Any], team: str) -> Job | None:
+    """One open job of a department's list, or None when it cannot be read: a `jobID` that is not a positive integer,
+    no `jobName`, or no place. The place is the job's own `location` text, else its `workPlaceType` name (what the page
+    shows as the place, `Haifa/Tel Aviv`), as the API gives it. The job has no page address of its own (the page shows
+    it from a card), so the link is the page of the open positions with the job's id as a fragment, which keeps the
+    ids apart and is never sent to the site."""
+    job_id, title, kind = item.get("jobID"), item.get("jobName"), item.get("workPlaceType")
+    names = [item.get("location"), kind.get("workPlaceType") if isinstance(kind, dict) else None]
+    place = next((p.strip() for p in names if isinstance(p, str) and p.strip()), "")
+    if not (type(job_id) is int and job_id > 0 and isinstance(title, str) and title.strip() and place):
+        return None
+    return _job(job_id, title, place, f"https://{HAAT_HOST}/open-positions#{job_id}", team=team)
+
+
+def _haat_list(path: str, cap: int) -> list[Any] | None:
+    """The JSON list the backend answers at `path` in one request, or None when the request fails, the answer is not
+    HTTP 200 and a JSON list, or the list has more than `cap` entries (one that long may be cut short)."""
+    r = get(f"{HAAT_API}/{path}")
+    if r is None or r.status_code != HTTP_OK:
+        return None
+    try:
+        data = r.json()
+    except ValueError:
+        return None
+    return data if isinstance(data, list) and len(data) <= cap else None
+
+
+def _haat_open_jobs(department: tuple[int, str, int]) -> list[Job] | None:
+    """The open jobs of one department, read in one request, or None for a failure. The list holds the closed jobs of
+    the department too (`isActive` 0), which the page does not show: they are left out. The list is trusted only when
+    it has at most HAAT_MAX entries, every entry is an object with an `isActive` of 0 or 1, every open job reads, and
+    the number of open jobs is the department's `numOfJobs`."""
+    dep_id, team, count = department
+    entries = _haat_list(f"jobs/getByDepartment/{dep_id}", HAAT_MAX)
+    if entries is None or not all(isinstance(e, dict) and e.get("isActive") in (0, 1) for e in entries):
+        return None
+    read = [_haat_job(e, team) for e in entries if e["isActive"] == 1]
+    jobs = [j for j in read if j]
+    return jobs if len(jobs) == len(read) == count else None
+
+
+def haat(slug: str) -> list[Job] | None:
+    """slug is 'careers.haat.delivery', the only host this reader serves (a dedicated reader for one company, by the
+    maintainer's decision of 2026-11-22). The careers page is an app of Haat's own backend, whose public answers it
+    draws from are read through `common.get` (the backend has no robots.txt, so no rule applies, and the pipeline's one
+    request a second and User-Agent do): the list of departments, then the jobs of each department that has an open
+    job, one request each, at most HAAT_MAX_DEPARTMENTS departments. The list is trusted only when every department
+    and job reads, no job is twice and each department's open jobs are its `numOfJobs` (see `_haat_open_jobs`): a
+    partial list would close the jobs it lacks. The answer has job texts, which are not read, and no date. The jobs
+    of the development team in India (`_HAAT_ABROAD` in the place) are dropped, and the place of every other job
+    gets ', Israel' after it, since the backend gives a region or a city only (`North\\Center District`). An empty
+    list, or one with no job in Israel, is a failure too (Haat has jobs in Israel, so an empty answer is a broken
+    one)."""
+    if slug != HAAT_HOST:
+        return None
+    data = _haat_list("departments", HAAT_MAX_DEPARTMENTS)
+    if data is None:
+        return None
+    jobs: list[Job] = []
+    for item in data:
+        department = _haat_department(item)
+        if department is None:
+            return None
+        if department[2]:  # a department with no open job is not asked
+            more = _haat_open_jobs(department)
+            if more is None:
+                return None
+            jobs += more
+    if len({j["job_id"] for j in jobs}) != len(jobs):
+        return None
+    israel = [{**j, "location": f"{j['location']}, Israel"} for j in jobs if not _HAAT_ABROAD.search(j["location"])]
+    return israel or None  # Haat has jobs in Israel: none is a bad answer
+
+
 _SUBDOMAIN_SLUG = re.compile(r"[a-z0-9][a-z0-9-]*")
 
 
@@ -1982,4 +2085,5 @@ ADAPTERS: dict[str, Callable[[str], list[Job] | None]] = {
     "deel": deel,
     "bulls_media": bulls_media,
     "elbit": elbit,
+    "haat": haat,
 }

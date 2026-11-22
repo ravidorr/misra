@@ -99,6 +99,36 @@ ELBIT_PLACES = [
 ]
 
 
+# The distinct places of the live Haat Delivery backend (24 jobs, 23 in Israel), as the haat reader writes them.
+# "On-site" is no place: that job keeps its own text in `locations`.
+HAAT_PLACES = [
+    ("North\\Center District, Israel", (CENTER, NORTH)),
+    ("Haifa, Israel", (NORTH,)),
+    ("Tel Aviv, Israel", (TEL_AVIV,)),
+    ("Hasharon region, Israel", (SHARON,)),
+    ("Jerusalem, Israel", (JERUSALEM,)),
+    ("Haifa/Tel Aviv, Israel", (TEL_AVIV, NORTH)),
+    ("North District/Umm al-Fahm, Israel", (NORTH,)),
+    ("On-site/Haifa/Tel Aviv, Israel", (TEL_AVIV, NORTH)),
+    ("Haifa /Um Alfahem, Israel", (NORTH,)),
+    ("Umm al-Fahm/ Haifa, Israel", (NORTH,)),
+    ("Center District, Israel", (CENTER,)),
+    ("Umm al-Fahm, Israel", (NORTH,)),
+    ("On-site/Umm al-Fahm/ Haifa, Israel", (NORTH,)),
+]
+
+
+@pytest.mark.parametrize(("location", "expected"), HAAT_PLACES)
+def test_the_regions_of_haat_delivery_are_placed(location: str, expected: tuple[str, ...]) -> None:
+    assert regions.place(location).regions == expected
+
+
+def test_haat_on_site_alone_has_no_region_and_keeps_its_text() -> None:
+    placed = regions.place("On-site, Israel")
+    assert placed.regions == ()
+    assert placed.locations == ("On-site, Israel",)
+
+
 @pytest.mark.parametrize(("location", "expected"), ELBIT_PLACES)
 def test_the_regions_of_elbit_systems_are_placed(location: str, expected: str) -> None:
     assert regions.place(location).regions == (expected,)
