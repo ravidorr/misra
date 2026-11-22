@@ -675,7 +675,9 @@ def test_a_comeet_job_whose_link_changes_is_the_same_job_not_a_new_one(
 def test_main_without_companies_as_script(workdir: Path, capsys: pytest.CaptureFixture[str]) -> None:
     write_json(workdir / "data" / "companies.json", [])
     runpy.run_module("run", run_name="__main__")
-    assert "crawled 0 companies, failed 0 [], open jobs 0" in capsys.readouterr().out
+    out = capsys.readouterr().out
+    assert "crawled 0 companies, failed 0 [], open jobs 0" in out
+    assert "paced requests: workday 0 requests" in out
 
 
 def test_a_crash_in_the_browser_crawl_keeps_the_api_companies_already_recorded(

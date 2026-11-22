@@ -5,12 +5,13 @@ import re
 import sqlite3
 import threading
 import time
+from dataclasses import dataclass
 from typing import Any, cast
 from urllib.parse import unquote, urlsplit
 
 import requests
 
-VERSION = "0.94.0"  # equal to the version in package.json and pyproject.toml (a test checks it)
+VERSION = "0.94.1"  # equal to the version in package.json and pyproject.toml (a test checks it)
 SITE_URL = "https://ravidorr.github.io/misra/"
 CONTACT = "raanan@avidor.org"
 ROBOTS_TOKEN = "Misra"  # the product token that robots.txt groups name
@@ -44,6 +45,7 @@ ROBOTS_MAX_PURGE_COMPANIES = 10  # the sync deletes the jobs of at most this man
 ROBOTS_TIMEOUT = 10
 ROBOTS_MAX_BYTES = 500 * 1024  # RFC 9309: a parser reads at least the first 500 KiB
 HTTP_OK = 200
+HTTP_TOO_MANY = 429
 HTTP_SERVER_ERROR = 500
 # Hosts and paths a service publishes for programmatic use (an ATS's public job-board API). A blanket `Disallow: /`
 # written for crawlers of pages does not cover them; a rule that names the API path does.
@@ -180,28 +182,93 @@ RETRY_AFTER_MAX = 30.0  # the longest Retry-After honoured, so one board cannot 
 _outcome = threading.local()  # per thread: how the last request ended, for the crawl log
 
 
+@dataclass(frozen=True)
+class Pace:
+    """A group of hosts that one provider throttles together, by client address rather than by host."""
+
+    gap: float  # seconds between ANY two requests of the group, whichever host they go to
+    retry_after_max: float  # the longest Retry-After honoured for the group
+    budget: float  # the most seconds of waiting after a refusal a run spends on the group; then no more repeats
+
+
+# Workday serves every tenant (`tenant.wdN.myworkdayjobs.com`) from shared edges and answers 429 by client address, so
+# the one-request-a-second rule of a host is not enough: 25 boards read by 8 threads in the daily run all got 429.
+# One request every WORKDAY_GAP seconds in the whole run: about 150 requests (25 boards, a few pages each) cost 5
+# minutes, spread under the 20 minute limit of the crawl step. Waiting after a 429 is at most 3 minutes in all
+# (a refusal also pushes back the next turn of every board), and a board whose 429 persists is not asked again.
+WORKDAY_GAP = 2.0
+PACES = {"workday": Pace(gap=WORKDAY_GAP, retry_after_max=60.0, budget=180.0)}
+_pool_spent: dict[str, float] = {}  # group -> seconds of waiting after a refusal spent so far
+_pool_given_up: set[str] = set()  # hosts whose 429 persisted: not requested again in this run
+_pool_requests: dict[str, int] = {}
+
+
+def pool_report() -> str:
+    """Counts only: the requests of each paced group, the seconds waited after a refusal and the boards given up."""
+    with _lock:
+        groups = [f"{n} {_pool_requests.get(n, 0)} requests, {_pool_spent.get(n, 0.0):.0f}s waited" for n in PACES]
+        return f"{'; '.join(groups)}; {len(_pool_given_up)} hosts not asked again after a persistent 429"
+
+
 def last_failure() -> str:
     """How the last request of this thread failed ("HTTP 503", "Timeout", "ConnectionError"), or '' when it answered
     200 or sent nothing. Only the status or the kind of error, never a page's text."""
     return cast("str", getattr(_outcome, "failure", ""))
 
 
-def _retry_wait(r: requests.Response | None, attempt: int) -> float:
+def _retry_wait(r: requests.Response | None, attempt: int, cap: float = RETRY_AFTER_MAX) -> float:
     """Seconds to wait before the next try: the Retry-After the server sent (in seconds), else a doubling backoff."""
     header = r.headers.get("Retry-After", "") if r is not None else ""
     if header.isdigit():
-        return min(float(header), RETRY_AFTER_MAX)
+        return min(float(header), cap)
     return float(RETRY_BACKOFF * 2**attempt)
 
 
-def _send(method: str, url: str, retry: bool = False, **kw: Any) -> requests.Response | None:
+def _cool_pool(r: requests.Response | None, attempt: int, pool: str) -> bool:
+    """A transient failure of a request of the group, retried or not: push every request of the group back by the
+    wait the server asked for (they take their turns after it) and charge it to the group's budget. False when the
+    budget is spent: the group is then not pushed back any more, and the request gets no repeat."""
+    wait = _retry_wait(r, attempt, PACES[pool].retry_after_max)
+    with _lock:
+        if _pool_spent.get(pool, 0.0) + wait > PACES[pool].budget:
+            return False
+        _pool_spent[pool] = _pool_spent.get(pool, 0.0) + wait
+        _last[pool] = max(_last.get(pool, 0), time.time() + wait)
+    return True
+
+
+def _await_paced_turn(host: str, pool: str) -> None:
+    """Wait until the host's turn AND the group's turn are both due, then take them at that same moment (it is the time
+    the request is sent, in both schedules). The clocks are read again after every sleep, so a refusal that pushed the
+    group back while this request slept is respected."""
+    gap = PACES[pool].gap
+    while True:
+        with _lock:
+            now = time.time()
+            due = max(_last.get(host, 0) + DELAY, _last.get(pool, 0) + gap)
+            if due <= now:
+                _last[host] = _last[pool] = now
+                _pool_requests[pool] = _pool_requests.get(pool, 0) + 1
+                return
+        time.sleep(due - now)
+
+
+def _send(method: str, url: str, retry: bool = False, pool: str = "", **kw: Any) -> requests.Response | None:
     """One request on its turn. With retry, a timeout, 429 or 5xx is tried again up to RETRIES times after a wait.
-    Each try takes its turn on the host, so the one-request-a-second rule holds. Nothing else is repeated."""
+    Each try takes its turn on the host, so the one-request-a-second rule holds, and on the pace of its `pool` when it
+    has one. A pooled request that was refused with a 429 for good gives its host up for the rest of the run.
+    Nothing else is repeated."""
     kw.setdefault("timeout", 20)
+    host = host_of(url)
+    paced = pool in PACES
+    if paced and host in _pool_given_up:
+        _outcome.failure = "HTTP 429"
+        return None
     attempt = 0
     while True:
-        wait = reserve_slot(host_of(url))
-        if wait > 0:
+        if paced:
+            _await_paced_turn(host, pool)
+        elif (wait := reserve_slot(host)) > 0:
             time.sleep(wait)
         r: requests.Response | None = None
         try:
@@ -212,10 +279,18 @@ def _send(method: str, url: str, retry: bool = False, **kw: Any) -> requests.Res
             _outcome.failure, transient = "Timeout", True
         except requests.RequestException as exc:
             _outcome.failure, transient = type(exc).__name__, False
-        if not (retry and transient) or attempt == RETRIES:
-            return r
-        time.sleep(_retry_wait(r, attempt))
-        attempt += 1
+        again = retry and attempt < RETRIES
+        if transient and paced:
+            again = _cool_pool(r, attempt, pool) and again  # the group is pushed back whether or not this one repeats
+        elif transient and again:
+            time.sleep(_retry_wait(r, attempt))
+        if transient and again:
+            attempt += 1
+            continue
+        if paced and r is not None and r.status_code == HTTP_TOO_MANY:
+            with _lock:
+                _pool_given_up.add(host)
+        return r
 
 
 _Rule = tuple[bool, str]  # (allow, path pattern)

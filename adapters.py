@@ -443,7 +443,7 @@ def _workday_page(base: str, applied: dict[str, list[str]], text: str, offset: i
     """One page of a Workday job search, or None when the answer is not the JSON of a search (a maintenance
     redirect, an error page, a tenant or site that does not exist)."""
     body = {"appliedFacets": applied, "limit": WORKDAY_PAGE, "offset": offset, "searchText": text}
-    r = post(base, json=body, headers={"Accept": "application/json"}, retry=True)
+    r = post(base, json=body, headers={"Accept": "application/json"}, retry=True, pool="workday")
     if r is None or r.status_code != HTTP_OK:
         return None
     try:
@@ -590,6 +590,7 @@ def workday_description(slug: str, job: Job) -> tuple[str, dict[str, Any]] | Non
     r = get(
         f"https://{tenant}.{dc}.myworkdayjobs.com/wday/cxs/{tenant}/{site}{path}",
         headers={"Accept": "application/json"},
+        pool="workday",
     )
     if r is None or r.status_code != HTTP_OK:
         return None
