@@ -8,6 +8,12 @@ All notable changes are documented here. Format follows [Keep a Changelog](https
 
 - A "Hidden (n)" switch beside "Starred (n)": a view of its own that lists every company the visitor hid, one row each with "Unhide" (a company with no open role is listed too, so it can be unhidden without finding one of its roles), and every open role they hid one by one, as cards at full strength with "Unhide" and no "New" flag. The Hidden view also puts the coverage card away with the filters; the Starred view keeps it. It reads the choices kept today (this browser, or the account) and stores nothing new; a role hidden only because its company is hidden is covered by the company's row, and a hidden role leaves the list when its posting closes (the database deletes the discard). Two WebMCP tools: `list_hidden` and `unhide_company`.
 
+## [0.94.2] - 2026-11-22
+
+### Fixed
+
+- A "Load more" click that times out is no longer the end of the list. On the daily run of 2026-11-22 the reader of Priority Software read 9 jobs of 21 because the click raised `TimeoutError` twice (the page was not ready for a click within 2 seconds on the runner) and the loop ended; the sharp-drop guard held its 21 jobs. The button now gets the click as an event, as the pagers already do under a cookie banner, and the reader waits for the list to grow as before. A press that fails in both ways is still logged ("not pressed") and ends the loop, so a real failure is not hidden. Nothing else changes: `robots.txt`, one request a second and the project User-Agent.
+
 ## [0.94.1] - 2026-11-22
 
 ### Fixed
