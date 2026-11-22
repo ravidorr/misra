@@ -98,20 +98,13 @@ CARD_JS = r"""(els, cfg) => {
     const jobLink = a => job.test(href(a)) && !skip.test(href(a));
     const titled = a => jobLink(a) && text(a) && !button.test(text(a));
     const nav = /^(view|read|learn|see|more|details)\b/i;  // not "Apply": that link only accompanies a job
+    const apply = a => /^apply( now)?$/i.test(text(a));  // "Apply" alone: a job only when no other link is in its card
     const label = a => !text(a) || !/\w/.test(text(a)) || nav.test(text(a));  // an icon, an arrow, "Details"
-    const apply = a => /^apply\b/i.test(text(a));  // "Apply now": a label too, but only for a card with no title link
-    // "/x/apply?job_id=1" is "/x?job_id=1": the suffix goes, the id stays
-    const base = h => h.replace(/\/(apply|details?|view|overview)(?=\?|$)/i, '');
-    const near = (x, y) => {
-        const p = base(x), q = base(y);
-        return p === q || p.startsWith(q + '/') || q.startsWith(p + '/');
-    };
-    const many = (n, e) => {  // two or more jobs in n? A label or Apply link e is one job, and so are the others
-        const mine = key(href(e));
+    const near = (x, y) => x === y || x.startsWith(y + '/') || y.startsWith(x + '/');  // "/jobs/x/apply" is "/jobs/x"
+    const many = (n, e) => {  // two or more jobs in n? A label link e is one job, and other label links count too
+        const lone = label(e) || apply(e), mine = key(href(e)), seen = new Set(lone ? [mine] : []);
+        const same = x => label(x) || (apply(e) && apply(x));  // an Apply link also stops at a neighbour's Apply link
         const titles = [...n.querySelectorAll('a[href]')].filter(titled).map(a => key(href(a)));
-        const lone = label(e) || (apply(e) && !titles.some(t => near(mine, t)));  // by its own title: a companion
-        const seen = new Set(lone ? [mine] : []);
-        const same = x => label(x) || apply(x);  // a neighbour's Details, arrow or Apply link is a boundary too
         for (const a of n.querySelectorAll('a[href]')) {
             const k = key(href(a));
             const other = lone && jobLink(a) && same(a) && !near(k, mine) && !titles.some(t => near(k, t));
@@ -131,7 +124,7 @@ CARD_JS = r"""(els, cfg) => {
             n = up;
         }
         const own = e.querySelector('h1, h2, h3, h4, h5, h6');  // a title heading inside the link
-        const others = [...n.querySelectorAll('a[href]')].some(a => a !== e && titled(a));
+        const others = [...n.querySelectorAll('a[href]')].some(a => a !== e && (apply(e) || titled(a)));
         const leaves = [];  // one line for each field: emphasis inside a title is not a boundary, a <br> is
         let last = null, cur = '';
         const flush = () => { if (cur.trim()) leaves.push(cur.replace(/\s+/g, ' ').trim()); cur = ''; last = null; };

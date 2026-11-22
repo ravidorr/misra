@@ -1306,6 +1306,12 @@ async def test_an_apply_link_with_a_card_that_is_not_a_job_is_no_job() -> None:
     assert await crawl_cards([link("/careers/pre-sale-engineer/", "Apply", card, leaves=card)]) == {}
 
 
+async def test_an_apply_link_with_another_link_in_its_card_is_no_job() -> None:
+    card = "Backend Engineer\nHaifa\nDetails\nApply"
+    row = link("/careers/backend-engineer/apply", "Apply", card, others=True, leaves=card)
+    assert await crawl_cards([row]) == {}
+
+
 @pytest.mark.parametrize("label", ["Save job", "Share job"])
 async def test_adjacent_cards_with_only_a_save_or_share_link_are_ignored_as_on_main(label: str) -> None:
     both = f"Backend Engineer\nHaifa\n{label}\nProduct Designer\nBerlin, Germany\n{label}"
