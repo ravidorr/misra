@@ -200,10 +200,25 @@ async def test_adjacent_cards_that_only_link_through_an_apply_link_each_keep_the
     assert "Haifa" not in second
 
 
+async def test_adjacent_cards_with_different_button_styles_are_two_cards(page: Page) -> None:
+    """An Apply card next to a Details card, or an icon card: neither link climbs into the shared container."""
+    for other in ("Details", "→"):
+        for apply_first in (True, False):
+            apply_card = label_card("/careers/backend-engineer", "Backend Engineer", "Haifa", "Apply")
+            other_card = label_card("/careers/product-designer", "Product Designer", "Berlin, Germany", other)
+            html = "<div>" + (apply_card + other_card if apply_first else other_card + apply_card) + "</div>"
+            first = (await row_for(page, html, "/careers/backend-engineer"))[2]
+            second = (await row_for(page, html, "/careers/product-designer"))[2]
+            assert "Haifa" in first
+            assert "Berlin" not in first
+            assert "Berlin" in second
+            assert "Haifa" not in second
+
+
 async def test_an_apply_link_does_not_stop_at_a_details_link_of_its_own_job(page: Page) -> None:
     html = (
         f'<div><div><a href="{BASE}/jobs/x-role">X Role</a></div><div>Haifa</div>'
-        f'<div><a href="{BASE}/jobs/x-role/apply">Apply</a><a href="{BASE}/jobs/y-role/details">Details</a></div></div>'
+        f'<div><a href="{BASE}/jobs/x-role/apply">Apply</a><a href="{BASE}/jobs/x-role/details">Details</a></div></div>'
     )
     assert (await row_for(page, html, "/jobs/x-role/apply"))[2].startswith("X Role")
 
