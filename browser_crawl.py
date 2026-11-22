@@ -545,14 +545,21 @@ async def crawl_one(ctx: Any, url: str, sem: asyncio.Semaphore) -> list[dict[str
                         answers.clear()
                         failed_calls[0] = 0
                         await _polite(page.url)
+                        pressed = ""
                         try:
                             await btn.click(timeout=2000)
-                        except Exception as exc:
-                            clicks.append(f"click raised {type(exc).__name__}")
-                            raise
+                        except Exception as exc:  # a banner or a slow page: the button gets the click as an event
+                            pressed = f"click raised {type(exc).__name__}, sent as event; "
+                            try:
+                                await btn.dispatch_event("click")
+                            except Exception:
+                                clicks.append(f"{pressed}not pressed")
+                                raise
                         grew = await _list_grew(page, before, open_calls, asked)
                         after = await page.eval_on_selector_all("a[href]", "e=>e.length")
-                        clicks.append(f"{before}->{after} links, xhr {sorted(answers)}, failed {failed_calls[0]}")
+                        clicks.append(
+                            f"{pressed}{before}->{after} links, xhr {sorted(answers)}, failed {failed_calls[0]}"
+                        )
                         if not grew:
                             break  # this button loads no jobs: stop pressing it
                 n = await page.eval_on_selector_all("a[href]", "e=>e.length")

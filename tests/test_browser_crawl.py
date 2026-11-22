@@ -1363,9 +1363,24 @@ async def test_load_more_trace_ignores_other_hosts_and_resources() -> None:
 
 
 async def test_load_more_trace_names_a_click_that_raised() -> None:
-    page = FakePage(count_fn=lambda _i: 9, btn=FakeEl(click_error=True))
+    page = FakePage(count_fn=lambda _i: 9, btn=FakeEl(click_error=2))
     await run(page)
-    assert WHY[URL].endswith("load more: 2 click(s); click raised RuntimeError; click raised RuntimeError")
+    assert WHY[URL].endswith(
+        "load more: 2 click(s); click raised RuntimeError, sent as event; not pressed; "
+        "click raised RuntimeError, sent as event; not pressed"
+    )
+
+
+async def test_a_load_more_click_that_times_out_is_sent_as_an_event_and_the_list_is_read() -> None:
+    """Priority Software, 2026-11-22: the click timed out on a runner (banner, slow page), nothing more was read and
+    the sharp-drop guard held 21 jobs against 9. The event reaches the button the click could not."""
+    pressed: list[int] = []
+    page = FakePage(count_fn=lambda _i: 21 if pressed else 9, link_fn=lambda _i: [])
+    page.btn = FakeEl(click_error=1, on_click=lambda: pressed.append(1))
+    await run(page)
+    assert pressed
+    assert WHY[URL].startswith("no jobs found")
+    assert "click raised RuntimeError, sent as event; 9->21 links" in WHY[URL]
 
 
 async def test_load_more_trace_keeps_three_clicks_of_many() -> None:
