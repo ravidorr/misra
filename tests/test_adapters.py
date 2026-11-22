@@ -330,6 +330,7 @@ def fake_post(monkeypatch: pytest.MonkeyPatch, *responses: FakeHttpResponse | No
 
     def _post(url: str, **kw: Any) -> FakeHttpResponse | None:
         assert kw["retry"] is True  # a Workday search is repeated after a timeout, 429 or 5xx
+        assert kw["pool"] == "workday"  # and takes its turn on the pace shared by all the tenants
         bodies.append({"url": url, **kw["json"]})
         return queue.pop(0) if len(queue) > 1 else queue[0]
 

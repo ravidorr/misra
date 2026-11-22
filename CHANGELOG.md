@@ -8,6 +8,12 @@ All notable changes are documented here. Format follows [Keep a Changelog](https
 
 - A "Hidden (n)" switch beside "Starred (n)": a view of its own that lists every company the visitor hid, one row each with "Unhide" (a company with no open role is listed too, so it can be unhidden without finding one of its roles), and every open role they hid one by one, as cards at full strength with "Unhide" and no "New" flag. The Hidden view also puts the coverage card away with the filters; the Starred view keeps it. It reads the choices kept today (this browser, or the account) and stores nothing new; a role hidden only because its company is hidden is covered by the company's row, and a hidden role leaves the list when its posting closes (the database deletes the discard). Two WebMCP tools: `list_hidden` and `unhide_company`.
 
+## [0.94.1] - 2026-11-22
+
+### Fixed
+
+- The Workday boards no longer all fail with HTTP 429. Workday throttles by client address across tenants, so the one request a second of each host was not enough for 25 boards read by 8 threads. Every Workday request (the searches and the job pages) now takes its turn on one pace shared by all tenants, `common.PACES["workday"]`: at least 2 seconds between any two requests of the run (about 150 requests, 5 minutes at most, inside the 20 minute limit of the crawl step). A Retry-After is honoured up to 60 seconds, a refusal pushes back the turn of every board, and the waiting after refusals is at most 180 seconds in all. A board whose 429 persists after the two repeats is not asked again in that run. The log gets one line of counts (`paced requests`). The project User-Agent, `robots.txt` and the one request a second of each host are unchanged; a 403 or a challenge page is never retried.
+
 ## [0.94.0] - 2026-11-22
 
 ### Added

@@ -690,6 +690,7 @@ def main() -> None:  # noqa: PLR0915
     n_open = c.execute("SELECT COUNT(*) FROM jobs WHERE status='open'").fetchone()[0]
     print(f"crawled {len(companies)} companies, failed {len(failed)} {failed}, open jobs {n_open}")
     print(f"skipped by robots.txt {len(skipped)} {skipped}")
+    print(f"paced requests: {common.pool_report()}")
     save_descriptions(texts, crawled)
     print(f"robots.txt: {dropped} jobs of skipped companies deleted from the history")
     if not common.ROBOTS_ENFORCED:

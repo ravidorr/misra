@@ -179,3 +179,76 @@ def test_a_connection_error_is_not_repeated_and_is_reported_by_kind(monkeypatch:
     assert (s.calls, sleeps, common.last_failure()) == (1, [], "ConnectionError")
     common.reset_robots_block()
     assert common.last_failure() == ""
+
+
+def paced(monkeypatch: pytest.MonkeyPatch, gap: float = 2.0, budget: float = 180.0) -> None:
+    monkeypatch.setattr(common, "PACES", {"workday": common.Pace(gap=gap, retry_after_max=60.0, budget=budget)})
+
+
+def clock(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A frozen clock, so the turns of a test do not depend on how fast it runs."""
+    monkeypatch.setattr(common.time, "time", lambda: 1000.0)
+
+
+def test_pooled_requests_to_different_hosts_wait_for_one_shared_turn(monkeypatch: pytest.MonkeyPatch) -> None:
+    paced(monkeypatch)
+    clock(monkeypatch)
+    s, sleeps = scripted(monkeypatch, *[FakeHttpResponse()] * 3)
+    for host in ("a.test", "b.test", "c.test"):
+        assert common.post(f"https://{host}/x", pool="workday") is not None
+    assert (s.calls, sleeps) == (3, [2.0, 4.0])  # the first goes at once, then one every gap, whatever the host
+    assert "workday 3 requests" in common.pool_report()
+
+
+def test_an_unpooled_request_ignores_the_pace(monkeypatch: pytest.MonkeyPatch) -> None:
+    paced(monkeypatch)
+    clock(monkeypatch)
+    s, sleeps = scripted(monkeypatch, *[FakeHttpResponse()] * 2)
+    common.post("https://a.test/x", pool="workday")
+    common.post("https://b.test/x")
+    assert (s.calls, sleeps) == (2, [])
+
+
+def test_a_pooled_refusal_pushes_back_the_whole_group_and_honours_a_long_retry_after(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    paced(monkeypatch)
+    clock(monkeypatch)
+    busy = FakeHttpResponse(status_code=429)
+    busy.headers["Retry-After"] = "45"
+    s, sleeps = scripted(monkeypatch, busy, FakeHttpResponse())
+    assert common.post("https://a.test/x", retry=True, pool="workday") is not None
+    assert (s.calls, sleeps, common.last_failure()) == (2, [47.0], "")  # the 45 s asked for, then the turn
+    assert common.reserve_slot("workday", 2.0) > 0  # another board waits behind it too
+    assert "45s waited" in common.pool_report()
+
+
+def test_a_persistent_429_gives_the_host_up_for_the_run(monkeypatch: pytest.MonkeyPatch) -> None:
+    paced(monkeypatch)
+    clock(monkeypatch)
+    s, sleeps = scripted(monkeypatch, *[FakeHttpResponse(status_code=429)] * 3, FakeHttpResponse())
+    r = common.post("https://a.test/x", retry=True, pool="workday")
+    assert r is not None
+    assert (s.calls, sleeps) == (3, [7.0, 12.0])  # the try and two repeats, each after the doubled wait and the turn
+    assert common.post("https://a.test/y", retry=True, pool="workday") is None  # no request any more
+    assert (s.calls, common.last_failure()) == (3, "HTTP 429")
+    assert common.post("https://b.test/x", retry=True, pool="workday") is not None  # another host is still asked
+    assert "1 hosts not asked again" in common.pool_report()
+
+
+def test_the_waiting_after_refusals_is_bounded_by_the_group_budget(monkeypatch: pytest.MonkeyPatch) -> None:
+    paced(monkeypatch, budget=7.0)
+    clock(monkeypatch)
+    s, sleeps = scripted(monkeypatch, *[FakeHttpResponse(status_code=503)] * 2)
+    r = common.post("https://a.test/x", retry=True, pool="workday")
+    assert r is not None
+    assert (s.calls, sleeps, common.last_failure()) == (2, [7.0], "HTTP 503")  # 5 s fit the budget, 10 more do not
+    assert common._pool_given_up == set()  # a 503 is not a 429: the host is asked again later
+
+
+def test_a_pooled_timeout_is_repeated_and_never_gives_the_host_up(monkeypatch: pytest.MonkeyPatch) -> None:
+    paced(monkeypatch, budget=0.0)
+    clock(monkeypatch)
+    s, _ = scripted(monkeypatch, requests.Timeout("slow"))
+    assert common.post("https://a.test/x", retry=True, pool="workday") is None
+    assert (s.calls, common.last_failure(), common._pool_given_up) == (1, "Timeout", set())
