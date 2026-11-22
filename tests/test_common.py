@@ -303,3 +303,30 @@ def test_one_send_time_is_recorded_in_both_schedules_when_the_host_is_the_slower
     assert (sleeps, common._last["workday"], common._last["a.test"]) == ([5.0], 1005.0, 1005.0)  # the real send time
     common.post("https://b.test/x", pool="workday")  # another tenant: a full gap after the send above, not before
     assert sleeps == [5.0, 2.0]
+
+
+def busy_for(seconds: str) -> FakeHttpResponse:
+    busy = FakeHttpResponse(status_code=429)
+    busy.headers["Retry-After"] = seconds
+    return busy
+
+
+def test_a_pooled_refusal_without_a_repeat_still_pushes_the_group_back(monkeypatch: pytest.MonkeyPatch) -> None:
+    paced(monkeypatch)
+    now = clock(monkeypatch)
+    busy = busy_for("45")
+    s, sleeps = scripted_on(now, monkeypatch, busy, FakeHttpResponse())
+    assert common.get("https://a.test/job", pool="workday") is busy  # a job page: retry is off
+    assert (s.calls, sleeps, common._last["workday"]) == (1, [], 1045.0)
+    assert common.get("https://b.test/job", pool="workday") is not None  # the next tenant waits for it
+    assert sleeps == [47.0]
+
+
+def test_the_last_failed_attempt_of_a_search_pushes_the_group_back_too(monkeypatch: pytest.MonkeyPatch) -> None:
+    paced(monkeypatch, budget=500.0)
+    now = clock(monkeypatch)
+    s, sleeps = scripted_on(now, monkeypatch, busy_for("10"), busy_for("10"), busy_for("45"), FakeHttpResponse())
+    assert common.post("https://a.test/x", retry=True, pool="workday") is not None
+    assert (s.calls, sleeps) == (3, [12.0, 12.0])  # two repeats, then the third refusal ends the board
+    assert common._last["workday"] == now[0] + 45.0  # and its Retry-After still holds back every other board
+    assert common._pool_given_up == {"a.test"}

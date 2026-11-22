@@ -224,13 +224,10 @@ def _retry_wait(r: requests.Response | None, attempt: int, cap: float = RETRY_AF
     return float(RETRY_BACKOFF * 2**attempt)
 
 
-def _wait_to_repeat(r: requests.Response | None, attempt: int, pool: str) -> bool:
-    """Wait before a repeat, or say there is none. Without a group the wait is slept here. In a group it is taken from
-    the group's budget and every request of the group is pushed back by it (they take their turns after it), and when
-    the budget is spent there is no repeat."""
-    if pool not in PACES:
-        time.sleep(_retry_wait(r, attempt))
-        return True
+def _cool_pool(r: requests.Response | None, attempt: int, pool: str) -> bool:
+    """A transient failure of a request of the group, retried or not: push every request of the group back by the
+    wait the server asked for (they take their turns after it) and charge it to the group's budget. False when the
+    budget is spent: the group is then not pushed back any more, and the request gets no repeat."""
     wait = _retry_wait(r, attempt, PACES[pool].retry_after_max)
     with _lock:
         if _pool_spent.get(pool, 0.0) + wait > PACES[pool].budget:
@@ -282,7 +279,12 @@ def _send(method: str, url: str, retry: bool = False, pool: str = "", **kw: Any)
             _outcome.failure, transient = "Timeout", True
         except requests.RequestException as exc:
             _outcome.failure, transient = type(exc).__name__, False
-        if retry and transient and attempt < RETRIES and _wait_to_repeat(r, attempt, pool):
+        again = retry and attempt < RETRIES
+        if transient and paced:
+            again = _cool_pool(r, attempt, pool) and again  # the group is pushed back whether or not this one repeats
+        elif transient and again:
+            time.sleep(_retry_wait(r, attempt))
+        if transient and again:
             attempt += 1
             continue
         if paced and r is not None and r.status_code == HTTP_TOO_MANY:
