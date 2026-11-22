@@ -8,6 +8,12 @@ All notable changes are documented here. Format follows [Keep a Changelog](https
 
 - A "Hidden (n)" switch beside "Starred (n)": a view of its own that lists every company the visitor hid, one row each with "Unhide" (a company with no open role is listed too, so it can be unhidden without finding one of its roles), and every open role they hid one by one, as cards at full strength with "Unhide" and no "New" flag. The Hidden view also puts the coverage card away with the filters; the Starred view keeps it. It reads the choices kept today (this browser, or the account) and stores nothing new; a role hidden only because its company is hidden is covered by the company's row, and a hidden role leaves the list when its posting closes (the database deletes the discard). Two WebMCP tools: `list_hidden` and `unhide_company`.
 
+## [0.94.0] - 2026-11-22
+
+### Added
+
+- Two dedicated readers for one company each, by the maintainer's decision of 2026-11-22: `adapters.deel` (feed `deel`, slug `www.deel.com`) reads the page data of `https://www.deel.com/careers/` in one request (Deel's Ashby public board answers an empty list), and `adapters.bulls_media` (feed `bulls_media`, slug `bulls-media.com`) reads the careers page's own feed `get-positions.php` in one request. Both go through `common.get` (robots.txt, one request a second, the project's User-Agent), read no job text, keep the jobs in Israel and treat a changed shape, a job twice, an empty list or one with no Israel job as a failure. Deel's links are `https://jobs.deel.com/deel/job-details/<ashby_id>`; Bulls Media's `discreet` positions, which its page hides, are not read. The migration `20261210100000_companies_ats_deel_bulls_media.sql` adds the two keys to the check `companies_ats_known` and the admin page lists them; apply the migration after the merge, then pin the two companies.
+
 ## [0.93.0] - 2026-11-22
 
 ### Fixed

@@ -40,6 +40,8 @@ PHENOM_MAX_PAGES = 100
 PHENOM_SLUG_PARTS = 3
 AVATURE_MAX = 20  # the most jobs an Avature feed gives (it has no paging): a feed this long may be cut short
 JIBE_MAX = 100  # the most jobs of one Jibe search read (one answer): a board with more is not read
+DEEL_MAX = 1000  # the most jobs of the Deel careers page read (it lists about 230): a longer list is a failure
+BULLS_MAX = 500  # the most positions of the Bulls Media feed read (it lists about 15): a longer list is a failure
 VARONIS_MAX = 200  # the most requisitions of Varonis' list read (it has no paging): a longer list is a failure
 EIGHTFOLD_MAX = 100  # the most positions of one Eightfold search read (ten an answer): a board with more is not read
 
@@ -1443,6 +1445,170 @@ def varonis(slug: str) -> list[Job] | None:
     return [j for j in jobs if ISRAEL.search(j["location"])] or None  # Varonis has jobs in Israel: none is a bad answer
 
 
+DEEL_HOST = "www.deel.com"
+DEEL_JOBS_HOST = "jobs.deel.com"
+_NEXT_PUSH = re.compile(r"<script[^>]*>self\.__next_f\.push\((.*?)\)</script>", re.S)
+_DEEL_LISTING = '"__component":"product.career-job-listing"'
+_DEEL_COUNT = re.compile(r',"jobsCount":(\d+)[,}]')
+_ASHBY_ID = re.compile(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}")
+
+
+def _deel_jobs(page: str) -> list[Any] | None:
+    """The `jobs` of the careers page's job listing, or None when the page does not hold them as expected. The page
+    is a Next.js page: its data is in the `self.__next_f.push([1, "<text>"])` scripts, whose texts joined are one
+    stream, and the listing is the one `product.career-job-listing` component there, `"jobs": [...]` followed by its
+    `jobsCount`. The list is trusted only when it is a list and its count is its length."""
+    parts = []
+    for m in _NEXT_PUSH.finditer(page):
+        try:
+            chunk = json.loads(m.group(1))
+        except ValueError:
+            return None
+        if isinstance(chunk, list) and len(chunk) == 2 and chunk[0] == 1 and isinstance(chunk[1], str):  # noqa: PLR2004
+            parts.append(chunk[1])
+    stream = "".join(parts)
+    key = '"jobs":'
+    start = stream.find(_DEEL_LISTING)
+    at = stream.find(key, start) if stream.count(_DEEL_LISTING) == 1 else -1
+    if at < 0:
+        return None
+    try:
+        jobs, end = json.JSONDecoder().raw_decode(stream, at + len(key))
+    except ValueError:
+        return None
+    count = _DEEL_COUNT.match(stream, end)
+    if not isinstance(jobs, list) or not count or int(count.group(1)) != len(jobs):
+        return None
+    return jobs
+
+
+def _deel_job(item: Any) -> Job | None:
+    """One job of the listing, or None when it cannot be read: no `attributes` object, an `ashby_id` that is not an
+    Ashby id, no title, `all_locations` that is not a non-empty list of place texts, or an `is_listed` that is not
+    true (a job the page does not list is not shown). The place is the places of the job that name Israel (a job of
+    several, EMEA ones list thirty countries, is kept when one is in Israel), '' when it has none. The link is the
+    job's page on the Ashby-hosted board, `https://jobs.deel.com/deel/job-details/<ashby_id>` (its `external_link`
+    is the application form, which robots.txt disallows, and is not used)."""
+    attrs = item.get("attributes") if isinstance(item, dict) else None
+    if not isinstance(attrs, dict):
+        return None
+    job_id, title, places = attrs.get("ashby_id"), attrs.get("title"), attrs.get("all_locations")
+    if not (
+        isinstance(job_id, str)
+        and _ASHBY_ID.fullmatch(job_id)
+        and isinstance(title, str)
+        and title.strip()
+        and attrs.get("is_listed") is True
+        and isinstance(places, list)
+        and places
+        and all(isinstance(p, str) and p.strip() for p in places)
+    ):
+        return None
+    team = attrs.get("team_name")
+    return _job(
+        job_id,
+        title,
+        "; ".join(p.strip() for p in places if ISRAEL.search(p)),
+        f"https://{DEEL_JOBS_HOST}/deel/job-details/{job_id}",
+        team=team if isinstance(team, str) and team != "$undefined" else "",
+        posted=_day(attrs.get("ashby_published_date")),
+    )
+
+
+def deel(slug: str) -> list[Job] | None:
+    """slug is 'www.deel.com', the only host this reader serves (a dedicated reader for one company, by the
+    maintainer's decision of 2026-11-22: the careers page draws its jobs from its own page data, and the Ashby public
+    board of Deel answers an empty list). The page `https://www.deel.com/careers/` is read in one request through
+    `common.get` (its robots.txt allows `/careers/`; one request a second, the project's User-Agent), and only its
+    page data is read, never a job page. The list is trusted only when `_deel_jobs` finds it whole, it has at most
+    DEEL_MAX jobs and no job is unreadable or twice: a partial list would close the jobs it lacks. Of those, the jobs
+    with a place in Israel (`common.ISRAEL`) are kept. The page data holds each job's text, which is not read. An
+    empty list, or one with no job in Israel, is a failure too (Deel has jobs in Israel, so an empty answer is a
+    broken one)."""
+    if slug != DEEL_HOST:
+        return None
+    r = get(f"https://{DEEL_HOST}/careers/")
+    if r is None or r.status_code != HTTP_OK:
+        return None
+    items = _deel_jobs(r.text)
+    if items is None or len(items) > DEEL_MAX:
+        return None
+    read = [_deel_job(i) for i in items]
+    jobs = [j for j in read if j]
+    if len(jobs) != len(items) or len({j["job_id"] for j in jobs}) != len(jobs):
+        return None
+    return [j for j in jobs if j["location"]] or None  # Deel has jobs in Israel: none is a bad answer
+
+
+BULLS_HOST = "bulls-media.com"
+_BULLS_ID = re.compile(r"[0-9A-Za-z][0-9A-Za-z.\-]*")
+
+
+def _bulls_hidden(item: Any) -> bool:
+    """True for a position the careers page itself does not show: the department `discreet` (a confidential search)."""
+    return (
+        isinstance(item, dict) and isinstance(item.get("department"), str) and item["department"].lower() == "discreet"
+    )
+
+
+def _bulls_job(item: Any) -> Job | None:
+    """One position of the feed, or None when it cannot be read: not an object, an `id` that is not letters, digits,
+    dots and dashes, no `name`, or a `city` or `country` that is not text. The place is `City, Country` with the
+    country as the feed gives it (a code: `Kiryat Ono, IL`). The department `empty` is the feed's word for none. The
+    link is the careers page's own view of the position, `/career/positions/?id=<id>`."""
+    if not isinstance(item, dict):
+        return None
+    job_id, title, city, country = item.get("id"), item.get("name"), item.get("city"), item.get("country")
+    if not (
+        isinstance(job_id, str)
+        and _BULLS_ID.fullmatch(job_id)
+        and isinstance(title, str)
+        and title.strip()
+        and isinstance(city, str)
+        and city.strip()
+        and isinstance(country, str)
+        and country.strip()
+    ):
+        return None
+    team = item.get("department")
+    return _job(
+        job_id,
+        title,
+        f"{city.strip()}, {country.strip()}",
+        f"https://{BULLS_HOST}/career/positions/?id={job_id}",
+        team=team if isinstance(team, str) and team.lower() != "empty" else "",
+    )
+
+
+def bulls_media(slug: str) -> list[Job] | None:
+    """slug is 'bulls-media.com', the only host this reader serves (a dedicated reader for one company, by the
+    maintainer's decision of 2026-11-22). The careers page draws its positions from its own feed,
+    `https://bulls-media.com/career/positions/get-positions.php`, read in one request through `common.get` (the
+    site's robots.txt allows everything; one request a second, the project's User-Agent). The list has no paging and
+    no total, so it is trusted only when it is a JSON list of at most BULLS_MAX positions and no position is
+    unreadable or twice: a partial list would close the jobs it lacks. The positions the page hides (`_bulls_hidden`)
+    are not read. Of those, the jobs whose place names Israel, by `common.ISRAEL`, are kept. The feed holds each
+    position's text, which is not read, and has no date. An empty list, or one with no job in Israel, is a failure too
+    (Bulls Media has jobs in Israel, so an empty answer is a broken one)."""
+    if slug != BULLS_HOST:
+        return None
+    r = get(f"https://{BULLS_HOST}/career/positions/get-positions.php")
+    if r is None or r.status_code != HTTP_OK:
+        return None
+    try:
+        data = r.json()
+    except ValueError:
+        return None
+    if not isinstance(data, list) or len(data) > BULLS_MAX:
+        return None
+    items = [i for i in data if not _bulls_hidden(i)]
+    read = [_bulls_job(i) for i in items]
+    jobs = [j for j in read if j]
+    if len(jobs) != len(items) or len({j["job_id"] for j in jobs}) != len(jobs):
+        return None
+    return [j for j in jobs if ISRAEL.search(j["location"])] or None  # Bulls Media has jobs in Israel: none is bad
+
+
 _SUBDOMAIN_SLUG = re.compile(r"[a-z0-9][a-z0-9-]*")
 
 
@@ -1757,4 +1923,6 @@ ADAPTERS: dict[str, Callable[[str], list[Job] | None]] = {
     "pinpoint": pinpoint,
     "jobvite": jobvite,
     "recruitee": recruitee,
+    "deel": deel,
+    "bulls_media": bulls_media,
 }
