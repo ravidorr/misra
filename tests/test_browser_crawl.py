@@ -1084,10 +1084,31 @@ def test_parse_card_with_a_heading_title_skips_the_team_guesses() -> None:
         ("https://x.test/positions/account-executive", True),
         ("https://x.test/positions/ab", False),
         ("https://x.test/open-roles/account-executive", False),
+        ("https://x.test/open-position/senior-software-engineer", True),  # Pillar Security
+        ("https://x.test/open-positions/ab", False),
+        ("https://x.test/2026/08/12/sales-specialist/", False),  # a dated post is a job only on a careers page
+        ("https://x.test/careers/co/other/6E.358/global-cs-engineer/all", True),  # the Comeet plugin (Qwilt, SQream)
+        ("https://x.test/co/other/6E.358/", False),
+        ("https://x.test/co/thankyou", False),
     ],
 )
 def test_the_job_link_pattern(href: str, job: bool) -> None:
     assert bool(browser_crawl.JOBLINK.search(href)) is job
+
+
+async def test_a_dated_post_is_a_job_only_on_a_careers_page_with_a_role_word() -> None:
+    """PayMe posts each job as /2026/08/12/<title>/ on /careers/; a news post has the same address."""
+    jobs = [
+        link("/2026/08/12/sales-specialist/", "Sales Specialist", "Sales Specialist\nLocation: Tel Aviv, Israel"),
+        link("/2026/08/12/our-latest-funding-round/", "Our latest funding round", "Our latest funding round\nNews"),
+    ]
+    careers = await run(FakePage(url="https://x.test/careers/", link_fn=lambda i: jobs if i == 1 else []))
+    assert careers is not None
+    assert [j["title"] for j in careers] == ["Sales Specialist"]  # the news post has no role word
+    news = await run(FakePage(url="https://x.test/blog/", link_fn=lambda i: jobs if i == 1 else []))
+    assert news == []  # not a careers page: no dated post is a job
+    assert browser_crawl.CAREER_PAGE.search("/careers/") and not browser_crawl.CAREER_PAGE.search("/blog/")
+    assert browser_crawl.DATED_POST.pattern in browser_crawl.CARD_ARGS["job"]
 
 
 def test_a_country_chooser_is_not_a_job_link() -> None:
@@ -1137,9 +1158,13 @@ async def test_a_button_label_is_no_job_title(label: str) -> None:
     }
 
 
-@pytest.mark.parametrize("label", ["View Full Position", "View The Position", "Apply for this position"])
+@pytest.mark.parametrize(
+    "label",
+    ["View Full Position", "View The Position", "Apply for this position", "See Position Details", "View Opening"],
+)
 async def test_a_view_or_apply_label_link_takes_its_title_from_the_card(label: str) -> None:
-    """Nanomotion, Variscite and Jungo: the link says only what the button does; the title is a heading in its card."""
+    """Nanomotion, Variscite, Jungo, Balink and GeoEdge: the link says only what the button does; the title is a heading
+    in its card."""
     row = link(
         "/jobs/hardware-engineer/",
         label,

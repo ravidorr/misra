@@ -20,10 +20,15 @@ from common import ISRAEL, ROBOTS_NOTE, USER_AGENT, host_of, reserve_slot, robot
 from descriptions import attach, html_to_text, jsonld_description
 
 JOBLINK = re.compile(
-    r"/(jobs?|positions?|careers?|details|cmcareer|openings?|vacanc\w+|job-?post\w*)/[^/?#]{4,}"
-    r"|[?&]job_id=[^&#]+",
+    r"/((?:open-)?jobs?|(?:open-)?positions?|careers?|details|cmcareer|openings?|vacanc\w+|job-?post\w*)/[^/?#]{4,}"
+    r"|[?&]job_id=[^&#]+"
+    r"|/co/[^/?#]+/[0-9A-F]{2}\.[0-9A-F]{3}/[^/?#]+",  # the Comeet WordPress plugin: /co/<place>/<uid>/<title>
     re.I,
 )
+# A career page that posts each job as a dated post (PayMe): /2026/08/12/<title>/. It is a job link only on a page
+# whose own path is a careers or jobs page and only with a role word in the title: a news post has the same address.
+DATED_POST = re.compile(r"/20\d\d/\d\d/\d\d/[^/?#]{4,}")
+CAREER_PAGE = re.compile(r"/(careers?|jobs?|join-us\S*|open-positions?|work-with-us)(/|$)", re.I)
 JOB_ID = re.compile(r"[?&](job_id=[^&#]+)", re.I)  # Tower: /job-description/?job_id=9672, the query is the job
 NOT_JOB = re.compile(
     r"/(department|departments|category|team|teams|locations?|working-at|life-at|benefits|students?|early-careers?|login|search|saved|talent-network|intro|choose-country\S*)\b|#",
@@ -149,7 +154,12 @@ CARD_JS = r"""(els, cfg) => {
         return [href(e), text(e), card, own ? text(own) : '', others, leaves.join('\n')];
     });
 }"""  # the card: the widest ancestor, up to 4 levels, with one job's title link and a card's worth of text
-CARD_ARGS = {"job": JOBLINK.pattern, "skip": NOT_JOB.pattern, "id": JOB_ID.pattern, "max": CARD_MAX}
+CARD_ARGS = {
+    "job": f"{JOBLINK.pattern}|{DATED_POST.pattern}",
+    "skip": NOT_JOB.pattern,
+    "id": JOB_ID.pattern,
+    "max": CARD_MAX,
+}
 CARD_LINE_MAX = 120  # a longer card line is a job description, not a title, place or team
 CARD_BEFORE = 2  # lines above the title that can still be its place or team
 CARD_AFTER = 3  # and below it
@@ -161,6 +171,8 @@ BUTTON_LINES = frozenset(
         "view position",
         "view the position",
         "view full position",
+        "see position details",
+        "view opening",
         "apply for this position",
         "view role",
         "view job",
@@ -581,9 +593,11 @@ async def crawl_one(ctx: Any, url: str, sem: asyncio.Semaphore) -> list[dict[str
                 link_count = len(links)
                 # links with a title of their own first, so a label link never claims a job before its titled twin
                 links.sort(key=lambda row: not _WORD.search(row[1]) or _label(row[1]) in LINK_NOISE)
+                dated_ok = bool(CAREER_PAGE.search(urlsplit(page.url).path))
                 for href, text, card, head, others, leaves in links:
                     key = _job_key(href)
-                    if key in seen or not JOBLINK.search(href) or NOT_JOB.search(href):
+                    dated = dated_ok and bool(DATED_POST.search(href)) and not JOBLINK.search(href)
+                    if key in seen or not (JOBLINK.search(href) or dated) or NOT_JOB.search(href):
                         continue
                     lines = [
                         ln.strip()
@@ -610,6 +624,8 @@ async def crawl_one(ctx: Any, url: str, sem: asyncio.Semaphore) -> list[dict[str
                     if parsed is None:
                         continue
                     title, loc, team = parsed
+                    if dated and not ROLE_WORD.search(title):
+                        continue  # a news post on a careers page: a job has a role word in its title
                     if from_card and not (ROLE_WORD.search(title) or len(title.split()) >= MIN_CARD_TITLE_WORDS):
                         continue  # a card with only a word or two of text is a banner or a place, not a job
                     seen.add(key)
