@@ -8,6 +8,12 @@ All notable changes are documented here. Format follows [Keep a Changelog](https
 
 - A "Hidden (n)" switch beside "Starred (n)": a view of its own that lists every company the visitor hid, one row each with "Unhide" (a company with no open role is listed too, so it can be unhidden without finding one of its roles), and every open role they hid one by one, as cards at full strength with "Unhide" and no "New" flag. The Hidden view also puts the coverage card away with the filters; the Starred view keeps it. It reads the choices kept today (this browser, or the account) and stores nothing new; a role hidden only because its company is hidden is covered by the company's row, and a hidden role leaves the list when its posting closes (the database deletes the discard). Two WebMCP tools: `list_hidden` and `unhide_company`.
 
+## [0.94.7] - 2026-11-22
+
+### Fixed
+
+- The browser reader reads a careers page whose cards hold only an "Apply" or "Apply now" link and no titled link (Mobilicom: three jobs, each a card with its title as plain text). An Apply link now counts as a job of its own in the card climb, only against other Apply links, and may start a card when the card has no titled link; "Save" and "Send" links still never do. A card with a titled link is read as before. Pin Mobilicom with `--ats browser --slug https://mobilicom.com/careers/`.
+
 ## [0.94.6] - 2026-11-22
 
 ### Added

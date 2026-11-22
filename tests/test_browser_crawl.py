@@ -1293,8 +1293,21 @@ async def test_a_titled_link_with_a_role_heading_and_a_long_department_reads_the
     assert await crawl_cards([row]) == {"Field Engineer": ("Birmingham, UK", "CUSTOMER DELIVERY AND SUCCESS")}
 
 
-@pytest.mark.parametrize("label", ["Apply", "Apply now", "Save job", "Share job"])
-async def test_adjacent_cards_with_only_an_apply_link_are_ignored_as_on_main(label: str) -> None:
+@pytest.mark.parametrize("label", ["APPLY NOW", "Apply"])
+async def test_a_card_whose_only_link_is_an_apply_link_gives_its_title_and_place(label: str) -> None:
+    """Mobilicom: every job is `/careers/<slug>/` with the text "APPLY NOW" and the title and place in the card."""
+    card = f"Pre-Sale Engineer\nShoham - Israel | Full-time position\n{label}"
+    row = link("/careers/pre-sale-engineer/", label, card, leaves=card)
+    assert await crawl_cards([row]) == {"Pre-Sale Engineer": ("Shoham - Israel | Full-time position", "")}
+
+
+async def test_an_apply_link_with_a_card_that_is_not_a_job_is_no_job() -> None:
+    card = "Apply"
+    assert await crawl_cards([link("/careers/pre-sale-engineer/", "Apply", card, leaves=card)]) == {}
+
+
+@pytest.mark.parametrize("label", ["Save job", "Share job"])
+async def test_adjacent_cards_with_only_a_save_or_share_link_are_ignored_as_on_main(label: str) -> None:
     both = f"Backend Engineer\nHaifa\n{label}\nProduct Designer\nBerlin, Germany\n{label}"
     links = [
         link("/jobs/backend-engineer", label, both, leaves=both),

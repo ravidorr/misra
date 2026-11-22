@@ -99,14 +99,16 @@ CARD_JS = r"""(els, cfg) => {
     const titled = a => jobLink(a) && text(a) && !button.test(text(a));
     const nav = /^(view|read|learn|see|more|details)\b/i;  // not "Apply": that link only accompanies a job
     const label = a => !text(a) || !/\w/.test(text(a)) || nav.test(text(a));  // an icon, an arrow, "Details"
+    const apply = a => /^apply\b/i.test(text(a));  // "Apply now": a label too, but only for a card with no title link
     const near = (x, y) => x === y || x.startsWith(y + '/') || y.startsWith(x + '/');  // "/jobs/x/apply" is "/jobs/x"
     const many = (n, e) => {  // two or more jobs in n? A label link e is one job, and other label links count too
-        const mine = key(href(e)), seen = new Set(label(e) ? [mine] : []);
+        const mine = key(href(e)), lone = label(e) || apply(e), seen = new Set(lone ? [mine] : []);
+        const same = x => (label(e) ? label(x) : apply(x));  // an Apply link counts with other Apply links only
         const titles = [...n.querySelectorAll('a[href]')].filter(titled).map(a => key(href(a)));
         for (const a of n.querySelectorAll('a[href]')) {
             const k = key(href(a));
-            const other = label(e) && jobLink(a) && label(a) && !near(k, mine) && !titles.some(t => near(k, t));
-            const own = label(e) && near(k, mine);  // the title link of e's own job is no second job
+            const other = lone && jobLink(a) && same(a) && !near(k, mine) && !titles.some(t => near(k, t));
+            const own = lone && near(k, mine);  // the title link of e's own job is no second job
             if ((titled(a) && !own) || other) {
                 seen.add(k);
                 if (seen.size > 1) return true;
@@ -183,6 +185,7 @@ BUTTON_LINES = frozenset(
     }
 )
 LOCATION_LABELS = frozenset({"location", "location:", "location : location"})
+APPLY_LABELS = frozenset({"apply", "apply now"})  # a link with only these words can be the whole of a card (Mobilicom)
 LINK_NOISE = CARD_CHROME | BUTTON_LINES | LOCATION_LABELS | {"department", "job posting title"}
 
 WHY: dict[str, str] = {}  # url -> reason, filled for failed or empty crawls, printed by run.py
@@ -616,8 +619,8 @@ async def crawl_one(ctx: Any, url: str, sem: asyncio.Semaphore) -> list[dict[str
                     if not lines:
                         # a link that is only an icon or a button label ("Details"): the title is in its card, unless
                         # the card has a titled link of its own, which this one only repeats
-                        if others or not 0 < len(card) <= card_max or _label(text) in CARD_CHROME:
-                            continue  # an Apply link never starts a card: it only goes with a titled link
+                        if others or not 0 < len(card) <= card_max or _label(text) in CARD_CHROME - APPLY_LABELS:
+                            continue  # a Save or Send link never starts a card, an Apply link only with no title link
                         lines = _card_lines(leaves)
                         from_card = True
                     elif lines[0].lower() in LANGS:
