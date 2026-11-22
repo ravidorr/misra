@@ -3474,6 +3474,208 @@ def test_bulls_media_is_registered() -> None:
     assert adapters.ADAPTERS["bulls_media"] is adapters.bulls_media
 
 
+HAAT_API = "https://hub-backend.haat.delivery/api/v1/careers/public"
+
+
+def haat_department(dep_id: Any = 4, count: Any = 1, **over: Any) -> dict[str, Any]:
+    return {
+        "departmentID": dep_id,
+        "departmentName": "Commercial",
+        "departmentDesc": "text that is never read",
+        "isDeleted": 0,
+        "numOfJobs": count,
+        **over,
+    }
+
+
+def haat_job(job_id: Any = 221, **over: Any) -> dict[str, Any]:
+    return {
+        "jobID": job_id,
+        "jobName": "Key Account Manager",
+        "isActive": 1,
+        "location": "",
+        "jobDesc": "posting text that is never read",
+        "workPlaceType": {"workPlaceTypeID": 20, "workPlaceType": "North\\Center District"},
+        "department": {"departmentID": 4, "departmentName": "Commercial"},
+        **over,
+    }
+
+
+def haat_answer(data: Any) -> FakeHttpResponse:
+    return FakeHttpResponse(data=data)
+
+
+def test_haat_reads_the_open_jobs_of_each_department_and_keeps_the_ones_in_israel(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls = fake_eightfold(
+        monkeypatch,
+        haat_answer(
+            [
+                haat_department(4, 3),
+                haat_department(2, 0),  # no open job: not asked
+                haat_department(58, 5, isDeleted=1),  # deleted: no open job, not asked
+                haat_department(3, 1, departmentName="Research and Development"),
+            ]
+        ),
+        haat_answer(
+            [
+                haat_job(221),
+                haat_job(214, isActive=0, jobName="  "),  # closed: the page does not show it, it is not read
+                haat_job(55, jobName="Sales Executive - Jerusalem", location=" Jerusalem ", workPlaceType=None),
+                haat_job(223, jobName="Senior Backend Engineer", workPlaceType={"workPlaceType": "Surat/Ahmedabad"}),
+            ]
+        ),
+        haat_answer([haat_job(184, jobName="Senior Python Engineer")]),
+    )
+    jobs = adapters.haat("careers.haat.delivery")
+    assert [c["url"] for c in calls] == [
+        f"{HAAT_API}/departments",
+        f"{HAAT_API}/jobs/getByDepartment/4",
+        f"{HAAT_API}/jobs/getByDepartment/3",
+    ]
+    assert jobs == [
+        {
+            "job_id": "221",
+            "title": "Key Account Manager",
+            "location": "North\\Center District, Israel",
+            "url": "https://careers.haat.delivery/open-positions#221",
+            "team": "Commercial",
+            "posted": "",
+        },
+        {
+            "job_id": "55",
+            "title": "Sales Executive - Jerusalem",
+            "location": "Jerusalem, Israel",
+            "url": "https://careers.haat.delivery/open-positions#55",
+            "team": "Commercial",
+            "posted": "",
+        },
+        {
+            "job_id": "184",
+            "title": "Senior Python Engineer",
+            "location": "North\\Center District, Israel",
+            "url": "https://careers.haat.delivery/open-positions#184",
+            "team": "Research and Development",
+            "posted": "",
+        },
+    ]
+    assert "posting text" not in json.dumps(jobs)
+    assert all(common.ISRAEL.search(j["location"]) for j in jobs)
+
+
+def test_haat_an_empty_list_or_one_with_no_job_in_israel_is_a_failure(monkeypatch: pytest.MonkeyPatch) -> None:
+    fake_eightfold(monkeypatch, haat_answer([]))
+    assert adapters.haat("careers.haat.delivery") is None
+    fake_eightfold(monkeypatch, haat_answer([haat_department(2, 0)]))
+    assert adapters.haat("careers.haat.delivery") is None
+    fake_eightfold(
+        monkeypatch,
+        haat_answer([haat_department()]),
+        haat_answer([haat_job(workPlaceType={"workPlaceType": "Pune"})]),
+    )
+    assert adapters.haat("careers.haat.delivery") is None
+
+
+def test_haat_the_lists_at_the_caps_are_read_and_ones_above_them_are_not(monkeypatch: pytest.MonkeyPatch) -> None:
+    departments = [haat_department(i, 0) for i in range(1, adapters.HAAT_MAX_DEPARTMENTS)]
+    fake_eightfold(monkeypatch, haat_answer([*departments, haat_department(99, 1)]), haat_answer([haat_job()]))
+    jobs = adapters.haat("careers.haat.delivery")
+    assert jobs is not None
+    assert len(jobs) == 1
+    fake_eightfold(monkeypatch, haat_answer([*departments, haat_department(98, 0), haat_department(99, 1)]))
+    assert adapters.haat("careers.haat.delivery") is None
+    closed = [haat_job(i, isActive=0) for i in range(2, adapters.HAAT_MAX + 1)]
+    fake_eightfold(
+        monkeypatch, haat_answer([haat_department()]), haat_answer([haat_job(), *closed][: adapters.HAAT_MAX])
+    )
+    assert adapters.haat("careers.haat.delivery") is not None
+    fake_eightfold(
+        monkeypatch, haat_answer([haat_department()]), haat_answer([haat_job(), *closed, haat_job(2, isActive=0)])
+    )
+    assert adapters.haat("careers.haat.delivery") is None  # a list that long may be cut short
+
+
+@pytest.mark.parametrize(
+    "answers",
+    [
+        [None],
+        [FakeHttpResponse(status_code=403)],
+        [FakeHttpResponse(json_error=True)],
+        [haat_answer({})],
+        [haat_answer("x")],
+        [haat_answer(["x"])],  # a department that is not an object
+        [haat_answer([haat_department(None)])],
+        [haat_answer([haat_department(True)])],
+        [haat_answer([haat_department(departmentName=None)])],
+        [haat_answer([haat_department(departmentName=" ")])],
+        [haat_answer([haat_department(count=None)])],
+        [haat_answer([haat_department(count="1")])],
+        [haat_answer([haat_department(count=-1)])],
+        [haat_answer([haat_department(isDeleted=None)])],
+        [haat_answer([haat_department(isDeleted=2)])],
+        [haat_answer([haat_department(2, 0), haat_department(None)])],  # one bad department fails the whole list
+        # the jobs of a department
+        [haat_answer([haat_department()]), None],
+        [haat_answer([haat_department()]), FakeHttpResponse(status_code=500)],
+        [haat_answer([haat_department()]), FakeHttpResponse(json_error=True)],
+        [haat_answer([haat_department()]), haat_answer({})],
+        [haat_answer([haat_department()]), haat_answer(["x"])],
+        [haat_answer([haat_department()]), haat_answer([haat_job(isActive=None)])],
+        [haat_answer([haat_department()]), haat_answer([haat_job(isActive=2)])],
+        [haat_answer([haat_department()]), haat_answer([haat_job(), haat_job(2, isActive=None)])],
+        [haat_answer([haat_department()]), haat_answer([])],  # fewer open jobs than the department says
+        [haat_answer([haat_department()]), haat_answer([haat_job(), haat_job(2)])],  # more open jobs
+        [haat_answer([haat_department()]), haat_answer([haat_job(isActive=0)])],  # none open, one said
+        [haat_answer([haat_department()]), haat_answer([haat_job(None)])],
+        [haat_answer([haat_department()]), haat_answer([haat_job(0)])],
+        [haat_answer([haat_department()]), haat_answer([haat_job("221")])],
+        [haat_answer([haat_department()]), haat_answer([haat_job(True)])],
+        [haat_answer([haat_department()]), haat_answer([haat_job(jobName=None)])],
+        [haat_answer([haat_department()]), haat_answer([haat_job(jobName="  ")])],
+        [haat_answer([haat_department()]), haat_answer([haat_job(location=None, workPlaceType=None)])],
+        [haat_answer([haat_department()]), haat_answer([haat_job(location=" ", workPlaceType={"workPlaceType": " "})])],
+        [haat_answer([haat_department()]), haat_answer([haat_job(location=7, workPlaceType={})])],
+        # a job twice, in one department or two
+        [haat_answer([haat_department(4, 2)]), haat_answer([haat_job(), haat_job()])],
+        [
+            haat_answer([haat_department(4, 1), haat_department(5, 1)]),
+            haat_answer([haat_job()]),
+            haat_answer([haat_job()]),
+        ],
+    ],
+)
+def test_haat_an_answer_that_is_not_the_whole_readable_list_is_a_failure(
+    monkeypatch: pytest.MonkeyPatch, answers: list[FakeHttpResponse | None]
+) -> None:
+    fake_eightfold(monkeypatch, *answers)
+    assert adapters.haat("careers.haat.delivery") is None
+
+
+def test_haat_a_failing_department_stops_the_run_at_once(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls = fake_eightfold(
+        monkeypatch, haat_answer([haat_department(4, 1), haat_department(5, 1)]), FakeHttpResponse(status_code=500)
+    )
+    assert adapters.haat("careers.haat.delivery") is None
+    assert [c["url"] for c in calls] == [f"{HAAT_API}/departments", f"{HAAT_API}/jobs/getByDepartment/4"]  # not the 2nd
+
+
+def test_haat_serves_only_its_own_host_without_a_request(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls = fake_eightfold(monkeypatch, haat_answer([haat_department()]))
+    assert adapters.haat("slug") is None
+    assert calls == []
+
+
+def test_haat_goes_through_the_robots_gate_and_the_polite_get(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(adapters, "get", common.get)
+    monkeypatch.setattr(common, "robots_gate", lambda url: False)
+    assert adapters.haat("careers.haat.delivery") is None
+
+
+def test_haat_is_registered() -> None:
+    assert adapters.ADAPTERS["haat"] is adapters.haat
+
+
 WP_PAGE = "https://www.meshpayments.com/careers"
 WP_ENDPOINT = adapters.WP_POSTS[WP_PAGE]
 
