@@ -8,6 +8,12 @@ All notable changes are documented here. Format follows [Keep a Changelog](https
 
 - A "Hidden (n)" switch beside "Starred (n)": a view of its own that lists every company the visitor hid, one row each with "Unhide" (a company with no open role is listed too, so it can be unhidden without finding one of its roles), and every open role they hid one by one, as cards at full strength with "Unhide" and no "New" flag. The Hidden view also puts the coverage card away with the filters; the Starred view keeps it. It reads the choices kept today (this browser, or the account) and stores nothing new; a role hidden only because its company is hidden is covered by the company's row, and a hidden role leaves the list when its posting closes (the database deletes the discard). Two WebMCP tools: `list_hidden` and `unhide_company`.
 
+## [0.94.6] - 2026-11-22
+
+### Added
+
+- A reader for Oracle Taleo career sections, by the maintainer's decision of 2026-11-22 (it is made for Radware, whose careers page `https://radware.taleo.net/careersection/ex/joblist.ftl` lists jobs that have no link of their own, so the browser reader read none): `adapters.taleo` (feed `taleo`, slug `<host>/careersection/<section>`, for Radware `radware.taleo.net/careersection/ex`). It reads the page the way a visitor's browser does: one GET of the list page, which holds the first 25 jobs and the list's size, then the page's own POST to `joblist.ajax` for every further page (with the order the page chose: without it the server answers another one and the pages overlap), one request a second through `common.get` and `common.post`, the project's User-Agent, no login. Radware's host has no `robots.txt`, so no rule applies. A job's link is `jobdetail.ftl?job=<Job Number>` (checked to open its job); its place is the list's own text (`IL-IL-Tel Aviv`), which `common.ISRAEL` and `regions` read (no change to `regions`). A changed shape, a page that is not the one asked for, a job that does not read, a job twice, an empty list or one over 2000 jobs is a failure. The job text is not read. The migration `20261213100000_companies_ats_taleo.sql` adds the key to the check `companies_ats_known` and the admin page lists it; apply the migration after the merge, then pin Radware (`israel_only` stays on).
+
 ## [0.94.4] - 2026-11-22
 
 ### Added

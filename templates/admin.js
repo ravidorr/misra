@@ -358,7 +358,7 @@ const SEGMENTS = {
 const PIN_ATS = [
   'greenhouse_url', 'greenhouse', 'lever', 'ashby', 'workable', 'smartrecruiters', 'comeet', 'workday', 'jazzhr',
   'bamboohr', 'oraclehcm', 'amazon', 'phenom', 'comeet_page', 'avature', 'eightfold', 'jibe', 'varonis', 'breezy',
-  'teamtailor', 'pinpoint', 'jobvite', 'recruitee', 'deel', 'bulls_media', 'elbit', 'haat', 'browser',
+  'teamtailor', 'pinpoint', 'jobvite', 'recruitee', 'deel', 'bulls_media', 'elbit', 'haat', 'taleo', 'browser',
 ];
 /* The form of the slug, only where CONTRIBUTING.md ("Adding a company") or the adapter's own text documents it. */
 const PIN_HINTS = {
@@ -382,6 +382,7 @@ const PIN_HINTS = {
   deel: 'Always www.deel.com (a reader for that one company). Israel only.',
   bulls_media: 'Always bulls-media.com (a reader for that one company). Israel only.',
   haat: 'Always careers.haat.delivery (a reader for that one company). Israel only.',
+  taleo: 'The <host>/careersection/<section> of the Taleo job list, for example radware.taleo.net/careersection/ex.',
   elbit: 'Always elbitsystemscareer.com (a reader for that one company). Every job is in Israel.',
   browser: 'The address of the career page, starting with https://, for example an Eightfold ...careers?location=Israel address.',
 };
