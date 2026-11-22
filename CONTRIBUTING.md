@@ -19,6 +19,39 @@ GitHub Pages serves the dashboard: Settings, Pages, Deploy from a branch, `main`
 4. If the PR changes `package.json`, `pyproject.toml`, or a Python module listed in `RELEASE_TRIGGER_PATHS`, update `CHANGELOG.md` and bump the version in both `package.json` and `pyproject.toml` (one SemVer bump per PR).
 5. Open a **draft** PR. Link an issue with `Closes #<issue>` only when the PR resolves one.
 
+## Working with agents
+
+How the maintainer and AI agents work together on this repository. One coordinator reviews and merges; agents implement.
+
+### Briefing an agent
+
+- One job per agent, with the files or area and what "done" looks like. State what is ruled out.
+- The agent opens the PR and never merges it. It reports the PR address, the test results and anything it did not check.
+- Reports carry counts and names only: never a secret, a row, a posting's text or personal data (the Actions logs are public).
+
+### The PR cycle
+
+1. Branch from `origin/main`, in its own worktree.
+2. Run `npm run lint`, `npm run typecheck` and `npm run test:coverage` with the Node version of `.nvmrc`. Commit normally: never `--no-verify`, and no Claude co-author trailer.
+3. Bump the version once per PR when the rules above ask for it (package.json, package-lock root, pyproject.toml, `common.VERSION`, CHANGELOG).
+4. Open a draft PR, then mark it ready: that asks Codex for a review of the head. A new commit needs a new review (comment `@codex review`).
+5. The coordinator merges (`gh pr merge <n> --admin --squash`) only when every check is green (`quality` included), Codex has completed on the current head, and no review thread is unresolved. Codex's "Running" and the coverage bot's table are status, not findings.
+6. After a fix lands, reply on each review thread, then resolve it.
+
+### Changing the company list
+
+- Write only through `tools/companyctl.py`: a dry run first (the default), then `--apply`, in batches of at most 25. Every write is journaled. Check the target is the misra project before a migration or a deploy.
+- A new adapter key goes in `KNOWN_ATS` of `tools/companyctl.py` as well as in the database check.
+- After a batch, run `discover-companies` and read the status of each new record. Never edit rows while that run is in flight.
+- A company that reads jobs but none in Israel is pinned with `--israel-only`, not parked. Park it `no_openings` or `needs_reader` only if it reads no job at all.
+- Never work around bot protection, a CAPTCHA, a runner block or `robots.txt`. A site that blocks us is parked `bot_protection`, and one whose `robots.txt` forbids the job pages `robots_disallowed`. Never spoof a User-Agent.
+- No Israeli job boards and no job-board sources without the lawyer. Never contact a company. Never edit the lawyer's texts.
+- Never dispatch `daily.yml` without the maintainer's yes: it sends subscriber emails. A dry run (`digest_dry_run=true`) is fine.
+
+### When to stop
+
+Stop writing, and report, when `main` goes red, a scheduled daily run fails, a guard trips (shrink, held back, MAX_LOST), a write result is unexpected, or anything touches an excluded record. Research and PRs may continue.
+
 ## Standards
 
 - Strict ruff, mypy, ESLint, Stylelint, html-validate, and markdownlint must pass.
