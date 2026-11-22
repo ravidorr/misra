@@ -67,7 +67,7 @@ def test_a_researched_company_is_not_covered_and_not_untracked_but_is_on_the_car
 ) -> None:
     """Only a crawled company counts. The researched ones (a `gap`) are on the card, linked to their own `links`."""
     prepare(workdir)
-    gap = {"reason": "no_openings", "note": "n"}
+    gap = {"reason": "needs_reader", "note": "n"}
     write_json(
         workdir / "data" / "companies.json",
         [
