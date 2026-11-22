@@ -195,6 +195,10 @@ REASONS = {
 }
 
 
+# A company with no open role is not a coverage gap (maintainer decision 2026-11-22): a valid reason, never on the card.
+OFF_CARD = {"no_openings"}
+
+
 def reason(note: str | None) -> str:
     n = note or ""
     if re.search(r"HTTP 40[13]|blocked page|Access Denied|Just a moment", n, re.I):
@@ -315,6 +319,8 @@ def gap_groups(
         sites.setdefault(company["name"], (code, "", careers_address(company)))
     groups = []
     for code, label in REASONS.items():
+        if code in OFF_CARD:
+            continue
         members = []
         for name, (c, why, found) in sorted(sites.items(), key=lambda site: site[0].lower()):
             if c != code:

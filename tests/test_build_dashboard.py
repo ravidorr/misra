@@ -174,11 +174,10 @@ def test_main_builds_dashboard(db: sqlite3.Connection, workdir: Path, capsys: py
     assert gaps["blocked"][0]["last"] == "2024-01-01"
     assert gaps["blocked"][0]["why"].startswith("the last crawl failed")
     assert gaps["blocked"][1]["last"] == "never"
-    # Down (a failing crawl), Never (the same), Alpha (no feed found) and Beta (from the CSV), grouped by reason
-    assert gaps["total"] == len(["Down", "Never", "Alpha", "Beta"])
+    # Down (a failing crawl), Never (the same) and Alpha (no feed found), grouped by reason; Beta has no open role
+    assert gaps["total"] == len(["Down", "Never", "Alpha"])
     assert [(g["reason"], g["count"]) for g in gaps["groups"]] == [
         ("crawl_failing", 2),
-        ("no_openings", 1),
         ("no_feed_found", 1),
     ]
     jobs = {j["i"]: j for j in payload["jobs"]}
@@ -757,12 +756,11 @@ def test_each_reason_links_where_the_card_says() -> None:
         "bot_protection": ["https://walled.test/careers"],
         "no_careers_url": ["https://x.test"],
         "site_unusable": ["https://x.test/site_unusable"],
-        "no_openings": ["https://x.test/no_openings"],
         "needs_reader": ["https://x.test/needs_reader"],
         "robots_disallowed": ["https://jobs.smartrecruiters.com/robot"],
         "no_feed_found": ["https://x.test/no_feed_found"],
     }
-    assert set(urls) == set(build_dashboard.REASONS) - {"crawl_failing"}
+    assert set(urls) == set(build_dashboard.REASONS) - {"crawl_failing", "no_openings"}
 
 
 def test_a_no_careers_page_row_links_to_the_own_site_even_when_it_has_an_address() -> None:
