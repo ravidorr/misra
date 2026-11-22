@@ -260,8 +260,10 @@ def test_the_robots_parser(robots: str, url: str, expected: bool) -> None:
         ("User-agent: *\nDisallow: /\n", "https://apply.workable.com/api/v1/widget/accounts/x", True),
         ("User-agent: *\nDisallow: /\n", "https://x.fa.oraclecloud.com/hcmRestApi/resources/latest/r", True),
         ("User-agent: *\nDisallow: /\n", "https://careers.cisco.com/widgets", True),
-        # a host that is not in API_HOSTS has no exemption: SmartRecruiters' blanket Disallow stops it
-        ("User-agent: *\nDisallow: /\n", "https://api.smartrecruiters.com/v1/companies/x/postings", False),
+        # SmartRecruiters gave written permission (ROBOTS_API_EXCEPTION_HOSTS): its blanket Disallow does not stop it
+        ("User-agent: *\nDisallow: /\n", "https://api.smartrecruiters.com/v1/companies/x/postings", True),
+        # a host that is not in API_HOSTS has no exemption
+        ("User-agent: *\nDisallow: /\n", "https://jobs.smartrecruiters.com/x/1", False),
         # but a rule that names the API path is honoured
         ("User-agent: *\nDisallow: /v1/\n", "https://api.smartrecruiters.com/v1/companies/x/postings", False),
         ("User-agent: *\nDisallow: /wday/\n", "https://x.wd5.myworkdayjobs.com/wday/cxs/x/y/jobs", False),
@@ -941,20 +943,38 @@ def test_a_robots_skip_between_crawls_does_not_turn_one_failure_into_a_streak(db
     assert [g["company"] for g in run.coverage_gaps(db)] == ["T"]
 
 
-def test_no_host_is_exempt_from_a_blanket_disallow_until_one_has_written_permission() -> None:
-    # the mechanism stays, the set is empty (see common.py and CONTRIBUTING.md): adding a host is a decision
-    assert set(common.ROBOTS_API_EXCEPTION_HOSTS) == set()
-    assert "api.smartrecruiters.com" not in common.API_HOSTS
-    assert {"boards-api.greenhouse.io", "api.lever.co", "api.eu.lever.co", "api.ashbyhq.com"} == set(common.API_HOSTS)
+def test_only_a_host_with_written_permission_is_exempt_from_a_blanket_disallow() -> None:
+    # adding a host is a decision (see common.py and CONTRIBUTING.md): SmartRecruiters' permission is of 2026-11-22
+    assert set(common.ROBOTS_API_EXCEPTION_HOSTS) == {"api.smartrecruiters.com"}
+    assert {
+        "boards-api.greenhouse.io",
+        "api.lever.co",
+        "api.eu.lever.co",
+        "api.ashbyhq.com",
+        "api.smartrecruiters.com",
+    } == set(common.API_HOSTS)
 
 
-SMARTRECRUITERS_ROBOTS = "User-agent: LinkedInBot\nAllow: /v1/companies/\nUser-agent: *\nDisallow: /\n"
+SMARTRECRUITERS_BLANKET = "User-agent: LinkedInBot\nAllow: /v1/companies/\nUser-agent: *\nDisallow: /\n"
+SMARTRECRUITERS_NAMED = "User-agent: *\nDisallow: /v1/\n"  # a rule that names the API path is honoured
 
 
-def test_a_company_on_smartrecruiters_is_skipped_for_robots_txt_not_failed(
+def test_smartrecruiters_postings_are_fetched_despite_its_blanket_disallow(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    session = RobotsSession({"https://api.smartrecruiters.com": FakeHttpResponse(text=SMARTRECRUITERS_BLANKET)})
+    monkeypatch.setattr(common, "_s", session)
+    monkeypatch.setattr(common, "_load_robots", REAL_LOAD_ROBOTS)
+    url = "https://api.smartrecruiters.com/v1/companies/armis/postings?limit=100&offset=0"
+    assert common.get(url) is not None
+    assert url in session.urls
+    assert common.robots_blocked() == ""
+
+
+def test_a_company_on_smartrecruiters_is_skipped_when_robots_txt_names_its_api_path(
     workdir: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    session = RobotsSession({"https://api.smartrecruiters.com": FakeHttpResponse(text=SMARTRECRUITERS_ROBOTS)})
+    session = RobotsSession({"https://api.smartrecruiters.com": FakeHttpResponse(text=SMARTRECRUITERS_NAMED)})
     monkeypatch.setattr(common, "_s", session)
     monkeypatch.setattr(common, "_load_robots", REAL_LOAD_ROBOTS)
     slept: list[float] = []

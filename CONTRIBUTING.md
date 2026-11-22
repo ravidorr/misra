@@ -248,13 +248,14 @@ All of these hold after the run:
 - The switch is `ROBOTS_ENFORCED` in `common.py`. Set to `False`, the crawl ignores the rules but logs which hosts it would
   have refused. Every run prints which state it is in.
 - Audit on 2026-11-15 (read-only: only each host's `/robots.txt` was fetched, once, politely): 234 companies on 75
-  hosts. The one that blocks us is SmartRecruiters: `api.smartrecruiters.com` answers `User-agent: *` with `Disallow: /`
-  and allows only `LinkedInBot` under `/v1/companies/`. Its documentation says nothing about aggregators, and the
-  maintainer has asked SmartRecruiters for permission. Until it is given, Armis, Kaltura, Atera, Nexar and ServiceNow
-  are skipped like any company a host forbids.
-- No host is exempt. `ROBOTS_API_EXCEPTION_HOSTS` in `common.py` is the place for a host that has given written
-  permission to be called despite a blanket `Disallow: /`; it is empty on purpose (a test pins that), and such a
-  permission is the only reason to add a host back. A rule that names an API path is honoured either way.
+  hosts. The one that blocked us was SmartRecruiters: `api.smartrecruiters.com` answers `User-agent: *` with `Disallow: /`
+  and allows only `LinkedInBot` under `/v1/companies/`. Its documentation says nothing about aggregators. On 2026-11-22
+  SmartRecruiters approved in writing our reading of its public posting API, so Armis, Kaltura, Atera, Nexar and
+  ServiceNow are crawled again, only on the posting paths the adapter uses, at one request a second.
+- Only a host that has given written permission is exempt. `ROBOTS_API_EXCEPTION_HOSTS` in `common.py` is the place
+  for it (today: `api.smartrecruiters.com`, permission of 2026-11-22; a test pins the set), to be called despite a
+  blanket `Disallow: /`, and such a permission is the only reason to add a host. A rule that names an API path is
+  honoured either way.
 - A company skipped because of `robots.txt` loses its jobs at once: we hold no role of a site whose policy does not
   allow us to read it. `run.py` deletes its rows from the scratch history (so the dashboard build and the upsert no longer
   see them) and the sync deletes its `jobs` rows in Supabase, open and closed, with the stored text, snippet and details
@@ -492,8 +493,8 @@ PLAN.md step 7.1. Where the text of a posting lives, and how it gets there:
   (`recruitingCEJobRequisitionDetails` on the list's own `/hcmRestApi/` path: `ExternalDescriptionStr` plus the external
   responsibilities and qualifications; the corporate boilerplate is left out), and JazzHR, Phenom and `comeet_page` (the job's
   own page on the host the slug names, only its `JobPosting` JSON-LD, as the JSON-LD pages above; a link to any other host is
-  never requested, and a redirect to another host is never followed (a redirect on the same host goes through the same gate)). Each shows as its own ATS in the `job pages:` and `descriptions:` lines. Not read: SmartRecruiters,
-  skipped by `robots.txt`.
+  never requested, and a redirect to another host is never followed (a redirect on the same host goes through the same gate)). Each shows as its own ATS in the `job pages:` and `descriptions:` lines. Not read: SmartRecruiters
+  (its permission covers the posting list, not the job pages).
 - **The text.** Plain text made from the site's HTML with the standard library: scripts, styles and embedded frames are
   dropped with their content, no tag survives (an angle bracket a posting wrote, such as `List<T>`, is kept as text, to be shown as text), paragraphs and list items keep their line breaks, control characters
   (NUL breaks a Postgres insert) are removed. At most 20,000 characters a job (`MAX_CHARS` in `descriptions.py`, cut at a
