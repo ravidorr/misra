@@ -15,6 +15,6 @@ Follow "Working with agents" in CONTRIBUTING.md; this is the checklist.
 6. Agents stop here and report the PR address and what they did not check. Only the coordinator merges.
 7. Merge only when: every check is green (`quality` too), Codex completed on the CURRENT head (comment `@codex review` after a new commit), and 0 unresolved review threads. Then `gh pr merge <n> --repo ravidorr/misra --admin --squash`.
 8. After a fix, reply on each thread and resolve it.
-9. Company-list writes: `tools/companyctl.py`, dry run first, at most 25 per batch, then a `discover-companies` run to check each first crawl.
+9. Company-list writes: through the admin page or the table (CONTRIBUTING.md, "Adding a company"), at most 25 per batch, then a `discover-companies` run to check each first crawl.
 
 Never print a secret, a row, a posting's text or personal data. Report counts only.

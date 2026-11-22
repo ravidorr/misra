@@ -40,8 +40,8 @@ How the maintainer and AI agents work together on this repository. One coordinat
 
 ### Changing the company list
 
-- Write only through `tools/companyctl.py`: a dry run first (the default), then `--apply`, in batches of at most 25. Every write is journaled. Check the target is the misra project before a migration or a deploy.
-- A new adapter key goes in `KNOWN_ATS` of `tools/companyctl.py` as well as in the database check.
+- Write through the Companies area of the admin page, or the table for what the page does not edit ("Adding a company"). Change at most 25 companies at a time, and note what was changed and why. Check the target is the misra project before a migration or a deploy.
+- A new adapter key goes in the database check of the `companies` table (a migration) as well as in `ADAPTERS`.
 - After a batch, run `discover-companies` and read the status of each new record. Never edit rows while that run is in flight.
 - A company that reads jobs but none in Israel is pinned with `--israel-only`, not parked. Park it `no_openings` or `needs_reader` only if it reads no job at all.
 - Never work around bot protection, a CAPTCHA, a runner block or `robots.txt`. A site that blocks us is parked `bot_protection`, and one whose `robots.txt` forbids the job pages `robots_disallowed`. Never spoof a User-Agent.
