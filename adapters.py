@@ -441,7 +441,7 @@ def _workday_page(base: str, applied: dict[str, list[str]], text: str, offset: i
     """One page of a Workday job search, or None when the answer is not the JSON of a search (a maintenance
     redirect, an error page, a tenant or site that does not exist)."""
     body = {"appliedFacets": applied, "limit": WORKDAY_PAGE, "offset": offset, "searchText": text}
-    r = post(base, json=body, headers={"Accept": "application/json"})
+    r = post(base, json=body, headers={"Accept": "application/json"}, retry=True)
     if r is None or r.status_code != HTTP_OK:
         return None
     try:

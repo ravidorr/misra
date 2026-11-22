@@ -103,3 +103,79 @@ def test_israeli_cities_and_their_spellings_are_israel(place: str) -> None:
 @pytest.mark.parametrize("place", ["London", "Lodz, Poland", "Odessa", "Nazareth, PA, United States"])
 def test_other_places_are_not_israel_by_the_new_cities(place: str) -> None:
     assert not common.ISRAEL.search(place)
+
+
+class ScriptedSession:
+    """Answers a request with the next item: a response, or an exception to raise."""
+
+    def __init__(self, *answers: FakeHttpResponse | Exception) -> None:
+        self.answers = list(answers)
+        self.calls = 0
+
+    def post(self, url: str, **kw: object) -> FakeHttpResponse:
+        self.calls += 1
+        answer = self.answers.pop(0)
+        if isinstance(answer, Exception):
+            raise answer
+        return answer
+
+    get = post
+
+
+def scripted(
+    monkeypatch: pytest.MonkeyPatch, *answers: FakeHttpResponse | Exception
+) -> tuple[ScriptedSession, list[float]]:
+    s = ScriptedSession(*answers)
+    sleeps: list[float] = []
+    monkeypatch.setattr(common, "_s", s)
+    monkeypatch.setattr(common, "_last", {})
+    monkeypatch.setattr(common.time, "sleep", sleeps.append)
+    return s, sleeps
+
+
+def test_a_request_is_not_repeated_unless_it_opts_in(monkeypatch: pytest.MonkeyPatch) -> None:
+    s, sleeps = scripted(monkeypatch, FakeHttpResponse(status_code=503))
+    r = common.post("https://a.test/x")
+    assert r is not None
+    assert (s.calls, sleeps, common.last_failure()) == (1, [], "HTTP 503")
+
+
+def test_a_transient_status_is_repeated_after_the_wait_the_server_asked_for(monkeypatch: pytest.MonkeyPatch) -> None:
+    busy = FakeHttpResponse(status_code=429)
+    busy.headers["Retry-After"] = "7"
+    s, sleeps = scripted(monkeypatch, busy, FakeHttpResponse())
+    r = common.post("https://a.test/x", retry=True)
+    assert r is not None
+    assert (s.calls, sleeps, common.last_failure()) == (2, [7.0], "")
+
+
+def test_the_wait_is_capped_and_without_a_header_it_doubles_and_there_are_two_repeats_at_most(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    long = FakeHttpResponse(status_code=503)
+    long.headers["Retry-After"] = "3600"
+    s, sleeps = scripted(monkeypatch, long, FakeHttpResponse(status_code=502), FakeHttpResponse(status_code=500))
+    r = common.get("https://a.test/x", retry=True)
+    assert r is not None
+    assert (s.calls, sleeps, common.last_failure()) == (3, [30.0, 10.0], "HTTP 500")
+
+
+def test_a_timeout_is_repeated_and_a_second_one_is_reported_by_kind(monkeypatch: pytest.MonkeyPatch) -> None:
+    s, sleeps = scripted(monkeypatch, requests.Timeout("slow"), requests.Timeout("slow"), requests.Timeout("slow"))
+    assert common.post("https://a.test/x", retry=True) is None
+    assert (s.calls, sleeps, common.last_failure()) == (3, [5.0, 10.0], "Timeout")
+
+
+@pytest.mark.parametrize("answer", [FakeHttpResponse(status_code=403), FakeHttpResponse(status_code=404)])
+def test_a_block_or_a_missing_page_is_never_repeated(monkeypatch: pytest.MonkeyPatch, answer: FakeHttpResponse) -> None:
+    s, sleeps = scripted(monkeypatch, answer)
+    assert common.post("https://a.test/x", retry=True) is answer
+    assert (s.calls, sleeps, common.last_failure()) == (1, [], f"HTTP {answer.status_code}")
+
+
+def test_a_connection_error_is_not_repeated_and_is_reported_by_kind(monkeypatch: pytest.MonkeyPatch) -> None:
+    s, sleeps = scripted(monkeypatch, requests.ConnectionError("down"))
+    assert common.post("https://a.test/x", retry=True) is None
+    assert (s.calls, sleeps, common.last_failure()) == (1, [], "ConnectionError")
+    common.reset_robots_block()
+    assert common.last_failure() == ""

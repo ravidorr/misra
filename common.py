@@ -10,7 +10,7 @@ from urllib.parse import unquote, urlsplit
 
 import requests
 
-VERSION = "0.92.0"  # equal to the version in package.json and pyproject.toml (a test checks it)
+VERSION = "0.92.1"  # equal to the version in package.json and pyproject.toml (a test checks it)
 SITE_URL = "https://ravidorr.github.io/misra/"
 CONTACT = "raanan@avidor.org"
 ROBOTS_TOKEN = "Misra"  # the product token that robots.txt groups name
@@ -174,15 +174,49 @@ def reserve_slot(host: str) -> float:
     return wait
 
 
-def _send(method: str, url: str, **kw: Any) -> requests.Response | None:
-    wait = reserve_slot(host_of(url))
-    if wait > 0:
-        time.sleep(wait)
+RETRY_STATUSES = frozenset({429, 500, 502, 503, 504})  # a server saying "try again later", never 403 or a challenge
+RETRIES = 2  # a request that opted in is repeated at most this many times, only after a transient failure
+RETRY_BACKOFF = 5.0  # seconds before the first repeat without a Retry-After; doubled for the second
+RETRY_AFTER_MAX = 30.0  # the longest Retry-After honoured, so one board cannot stall the run
+_outcome = threading.local()  # per thread: how the last request ended, for the crawl log
+
+
+def last_failure() -> str:
+    """How the last request of this thread failed ("HTTP 503", "Timeout", "ConnectionError"), or '' when it answered
+    200 or sent nothing. Only the status or the kind of error, never a page's text."""
+    return cast("str", getattr(_outcome, "failure", ""))
+
+
+def _retry_wait(r: requests.Response | None, attempt: int) -> float:
+    """Seconds to wait before the next try: the Retry-After the server sent (in seconds), else a doubling backoff."""
+    header = r.headers.get("Retry-After", "") if r is not None else ""
+    if header.isdigit():
+        return min(float(header), RETRY_AFTER_MAX)
+    return float(RETRY_BACKOFF * 2**attempt)
+
+
+def _send(method: str, url: str, retry: bool = False, **kw: Any) -> requests.Response | None:
+    """One request on its turn. With retry, a timeout, 429 or 5xx is tried again up to RETRIES times after a wait.
+    Each try takes its turn on the host, so the one-request-a-second rule holds. Nothing else is repeated."""
     kw.setdefault("timeout", 20)
-    try:
-        return cast("requests.Response", getattr(_s, method)(url, **kw))
-    except requests.RequestException:
-        return None
+    attempt = 0
+    while True:
+        wait = reserve_slot(host_of(url))
+        if wait > 0:
+            time.sleep(wait)
+        r: requests.Response | None = None
+        try:
+            r = cast("requests.Response", getattr(_s, method)(url, **kw))
+            _outcome.failure = "" if r.status_code == HTTP_OK else f"HTTP {r.status_code}"
+            transient = r.status_code in RETRY_STATUSES
+        except requests.Timeout:
+            _outcome.failure, transient = "Timeout", True
+        except requests.RequestException as exc:
+            _outcome.failure, transient = type(exc).__name__, False
+        if not (retry and transient) or attempt == RETRIES:
+            return r
+        time.sleep(_retry_wait(r, attempt))
+        attempt += 1
 
 
 _Rule = tuple[bool, str]  # (allow, path pattern)
@@ -309,6 +343,7 @@ def robots_gate(url: str) -> bool:
 
 def reset_robots_block() -> None:
     _robots_state.host = ""
+    _outcome.failure = ""
 
 
 def robots_blocked() -> str:
