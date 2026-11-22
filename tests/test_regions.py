@@ -88,6 +88,22 @@ REAL_LOCATIONS: list[tuple[str, tuple[str, ...]]] = [
 ]
 
 
+# The distinct `area` values of the live Elbit Systems feed (537 jobs), as the elbit reader writes the place.
+ELBIT_PLACES = [
+    ("North, Israel", NORTH),
+    ("Sharon, Israel", SHARON),
+    ("Shfela, Israel", CENTER),
+    ("Center, Israel", CENTER),
+    ("South, Israel", SOUTH),
+    ("Jerusalem Area, Israel", JERUSALEM),
+]
+
+
+@pytest.mark.parametrize(("location", "expected"), ELBIT_PLACES)
+def test_the_regions_of_elbit_systems_are_placed(location: str, expected: str) -> None:
+    assert regions.place(location).regions == (expected,)
+
+
 @pytest.mark.parametrize(("location", "expected"), REAL_LOCATIONS)
 def test_regions_of_real_locations(location: str, expected: tuple[str, ...]) -> None:
     placed = regions.place(location)

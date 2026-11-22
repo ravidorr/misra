@@ -8,6 +8,12 @@ All notable changes are documented here. Format follows [Keep a Changelog](https
 
 - A "Hidden (n)" switch beside "Starred (n)": a view of its own that lists every company the visitor hid, one row each with "Unhide" (a company with no open role is listed too, so it can be unhidden without finding one of its roles), and every open role they hid one by one, as cards at full strength with "Unhide" and no "New" flag. The Hidden view also puts the coverage card away with the filters; the Starred view keeps it. It reads the choices kept today (this browser, or the account) and stores nothing new; a role hidden only because its company is hidden is covered by the company's row, and a hidden role leaves the list when its posting closes (the database deletes the discard). Two WebMCP tools: `list_hidden` and `unhide_company`.
 
+## [0.94.3] - 2026-11-22
+
+### Added
+
+- A dedicated reader for the recruiting site of Elbit Systems: `adapters.elbit` (feed `elbit`, slug `elbitsystemscareer.com`) reads the site's own file `cron/jobs.json` (about 540 jobs) in one request, through `common.get` (robots.txt, one request a second, the project's User-Agent), and links each job to the site's own page `/job/?jid=<jobId>`. Every job is in Israel (the place is the region the site names, `North`, `Sharon`, `Shfela`, `Center`, `South` or `Jerusalem Area`, then `Israel`). It reads no job text, and treats a changed shape, a job twice, more than 2000 jobs or an empty list as a failure. The migration `20261211100000_companies_ats_elbit.sql` adds the key to the check `companies_ats_known` and the admin page lists it; apply the migration after the merge, then pin the company.
+
 ## [0.94.2] - 2026-11-22
 
 ### Fixed
