@@ -10,7 +10,7 @@ from urllib.parse import unquote, urlsplit
 
 import requests
 
-VERSION = "0.92.1"  # equal to the version in package.json and pyproject.toml (a test checks it)
+VERSION = "0.92.2"  # equal to the version in package.json and pyproject.toml (a test checks it)
 SITE_URL = "https://ravidorr.github.io/misra/"
 CONTACT = "raanan@avidor.org"
 ROBOTS_TOKEN = "Misra"  # the product token that robots.txt groups name
@@ -47,13 +47,12 @@ HTTP_OK = 200
 HTTP_SERVER_ERROR = 500
 # Hosts and paths a service publishes for programmatic use (an ATS's public job-board API). A blanket `Disallow: /`
 # written for crawlers of pages does not cover them; a rule that names the API path does.
-# The mechanism for a host that has WRITTEN permission to be called despite a blanket `Disallow: /`. It is empty on
-# purpose. api.smartrecruiters.com was the only entry: it answers `User-agent: *` with `Disallow: /` and allows only
-# LinkedInBot under /v1/companies/, its documentation says nothing about aggregators, and the maintainer has asked
-# SmartRecruiters for permission. Until that is given the host goes through the robots gate like any other, and its five
-# companies (Armis, Kaltura, Atera, Nexar, ServiceNow) are skipped. A written permission from the host's owner is the
-# only reason to add a host back here. See CONTRIBUTING.md, "How the crawler behaves".
-ROBOTS_API_EXCEPTION_HOSTS: frozenset[str] = frozenset()
+# The mechanism for a host that has WRITTEN permission to be called despite a blanket `Disallow: /`. A written
+# permission from the host's owner is the only reason to add a host here. api.smartrecruiters.com answers
+# `User-agent: *` with `Disallow: /` and allows only LinkedInBot under /v1/companies/; SmartRecruiters approved our
+# reading of its public posting API in writing on 2026-11-22 (told to the maintainer), so it is listed. A rule that
+# names the API path is still honoured. See CONTRIBUTING.md, "How the crawler behaves".
+ROBOTS_API_EXCEPTION_HOSTS: frozenset[str] = frozenset({"api.smartrecruiters.com"})
 API_HOSTS = frozenset({"boards-api.greenhouse.io", "api.lever.co", "api.eu.lever.co", "api.ashbyhq.com"}) | (
     ROBOTS_API_EXCEPTION_HOSTS
 )

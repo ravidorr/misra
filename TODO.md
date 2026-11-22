@@ -220,7 +220,7 @@ An item that has a date says `Due <date>` in its text. The dates were set on 202
       now part of Ceragon, whose Comeet board is Ceragon's; CytoReason's old plugin page answers 404; Diagnostic
       Robotics' list shows "No items found"; Guesty's page is a Next.js app that shows no uid even on a job page. Guessing
       the Greenhouse, Lever, Ashby and Workable slugs of the 21 companies without a careers URL found only an unrelated
-      company (`air` on Greenhouse). Western Digital's board is on SmartRecruiters, which robots.txt skips.
+      company (`air` on Greenhouse). Western Digital's board is on SmartRecruiters, which robots.txt used to skip (permission given 2026-11-22).
     - **Known limitation, checked on 2026-11-17: pinned Workday boards that fail only from GitHub's servers.** In the
       builds of 2026-11-15 to 2026-11-17 these companies show "request failed" on the coverage gap card: Adobe,
       Broadcom, Cadence, Criteo, CrowdStrike, DoubleVerify, Edwards Lifesciences, Integral Ad Science, Kyndryl,
@@ -375,8 +375,7 @@ recurring work.
   `gh run view <id> --json jobs`, the `Crawl and diff` step's `completedAt` minus `startedAt`).
   - Crawl time: the step took 3.5 to 3.9 minutes with 267 companies; the ceiling is 15 of the 20 minutes of
     `timeout-minutes: 20` (900 s). A browser record costs more than a JSON feed.
-  - Failures: more than 3 new failing companies after a batch, not in the known set (the 25 Workday tenants, the 5
-    SmartRecruiters companies skipped by `robots.txt`, Check Point and the other bot-protected browser crawls), blocks the
+  - Failures: more than 3 new failing companies after a batch, not in the known set (the 25 Workday tenants, Check Point and the other bot-protected browser crawls), blocks the
     next batch until they are fixed or parked.
   - Size: `docs/jobs.json` was 2.0 MiB for 6,764 jobs; the ceiling proposed is 4 MB and 500 `crawl_log` rows a day (the log
     keeps 90 days, about 45k rows). The maintainer confirms the ceiling.

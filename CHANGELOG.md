@@ -8,6 +8,12 @@ All notable changes are documented here. Format follows [Keep a Changelog](https
 
 - A "Hidden (n)" switch beside "Starred (n)": a view of its own that lists every company the visitor hid, one row each with "Unhide" (a company with no open role is listed too, so it can be unhidden without finding one of its roles), and every open role they hid one by one, as cards at full strength with "Unhide" and no "New" flag. The Hidden view also puts the coverage card away with the filters; the Starred view keeps it. It reads the choices kept today (this browser, or the account) and stores nothing new; a role hidden only because its company is hidden is covered by the company's row, and a hidden role leaves the list when its posting closes (the database deletes the discard). Two WebMCP tools: `list_hidden` and `unhide_company`.
 
+## [0.92.2] - 2026-11-22
+
+### Changed
+
+- `api.smartrecruiters.com` is crawled again: SmartRecruiters approved in writing, on 2026-11-22, our reading of its public posting API, so it is back in `ROBOTS_API_EXCEPTION_HOSTS` and a blanket `Disallow: /` no longer skips Armis, Kaltura, Atera, Nexar and ServiceNow. Nothing else changes: one request a second, the project User-Agent, only the posting paths the adapter uses, and a rule that names the API path is still honoured.
+
 ## [0.92.1] - 2026-11-22
 
 ### Fixed
