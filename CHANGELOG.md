@@ -12,7 +12,7 @@ All notable changes are documented here. Format follows [Keep a Changelog](https
 
 ### Fixed
 
-- The `browser` reader takes a link to `/open-position/<title>` (Pillar Security: 5 jobs), to a dated post `/YYYY/MM/DD/<title>/` (PayMe: 5 jobs in Tel Aviv) and to a Comeet plugin position `/co/<place>/<uid>/<title>` (Qwilt and SQream: 1 job each) for a job link. Before, those pages read zero jobs.
+- The `browser` reader takes a link to `/open-position/<title>` (Pillar Security: 5 jobs), to a dated post `/YYYY/MM/DD/<title>/` on a careers or jobs page, when its title has a role word (PayMe: 5 jobs in Tel Aviv; a news post is no job) and to a Comeet plugin position `/co/<place>/<uid>/<title>` (Qwilt and SQream: 1 job each) for a job link. Before, those pages read zero jobs.
 - The `browser` reader takes the title from the card when the link says "See Position Details" (Balink: 3 jobs, one in Jerusalem) or "View Opening".
 
 ## [0.92.2] - 2026-11-22
