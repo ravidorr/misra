@@ -100,7 +100,8 @@ CARD_JS = r"""(els, cfg) => {
     const nav = /^(view|read|learn|see|more|details)\b/i;  // not "Apply": that link only accompanies a job
     const label = a => !text(a) || !/\w/.test(text(a)) || nav.test(text(a));  // an icon, an arrow, "Details"
     const apply = a => /^apply\b/i.test(text(a));  // "Apply now": a label too, but only for a card with no title link
-    const base = h => h.replace(/\/(apply|details?|view|overview)(\?.*)?$/i, '');  // "/jobs/x/apply" is "/jobs/x"
+    // "/x/apply?job_id=1" is "/x?job_id=1": the suffix goes, the id stays
+    const base = h => h.replace(/\/(apply|details?|view|overview)(?=\?|$)/i, '');
     const near = (x, y) => {
         const p = base(x), q = base(y);
         return p === q || p.startsWith(q + '/') || q.startsWith(p + '/');

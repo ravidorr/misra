@@ -215,6 +215,26 @@ async def test_adjacent_cards_with_different_button_styles_are_two_cards(page: P
             assert "Haifa" not in second
 
 
+async def test_label_cards_told_apart_by_a_job_id_query_are_two_cards(page: Page) -> None:
+    html = (
+        "<div>"
+        + label_card("/careers/details?job_id=1234", "Backend Engineer", "Haifa")
+        + label_card("/careers/details?job_id=5678", "Product Designer", "Berlin, Germany")
+        + "</div>"
+    )
+    assert "Berlin" not in (await row_for(page, html, "job_id=1234"))[2]
+    assert "Haifa" not in (await row_for(page, html, "job_id=5678"))[2]
+
+
+async def test_apply_and_details_links_of_one_job_id_are_companions(page: Page) -> None:
+    html = (
+        f'<div><div><a href="{BASE}/careers/job?job_id=1234">X Role</a></div><div>Haifa</div>'
+        f'<div><a href="{BASE}/careers/job/apply?job_id=1234">Apply</a>'
+        f'<a href="{BASE}/careers/job/details?job_id=1234">Details</a></div></div>'
+    )
+    assert (await row_for(page, html, "/apply?job_id=1234"))[2].startswith("X Role")
+
+
 async def test_an_apply_link_does_not_stop_at_a_details_link_of_its_own_job(page: Page) -> None:
     html = (
         f'<div><div><a href="{BASE}/jobs/x-role">X Role</a></div><div>Haifa</div>'
