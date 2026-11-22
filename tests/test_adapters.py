@@ -3164,6 +3164,315 @@ def test_varonis_is_registered() -> None:
     assert adapters.ADAPTERS["varonis"] is adapters.varonis
 
 
+DEEL_URL = "https://www.deel.com/careers/"
+ASHBY_A = "8c6883db-c84e-4c75-ae99-d72d4fbf7cad"
+ASHBY_B = "dc43b9f5-2d7a-497f-b356-b19c44c80212"
+
+
+def deel_job(job_id: Any = ASHBY_A, **over: Any) -> dict[str, Any]:
+    attributes = {
+        "ashby_id": job_id,
+        "title": "Account Executive",
+        "team_name": "Sales",
+        "location_name": "Israel",
+        "all_locations": ["Israel"],
+        "is_listed": True,
+        "ashby_published_date": "2026-09-15T07:41:31.170Z",
+        "external_link": f"https://jobs.deel.com/deel/job-details/{job_id}/application",
+        "full_job_description": "posting text that is never read",
+        **over,
+    }
+    return {"id": 0, "attributes": attributes}
+
+
+def deel_page(jobs: Any, count: Any = None, split: int = 3) -> str:
+    """The careers page: the listing component in the Next.js stream, cut into chunks at `split` places, as the
+    page cuts it, with another component before and after it."""
+    n = len(jobs) if count is None else count
+    stream = (
+        '5:{"__component":"product.hero-careers","jobs":"not this one"},'
+        f'{{"__component":"product.career-job-listing","jobs":{json.dumps(jobs)},"jobsCount":{n}}},'
+        '{"__component":"product.footer"}'
+    )
+    cut = max(1, len(stream) // split)
+    chunks = [stream[i : i + cut] for i in range(0, len(stream), cut)]
+    scripts = ["<script>self.__next_f.push([0])</script>"]
+    scripts += [f"<script>self.__next_f.push({json.dumps([1, c])})</script>" for c in chunks]
+    scripts.append('<script id="other">window.x = 1</script>')
+    return "<html><body>" + "".join(scripts) + "</body></html>"
+
+
+def deel_answer(jobs: Any, **kw: Any) -> FakeHttpResponse:
+    return FakeHttpResponse(text=deel_page(jobs, **kw))
+
+
+def test_deel_reads_the_israel_jobs_of_the_page_data_and_drops_the_others(monkeypatch: pytest.MonkeyPatch) -> None:
+    several = deel_job(
+        ASHBY_B, title="Full Stack Engineer - EMEA", team_name="$undefined", all_locations=["Poland", "Israel", "Haifa"]
+    )
+    elsewhere = deel_job("11111111-2222-3333-4444-555555555555", all_locations=["Spain", "Portugal"])
+    calls = fake_eightfold(monkeypatch, deel_answer([deel_job(), several, elsewhere]))
+    jobs = adapters.deel("www.deel.com")
+    assert calls == [{"url": DEEL_URL}]
+    assert jobs == [
+        {
+            "job_id": ASHBY_A,
+            "title": "Account Executive",
+            "location": "Israel",
+            "url": f"https://jobs.deel.com/deel/job-details/{ASHBY_A}",
+            "team": "Sales",
+            "posted": "2026-09-15",
+        },
+        {
+            "job_id": ASHBY_B,
+            "title": "Full Stack Engineer - EMEA",
+            "location": "Israel; Haifa",
+            "url": f"https://jobs.deel.com/deel/job-details/{ASHBY_B}",
+            "team": "",
+            "posted": "2026-09-15",
+        },
+    ]
+    assert "posting text" not in json.dumps(jobs)
+    assert "application" not in json.dumps(jobs)
+
+
+def test_deel_a_missing_team_and_date_are_read(monkeypatch: pytest.MonkeyPatch) -> None:
+    fake_eightfold(monkeypatch, deel_answer([deel_job(team_name=None, ashby_published_date=None)]))
+    jobs = adapters.deel("www.deel.com")
+    assert jobs is not None
+    assert (jobs[0]["team"], jobs[0]["posted"]) == ("", "")
+
+
+def test_deel_a_page_in_one_chunk_is_read(monkeypatch: pytest.MonkeyPatch) -> None:
+    fake_eightfold(monkeypatch, deel_answer([deel_job()], split=1))
+    jobs = adapters.deel("www.deel.com")
+    assert jobs is not None
+    assert len(jobs) == 1
+
+
+def test_deel_an_empty_list_or_one_without_an_israel_job_is_a_failure(monkeypatch: pytest.MonkeyPatch) -> None:
+    fake_eightfold(monkeypatch, deel_answer([]))
+    assert adapters.deel("www.deel.com") is None
+    fake_eightfold(monkeypatch, deel_answer([deel_job(all_locations=["Spain"])]))
+    assert adapters.deel("www.deel.com") is None
+
+
+def test_deel_a_list_at_the_cap_is_read_and_one_above_it_is_not(monkeypatch: pytest.MonkeyPatch) -> None:
+    def many(n: int) -> list[dict[str, Any]]:
+        return [deel_job(f"{i:08x}-2222-3333-4444-555555555555") for i in range(n)]
+
+    fake_eightfold(monkeypatch, deel_answer(many(adapters.DEEL_MAX)))
+    jobs = adapters.deel("www.deel.com")
+    assert jobs is not None
+    assert len(jobs) == adapters.DEEL_MAX
+    fake_eightfold(monkeypatch, deel_answer(many(adapters.DEEL_MAX + 1)))
+    assert adapters.deel("www.deel.com") is None  # a list that long may be cut short
+
+
+LISTING = '"__component":"product.career-job-listing"'
+
+
+def deel_stream(stream: str) -> FakeHttpResponse:
+    return FakeHttpResponse(text=f"<script>self.__next_f.push({json.dumps([1, stream])})</script>")
+
+
+@pytest.mark.parametrize(
+    "answer",
+    [
+        None,
+        FakeHttpResponse(status_code=403),
+        FakeHttpResponse(text=""),
+        FakeHttpResponse(text="<html>no page data</html>"),
+        FakeHttpResponse(text="<script>self.__next_f.push(not json)</script>"),
+        FakeHttpResponse(text="<script>self.__next_f.push([1])</script>"),  # a chunk of another shape
+        FakeHttpResponse(text='<script>self.__next_f.push({"a": 1})</script>'),
+        deel_stream('{"jobs":[]}'),  # no listing component
+        deel_stream(LISTING),  # a listing with no jobs key
+        deel_stream(LISTING + ',"jobs":[1,'),  # a list that does not parse
+        deel_stream(LISTING + ',"jobs":{"a":1},"jobsCount":1}'),  # not a list
+        deel_stream(LISTING + ',"jobs":[1],"jobsCount":"1"}'),  # a count that is not a number
+        deel_stream(LISTING + ',"jobs":[1]}'),  # no count
+        deel_stream(LISTING + ',"jobs":[1],"jobsCount":2}'),  # a count that is not the length
+        deel_stream(LISTING + ',"jobs":[],"jobsCount":0},' + LISTING + ',"jobs":[],"jobsCount":0}'),  # two listings
+        deel_answer([deel_job(ASHBY_A), deel_job(ASHBY_A)]),  # a job twice
+        deel_answer(["x"]),  # not an object
+        deel_answer([{"id": 0}]),  # no attributes
+        deel_answer([{"id": 0, "attributes": "x"}]),
+        deel_answer([deel_job(None)]),
+        deel_answer([deel_job("12345")]),  # not an Ashby id
+        deel_answer([deel_job(ASHBY_A.upper())]),
+        deel_answer([deel_job(title="  ")]),
+        deel_answer([deel_job(title=None)]),
+        deel_answer([deel_job(is_listed=False)]),  # a job the page does not list
+        deel_answer([deel_job(is_listed=None)]),
+        deel_answer([deel_job(all_locations=None)]),
+        deel_answer([deel_job(all_locations=[])]),
+        deel_answer([deel_job(all_locations=["Israel", None])]),
+        deel_answer([deel_job(all_locations=["Israel", " "])]),
+    ],
+)
+def test_deel_an_answer_that_is_not_the_whole_readable_list_is_a_failure(
+    monkeypatch: pytest.MonkeyPatch, answer: FakeHttpResponse | None
+) -> None:
+    fake_eightfold(monkeypatch, answer)
+    assert adapters.deel("www.deel.com") is None
+
+
+def test_deel_a_bad_job_outside_israel_still_fails_the_whole_list(monkeypatch: pytest.MonkeyPatch) -> None:
+    bad = deel_job(ASHBY_B, all_locations=["Spain"], title=None)
+    fake_eightfold(monkeypatch, deel_answer([deel_job(), bad]))
+    assert adapters.deel("www.deel.com") is None
+
+
+def test_deel_serves_only_its_own_host_without_a_request(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls = fake_eightfold(monkeypatch, deel_answer([deel_job()]))
+    assert adapters.deel("slug") is None
+    assert calls == []
+
+
+def test_deel_goes_through_the_robots_gate_and_the_polite_get(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(adapters, "get", common.get)
+    monkeypatch.setattr(common, "robots_gate", lambda url: False)
+    assert adapters.deel("www.deel.com") is None
+
+
+def test_deel_is_registered() -> None:
+    assert adapters.ADAPTERS["deel"] is adapters.deel
+
+
+BULLS_URL = "https://bulls-media.com/career/positions/get-positions.php"
+
+
+def bulls_item(job_id: Any = "23.470", **over: Any) -> dict[str, Any]:
+    return {
+        "id": job_id,
+        "name": "Business Unit Manager",
+        "number": "6",
+        "city": "Kiryat Ono",
+        "country": "IL",
+        "department": "Sales",
+        "status": "active",
+        "description": "posting text that is never read",
+        **over,
+    }
+
+
+def bulls_answer(items: Any) -> FakeHttpResponse:
+    return FakeHttpResponse(data=items)
+
+
+def test_bulls_media_keeps_the_jobs_in_israel_and_drops_the_others_and_the_hidden_ones(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    items = [
+        bulls_item(),
+        bulls_item("72.273-F4.504", name="Backend", city="Tiranë", country="AL", department="empty"),
+        bulls_item("C2.27D", name="Secret", department="Discreet"),  # the page hides it, it is not read at all
+        bulls_item("2B.B64", name="PPC Team lead", department="empty"),
+    ]
+    calls = fake_eightfold(monkeypatch, bulls_answer(items))
+    jobs = adapters.bulls_media("bulls-media.com")
+    assert calls == [{"url": BULLS_URL}]
+    assert jobs == [
+        {
+            "job_id": "23.470",
+            "title": "Business Unit Manager",
+            "location": "Kiryat Ono, IL",
+            "url": "https://bulls-media.com/career/positions/?id=23.470",
+            "team": "Sales",
+            "posted": "",
+        },
+        {
+            "job_id": "2B.B64",
+            "title": "PPC Team lead",
+            "location": "Kiryat Ono, IL",
+            "url": "https://bulls-media.com/career/positions/?id=2B.B64",
+            "team": "",
+            "posted": "",
+        },
+    ]
+    assert "posting text" not in json.dumps(jobs)
+
+
+def test_bulls_media_a_hidden_position_may_be_unreadable_and_is_still_not_a_failure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    hidden = {"department": "DISCREET"}
+    fake_eightfold(monkeypatch, bulls_answer([bulls_item(), hidden]))
+    jobs = adapters.bulls_media("bulls-media.com")
+    assert jobs is not None
+    assert len(jobs) == 1
+
+
+def test_bulls_media_an_empty_list_or_one_without_an_israel_job_is_a_failure(monkeypatch: pytest.MonkeyPatch) -> None:
+    fake_eightfold(monkeypatch, bulls_answer([]))
+    assert adapters.bulls_media("bulls-media.com") is None
+    fake_eightfold(monkeypatch, bulls_answer([bulls_item(city="Kyiv", country="UA")]))
+    assert adapters.bulls_media("bulls-media.com") is None
+
+
+def test_bulls_media_a_list_at_the_cap_is_read_and_one_above_it_is_not(monkeypatch: pytest.MonkeyPatch) -> None:
+    fake_eightfold(monkeypatch, bulls_answer([bulls_item(f"A{i}") for i in range(adapters.BULLS_MAX)]))
+    jobs = adapters.bulls_media("bulls-media.com")
+    assert jobs is not None
+    assert len(jobs) == adapters.BULLS_MAX
+    fake_eightfold(monkeypatch, bulls_answer([bulls_item(f"A{i}") for i in range(adapters.BULLS_MAX + 1)]))
+    assert adapters.bulls_media("bulls-media.com") is None  # a list that long may be cut short
+
+
+@pytest.mark.parametrize(
+    "answer",
+    [
+        None,
+        FakeHttpResponse(status_code=403),
+        FakeHttpResponse(json_error=True),
+        FakeHttpResponse(data={}),
+        FakeHttpResponse(data="x"),
+        bulls_answer([bulls_item("A1"), bulls_item("A1")]),  # a job twice
+        bulls_answer(["x"]),  # not an object
+        bulls_answer([bulls_item(None)]),
+        bulls_answer([bulls_item("")]),
+        bulls_answer([bulls_item(".1")]),
+        bulls_answer([bulls_item("a b")]),
+        bulls_answer([bulls_item("a?b")]),
+        bulls_answer([bulls_item(name="  ")]),
+        bulls_answer([bulls_item(name=None)]),
+        bulls_answer([bulls_item(city=None)]),
+        bulls_answer([bulls_item(city=" ")]),
+        bulls_answer([bulls_item(country=None)]),
+        bulls_answer([bulls_item(country="")]),
+    ],
+)
+def test_bulls_media_an_answer_that_is_not_the_whole_readable_list_is_a_failure(
+    monkeypatch: pytest.MonkeyPatch, answer: FakeHttpResponse | None
+) -> None:
+    fake_eightfold(monkeypatch, answer)
+    assert adapters.bulls_media("bulls-media.com") is None
+
+
+def test_bulls_media_a_missing_department_is_no_team(monkeypatch: pytest.MonkeyPatch) -> None:
+    fake_eightfold(monkeypatch, bulls_answer([bulls_item(department=None)]))
+    jobs = adapters.bulls_media("bulls-media.com")
+    assert jobs is not None
+    assert jobs[0]["team"] == ""
+
+
+def test_bulls_media_serves_only_its_own_host_without_a_request(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls = fake_eightfold(monkeypatch, bulls_answer([bulls_item()]))
+    assert adapters.bulls_media("slug") is None
+    assert calls == []
+
+
+def test_bulls_media_goes_through_the_robots_gate_and_the_polite_get(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(adapters, "get", common.get)
+    monkeypatch.setattr(common, "robots_gate", lambda url: False)
+    assert adapters.bulls_media("bulls-media.com") is None
+
+
+def test_bulls_media_is_registered() -> None:
+    assert adapters.ADAPTERS["bulls_media"] is adapters.bulls_media
+
+
 WP_PAGE = "https://www.meshpayments.com/careers"
 WP_ENDPOINT = adapters.WP_POSTS[WP_PAGE]
 
