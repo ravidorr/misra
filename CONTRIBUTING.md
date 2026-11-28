@@ -16,7 +16,7 @@ GitHub Pages serves the dashboard: Settings, Pages, Deploy from a branch, `main`
 1. Branch from `main`.
 2. Make changes. Hooks run lint on commit and the full suite on push; never bypass them.
 3. Commit subjects are at least 15 characters.
-4. If the PR changes `package.json`, `pyproject.toml`, or a Python module listed in `RELEASE_TRIGGER_PATHS`, update `CHANGELOG.md` and bump the version in both `package.json` and `pyproject.toml` (one SemVer bump per PR).
+4. If the PR changes `package.json` (other than its `devDependencies`), `pyproject.toml`, or a Python module listed in `RELEASE_TRIGGER_PATHS`, update `CHANGELOG.md` and bump the version in both `package.json` and `pyproject.toml` (one SemVer bump per PR).
 5. Open a **draft** PR. Link an issue with `Closes #<issue>` only when the PR resolves one.
 
 ## Working with agents
@@ -748,4 +748,4 @@ The privacy notice, the terms and the security note are on the site as `privacy.
 
 ## Release policy
 
-When a PR or push to `main` changes `package.json`, `pyproject.toml`, or a Python module listed in `RELEASE_TRIGGER_PATHS` (`ci.yml`, `.husky/pre-push`), CI runs the release gate: the package version must increase (SemVer) and `CHANGELOG.md` must have a non-empty section for that version. PRs that only touch docs, tests, or workflows do not need a bump. Tagged releases (`vX.Y.Z`) must match `package.json` and have non-empty notes extracted from the changelog.
+When a PR or push to `main` changes `package.json` (other than its `devDependencies`), `pyproject.toml`, or a Python module listed in `RELEASE_TRIGGER_PATHS` (`ci.yml`, `.husky/pre-push`), CI runs the release gate: the package version must increase (SemVer) and `CHANGELOG.md` must have a non-empty section for that version. PRs that only touch docs, tests, or workflows do not need a bump. Tagged releases (`vX.Y.Z`) must match `package.json` and have non-empty notes extracted from the changelog.

@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   assertTagMatchesPackageVersion,
   extractChangelogNotes,
+  isDevDependencyOnlyChange,
   requiresRelease,
   runReleaseGate,
   validateRelease,
@@ -272,6 +273,7 @@ describe('runReleaseGate', () => {
     localThis.result = runReleaseGate({
       baseRef: 'origin/main',
       readDiffFiles: () => ['package.json'],
+      readBasePackageJson: () => ({ version: '0.1.1' }),
       readBasePackageVersion: (baseRef) => {
         localThis.baseRefUsed = baseRef;
         return '0.1.1';
@@ -301,9 +303,93 @@ describe('runReleaseGate', () => {
       runReleaseGate({
         baseRef: 'origin/main',
         readDiffFiles: () => ['package.json'],
+        readBasePackageJson: () => ({ version: '0.1.2', dependencies: {} }),
         readBasePackageVersion: () => '0.1.2',
-        readCurrentPackageJson: () => ({ version: '0.1.2' }),
+        readCurrentPackageJson: () => ({
+          version: '0.1.2',
+          dependencies: { a: '1.0.0' }
+        }),
         readChangelog: () => localThis.changelog
+      })
+    ).toThrow('package version must change');
+  });
+});
+
+describe('dev dependency only package.json changes', () => {
+  it('detects a change limited to devDependencies', () => {
+    expect(
+      isDevDependencyOnlyChange(
+        { version: '1.0.0', devDependencies: { a: '1.0.0' } },
+        { version: '1.0.0', devDependencies: { a: '1.0.1', b: '2.0.0' } }
+      )
+    ).toBe(true);
+  });
+
+  it('is false when anything else changed or a side is missing', () => {
+    expect(
+      isDevDependencyOnlyChange({ version: '1.0.0' }, { version: '1.0.1' })
+    ).toBe(false);
+    expect(
+      isDevDependencyOnlyChange(
+        { dependencies: { a: '1.0.0' } },
+        { dependencies: { a: '1.0.1' } }
+      )
+    ).toBe(false);
+    expect(isDevDependencyOnlyChange(null, { version: '1.0.0' })).toBe(false);
+  });
+
+  it('skips the gate for a devDependencies-only package.json change', () => {
+    const localThis = { baseVersionCalls: 0, result: undefined };
+
+    localThis.result = runReleaseGate({
+      baseRef: 'origin/main',
+      readDiffFiles: () => ['package.json', 'package-lock.json'],
+      readBasePackageJson: () => ({
+        version: '0.1.1',
+        devDependencies: { a: '1.0.0' }
+      }),
+      readCurrentPackageJson: () => ({
+        version: '0.1.1',
+        devDependencies: { a: '1.0.1' }
+      }),
+      readBasePackageVersion: () => {
+        localThis.baseVersionCalls += 1;
+        return '0.1.1';
+      }
+    });
+
+    expect(localThis.result).toBeUndefined();
+    expect(localThis.baseVersionCalls).toBe(0);
+  });
+
+  it('still gates a devDependencies change that also touches a trigger path', () => {
+    expect(() =>
+      runReleaseGate({
+        baseRef: 'origin/main',
+        readDiffFiles: () => ['package.json', 'lib/a.js'],
+        readBasePackageJson: () => ({ version: '0.1.1', devDependencies: {} }),
+        readCurrentPackageJson: () => ({
+          version: '0.1.1',
+          devDependencies: { a: '1.0.0' }
+        }),
+        readBasePackageVersion: () => '0.1.1',
+        readChangelog: () => '## [0.1.1] - 2026-10-09\n\n- Old.\n'
+      })
+    ).toThrow('package version must change');
+  });
+
+  it('still gates a dependencies change', () => {
+    expect(() =>
+      runReleaseGate({
+        baseRef: 'origin/main',
+        readDiffFiles: () => ['package.json'],
+        readBasePackageJson: () => ({ version: '0.1.1', dependencies: {} }),
+        readCurrentPackageJson: () => ({
+          version: '0.1.1',
+          dependencies: { a: '1.0.0' }
+        }),
+        readBasePackageVersion: () => '0.1.1',
+        readChangelog: () => '## [0.1.1] - 2026-10-09\n\n- Old.\n'
       })
     ).toThrow('package version must change');
   });
@@ -360,6 +446,7 @@ describe('runReleaseGate without a base package.json', () => {
     localThis.result = runReleaseGate({
       baseRef: 'origin/main',
       readDiffFiles: () => ['package.json'],
+      readBasePackageJson: () => null,
       readBasePackageVersion: () => null,
       readCurrentPackageJson: () => ({ version: '0.1.0' }),
       readChangelog: () => '## [0.1.0] - 2026-10-09\n\n- Initial release.\n'
@@ -373,6 +460,7 @@ describe('runReleaseGate without a base package.json', () => {
       runReleaseGate({
         baseRef: 'origin/main',
         readDiffFiles: () => ['package.json'],
+        readBasePackageJson: () => null,
         readBasePackageVersion: () => null,
         readCurrentPackageJson: () => ({ version: '0.1.0' }),
         readChangelog: () => '# Changelog\n'
