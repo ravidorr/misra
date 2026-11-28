@@ -215,6 +215,37 @@ describe('check-release CLI gate', () => {
     expect(localThis.result.ok).toBe(true);
   });
 
+  it('skips the gate for a devDependencies-only bump and gates a dependencies bump', () => {
+    const localThis = { devOnly: undefined, runtime: undefined };
+
+    const run = (field) =>
+      withTempDir((root) => {
+        const write = (value) =>
+          writeFileSync(
+            join(root, 'package.json'),
+            `${JSON.stringify({ version: '0.1.0', [field]: { a: value } })}\n`
+          );
+
+        git(root, 'init', '-b', 'main');
+        write('1.0.0');
+        writeFileSync(join(root, 'CHANGELOG.md'), '# Changelog\n');
+        git(root, 'add', '.');
+        git(root, 'commit', '-m', 'initial');
+        git(root, 'checkout', '-b', 'bump');
+        write('1.0.1');
+        git(root, 'commit', '-am', 'bump a');
+
+        return runCheckReleaseCli(root, [], { env: { BASE_REF: 'main' } });
+      });
+
+    localThis.devOnly = run('devDependencies');
+    localThis.runtime = run('dependencies');
+
+    expect(localThis.devOnly.ok).toBe(true);
+    expect(localThis.runtime.ok).toBe(false);
+    expect(localThis.runtime.stderr).toContain('package version must change');
+  });
+
   it('fails loudly when the base ref does not exist', () => {
     const localThis = { result: undefined };
 

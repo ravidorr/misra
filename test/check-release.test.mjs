@@ -325,6 +325,25 @@ describe('dev dependency only package.json changes', () => {
     ).toBe(true);
   });
 
+  it('is false when version and devDependencies change together', () => {
+    expect(
+      isDevDependencyOnlyChange(
+        { version: '1.0.0', devDependencies: { a: '1' } },
+        { version: '1.0.1', devDependencies: { a: '2' } }
+      )
+    ).toBe(false);
+  });
+
+  it('ignores key order and a devDependencies block added or removed', () => {
+    expect(
+      isDevDependencyOnlyChange(
+        { name: 'x', version: '1.0.0' },
+        { version: '1.0.0', name: 'x', devDependencies: { a: '1' } }
+      )
+    ).toBe(true);
+    expect(isDevDependencyOnlyChange({ version: '1.0.0' }, null)).toBe(false);
+  });
+
   it('is false when anything else changed or a side is missing', () => {
     expect(
       isDevDependencyOnlyChange({ version: '1.0.0' }, { version: '1.0.1' })
