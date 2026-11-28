@@ -8,6 +8,12 @@ All notable changes are documented here. Format follows [Keep a Changelog](https
 
 - A "Hidden (n)" switch beside "Starred (n)": a view of its own that lists every company the visitor hid, one row each with "Unhide" (a company with no open role is listed too, so it can be unhidden without finding one of its roles), and every open role they hid one by one, as cards at full strength with "Unhide" and no "New" flag. The Hidden view also puts the coverage card away with the filters; the Starred view keeps it. It reads the choices kept today (this browser, or the account) and stores nothing new; a role hidden only because its company is hidden is covered by the company's row, and a hidden role leaves the list when its posting closes (the database deletes the discard). Two WebMCP tools: `list_hidden` and `unhide_company`.
 
+## [0.94.9] - 2026-11-28
+
+### Changed
+
+- Dev tooling bumped within semver ranges: html-validate 11.22.1, lint-staged 17.6.2, markdownlint-cli2 0.24.2, stylelint 18.1.0, stylelint-config-standard 41.1.0, typescript-eslint 8.74.0 and vitest 5.1.1 (and their lockfile dependencies). No change to the pipeline or the site.
+
 ## [0.94.8] - 2026-11-22
 
 ### Added
