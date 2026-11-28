@@ -9,6 +9,8 @@
 //   - It only applies when release-relevant files changed: package.json, tsconfig.json, manifest.json,
 //     or files under src/, lib/, bin/, app/, extension/. Extend with RELEASE_TRIGGER_PATHS
 //     (comma-separated path prefixes).
+//   - A package.json change that touches only devDependencies is not release-relevant (dev tooling
+//     bumps, which Dependabot cannot pair with a version and a changelog entry).
 //   - An all-zero BASE_REF (first push of a branch) is skipped: there is nothing to compare against.
 //   - When the base ref has no package.json (the very first baseline PR), only the changelog entry
 //     for the current version is required.
@@ -17,6 +19,7 @@
 import { execFileSync } from 'node:child_process';
 import { readFileSync, realpathSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
+import { isDeepStrictEqual } from 'node:util';
 import semver from 'semver';
 
 const RELEASE_TRIGGER_ROOT_FILES = new Set([
@@ -127,9 +130,27 @@ export function validateTaggedRelease({
   assertReleaseNotesPresent(releaseNotes);
 }
 
-// Returns the package.json version at ref, or null when the ref has no package.json.
+// True when package.json differs from the base only in devDependencies.
+export function isDevDependencyOnlyChange(basePackageJson, currentPackageJson) {
+  if (!basePackageJson || !currentPackageJson) {
+    return false;
+  }
+
+  const withoutDevDependencies = (packageJson) => {
+    const rest = { ...packageJson };
+    delete rest.devDependencies;
+    return rest;
+  };
+
+  return isDeepStrictEqual(
+    withoutDevDependencies(basePackageJson),
+    withoutDevDependencies(currentPackageJson)
+  );
+}
+
+// Returns the parsed package.json at ref, or null when the ref has no package.json.
 // A ref that does not exist is an error: fetch it instead of silently skipping the gate.
-function readPackageVersion(ref) {
+function readPackageJsonAt(ref) {
   try {
     execFileSync('git', ['rev-parse', '--verify', '--quiet', `${ref}^{commit}`], {
       stdio: 'ignore'
@@ -150,7 +171,11 @@ function readPackageVersion(ref) {
     encoding: 'utf8'
   });
 
-  return JSON.parse(packageJson).version;
+  return JSON.parse(packageJson);
+}
+
+function readPackageVersion(ref) {
+  return readPackageJsonAt(ref)?.version ?? null;
 }
 
 function readChangedFiles(baseRef) {
@@ -165,6 +190,7 @@ function readChangedFiles(baseRef) {
 export function runReleaseGate({
   baseRef,
   readBasePackageVersion = readPackageVersion,
+  readBasePackageJson = readPackageJsonAt,
   readDiffFiles = readChangedFiles,
   readCurrentPackageJson = () =>
     JSON.parse(readFileSync('package.json', 'utf8')),
@@ -179,12 +205,22 @@ export function runReleaseGate({
     return;
   }
 
-  if (!requiresRelease(readDiffFiles(baseRef))) {
+  const currentPackageJson = readCurrentPackageJson();
+  let changedFiles = readDiffFiles(baseRef);
+
+  if (
+    changedFiles.includes('package.json') &&
+    isDevDependencyOnlyChange(readBasePackageJson(baseRef), currentPackageJson)
+  ) {
+    changedFiles = changedFiles.filter((file) => file !== 'package.json');
+  }
+
+  if (!requiresRelease(changedFiles)) {
     return;
   }
 
   const baseVersion = readBasePackageVersion(baseRef);
-  const currentVersion = readCurrentPackageJson().version;
+  const currentVersion = currentPackageJson.version;
   const changelog = readChangelog();
 
   if (baseVersion === null) {
